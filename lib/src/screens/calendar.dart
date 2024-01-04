@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart'; // kDebugModeのためにインポート
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as google_calendar;
+import 'package:googleapis_auth/auth_io.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:url_launcher/url_launcher.dart' as url_launcher;
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -16,7 +19,6 @@ class CalendarScreenState extends State<CalendarScreen> {
   late DateTime _focusedDay;
   late DateTime _selectedDay;
   late Future<List<google_calendar.Event>> _eventsFuture;
-  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -25,33 +27,35 @@ class CalendarScreenState extends State<CalendarScreen> {
     _focusedDay = DateTime.now();
     _selectedDay = DateTime.now();
     _selectedEvents = [];
-    _events = _createTestEvents();
-    _eventsFuture =
-        Future<List<google_calendar.Event>>.value(_events[_focusedDay] ?? []);
-    _scrollController.addListener(_scrollListener);
+    _events = {};
+    _eventsFuture = _fetchEvents();
   }
 
-  Map<DateTime, List<google_calendar.Event>> _createTestEvents() {
-    final testEvents = <DateTime, List<google_calendar.Event>>{};
-    // 今日の日付にテストイベントを設定
-    final today = DateTime.now();
-    final startOfToday = DateTime(today.year, today.month, today.day);
-    final testEvent = google_calendar.Event(
-      summary: 'Test Event',
-      start: google_calendar.EventDateTime(dateTime: startOfToday),
-      end: google_calendar.EventDateTime(
-        dateTime: startOfToday.add(const Duration(hours: 1)),
-      ),
-    );
-    testEvents[startOfToday] = [testEvent];
-    return testEvents;
-  }
-
-  void _scrollListener() {
-    if (_scrollController.position.pixels ==
-        _scrollController.position.maxScrollExtent) {
-      // 追加のイベントを読み込む処理（実装されていません）
+  Future<List<google_calendar.Event>> _fetchEvents() async {
+    try {
+      final client = await _getAuthenticatedClient();
+      final api = google_calendar.CalendarApi(client);
+      final calendarEvents = await api.events.list('primary');
+      return calendarEvents.items ?? [];
+    } catch (e) {
+      logMessage('Error fetching events: $e');
+      return [];
     }
+  }
+
+  Future<AutoRefreshingAuthClient> _getAuthenticatedClient() async {
+    final clientId = ClientId("", "");
+    return clientViaUserConsent(
+      clientId,
+      [google_calendar.CalendarApi.calendarScope],
+      (url) async {
+        if (await url_launcher.canLaunchUrl(Uri.parse(url))) {
+          await url_launcher.launchUrl(Uri.parse(url));
+        } else {
+          logMessage('Could not launch $url');
+        }
+      },
+    );
   }
 
   @override
@@ -63,9 +67,6 @@ class CalendarScreenState extends State<CalendarScreen> {
           lastDay: DateTime.utc(2050, 12, 31),
           focusedDay: _focusedDay,
           calendarFormat: _calendarFormat,
-          eventLoader: (day) {
-            return _events[day] ?? [];
-          },
           onDaySelected: (selectedDay, focusedDay) {
             setState(() {
               _selectedDay = selectedDay;
@@ -78,29 +79,49 @@ class CalendarScreenState extends State<CalendarScreen> {
           },
         ),
         Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            itemCount: _selectedEvents.length,
-            itemBuilder: (context, index) {
-              return Card(
-                child: ListTile(
-                  title: Text(_selectedEvents[index].summary ?? 'No Title'),
-                  subtitle: Text(
-                    _selectedEvents[index].start?.dateTime?.toString() ??
-                        'No Start Time',
-                  ),
-                ),
-              );
+          child: FutureBuilder<List<google_calendar.Event>>(
+            future: _eventsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const CircularProgressIndicator();
+              } else if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              } else if (snapshot.hasData) {
+                for (final event in snapshot.data!) {
+                  final eventDate = event.start!.date ?? event.start!.dateTime!;
+                  if (_events[eventDate] == null) {
+                    _events[eventDate] = [];
+                  }
+                  _events[eventDate]!.add(event);
+                }
+                return ListView.builder(
+                  itemCount: _selectedEvents.length,
+                  itemBuilder: (context, index) {
+                    return Card(
+                      child: ListTile(
+                        title:
+                            Text(_selectedEvents[index].summary ?? 'No Title'),
+                        subtitle: Text(
+                          _selectedEvents[index].start?.dateTime?.toString() ??
+                              'No Start Time',
+                        ),
+                      ),
+                    );
+                  },
+                );
+              } else {
+                return const Center(child: Text('No Events Found'));
+              }
             },
           ),
         ),
       ],
     );
   }
+}
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+void logMessage(String message) {
+  if (kDebugMode) {
+    print(message);
   }
 }
