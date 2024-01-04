@@ -1,0 +1,46 @@
+name: production
+
+on:
+  push:
+    branches:
+      - master
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version-file: 'package.json'
+
+      - name: Install Dependencies and Pre-Build Commands
+        run: |
+          yarn install
+          yarn fix
+          touch .env
+          echo "NEXT_PUBLIC_NOINDEX=false" >> .env
+          echo "NEXT_PUBLIC_GA_ID=${{ secrets.NEXT_PUBLIC_GA_ID }}" >> .env
+          echo "GENERATE_SOURCEMAP=false" >> .env
+
+      - name: Build
+        run: yarn build
+
+      - name: Chromatic (if not master)
+        if: ${{ github.ref != 'refs/heads/master' }}
+        run: yarn chromatic --project-token=${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+
+      - name: FTP-Deploy-Action
+        uses: SamKirkland/FTP-Deploy-Action@4.2.0 # FTPアップロードアクション（https://github.com/SamKirkland/FTP-Deploy-Action）
+        with:
+          server: ${{ secrets.PROD_SERVER }} # FTPのサーバーアドレス
+          username: ${{ secrets.PROD_USERNAME }} # FTPのユーザー名名
+          password: ${{ secrets.PROD_PASSWORD }} # FTPのパスワード
+          local-dir: ./out/ # アップロードしたいファイルのパス、この場合srcディレクトリ内をアップロード対象としている
+          server-dir: /ritmo.co.jp/public_html/ # アップロード先のリモートパス
+

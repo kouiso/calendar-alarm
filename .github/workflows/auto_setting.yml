@@ -1,0 +1,172 @@
+name: Auto Assign PR to Creator and Modify Title with Branch Name
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  assign_pr_to_creator:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto Assign PR to Creator
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            console.log('Assigning PR...');
+            console.log('Context:', JSON.stringify(context, null, 2));
+            github.rest.issues.addAssignees({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              assignees: [context.payload.pull_request.user.login]
+            });
+            console.log('PR assigned to creator.');
+
+  auto-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add label based on branch name
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branchName = context.payload.pull_request.head.ref;
+            console.log(`Branch name: ${branchName}`);
+
+            console.log('Adding label based on branch name...');
+            if (branchName.startsWith('feature/')) {
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['feature']
+              });
+              console.log('Feature label added.');
+            } else if (branchName.startsWith('bugfix/')) {
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['bugfix']
+              });
+              console.log('Bugfix label added.');
+            } else if (branchName.startsWith('release/')) {
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['release']
+              });
+              console.log('Release label added.');
+            } else if (branchName.startsWith('hotfix/')) {
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['hotfix']
+              });
+              console.log('Hotfix label added.');
+            } else if (branchName.startsWith('support/')) {
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['support']
+              });
+              console.log('Support label added.');
+            } else {
+              console.log('No matching prefix found for label addition.');
+            }
+
+  pull_request_taking_for_jira:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Axios
+        run: npm install axios
+      - name: Fetch JIRA Task Name and Modify PR Description
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const axios = require('axios');
+            console.log('Starting Fetch JIRA Task Name and Modify PR Description...');
+            const branchName = context.payload.pull_request.head.ref;
+            const jiraIDMatch = branchName.match(/[A-Z]+-[0-9]+/);
+
+            if (jiraIDMatch) {
+              const jiraID = jiraIDMatch[0];
+              console.log(`JIRA ID found: ${jiraID}`);
+              try {
+                const jiraAPIResponse = await axios.get(`${process.env.JIRA_BASE_URL}/rest/api/2/issue/${jiraID}`, {
+                  headers: {
+                    'Authorization': `Basic ${Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64')}`,
+                    'Content-Type': 'application/json',
+                  },
+                });
+
+                if (jiraAPIResponse.status === 200 && jiraAPIResponse.data && jiraAPIResponse.data.fields) {
+                  const jiraTaskName = jiraAPIResponse.data.fields.summary;
+                  console.log('JIRA Task Name:', jiraTaskName);
+
+                  const labels = jiraAPIResponse.data.fields.labels || [];
+                  for (const label of labels) {
+                    github.rest.issues.addLabels({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: context.payload.pull_request.number,
+                      labels: [label]
+                    });
+                  }
+                  console.log('Labels added:', labels);
+
+                  const jiraDescription = jiraAPIResponse.data.fields.description || '';
+                  let prDescription = context.payload.pull_request.body;
+
+                  // $task_description を JIRA の説明欄の内容で置換
+                  prDescription = prDescription.replace('$task_description', jiraDescription);
+
+                  // $JIRA_SBI と $JIRA_PBI を適切な値で置換
+                  prDescription = prDescription.replace('$JIRA_SBI', jiraID);
+                  if (jiraAPIResponse.data.fields.parent) {
+                    const jiraPbiID = jiraAPIResponse.data.fields.parent.key;
+                    prDescription = prDescription.replace('$JIRA_PBI', jiraPbiID);
+                  }
+
+                  const newTitle = `[${branchName}] ${jiraTaskName}`;
+                  console.log(`Setting PR title to: ${newTitle}`);
+
+                  github.rest.pulls.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: context.issue.number,
+                    title: newTitle,
+                    body: prDescription
+                  });
+
+                  console.log('Updated PR title:', newTitle);
+                  console.log('Updated PR description:', prDescription);
+                } else {
+                  console.error('Error fetching JIRA task: Invalid response from JIRA API.');
+                }
+              } catch (error) {
+                console.error(`Error fetching JIRA task: ${error.message}`);
+              }
+            } else {
+              console.log('No JIRA ID found in branch name.');
+            }
+
+        env:
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+
+  check-base-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if base branch is not develop
+        run: |
+          if [[ "${{ github.base_ref }}" != "develop" ]]; then
+            echo "Error: Base branch is not 'develop'. Please change the base branch to 'develop'."
+            exit 1
+          fi
