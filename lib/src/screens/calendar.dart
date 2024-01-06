@@ -1,9 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart'; // kDebugModeのためにインポート
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as google_calendar;
 import 'package:googleapis_auth/auth_io.dart';
+import 'package:http/http.dart' as http;
 import 'package:table_calendar/table_calendar.dart';
-import 'package:url_launcher/url_launcher.dart' as url_launcher;
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -44,18 +45,29 @@ class CalendarScreenState extends State<CalendarScreen> {
   }
 
   Future<AutoRefreshingAuthClient> _getAuthenticatedClient() async {
-    final clientId = ClientId("", "");
-    return clientViaUserConsent(
-      clientId,
-      [google_calendar.CalendarApi.calendarScope],
-      (url) async {
-        if (await url_launcher.canLaunchUrl(Uri.parse(url))) {
-          await url_launcher.launchUrl(Uri.parse(url));
-        } else {
-          logMessage('Could not launch $url');
-        }
-      },
+    final accessToken = await _getGoogleAccessTokenFromFirebase();
+
+    final authClient = authenticatedClient(
+      http.Client(),
+      AccessCredentials(
+        AccessToken(
+            'Bearer', accessToken, DateTime.now().add(Duration(hours: 1))),
+        null, // refreshTokenはnullでも問題ありません
+        [google_calendar.CalendarApi.calendarScope],
+      ),
     );
+    return authClient;
+  }
+
+  Future<String> _getGoogleAccessTokenFromFirebase() async {
+    User? user = FirebaseAuth.instance.currentUser;
+
+    if (user != null) {
+      final idTokenResult = await user.getIdTokenResult(true);
+      return idTokenResult.token!;
+    } else {
+      throw Exception('ユーザーがログインしていません。');
+    }
   }
 
   @override
@@ -87,6 +99,7 @@ class CalendarScreenState extends State<CalendarScreen> {
               } else if (snapshot.hasError) {
                 return Center(child: Text('Error: ${snapshot.error}'));
               } else if (snapshot.hasData) {
+                _events.clear();
                 for (final event in snapshot.data!) {
                   final eventDate = event.start!.date ?? event.start!.dateTime!;
                   if (_events[eventDate] == null) {
@@ -97,13 +110,12 @@ class CalendarScreenState extends State<CalendarScreen> {
                 return ListView.builder(
                   itemCount: _selectedEvents.length,
                   itemBuilder: (context, index) {
+                    final event = _selectedEvents[index];
                     return Card(
                       child: ListTile(
-                        title:
-                            Text(_selectedEvents[index].summary ?? 'No Title'),
+                        title: Text(event.summary ?? 'No Title'),
                         subtitle: Text(
-                          _selectedEvents[index].start?.dateTime?.toString() ??
-                              'No Start Time',
+                          event.start?.dateTime?.toString() ?? 'No Start Time',
                         ),
                       ),
                     );
@@ -118,10 +130,10 @@ class CalendarScreenState extends State<CalendarScreen> {
       ],
     );
   }
-}
 
-void logMessage(String message) {
-  if (kDebugMode) {
-    print(message);
+  void logMessage(String message) {
+    if (kDebugMode) {
+      print(message);
+    }
   }
 }
