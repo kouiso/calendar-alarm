@@ -18,7 +18,7 @@ jobs:
 
       - name: Install asdf plugins
         run: |
-          asdf plugin add java
+          asdf plugin add java https://github.com/halcyon/asdf-java.git
           asdf plugin add flutter
 
       - name: Install runtime versions
