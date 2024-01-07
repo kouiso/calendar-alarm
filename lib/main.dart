@@ -1,18 +1,23 @@
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'firebase_options.dart';
 import 'src/app.dart';
 
 void main() async {
-  const envFile = String.fromEnvironment('env');
-  await dotenv.load(fileName: envFile);
-
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(const MyApp());
+
+  // Crashlyticsの初期設定
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
+
+  // Firebase Analyticsのインスタンス
+  final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+
+  runApp(MyApp(analytics: analytics));
 }

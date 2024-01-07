@@ -4,12 +4,13 @@ import 'package:calendar_alarm/src/screens/onboarding.dart';
 import 'package:calendar_alarm/src/screens/profile.dart';
 import 'package:calendar_alarm/src/screens/register.dart';
 import 'package:calendar_alarm/src/screens/settings.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 
-void main() => runApp(const MyApp());
-
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final FirebaseAnalytics analytics;
+
+  const MyApp({super.key, required this.analytics});
 
   @override
   Widget build(BuildContext context) {
