@@ -24,8 +24,26 @@ jobs:
       - name: Install runtime versions
         run: asdf install
 
+      - name: Authenticate with Firebase
+        run: firebase login --reauth --token ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Generate Firebase options
+        run: flutterfire configure
+
       - name: Build APK
         run: flutter build apk
+
+      - name: Get release notes
+        id: release_notes
+        run: |
+          RELEASE_NOTES=""
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            RELEASE_NOTES=$(curl --silent "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}" | jq -r .body)
+          fi
+          if [[ -z "${RELEASE_NOTES}" ]]; then
+            RELEASE_NOTES="Commit: ${{ github.sha }}"
+          fi
+          echo "::set-output name=notes::${RELEASE_NOTES}"
 
       - name: Deploy APK to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
@@ -34,6 +52,7 @@ jobs:
           token: ${{ secrets.FIREBASE_TOKEN }}
           groups: tester-group-android
           file: build/app/outputs/flutter-apk/app-release.apk
+          releaseNotes: ${{ steps.release_notes.outputs.notes }}
 
   ios_build:
     runs-on: macos-latest
@@ -50,6 +69,12 @@ jobs:
       - name: Install runtime versions
         run: asdf install
 
+      - name: Authenticate with Firebase
+        run: firebase login --reauth --token ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Generate Firebase options
+        run: flutterfire configure
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -59,6 +84,18 @@ jobs:
       - name: Build iOS app
         run: flutter build ios --release --no-codesign
 
+      - name: Get release notes
+        id: release_notes
+        run: |
+          RELEASE_NOTES=""
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            RELEASE_NOTES=$(curl --silent "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}" | jq -r .body)
+          fi
+          if [[ -z "${RELEASE_NOTES}" ]]; then
+            RELEASE_NOTES="Commit: ${{ github.sha }}"
+          fi
+          echo "::set-output name=notes::${RELEASE_NOTES}"
+
       - name: Deploy iOS app to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
@@ -66,6 +103,7 @@ jobs:
           token: ${{ secrets.FIREBASE_TOKEN }}
           groups: tester-group-ios
           file: build/ios/iphoneos/Runner.app
+          releaseNotes: ${{ steps.release_notes.outputs.notes }}
 
   macos_build:
     runs-on: macos-latest
@@ -82,11 +120,29 @@ jobs:
       - name: Install runtime versions
         run: asdf install
 
+      - name: Authenticate with Firebase
+        run: firebase login --reauth --token ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Generate Firebase options
+        run: flutterfire configure
+
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build macOS app
         run: flutter build macos --release
+
+      - name: Get release notes
+        id: release_notes
+        run: |
+          RELEASE_NOTES=""
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            RELEASE_NOTES=$(curl --silent "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}" | jq -r .body)
+          fi
+          if [[ -z "${RELEASE_NOTES}" ]]; then
+            RELEASE_NOTES="Commit: ${{ github.sha }}"
+          fi
+          echo "::set-output name=notes::${RELEASE_NOTES}"
 
       - name: Deploy macOS app to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
@@ -95,3 +151,4 @@ jobs:
           token: ${{ secrets.FIREBASE_TOKEN }}
           groups: tester-group-macos
           file: build/macos/Build/Products/Release/Runner.app
+          releaseNotes: ${{ steps.release_notes.outputs.notes }}
