@@ -3,31 +3,95 @@ name: Deploy to Firebase App Distribution
 on:
   push:
     branches:
-      - '**'
+      - "**"
     branches-ignore:
-      - 'master'
+      - "master"
 
 jobs:
-  build:
+  android_build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-java@v1
-        with:
-          java-version: '12.x'
 
-      - name: Install Flutter
-        uses: subosito/flutter-action@v1
-        with:
-          flutter-version: '2.2.3'
+      - name: Setup asdf
+        uses: asdf-vm/actions/setup@v1
+
+      - name: Install asdf plugins
+        run: |
+          asdf plugin add java
+          asdf plugin add flutter
+
+      - name: Install runtime versions
+        run: asdf install
 
       - name: Build APK
         run: flutter build apk
 
-      - name: Deploy to Firebase App Distribution
+      - name: Deploy APK to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
-          appId: ${{secrets.FIREBASE_APP_ID}}
-          token: ${{secrets.FIREBASE_TOKEN}}
-          groups: tester-group
+          appId: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+          token: ${{ secrets.FIREBASE_TOKEN }}
+          groups: tester-group-android
           file: build/app/outputs/flutter-apk/app-release.apk
+
+  ios_build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup asdf
+        uses: asdf-vm/actions/setup@v1
+
+      - name: Install asdf plugins
+        run: |
+          asdf plugin add flutter
+
+      - name: Install runtime versions
+        run: asdf install
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Install CocoaPods
+        run: cd ios && pod install
+
+      - name: Build iOS app
+        run: flutter build ios --release --no-codesign
+
+      - name: Deploy iOS app to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_IOS_APP_ID }}
+          token: ${{ secrets.FIREBASE_TOKEN }}
+          groups: tester-group-ios
+          file: build/ios/iphoneos/Runner.app
+
+  macos_build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup asdf
+        uses: asdf-vm/actions/setup@v1
+
+      - name: Install asdf plugins
+        run: |
+          asdf plugin add flutter
+
+      - name: Install runtime versions
+        run: asdf install
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build macOS app
+        run: flutter build macos --release
+
+      - name: Deploy macOS app to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_MACOS_APP_ID }}
+          token: ${{ secrets.FIREBASE_TOKEN }}
+          groups: tester-group-macos
+          file: build/macos/Build/Products/Release/Runner.app

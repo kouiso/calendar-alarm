@@ -1,43 +1,51 @@
-name: development
+name: Flutter CI
 
 on:
   push:
     branches:
-      - '**'
-
+      - "**"
   workflow_dispatch:
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Use Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version-file: 'package.json'
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: node_module Cache
-        uses: actions/cache@v3
-        id: node_modules_cache_id
-        env:
-          cache-name: cache-node-modules
-        with:
-          path: '**/node_modules'
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/yarn.lock') }}
+      - name: Setup asdf
+        uses: asdf-vm/actions/setup@v1
 
-      - run: echo '${{ toJSON(steps.node_modules_cache_id.outputs) }}'
-        shell: bash
-      - if: ${{ steps.node_modules_cache_id.outputs.cache-hit != 'true' }}
-        run: yarn install
-        shell: bash
-      - run: yarn list --depth=0
-        shell: bash
+      - name: Install asdf plugins
+        run: |
+          asdf plugin add ruby
+          asdf plugin add flutter
+          asdf plugin add dart
 
-      - name: Run Lint And Prettier
-        run: yarn fix
+      - name: Install runtime versions
+        run: asdf install
 
-      - name: Build Next.js For SSR & SSG And typedoc & storybook
-        run: yarn build
+      - name: Install dependencies
+        run: flutter pub get
 
-      - name: chromatic deploy
-        run: yarn chromatic --project-token=${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+      - name: Run Flutter tests
+        run: flutter test
+
+      - name: Run Flutter Lint
+        run: flutter analyze
+
+      - name: Build Flutter Android app
+        run: flutter build apk
+
+      - name: Setup CocoaPods
+        run: sudo gem install cocoapods
+
+      - name: Install CocoaPods dependencies
+        run: cd ios && pod install
+
+      - name: Build Flutter iOS app
+        run: flutter build ios --release --no-codesign
+
+      - name: Build Flutter macOS app
+        run: flutter build macos --release

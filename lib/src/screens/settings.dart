@@ -1,13 +1,17 @@
+import 'package:calendar_alarm/src/app.dart';
 import 'package:calendar_alarm/src/constants/Theme.dart';
 import 'package:calendar_alarm/src/screens/about.dart';
 import 'package:calendar_alarm/src/screens/agreement.dart';
 import 'package:calendar_alarm/src/screens/notifications-settings.dart';
 import 'package:calendar_alarm/src/screens/privacy.dart';
+import 'package:calendar_alarm/src/screens/register.dart';
 import 'package:calendar_alarm/src/widgets/drawer.dart';
-//widgets
 import 'package:calendar_alarm/src/widgets/navbar.dart';
 import 'package:calendar_alarm/src/widgets/table-cell.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class Settings extends StatefulWidget {
   const Settings({super.key});
@@ -19,22 +23,99 @@ class Settings extends StatefulWidget {
 class _SettingsState extends State<Settings> {
   late bool switchValueOne;
   late bool switchValueTwo;
+  User? user;
 
   @override
   void initState() {
-    setState(() {
-      switchValueOne = false;
-      switchValueTwo = false;
-    });
     super.initState();
+    switchValueOne = false;
+    switchValueTwo = false;
+    user = FirebaseAuth.instance.currentUser;
+    _checkAuthentication();
+  }
+
+  void _checkAuthentication() {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      // ユーザーが未認証の場合、ダイアログを表示
+      _showAuthenticationDialog();
+    }
+  }
+
+  void _showAuthenticationDialog() {
+    MyApp.showErrorDialog(
+      context,
+      '未認証のユーザー',
+      'ログインが必要です。ログイン画面に戻ります。',
+      onPressedOk: () {
+        Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const Register()));
+      },
+    );
+  }
+
+  Future<void> linkGoogleAccount() async {
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser!.authentication;
+
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      await FirebaseAuth.instance.currentUser!.linkWithCredential(credential);
+      // 成功時の処理（例えば状態の更新やメッセージの表示）
+    } on FirebaseAuthException catch (e) {
+      // エラー処理（例えばエラーダイアログの表示）
+      MyApp.showErrorDialog(context, 'Googleサインインエラー', 'サインインに失敗しました: $e');
+    }
+  }
+
+  Future<void> linkAppleAccount() async {
+    try {
+      final AuthorizationCredentialAppleID appleCredential =
+          await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final OAuthCredential oauthCredential =
+          OAuthProvider("apple.com").credential(
+        idToken: appleCredential.identityToken,
+        accessToken: appleCredential.authorizationCode,
+      );
+
+      await FirebaseAuth.instance.currentUser!
+          .linkWithCredential(oauthCredential);
+      // 成功時の処理（例えば状態の更新やメッセージの表示）
+    } on FirebaseAuthException catch (e) {
+      // エラー処理（例えばエラーダイアログの表示）
+      MyApp.showErrorDialog(context, 'Googleサインインエラー', 'サインインに失敗しました: $e');
+    }
+  }
+
+  Future<void> unlinkAccount(String providerId) async {
+    try {
+      await user!.unlink(providerId);
+      setState(() {
+        user = FirebaseAuth.instance.currentUser;
+      });
+      // 成功時の処理（例えば状態の更新やメッセージの表示）
+    } catch (e) {
+      // エラー処理（例えばエラーダイアログの表示）
+      MyApp.showErrorDialog(context, 'Googleサインインエラー', 'サインインに失敗しました: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const Navbar(
-        title: 'Settings',
-      ),
+      appBar: const Navbar(title: 'Settings'),
       drawer: const ArgonDrawer(currentPage: 'Settings'),
       body: SingleChildScrollView(
         child: Padding(
@@ -129,9 +210,30 @@ class _SettingsState extends State<Settings> {
               ),
               const TableCellSettings(title: 'Manage Payment Options'),
               const TableCellSettings(title: 'Manage Gift Cards'),
-              const SizedBox(
-                height: 36,
+              const SizedBox(height: 36),
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 16),
+                  child: Text(
+                    'Connected Accounts',
+                    style: TextStyle(
+                      color: ArgonColors.text,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
               ),
+              ...user!.providerData.map((provider) {
+                return ListTile(
+                  title: Text(provider.providerId),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: () => unlinkAccount(provider.providerId),
+                  ),
+                );
+              }),
+              const SizedBox(height: 36),
               const Center(
                 child: Padding(
                   padding: EdgeInsets.only(top: 16),

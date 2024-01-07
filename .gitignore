@@ -53,3 +53,4 @@ lib/firebase_options.dart
 !.env.example
 
 .fvm/flutter_sdk
+node_modules

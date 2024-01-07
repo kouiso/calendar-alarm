@@ -58,7 +58,10 @@
    Flutter 環境が正しく設定されているか確認するために、コマンドラインで`flutter doctor`を実行します。
 
 5. **Keystore の生成**:
-   リリースビルド用の Keystore を生成します。詳細な手順は前述のとおりです。
+
+   ```bash
+   ./gradlew signingReport
+   ```
 
 ### clone 後の環境構築手順
 
