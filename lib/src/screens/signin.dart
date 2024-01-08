@@ -77,7 +77,7 @@ class _SigninState extends State<Signin> {
           Container(
             decoration: const BoxDecoration(
               image: DecorationImage(
-                image: AssetImage('assets/img/Signin-bg.png'),
+                image: AssetImage('assets/img/register-bg.png'),
                 fit: BoxFit.cover,
               ),
             ),
