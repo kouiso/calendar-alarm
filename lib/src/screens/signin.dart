@@ -71,7 +71,7 @@ class _SigninState extends State<Signin> {
     double screenHeight = MediaQuery.of(context).size.height;
 
     return PageLayout(
-      title: "Account",
+      title: "サインイン",
       bodyContent: Stack(
         children: [
           Container(
