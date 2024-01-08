@@ -54,17 +54,6 @@ class ArgonDrawer extends StatelessWidget {
                     isSelected: currentPage == 'Home' ? true : false,
                   ),
                   DrawerTile(
-                    icon: Icons.pie_chart,
-                    onTap: () {
-                      if (currentPage != 'Profile') {
-                        Navigator.pushReplacementNamed(context, '/profile');
-                      }
-                    },
-                    iconColor: ArgonColors.warning,
-                    title: 'Profile',
-                    isSelected: currentPage == 'Profile' ? true : false,
-                  ),
-                  DrawerTile(
                     icon: Icons.account_circle,
                     onTap: () {
                       if (currentPage != 'Account') {
@@ -74,28 +63,6 @@ class ArgonDrawer extends StatelessWidget {
                     iconColor: ArgonColors.info,
                     title: 'Account',
                     isSelected: currentPage == 'Account' ? true : false,
-                  ),
-                  DrawerTile(
-                    icon: Icons.settings_input_component,
-                    onTap: () {
-                      if (currentPage != 'Elements') {
-                        Navigator.pushReplacementNamed(context, '/elements');
-                      }
-                    },
-                    iconColor: ArgonColors.error,
-                    title: 'Elements',
-                    isSelected: currentPage == 'Elements' ? true : false,
-                  ),
-                  DrawerTile(
-                    icon: Icons.apps,
-                    onTap: () {
-                      if (currentPage != 'Articles') {
-                        Navigator.pushReplacementNamed(context, '/articles');
-                      }
-                    },
-                    iconColor: ArgonColors.primary,
-                    title: 'Articles',
-                    isSelected: currentPage == 'Articles' ? true : false,
                   ),
                   DrawerTile(
                     icon: Icons.settings,
@@ -136,7 +103,7 @@ class ArgonDrawer extends StatelessWidget {
                       icon: Icons.airplanemode_active,
                       onTap: _launchURL,
                       iconColor: ArgonColors.muted,
-                      title: 'Getting Started',
+                      title: '使い方について',
                       isSelected:
                           currentPage == 'Getting started' ? true : false,
                     ),

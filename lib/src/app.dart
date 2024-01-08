@@ -1,8 +1,8 @@
 import 'package:calendar_alarm/src/screens/home.dart';
 import 'package:calendar_alarm/src/screens/onboarding.dart';
 import 'package:calendar_alarm/src/screens/profile.dart';
-import 'package:calendar_alarm/src/screens/register.dart';
 import 'package:calendar_alarm/src/screens/settings.dart';
+import 'package:calendar_alarm/src/screens/signin.dart';
 import 'package:calendar_alarm/src/widgets/dialog.dart' as custom_dialog;
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -41,7 +41,7 @@ class MyApp extends StatelessWidget {
             User? user = snapshot.data;
             if (user == null) {
               // ユーザーがログインしていない場合、Registerページにリダイレクト
-              return const Register();
+              return const Signin();
             }
             // ユーザーがログインしている場合、Homeページにリダイレクト
             return const Home();
@@ -59,7 +59,7 @@ class MyApp extends StatelessWidget {
         '/home': (BuildContext context) => const Home(),
         '/profile': (BuildContext context) => const Profile(),
         '/settings': (BuildContext context) => const Settings(),
-        '/account': (BuildContext context) => const Register(),
+        '/account': (BuildContext context) => const Signin(),
       },
     );
   }

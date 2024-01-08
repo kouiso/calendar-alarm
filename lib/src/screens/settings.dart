@@ -1,12 +1,10 @@
 import 'package:calendar_alarm/src/app.dart';
 import 'package:calendar_alarm/src/constants/Theme.dart';
+import 'package:calendar_alarm/src/layouts/page-layout.dart';
 import 'package:calendar_alarm/src/screens/about.dart';
 import 'package:calendar_alarm/src/screens/agreement.dart';
 import 'package:calendar_alarm/src/screens/notifications-settings.dart';
 import 'package:calendar_alarm/src/screens/privacy.dart';
-import 'package:calendar_alarm/src/screens/register.dart';
-import 'package:calendar_alarm/src/widgets/drawer.dart';
-import 'package:calendar_alarm/src/widgets/navbar.dart';
 import 'package:calendar_alarm/src/widgets/table-cell.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -34,25 +32,13 @@ class _SettingsState extends State<Settings> {
     _checkAuthentication();
   }
 
-  void _checkAuthentication() {
+  void _checkAuthentication() async {
     final user = FirebaseAuth.instance.currentUser;
-
     if (user == null) {
-      // ユーザーが未認証の場合、ダイアログを表示
-      _showAuthenticationDialog();
+      // ログイン画面にリダイレクト
+      Future.microtask(
+          () => Navigator.of(context).pushReplacementNamed('/account'));
     }
-  }
-
-  void _showAuthenticationDialog() {
-    MyApp.showErrorDialog(
-      context,
-      '未認証のユーザー',
-      'ログインが必要です。ログイン画面に戻ります。',
-      onPressedOk: () {
-        Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const Register()));
-      },
-    );
   }
 
   Future<void> linkGoogleAccount() async {
@@ -114,10 +100,9 @@ class _SettingsState extends State<Settings> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: const Navbar(title: 'Settings'),
-      drawer: const ArgonDrawer(currentPage: 'Settings'),
-      body: SingleChildScrollView(
+    return PageLayout(
+      title: "Settings",
+      bodyContent: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
