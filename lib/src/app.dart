@@ -59,7 +59,7 @@ class MyApp extends StatelessWidget {
         '/home': (BuildContext context) => const Home(),
         '/profile': (BuildContext context) => const Profile(),
         '/settings': (BuildContext context) => const Settings(),
-        '/account': (BuildContext context) => const Signin(),
+        '/signin': (BuildContext context) => const Signin(),
       },
     );
   }

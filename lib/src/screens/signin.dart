@@ -1,8 +1,10 @@
 import 'dart:ui' as ui;
 
+import 'package:calendar_alarm/src/app.dart';
 import 'package:calendar_alarm/src/constants/Theme.dart';
 import 'package:calendar_alarm/src/layouts/page-layout.dart';
 import 'package:calendar_alarm/src/services/authentication-service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:sign_in_button/sign_in_button.dart';
 
@@ -15,6 +17,28 @@ class Signin extends StatefulWidget {
 
 class _SigninState extends State<Signin> {
   final double height = ui.window.physicalSize.height;
+
+  final authService = AuthenticationService(FirebaseAuth.instance);
+
+  void _handleSignInGoogle() async {
+    try {
+      await authService.signInWithGoogle();
+      // サインイン成功時の処理
+    } on FirebaseAuthException catch (e) {
+      // エラーダイアログを表示
+      MyApp.showErrorDialog(context, 'Googleサインインエラー', 'サインインに失敗しました: $e');
+    }
+  }
+
+  void _handleSignInApple() async {
+    try {
+      await authService.signInWithApple();
+      // サインイン成功時の処理
+    } on FirebaseAuthException catch (e) {
+      // エラーダイアログを表示
+      MyApp.showErrorDialog(context, 'Appleサインインエラー', 'サインインに失敗しました: $e');
+    }
+  }
 
   Widget _signInButton(
       {required String text,
@@ -36,7 +60,7 @@ class _SigninState extends State<Signin> {
 
     return PageLayout(
       title: "サインイン",
-      notShowNavbar: true,
+      notShowNavbar: false,
       bodyContent: Stack(
         children: [
           Container(
@@ -76,18 +100,14 @@ class _SigninState extends State<Signin> {
                           ),
                         ),
                         _signInButton(
-                          text: "Googleにサインイン",
-                          buttonType: Buttons.google,
-                          onPressed: () =>
-                              AuthenticationService.signInWithGoogle(context),
-                        ),
+                            text: "Googleにサインイン",
+                            buttonType: Buttons.google,
+                            onPressed: () => _handleSignInGoogle()),
                         const SizedBox(height: 20),
                         _signInButton(
-                          text: "Appleにサインイン",
-                          buttonType: Buttons.apple,
-                          onPressed: () =>
-                              AuthenticationService.signInWithApple(context),
-                        ),
+                            text: "Appleにサインイン",
+                            buttonType: Buttons.apple,
+                            onPressed: () => _handleSignInApple()),
                         const SizedBox(height: 20),
                       ],
                     ),
