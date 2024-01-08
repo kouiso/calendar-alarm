@@ -1,13 +1,10 @@
 import 'dart:ui' as ui;
 
-import 'package:calendar_alarm/src/app.dart';
 import 'package:calendar_alarm/src/constants/Theme.dart';
 import 'package:calendar_alarm/src/layouts/page-layout.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:calendar_alarm/src/services/authentication-service.dart';
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_button/sign_in_button.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class Signin extends StatefulWidget {
   const Signin({super.key});
@@ -18,44 +15,6 @@ class Signin extends StatefulWidget {
 
 class _SigninState extends State<Signin> {
   final double height = ui.window.physicalSize.height;
-
-  Future<void> _signInWithGoogle() async {
-    try {
-      final GoogleSignIn googleSignIn = GoogleSignIn();
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      if (googleUser != null) {
-        final GoogleSignInAuthentication googleAuth =
-            await googleUser.authentication;
-        final AuthCredential credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-        await FirebaseAuth.instance.signInWithCredential(credential);
-      } else {
-        // ユーザーがGoogleのサインインをキャンセルした場合の処理
-      }
-    } catch (error) {
-      MyApp.showErrorDialog(context, 'サインインエラー', 'サインインに失敗しました: $error');
-    }
-  }
-
-  Future<void> _signInWithApple() async {
-    try {
-      final appleCredential = await SignInWithApple.getAppleIDCredential(
-        scopes: [
-          AppleIDAuthorizationScopes.email,
-          AppleIDAuthorizationScopes.fullName,
-        ],
-      );
-      final oauthCredential = OAuthProvider("apple.com").credential(
-        idToken: appleCredential.identityToken,
-        accessToken: appleCredential.authorizationCode,
-      );
-      await FirebaseAuth.instance.signInWithCredential(oauthCredential);
-    } catch (error) {
-      MyApp.showErrorDialog(context, 'サインインエラー', 'サインインに失敗しました: $error');
-    }
-  }
 
   Widget _signInButton(
       {required String text,
@@ -77,6 +36,7 @@ class _SigninState extends State<Signin> {
 
     return PageLayout(
       title: "サインイン",
+      notShowNavbar: true,
       bodyContent: Stack(
         children: [
           Container(
@@ -118,13 +78,15 @@ class _SigninState extends State<Signin> {
                         _signInButton(
                           text: "Googleにサインイン",
                           buttonType: Buttons.google,
-                          onPressed: _signInWithGoogle,
+                          onPressed: () =>
+                              AuthenticationService.signInWithGoogle(context),
                         ),
                         const SizedBox(height: 20),
                         _signInButton(
                           text: "Appleにサインイン",
                           buttonType: Buttons.apple,
-                          onPressed: _signInWithApple,
+                          onPressed: () =>
+                              AuthenticationService.signInWithApple(context),
                         ),
                         const SizedBox(height: 20),
                       ],
