@@ -54,17 +54,6 @@ class ArgonDrawer extends StatelessWidget {
                     isSelected: currentPage == 'Home' ? true : false,
                   ),
                   DrawerTile(
-                    icon: Icons.account_circle,
-                    onTap: () {
-                      if (currentPage != 'Account') {
-                        Navigator.pushReplacementNamed(context, '/account');
-                      }
-                    },
-                    iconColor: ArgonColors.info,
-                    title: 'Account',
-                    isSelected: currentPage == 'Account' ? true : false,
-                  ),
-                  DrawerTile(
                     icon: Icons.settings,
                     onTap: () {
                       if (currentPage != 'Settings') {
@@ -72,7 +61,7 @@ class ArgonDrawer extends StatelessWidget {
                       }
                     },
                     iconColor: ArgonColors.success,
-                    title: 'Settings',
+                    title: "設定",
                     isSelected: currentPage == 'Settings' ? true : false,
                   ),
                 ],
