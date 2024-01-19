@@ -1,3 +1,5 @@
+import 'package:calendar_alarm/src/constants/Words.dart';
+import 'package:calendar_alarm/src/layouts/page-layout.dart';
 import 'package:calendar_alarm/src/services/event_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -73,11 +75,10 @@ class _HomeState extends State<Home> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Calendar Alarm'),
-      ),
-      body: FutureBuilder(
+    return PageLayout(
+      title: Words.appTitle,
+      notShowNavbar: false,
+      bodyContent: FutureBuilder(
         future: _fetchEventsWithPagination(),
         builder: (BuildContext context, AsyncSnapshot snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {

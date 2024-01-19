@@ -1,3 +1,4 @@
+import 'package:calendar_alarm/src/constants/Words.dart';
 import 'package:calendar_alarm/src/screens/home.dart';
 import 'package:calendar_alarm/src/screens/onboarding.dart';
 import 'package:calendar_alarm/src/screens/profile.dart';
@@ -7,6 +8,7 @@ import 'package:calendar_alarm/src/widgets/dialog.dart' as custom_dialog;
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 class MyApp extends StatelessWidget {
   final FirebaseAnalytics analytics;
@@ -30,9 +32,17 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Calendar Alarm',
+      title: Words.appTitle,
       theme: ThemeData(fontFamily: 'OpenSans'),
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: [
+        const Locale('ja', 'JP'),
+      ],
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {

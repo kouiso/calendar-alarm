@@ -11,4 +11,5 @@ class Words {
   static const String userAgreement = 'User Agreement';
   static const String privacy = 'Privacy';
   static const String about = 'About';
+  static const String appTitle = 'Calendar Alarm';
 }
