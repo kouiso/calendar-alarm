@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:calendar_alarm/src/app.dart';
 import 'package:calendar_alarm/src/constants/Theme.dart';
+import 'package:calendar_alarm/src/constants/Words.dart';
 import 'package:calendar_alarm/src/layouts/page-layout.dart';
 import 'package:calendar_alarm/src/services/authentication-service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -20,30 +21,26 @@ class _SigninState extends State<Signin> {
 
   final authService = AuthenticationService(FirebaseAuth.instance);
 
-  void _handleSignInGoogle() async {
-    try {
-      await authService.signInWithGoogle();
-      // サインイン成功時の処理
-    } on FirebaseAuthException catch (e) {
-      // エラーダイアログを表示
-      MyApp.showErrorDialog(context, 'Googleサインインエラー', 'サインインに失敗しました: $e');
-    }
-  }
+  final signInMethods = [
+    SignInMethod('Google', (authService) => authService.signInWithGoogle()),
+    SignInMethod('Apple', (authService) => authService.signInWithApple()),
+  ];
 
-  void _handleSignInApple() async {
+  void _handleSignIn(SignInMethod method) async {
     try {
-      await authService.signInWithApple();
+      await method.action(authService);
       // サインイン成功時の処理
-    } on FirebaseAuthException catch (e) {
+    } catch (e) {
       // エラーダイアログを表示
-      MyApp.showErrorDialog(context, 'Appleサインインエラー', 'サインインに失敗しました: $e');
+      MyApp.showErrorDialog(context, '${method.name}${Words.signInError}',
+          '${Words.signInFailed}$e');
     }
   }
 
   Widget _signInButton(
       {required String text,
       required Buttons buttonType,
-      required VoidCallback onPressed}) {
+      required Function onPressed}) {
     return SizedBox(
       height: 60,
       child: SignInButton(
@@ -59,7 +56,7 @@ class _SigninState extends State<Signin> {
     double screenHeight = MediaQuery.of(context).size.height;
 
     return PageLayout(
-      title: "サインイン",
+      title: Words.signIn,
       notShowNavbar: false,
       bodyContent: Stack(
         children: [
@@ -92,22 +89,21 @@ class _SigninState extends State<Signin> {
                         const Padding(
                           padding: EdgeInsets.only(top: 20, bottom: 10),
                           child: Text(
-                            'サインイン',
+                            Words.signIn,
                             style: TextStyle(
                               color: ArgonColors.text,
                               fontSize: 16,
                             ),
                           ),
                         ),
-                        _signInButton(
-                            text: "Googleにサインイン",
-                            buttonType: Buttons.google,
-                            onPressed: () => _handleSignInGoogle()),
-                        const SizedBox(height: 20),
-                        _signInButton(
-                            text: "Appleにサインイン",
-                            buttonType: Buttons.apple,
-                            onPressed: () => _handleSignInApple()),
+                        for (var method in signInMethods)
+                          _signInButton(
+                            text: "${method.name}${Words.signInWith}",
+                            buttonType: method.name == 'Google'
+                                ? Buttons.google
+                                : Buttons.apple,
+                            onPressed: () => _handleSignIn(method),
+                          ),
                         const SizedBox(height: 20),
                       ],
                     ),
@@ -120,4 +116,11 @@ class _SigninState extends State<Signin> {
       ),
     );
   }
+}
+
+class SignInMethod {
+  final String name;
+  final Future Function(AuthenticationService) action;
+
+  SignInMethod(this.name, this.action);
 }

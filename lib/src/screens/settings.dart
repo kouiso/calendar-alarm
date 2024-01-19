@@ -1,3 +1,4 @@
+import 'package:calendar_alarm/src/constants/Words.dart';
 import 'package:calendar_alarm/src/layouts/page-layout.dart';
 import 'package:calendar_alarm/src/screens/about.dart';
 import 'package:calendar_alarm/src/screens/agreement.dart';
@@ -28,7 +29,7 @@ class _SettingsState extends State<Settings> {
   @override
   Widget build(BuildContext context) {
     return PageLayout(
-      title: "Settings",
+      title: Words.settings,
       bodyContent: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -36,7 +37,7 @@ class _SettingsState extends State<Settings> {
             children: [
               // その他の設定項目
               TableCellSettings(
-                title: 'Link Google Account',
+                title: Words.linkGoogleAccount,
                 onTap: () async {
                   await _authService.linkGoogleAccount();
                   setState(() {
@@ -45,7 +46,7 @@ class _SettingsState extends State<Settings> {
                 },
               ),
               TableCellSettings(
-                title: 'Link Apple Account',
+                title: Words.linkAppleAccount,
                 onTap: () async {
                   await _authService.linkAppleAccount();
                   setState(() {
@@ -53,10 +54,10 @@ class _SettingsState extends State<Settings> {
                   });
                 },
               ),
-              Divider(),
+              const Divider(),
               ...user!.providerData.map((provider) {
                 return ListTile(
-                  title: Text("Linked Account: ${provider.providerId}"),
+                  title: Text("${Words.linkedAccount}${provider.providerId}"),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete),
                     onPressed: () async {
@@ -68,10 +69,10 @@ class _SettingsState extends State<Settings> {
                   ),
                 );
               }),
-              Divider(),
+              const Divider(),
               // その他の設定項目
               TableCellSettings(
-                title: 'User Agreement',
+                title: Words.userAgreement,
                 onTap: () {
                   Navigator.push(
                     context,
@@ -82,7 +83,7 @@ class _SettingsState extends State<Settings> {
                 },
               ),
               TableCellSettings(
-                title: 'Privacy',
+                title: Words.privacy,
                 onTap: () {
                   Navigator.push(
                     context,
@@ -91,7 +92,7 @@ class _SettingsState extends State<Settings> {
                 },
               ),
               TableCellSettings(
-                title: 'About',
+                title: Words.about,
                 onTap: () {
                   Navigator.push(
                     context,

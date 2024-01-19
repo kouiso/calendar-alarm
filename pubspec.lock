@@ -300,18 +300,18 @@ packages:
     dependency: transitive
     description:
       name: google_sign_in_ios
-      sha256: b7d444abd3b4ef718e32d766c84b5a5d00d4e63a673075a435e6aad0e85e4d20
+      sha256: f3336d9e44d4d28063ac90271f6db5caf99f0480cb07281330e7a432edb95226
       url: "https://pub.dev"
     source: hosted
-    version: "5.7.2"
+    version: "5.7.3"
   google_sign_in_platform_interface:
     dependency: transitive
     description:
       name: google_sign_in_platform_interface
-      sha256: df6c91e74b7bb07335c864434c2064007dafa5539a96adeca6e83811be583ec4
+      sha256: "1f6e5787d7a120cc0359ddf315c92309069171306242e181c09472d1b00a2971"
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.4"
+    version: "2.4.5"
   google_sign_in_web:
     dependency: transitive
     description:
@@ -340,10 +340,10 @@ packages:
     dependency: "direct main"
     description:
       name: http
-      sha256: d4872660c46d929f6b8a9ef4e7a7eff7e49bbf0c4ec3f385ee32df5119175139
+      sha256: a2bbf9d017fcced29139daa8ed2bba4ece450ab222871df93ca9eec6f80c34ba
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.2"
+    version: "1.2.0"
   http_parser:
     dependency: transitive
     description:
@@ -356,34 +356,34 @@ packages:
     dependency: "direct main"
     description:
       name: in_app_purchase
-      sha256: "166e68175b97b92faa950c8cb5bc9fa5729352f7512685a32c75070250665ed6"
+      sha256: def70fbaa2a274f4d835677459f6f7afc5469de912438f86076e51cbd4cbd5b4
       url: "https://pub.dev"
     source: hosted
-    version: "3.1.12"
+    version: "3.1.13"
   in_app_purchase_android:
     dependency: transitive
     description:
       name: in_app_purchase_android
-      sha256: "3dbc9b2aa006f96d66e6802c7d2cf41bf8ea246254265c6a9fc01601a5c342ce"
+      sha256: "28164faac635a6cc357c96f47813e675eec7622a8f41e829b501573dbbce2cce"
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.0+16"
+    version: "0.3.0+17"
   in_app_purchase_platform_interface:
     dependency: transitive
     description:
       name: in_app_purchase_platform_interface
-      sha256: "5168afbc54f406f741252b66d41872c1193a0066a6edcb587176290b92e2d537"
+      sha256: "412efce2b9238c5ace4f057acad43f793ed06880e366d26ae322e796cadb051a"
       url: "https://pub.dev"
     source: hosted
-    version: "1.3.6"
+    version: "1.3.7"
   in_app_purchase_storekit:
     dependency: transitive
     description:
       name: in_app_purchase_storekit
-      sha256: "4c29a82fcc68484fc3ac9ae5c2eab8bb3954e3a3d6059d1a31c8383630697fa6"
+      sha256: c4b17a7f2ca8ddc7fd7996a8c32a3af6beddf91d651997c8675a5f23c103c9bc
       url: "https://pub.dev"
     source: hosted
-    version: "0.3.8"
+    version: "0.3.8+1"
   intl:
     dependency: transitive
     description:
@@ -601,26 +601,26 @@ packages:
     dependency: "direct main"
     description:
       name: url_launcher
-      sha256: e9aa5ea75c84cf46b3db4eea212523591211c3cf2e13099ee4ec147f54201c86
+      sha256: d25bb0ca00432a5e1ee40e69c36c85863addf7cc45e433769d61bed3fe81fd96
       url: "https://pub.dev"
     source: hosted
-    version: "6.2.2"
+    version: "6.2.3"
   url_launcher_android:
     dependency: transitive
     description:
       name: url_launcher_android
-      sha256: c0766a55ab42cefaa728cabc951e82919ab41a3a4fee0aaa96176ca82da8cc51
+      sha256: "507dc655b1d9cb5ebc756032eb785f114e415f91557b73bf60b7e201dfedeb2f"
       url: "https://pub.dev"
     source: hosted
-    version: "6.2.1"
+    version: "6.2.2"
   url_launcher_ios:
     dependency: transitive
     description:
       name: url_launcher_ios
-      sha256: "46b81e3109cbb2d6b81702ad3077540789a3e74e22795eb9f0b7d494dbaa72ea"
+      sha256: "75bb6fe3f60070407704282a2d295630cab232991eb52542b18347a8a941df03"
       url: "https://pub.dev"
     source: hosted
-    version: "6.2.2"
+    version: "6.2.4"
   url_launcher_linux:
     dependency: transitive
     description:
@@ -641,10 +641,10 @@ packages:
     dependency: transitive
     description:
       name: url_launcher_platform_interface
-      sha256: "4aca1e060978e19b2998ee28503f40b5ba6226819c2b5e3e4d1821e8ccd92198"
+      sha256: a932c3a8082e118f80a475ce692fde89dc20fddb24c57360b96bc56f7035de1f
       url: "https://pub.dev"
     source: hosted
-    version: "2.3.0"
+    version: "2.3.1"
   url_launcher_web:
     dependency: transitive
     description:

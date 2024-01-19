@@ -1,12 +1,12 @@
 name: calendar_alarm
 description: "variable calendar notification"
 
-publish_to: 'none'
+publish_to: "none"
 
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.2.3 <4.0.0'
+  sdk: ">=3.2.3 <4.0.0"
 
 dependencies:
   carousel_slider: ^4.2.1
@@ -56,10 +56,10 @@ flutter:
     - assets/img/argon-logo.png
 
   fonts:
-  - family: OpenSans
-    fonts:
-      - asset: assets/fonts/OpenSans-Regular.ttf
-      - asset: assets/fonts/OpenSans-Light.ttf
-        weight: 200
-      - asset: assets/fonts/OpenSans-Bold.ttf
-        weight: 600
+    - family: OpenSans
+      fonts:
+        - asset: assets/fonts/OpenSans-Regular.ttf
+        - asset: assets/fonts/OpenSans-Light.ttf
+          weight: 200
+        - asset: assets/fonts/OpenSans-Bold.ttf
+          weight: 600

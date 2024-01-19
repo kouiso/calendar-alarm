@@ -1,4 +1,4 @@
-package com.example.calendar_alarm
+package com.app.calendaralarm
 
 import io.flutter.embedding.android.FlutterActivity
 import androidx.multidex.MultiDex

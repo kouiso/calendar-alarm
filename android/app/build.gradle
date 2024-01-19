@@ -23,7 +23,7 @@ if (flutterVersionName == null) {
 }
 
 android {
-    namespace "com.example.calendar_alarm"
+    namespace "com.app.calendaralarm"
     compileSdkVersion flutter.compileSdkVersion
     ndkVersion flutter.ndkVersion
 
@@ -41,7 +41,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.calendar_alarm"
+        applicationId "com.app.calendaralarm"
         minSdkVersion flutter.minSdkVersion
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
@@ -52,9 +52,9 @@ android {
     signingConfigs {
         debug {
             keyAlias 'calendar-alarm-debug'
-            keyPassword 'Kouiso0802'
+            keyPassword localProperties['keyPassword']
             storeFile file("${System.properties['user.home']}/.keystores/calendar-alarm.keystore")
-            storePassword 'Kouiso0802'
+            storePassword localProperties['storePassword']
         }
     }
 
