@@ -13,6 +13,7 @@ dependencies:
   cloud_firestore: ^4.14.0
   firebase_analytics: ^10.8.0
   firebase_auth: ^4.16.0
+  firebase_auth_oauth: ^1.2.2
   firebase_core: ^2.24.2
   firebase_crashlytics: ^3.4.9
   flutter:
@@ -21,11 +22,10 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   font_awesome_flutter: ^10.6.0
-  # google_sign_in: ^6.2.1
   google_sign_in: ^6.2.1
   googleapis: ^12.0.0
   googleapis_auth: ^1.4.1
-  http: ^1.1.2
+  http: ^0.13.0
   in_app_purchase: ^3.1.12
   pedantic_mono: ^1.25.0
   scrollable_positioned_list: ^0.3.8

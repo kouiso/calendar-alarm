@@ -12,4 +12,5 @@ class Words {
   static const String privacy = 'Privacy';
   static const String about = 'About';
   static const String appTitle = 'Calendar Alarm';
+  static const String unexpectedErrorOccurred = '予期せぬエラーが発生しました。';
 }

@@ -22,10 +22,12 @@ class _HomeState extends State<Home> {
   final EventService _eventService =
       EventService(firestore: FirebaseFirestore.instance);
 
+  late Future<void> _initialFetchEvents;
+
   @override
   void initState() {
     super.initState();
-    _fetchEventsWithPagination();
+    _initialFetchEvents = _fetchEventsWithPagination();
   }
 
   Future<void> _fetchEventsWithPagination() async {
@@ -75,82 +77,86 @@ class _HomeState extends State<Home> {
 
   @override
   Widget build(BuildContext context) {
-    return PageLayout(
-      title: Words.appTitle,
-      notShowNavbar: false,
-      bodyContent: FutureBuilder(
-        future: _fetchEventsWithPagination(),
-        builder: (BuildContext context, AsyncSnapshot snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.error != null) {
-            return const Center(child: Text('Error occurred.'));
-          } else {
-            return Column(
-              children: [
-                TableCalendar(
-                  firstDay: DateTime.utc(2000),
-                  lastDay: DateTime.utc(2050, 12, 31),
-                  focusedDay: _focusedDay,
-                  calendarFormat: _calendarFormat,
-                  onDaySelected: (selectedDay, focusedDay) {
-                    setState(() {
-                      _selectedDay = selectedDay;
-                      _focusedDay = focusedDay;
-                      _selectedEvents = _events[_selectedDay] ?? [];
-                    });
-                  },
-                  selectedDayPredicate: (day) {
-                    return isSameDay(_selectedDay, day);
-                  },
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _selectedEvents.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == _selectedEvents.length) {
-                        if (!_hasMoreData) {
-                          return Center(child: Text('No more events'));
-                        } else {
-                          return Center(child: CircularProgressIndicator());
-                        }
-                      }
-
-                      final event = _selectedEvents[index];
-                      return Card(
-                        child: ListTile(
-                          title: Text(event['summary'] ?? 'No Title'),
-                          subtitle: Text(
-                            (event['start']['dateTime'] as Timestamp)
-                                    .toDate()
-                                    .toString() ??
-                                'No Start Time',
-                          ),
-                          onTap: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) {
-                                return AlertDialog(
-                                  title: Text(event['summary'] ?? 'No Title'),
-                                  content: Text(
-                                    (event['start']['dateTime'] as Timestamp)
-                                            .toDate()
-                                            .toString() ??
-                                        'No Start Time',
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      );
+    return RefreshIndicator(
+      onRefresh: _fetchEventsWithPagination,
+      child: PageLayout(
+        title: Words.appTitle,
+        notShowNavbar: false,
+        bodyContent: FutureBuilder(
+          future: _initialFetchEvents,
+          builder: (BuildContext context, AsyncSnapshot snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            } else if (snapshot.hasError) {
+              return Center(
+                  child: Text(snapshot.error.toString() ?? 'Error occurred.'));
+            } else {
+              return Column(
+                children: [
+                  TableCalendar(
+                    firstDay: DateTime.utc(2000),
+                    lastDay: DateTime.utc(2050, 12, 31),
+                    focusedDay: _focusedDay,
+                    calendarFormat: _calendarFormat,
+                    onDaySelected: (selectedDay, focusedDay) {
+                      setState(() {
+                        _selectedDay = selectedDay;
+                        _focusedDay = focusedDay;
+                        _selectedEvents = _events[_selectedDay] ?? [];
+                      });
+                    },
+                    selectedDayPredicate: (day) {
+                      return isSameDay(_selectedDay, day);
                     },
                   ),
-                ),
-              ],
-            );
-          }
-        },
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: _selectedEvents.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == _selectedEvents.length) {
+                          if (!_hasMoreData) {
+                            return Center(child: Text('No more events'));
+                          } else {
+                            return Center(child: CircularProgressIndicator());
+                          }
+                        }
+
+                        final event = _selectedEvents[index];
+                        return Card(
+                          child: ListTile(
+                            title: Text(event['summary'] ?? 'No Title'),
+                            subtitle: Text(
+                              (event['start']['dateTime'] as Timestamp)
+                                      .toDate()
+                                      .toString() ??
+                                  'No Start Time',
+                            ),
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) {
+                                  return AlertDialog(
+                                    title: Text(event['summary'] ?? 'No Title'),
+                                    content: Text(
+                                      (event['start']['dateTime'] as Timestamp)
+                                              .toDate()
+                                              .toString() ??
+                                          'No Start Time',
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            }
+          },
+        ),
       ),
     );
   }

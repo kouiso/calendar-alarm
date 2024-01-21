@@ -10,24 +10,22 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+void showErrorDialog(BuildContext context, String title, String message,
+    {VoidCallback? onPressedOk}) {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) => custom_dialog.Dialog(
+      title: title,
+      message: message,
+      onPressedOk: onPressedOk,
+    ),
+  );
+}
+
 class MyApp extends StatelessWidget {
   final FirebaseAnalytics analytics;
 
   const MyApp({super.key, required this.analytics});
-
-  static void showErrorDialog(
-      BuildContext context, String title, String message,
-      {VoidCallback? onPressedOk} // ここをオプショナルに変更
-      ) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) => custom_dialog.Dialog(
-        title: title,
-        message: message,
-        onPressedOk: onPressedOk, // コールバック関数をDialogに渡す
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,29 +40,20 @@ class MyApp extends StatelessWidget {
       ],
       supportedLocales: [
         const Locale('ja', 'JP'),
+        // 他のサポートされるロケールを追加
       ],
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.active) {
-            // ユーザーがログインしているかどうかをチェック
-            User? user = snapshot.data;
-            if (user == null) {
-              // ユーザーがログインしていない場合、Registerページにリダイレクト
-              return const Signin();
-            }
-            // ユーザーがログインしている場合、Homeページにリダイレクト
-            return const Home();
-          }
-          // 接続中のローディングインジケーターを表示
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
+      initialRoute: '/',
+      routes: {
+        '/': (BuildContext context) => StreamBuilder<User?>(
+              stream: FirebaseAuth.instance.authStateChanges(),
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  return const Home();
+                } else {
+                  return const Signin();
+                }
+              },
             ),
-          );
-        },
-      ),
-      routes: <String, WidgetBuilder>{
         '/onboarding': (BuildContext context) => const Onboarding(),
         '/home': (BuildContext context) => const Home(),
         '/profile': (BuildContext context) => const Profile(),

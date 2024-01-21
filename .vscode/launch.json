@@ -16,7 +16,7 @@
             "name": "iPhone 14",
             "request": "launch",
             "type": "dart",
-            "deviceId": "xxxx"
+            "deviceId": "7CE045A3-8C62-4454-A70E-4871753DCF78"
         },
         {
             "name": "Web(Chrome)",

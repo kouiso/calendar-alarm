@@ -22,33 +22,51 @@ class _SigninState extends State<Signin> {
   final authService = AuthenticationService(FirebaseAuth.instance);
 
   final signInMethods = [
-    SignInMethod('Google', (authService) => authService.signInWithGoogle()),
-    SignInMethod('Apple', (authService) => authService.signInWithApple()),
+    SignInMethod('Google', SignInProvider.google),
+    SignInMethod('Apple', SignInProvider.apple),
+    // Add Microsoft support if necessary
   ];
 
-  void _handleSignIn(SignInMethod method) async {
+  bool _isLoading = false;
+
+  Future<void> _handleSignIn(SignInProvider provider) async {
     try {
-      await method.action(authService);
-      // サインイン成功時の処理
+      await authService.signIn(provider);
+      // サインイン成功時の処理、例えばホーム画面へのリダイレクト
+      Navigator.of(context).pushReplacementNamed('/home');
     } catch (e) {
-      // エラーダイアログを表示
-      MyApp.showErrorDialog(context, '${method.name}${Words.signInError}',
-          '${Words.signInFailed}$e');
+      // ユーザーフレンドリーなエラーメッセージを表示
+      final errorMessage = e is AuthenticationException
+          ? e.message
+          : Words.unexpectedErrorOccurred;
+      showErrorDialog(
+          context, '${provider.name}${Words.signInError}', errorMessage);
     }
   }
 
   Widget _signInButton(
-      {required String text,
-      required Buttons buttonType,
-      required Function onPressed}) {
-    return SizedBox(
-      height: 60,
-      child: SignInButton(
-        text: text,
-        buttonType,
-        onPressed: onPressed,
-      ),
+      {required String text, required SignInProvider provider}) {
+    return SignInButton(
+      _getButton(provider),
+      text: text,
+      onPressed: () async {
+        setState(() => _isLoading = true); // ローディング状態を開始
+        await _handleSignIn(provider);
+        setState(() => _isLoading = false); // ローディング状態を終了
+      },
     );
+  }
+
+  Buttons _getButton(SignInProvider provider) {
+    switch (provider) {
+      case SignInProvider.google:
+        return Buttons.google;
+      case SignInProvider.apple:
+        return Buttons.apple;
+      // Microsoftサポートを追加する場合はここにcaseを追加
+      default:
+        return Buttons.google; // デフォルトのフォールバック
+    }
   }
 
   @override
@@ -57,7 +75,7 @@ class _SigninState extends State<Signin> {
 
     return PageLayout(
       title: Words.signIn,
-      notShowNavbar: false,
+      notShowNavbar: true, // Changed this line
       bodyContent: Stack(
         children: [
           Container(
@@ -99,10 +117,7 @@ class _SigninState extends State<Signin> {
                         for (var method in signInMethods)
                           _signInButton(
                             text: "${method.name}${Words.signInWith}",
-                            buttonType: method.name == 'Google'
-                                ? Buttons.google
-                                : Buttons.apple,
-                            onPressed: () => _handleSignIn(method),
+                            provider: method.provider,
                           ),
                         const SizedBox(height: 20),
                       ],
@@ -112,6 +127,9 @@ class _SigninState extends State<Signin> {
               ],
             ),
           ),
+          if (_isLoading)
+            const Center(
+                child: CircularProgressIndicator()), // ローディングインジケーターを表示
         ],
       ),
     );
@@ -120,7 +138,7 @@ class _SigninState extends State<Signin> {
 
 class SignInMethod {
   final String name;
-  final Future Function(AuthenticationService) action;
+  final SignInProvider provider;
 
-  SignInMethod(this.name, this.action);
+  SignInMethod(this.name, this.provider);
 }

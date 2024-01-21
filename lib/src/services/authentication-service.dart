@@ -7,6 +7,22 @@ class AuthenticationService {
 
   AuthenticationService(this._firebaseAuth);
 
+  Future<AuthCredential> _getCredentialFromProvider(
+      SignInProvider provider) async {
+    try {
+      switch (provider) {
+        case SignInProvider.google:
+          return await _getGoogleCredential();
+        case SignInProvider.apple:
+          return await _getAppleCredential();
+        default:
+          throw AuthenticationException('Provider not supported');
+      }
+    } on FirebaseAuthException catch (e) {
+      throw AuthenticationException(e.message ?? 'An unknown error occurred');
+    }
+  }
+
   Future<AuthCredential> _getGoogleCredential() async {
     final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
     if (googleUser == null) {
@@ -15,7 +31,6 @@ class AuthenticationService {
         message: 'Google sign in aborted by user',
       );
     }
-
     final GoogleSignInAuthentication googleAuth =
         await googleUser.authentication;
     return GoogleAuthProvider.credential(
@@ -32,54 +47,44 @@ class AuthenticationService {
         AppleIDAuthorizationScopes.fullName,
       ],
     );
-
-    return OAuthProvider("apple.com").credential(
+    return OAuthProvider(kAppleProviderId).credential(
       idToken: appleCredential.identityToken,
       accessToken: appleCredential.authorizationCode,
     );
   }
 
-  Future<void> signInWithGoogle() async {
-    try {
-      final credential = await _getGoogleCredential();
-      await _firebaseAuth.signInWithCredential(credential);
-    } on FirebaseAuthException catch (e) {
-      throw e;
-    }
+  Future<void> signIn(SignInProvider provider) async {
+    final credential = await _getCredentialFromProvider(provider);
+    await _firebaseAuth.signInWithCredential(credential);
   }
 
-  Future<void> signInWithApple() async {
-    try {
-      final credential = await _getAppleCredential();
-      await _firebaseAuth.signInWithCredential(credential);
-    } on FirebaseAuthException catch (e) {
-      throw e;
-    }
-  }
-
-  Future<void> linkGoogleAccount() async {
-    try {
-      final credential = await _getGoogleCredential();
-      await _firebaseAuth.currentUser!.linkWithCredential(credential);
-    } on FirebaseAuthException catch (e) {
-      throw e;
-    }
-  }
-
-  Future<void> linkAppleAccount() async {
-    try {
-      final credential = await _getAppleCredential();
-      await _firebaseAuth.currentUser!.linkWithCredential(credential);
-    } on FirebaseAuthException catch (e) {
-      throw e;
-    }
+  Future<void> linkAccount(SignInProvider provider) async {
+    await _ensureLoggedIn();
+    final credential = await _getCredentialFromProvider(provider);
+    await _firebaseAuth.currentUser!.linkWithCredential(credential);
   }
 
   Future<void> unlinkAccount(String providerId) async {
-    try {
-      await _firebaseAuth.currentUser!.unlink(providerId);
-    } catch (e) {
-      throw e;
+    await _ensureLoggedIn();
+    await _firebaseAuth.currentUser!.unlink(providerId);
+  }
+
+  Future<void> _ensureLoggedIn() async {
+    if (_firebaseAuth.currentUser == null) {
+      throw AuthenticationException('Not logged in');
     }
   }
+}
+
+class AuthenticationException implements Exception {
+  final String message;
+  AuthenticationException(this.message);
+}
+
+const String kAppleProviderId = 'apple.com';
+
+enum SignInProvider {
+  google,
+  apple,
+  // Add other providers if necessary
 }
