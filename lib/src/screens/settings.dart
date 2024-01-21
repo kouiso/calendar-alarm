@@ -22,8 +22,72 @@ class _SettingsState extends State<Settings> {
   @override
   void initState() {
     super.initState();
-    user = FirebaseAuth.instance.currentUser;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeUserAndAuthService();
+    });
+  }
+
+  void _initializeUserAndAuthService() async {
     _authService = AuthenticationService(FirebaseAuth.instance);
+    await _updateCurrentUser();
+  }
+
+  Future<void> _updateCurrentUser() async {
+    var currentUser = FirebaseAuth.instance.currentUser;
+    setState(() {
+      user = currentUser;
+    });
+  }
+
+  Future<void> _linkAccount(Future<void> Function() linkMethod) async {
+    try {
+      await linkMethod();
+      await _updateCurrentUser();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(Words.accountLinked)),
+      );
+    } catch (e) {
+      _showErrorDialog(Words.accountLinkFailed);
+    }
+  }
+
+  Future<void> _unlinkAccount(String providerId) async {
+    if (user!.providerData.length <= 1) {
+      _showErrorDialog(Words.cannotDeleteMainAccount);
+      return;
+    }
+    try {
+      await _authService.unlinkAccount(providerId);
+      await _updateCurrentUser();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(Words.accountUnlinked)),
+      );
+    } catch (e) {
+      _showErrorDialog(Words.accountUnlinkFailed);
+    }
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(Words.error),
+        content: Text(message),
+        actions: [
+          TextButton(
+            child: Text(Words.close),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _navigateTo(Widget page) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => page),
+    );
   }
 
   @override
@@ -35,70 +99,44 @@ class _SettingsState extends State<Settings> {
           padding: const EdgeInsets.all(32),
           child: Column(
             children: [
-              // その他の設定項目
               TableCellSettings(
                 title: Words.linkGoogleAccount,
-                onTap: () async {
-                  await _authService.linkGoogleAccount();
-                  setState(() {
-                    user = FirebaseAuth.instance.currentUser;
-                  });
-                },
+                onTap: () => _linkAccount(
+                    () => _authService.linkAccount(SignInProvider.google)),
               ),
               TableCellSettings(
                 title: Words.linkAppleAccount,
-                onTap: () async {
-                  await _authService.linkAppleAccount();
-                  setState(() {
-                    user = FirebaseAuth.instance.currentUser;
-                  });
-                },
+                onTap: () => _linkAccount(
+                    () => _authService.linkAccount(SignInProvider.apple)),
               ),
               const Divider(),
-              ...user!.providerData.map((provider) {
-                return ListTile(
-                  title: Text("${Words.linkedAccount}${provider.providerId}"),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: () async {
-                      await _authService.unlinkAccount(provider.providerId);
-                      setState(() {
-                        user = FirebaseAuth.instance.currentUser;
-                      });
-                    },
-                  ),
-                );
-              }),
+              if (user != null)
+                ...user!.providerData.map((provider) {
+                  bool isOnlyAccount = user!.providerData.length == 1;
+                  return ListTile(
+                    title: Text("${Words.linkedAccount}${provider.providerId}"),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete),
+                      onPressed: isOnlyAccount
+                          ? null
+                          : () => _unlinkAccount(provider.providerId),
+                      tooltip: isOnlyAccount ? 'メインアカウントは削除できません。' : null,
+                    ),
+                  );
+                }),
               const Divider(),
               // その他の設定項目
               TableCellSettings(
                 title: Words.userAgreement,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const UserAgreement(),
-                    ),
-                  );
-                },
+                onTap: () => _navigateTo(const UserAgreement()),
               ),
               TableCellSettings(
                 title: Words.privacy,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const Privacy()),
-                  );
-                },
+                onTap: () => _navigateTo(const Privacy()),
               ),
               TableCellSettings(
                 title: Words.about,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const About()),
-                  );
-                },
+                onTap: () => _navigateTo(const About()),
               ),
             ],
           ),
