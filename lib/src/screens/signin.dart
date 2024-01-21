@@ -1,10 +1,11 @@
 import 'dart:ui' as ui;
 
-import 'package:calendar_alarm/src/app.dart';
 import 'package:calendar_alarm/src/constants/Theme.dart';
 import 'package:calendar_alarm/src/constants/Words.dart';
 import 'package:calendar_alarm/src/layouts/page-layout.dart';
 import 'package:calendar_alarm/src/services/authentication-service.dart';
+import 'package:calendar_alarm/src/utils/index.dart'
+    as utils; // Updated import path
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:sign_in_button/sign_in_button.dart';
@@ -39,8 +40,8 @@ class _SigninState extends State<Signin> {
       final errorMessage = e is AuthenticationException
           ? e.message
           : Words.unexpectedErrorOccurred;
-      showErrorDialog(
-          context, '${provider.name}${Words.signInError}', errorMessage);
+      utils.showErrorDialog(context, '${provider.name}${Words.signInError}',
+          errorMessage); // Updated function call
     }
   }
 
@@ -75,7 +76,6 @@ class _SigninState extends State<Signin> {
 
     return PageLayout(
       title: Words.signIn,
-      notShowNavbar: true, // Changed this line
       bodyContent: Stack(
         children: [
           Container(

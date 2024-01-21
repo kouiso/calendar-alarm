@@ -5,23 +5,24 @@ import 'package:flutter/material.dart';
 class PageLayout extends StatelessWidget {
   final String title;
   final Widget bodyContent;
-  final bool notShowNavbar; // ナビゲーションバーを表示するかどうかのプロパティ
+  final bool? showNavbar; // ナビゲーションバーを表示するかどうかのプロパティ
 
   const PageLayout({
     Key? key,
     required this.title,
     required this.bodyContent,
-    this.notShowNavbar = false, // デフォルトはtrueに設定
+    this.showNavbar = true, // デフォルトはtrueに設定
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: notShowNavbar
-          ? null
-          : Navbar(title: title), // showNavbarに基づいてナビゲーションバーを表示または非表示
+      appBar: showNavbar ?? true
+          ? Navbar(title: title)
+          : null, // showNavbarに基づいてナビゲーションバーを表示または非表示
       drawer: ArgonDrawer(currentPage: title),
       body: bodyContent,
+      // フローティングアクションボタンのコードを削除
     );
   }
 }
