@@ -157,7 +157,38 @@ class _HomeState extends State<Home> {
             }
           },
         ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            // アラーム設定画面を表示する
+            showAlarmSettingDialog(context);
+          },
+          child: Icon(Icons.alarm_add),
+        ),
       ),
+    );
+  }
+
+  void showAlarmSettingDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Set Alarm'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              // 時間を設定するウィジェット
+              // 音を選択するウィジェット
+              // バイブレーションの有無を選択するウィジェット
+              // 音量を設定するスライダー
+            ],
+          ),
+          actions: <Widget>[
+            // キャンセルボタン
+            // 設定ボタン
+          ],
+        );
+      },
     );
   }
 }

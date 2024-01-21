@@ -92,6 +92,51 @@ exports.createGoogleCalendarWatchChannel = functions.https.onRequest(
   }
 );
 
+exports.syncCalendarEventsOnLogin = functions.auth
+  .user()
+  .onCreate(async (user) => {
+    // 新しいユーザーが作成されたときに実行される
+    try {
+      const calendar = await getCalendar();
+      const response = await calendar.events.list({
+        calendarId: "primary",
+        timeMin: new Date().toISOString(),
+        maxResults: 10,
+        singleEvents: true,
+        orderBy: "startTime",
+      });
+
+      if (response.status !== 200) {
+        throw new Error(`API returned status ${response.status}`);
+      }
+
+      const events: CalendarEvent[] = response.data.items || [];
+      const batch = admin.firestore().batch();
+      events.forEach((event: CalendarEvent) => {
+        if (event.id) {
+          const eventRef = admin
+            .firestore()
+            .collection("users")
+            .doc(user.uid)
+            .collection("calendarEvents")
+            .doc(event.id);
+          batch.set(eventRef, event);
+        }
+      });
+      await batch.commit();
+      console.log(
+        "Calendar events synced successfully for new user:",
+        user.uid
+      );
+    } catch (error) {
+      console.error(
+        "Error syncing calendar events for new user:",
+        user.uid,
+        error
+      );
+    }
+  });
+
 function isValidRequest(req: functions.https.Request): boolean {
   // Implement request validation logic here
   return true; // As an example, always return true
