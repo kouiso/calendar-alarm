@@ -36,35 +36,36 @@ class MyApp extends StatelessWidget {
               stream: FirebaseAuth.instance.authStateChanges(),
               builder: (context, snapshot) {
                 if (snapshot.hasData) {
-                  return const Home();
+                  return HomeWithFAB(analytics: analytics);
                 } else {
                   return const Signin();
                 }
               },
             ),
         '/onboarding': (BuildContext context) => const Onboarding(),
-        '/home': (BuildContext context) => const Home(),
+        '/home': (BuildContext context) => HomeWithFAB(analytics: analytics),
         '/profile': (BuildContext context) => const Profile(),
         '/settings': (BuildContext context) => const Settings(),
         '/signin': (BuildContext context) => const Signin(),
       },
-      builder: (context, child) {
-        // 現在のルートを取得
-        final currentRoute = ModalRoute.of(context)?.settings.name;
+    );
+  }
+}
 
-        // フローティングアクションボタンを条件に応じて表示
-        final bool showFab = currentRoute == '/home';
-        return Scaffold(
-          body: child,
-          floatingActionButton: showFab
-              ? FloatingActionButton(
-                  onPressed: () => _showAddOptions(context),
-                  child: const Icon(Icons.add), // プラスアイコン
-                  tooltip: '追加', // ツールチップに「追加」と表示
-                )
-              : null,
-        );
-      },
+class HomeWithFAB extends StatelessWidget {
+  final FirebaseAnalytics analytics;
+
+  const HomeWithFAB({Key? key, required this.analytics}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: const Home(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showAddOptions(context),
+        child: const Icon(Icons.add), // プラスアイコン
+        tooltip: '追加', // ツールチップに「追加」と表示
+      ),
     );
   }
 

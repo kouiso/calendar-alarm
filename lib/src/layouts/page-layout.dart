@@ -17,12 +17,9 @@ class PageLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: showNavbar ?? true
-          ? Navbar(title: title)
-          : null, // showNavbarに基づいてナビゲーションバーを表示または非表示
+      appBar: showNavbar ?? true ? Navbar(title: title) : null,
       drawer: ArgonDrawer(currentPage: title),
       body: bodyContent,
-      // フローティングアクションボタンのコードを削除
     );
   }
 }

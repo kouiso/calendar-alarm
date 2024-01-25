@@ -28,6 +28,7 @@ dependencies:
   http: ^0.13.0
   in_app_purchase: ^3.1.12
   pedantic_mono: ^1.25.0
+  popup_menu: ^2.0.0
   scrollable_positioned_list: ^0.3.8
   sign_in_button: ^3.2.0
   sign_in_with_apple: ^5.0.0
