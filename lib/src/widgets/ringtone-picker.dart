@@ -13,7 +13,7 @@ class RingtonePickerWidget extends StatelessWidget {
 
   void _playRingtone() {
     // アラーム音選択ロジックをメソッドに分離
-    FlutterRingtonePlayer.play(
+    FlutterRingtonePlayer().play(
       android: AndroidSounds.notification,
       ios: IosSounds.glass,
       looping: true, // Android only - API >= 28

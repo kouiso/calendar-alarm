@@ -1,38 +1,32 @@
 {
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Current Device",
-            "request": "launch",
-            "type": "dart"
-        },
-        {
-            "name": "Pixel_4_API_30",
+            "name": "debug flavor dev",
             "request": "launch",
             "type": "dart",
-            "deviceId": "emulator-5554"
+            "program": "lib/main.dart",
+            "args": [
+                "--debug",
+                "--flavor",
+                "dev",
+                "--dart-define=FLAVOR=dev",
+            ],
         },
         {
-            "name": "iPhone 14",
+            "name": "debug flavor prod",
             "request": "launch",
             "type": "dart",
-            "deviceId": "7CE045A3-8C62-4454-A70E-4871753DCF78"
-        },
-        {
-            "name": "Web(Chrome)",
-            "request": "launch",
-            "type": "dart",
-            "deviceId": "chrome"
-        },
+            "program": "lib/main.dart",
+            "args": [
+                "--debug",
+                "--flavor",
+                "prod",
+                "--dart-define=FLAVOR=prod",
+            ],
+        }
     ],
-    "compounds": [
-        {
-            "name": "All Mobile Devices",
-            "configurations": [
-                "Pixel_4_API_30",
-                "iPhone SE (3rd generation)",
-                "iPhone 14"
-            ]
-        },
-    ]
 }
