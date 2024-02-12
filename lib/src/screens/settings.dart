@@ -30,10 +30,12 @@ class _SettingsState extends State<Settings> {
   }
 
   void _fetchGoogleAccountEmail() async {
-    final String? email = await PlatformService.getGoogleAccounts();
-    setState(() {
-      _googleAccountEmail = email;
-    });
+    final List<String> accounts = await PlatformService.getGoogleAccounts();
+    if (accounts.isNotEmpty) {
+      setState(() {
+        _googleAccountEmail = accounts.first;
+      });
+    }
   }
 
   /// Googleアカウントとの同期を切り替えます。
