@@ -1,4 +1,7 @@
-flutter 3.16.5-stable
-dart 3.2.4
+flutter 3.16.9-stable
+dart 3.2.6
 ruby 3.3.0
 java adoptopenjdk-8.0.292+10
+cocoapods 1.11.3
+
+
