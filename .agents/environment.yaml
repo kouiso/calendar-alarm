@@ -1,0 +1,4 @@
+setup:
+  install: "flutter pub get"
+  test: "flutter test"
+  lint: "flutter analyze"
