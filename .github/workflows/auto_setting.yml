@@ -6,7 +6,7 @@ on:
 
 jobs:
   assign_pr_to_creator:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Auto Assign PR to Creator
         uses: actions/github-script@v5
@@ -24,7 +24,7 @@ jobs:
             console.log('PR assigned to creator.');
 
   auto-label:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Add label based on branch name
         uses: actions/github-script@v5
@@ -80,7 +80,7 @@ jobs:
             }
 
   pull_request_taking_for_jira:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Install Axios
         run: npm install axios
@@ -162,7 +162,7 @@ jobs:
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
 
   check-base-branch:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Fail if base branch is not develop
         run: |
