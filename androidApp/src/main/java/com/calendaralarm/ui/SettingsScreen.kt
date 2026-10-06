@@ -90,14 +90,15 @@ fun SettingsScreen(
         item { SectionHeader("鳴動") }
         item {
             val defaultMin = prefs?.defaultMinutesBefore ?: 0
-            SettingRow("イベント連動の既定") {
-                Row {
+            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                Text("イベント連動の既定", style = MaterialTheme.typography.bodyLarge)
+                Row(Modifier.padding(top = 4.dp)) {
                     listOf(0, 5, 10, 15).forEach { m ->
                         FilterChip(
                             selected = defaultMin == m,
                             onClick = { scope.launch { settings.setDefaultMinutesBefore(m) } },
                             label = { Text(if (m == 0) "開始時" else "${m}分前") },
-                            modifier = Modifier.padding(start = 4.dp),
+                            modifier = Modifier.padding(end = 6.dp),
                         )
                     }
                 }

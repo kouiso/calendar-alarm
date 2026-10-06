@@ -15,17 +15,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// パレット方針: 夜の時計 = 深いインディゴを主色に、警告/アクセントだけ温かいアンバー。
+// パレット方針: 夜の時計 = 深いインディゴを主色に、選択状態(チップ/ナビピル)は
+// 同系のくすみインディゴで揃える (secondaryContainer が M3 の標準選択色のため)。
 // ニュートラルは彩度を落としたブルーグレー系で、light/dark 両方で 4.5:1 を確保する。
 private val LightColors = lightColorScheme(
     primary = Color(0xFF4A46D4),
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFE3E0FF),
     onPrimaryContainer = Color(0xFF120D69),
-    secondary = Color(0xFF915200),
+    secondary = Color(0xFF585A92),
     onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFFFDCB8),
-    onSecondaryContainer = Color(0xFF311300),
+    secondaryContainer = Color(0xFFE1E0F9),
+    onSecondaryContainer = Color(0xFF1A1B4B),
     tertiary = Color(0xFF006A63),
     onTertiary = Color(0xFFFFFFFF),
     tertiaryContainer = Color(0xFF9EF2E7),
@@ -56,10 +57,10 @@ private val DarkColors = darkColorScheme(
     onPrimary = Color(0xFF26247A),
     primaryContainer = Color(0xFF3B3794),
     onPrimaryContainer = Color(0xFFE3E0FF),
-    secondary = Color(0xFFFFB95C),
-    onSecondary = Color(0xFF4A2800),
-    secondaryContainer = Color(0xFF6A3A00),
-    onSecondaryContainer = Color(0xFFFFDCB8),
+    secondary = Color(0xFFC4C3EA),
+    onSecondary = Color(0xFF2D2E55),
+    secondaryContainer = Color(0xFF444462),
+    onSecondaryContainer = Color(0xFFE1E0F9),
     tertiary = Color(0xFF86D2C7),
     onTertiary = Color(0xFF003730),
     tertiaryContainer = Color(0xFF00504A),
