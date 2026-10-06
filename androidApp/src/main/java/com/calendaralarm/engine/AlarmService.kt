@@ -217,12 +217,16 @@ class AlarmService : Service() {
         super.onDestroy()
     }
 
-    /** システムやユーザーにサービスを殺されても、未解決のまま状態を残す。 */
+    /** システムやユーザーにサービスを殺されても、鳴動を握り潰さない。 */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        scope.launch {
-            currentInstance?.let {
-                app.container.repository.audit("ERROR", "鳴動中にタスク除去: ${it.id}")
-                // PENDING に戻して健全性チェックが再鳴動させる
+        currentInstance?.let {
+            // AlarmManager の予約はプロセスをまたいで残るので、直近に再鳴動を仕掛け直す。
+            // DB も PENDING に戻して健全性チェックの差分と整合させる。
+            app.container.scheduler.schedule(
+                it.copy(triggerAtMillis = System.currentTimeMillis() + 15_000L),
+            )
+            scope.launch {
+                app.container.repository.audit("ERROR", "鳴動中にタスク除去: ${it.id} → 15秒後に再鳴動")
                 app.container.repository.setState(it.id, AlarmState.PENDING)
             }
         }

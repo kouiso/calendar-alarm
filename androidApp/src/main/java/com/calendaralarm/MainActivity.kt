@@ -58,6 +58,11 @@ class MainActivity : ComponentActivity() {
                         activity = this,
                     )
                 } else {
+                    // 強制終了→手動再開で AlarmManager の予約が消えるケースに備え、
+                    // メイン画面に入る度に予約を再主張する (冪等)。
+                    androidx.compose.runtime.LaunchedEffect(Unit) {
+                        app.container.repository.resync("app start")
+                    }
                     MainScaffold(app.container.repository, app.container.settings)
                 }
             }

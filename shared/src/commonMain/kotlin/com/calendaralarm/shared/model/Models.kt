@@ -82,7 +82,8 @@ data class AlarmInstance(
     val snoozeSeq: Int = 0,
 ) {
     fun snoozed(nextTriggerMillis: Long): AlarmInstance =
-        copy(id = "$id#snz${snoozeSeq + 1}", triggerAtMillis = nextTriggerMillis, snoozeSeq = snoozeSeq + 1)
+        // URI 経由で渡す都合上 '#' は使えない (fragment 扱いで lastPathSegment が化ける)
+        copy(id = "$id:snz${snoozeSeq + 1}", triggerAtMillis = nextTriggerMillis, snoozeSeq = snoozeSeq + 1)
 }
 
 /** 鳴動結果の状態。ScheduledInstanceEntity.state と対応。 */

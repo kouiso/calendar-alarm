@@ -119,15 +119,12 @@ class EngineTest {
         repository.scheduleAdhoc(inst)
         repository.onSnoozed(inst.id)
 
-        val states = repository
         // 元は SNOOZED
-        // DB の全行を確認
-        val all = mutableListOf<com.calendaralarm.data.db.ScheduledInstanceEntity>()
-        db.scheduledInstances().allFlow().first().let { all.addAll(it) }
+        val all = db.scheduledInstances().allFlow().first()
         val orig = all.first { it.id == inst.id }
         assertEquals(AlarmState.SNOOZED.name, orig.state)
         // スヌーズ分が PENDING でスケジュール済み
-        val snoozed = all.firstOrNull { it.id.startsWith("${inst.id}#snz") }
+        val snoozed = all.firstOrNull { it.id.startsWith("${inst.id}:snz") }
         assertNotNull(snoozed)
         assertEquals(AlarmState.PENDING.name, snoozed!!.state)
         assertTrue(snoozed.triggerAtMillis > System.currentTimeMillis())
