@@ -137,6 +137,11 @@ class AlarmRepository(
         setState(id, AlarmState.DISMISSED)
         scheduler.cancel(id)
         audit("DISMISS", id)
+        // 単発アラームは終端到達=消費。アラーム本体も OFF に倒して
+        // 「有効表示なのに二度と鳴らない」状態を残さない
+        db.scheduledInstances().byId(id)?.standaloneAlarmId?.let {
+            disableConsumedOneShots(setOf(it))
+        }
         onScheduleChanged?.invoke()
     }
 
@@ -184,9 +189,32 @@ class AlarmRepository(
         val horizon = now + 14.days
         val desired = mutableListOf<AlarmInstance>()
 
-        // 単発/繰り返しアラーム
+        // 終端行は先に読む。同 id の蘇生防止と単発アラームの消費判定の両方で使う
+        val allRows = db.scheduledInstances().all()
+        val terminalIds = allRows.asSequence()
+            .filter {
+                it.state in setOf(
+                    AlarmState.FIRED.name, AlarmState.DISMISSED.name,
+                    AlarmState.SNOOZED.name, AlarmState.MISSED.name,
+                )
+            }
+            .map { it.id }
+            .toSet()
+
+        // 単発/繰り返しアラーム。
+        // 単発 (daysOfWeek 空) は一度終端に達したら二度と発行しない。
+        // 展開は毎回「次の in-window 日付」へ新 id を発行するので、終端行が
+        // 残る限り「1回のみ」の約束が日跨ぎで破られて毎日鳴り続ける。
+        val consumedAlarmIds = allRows.asSequence()
+            .filter { it.id in terminalIds }
+            .mapNotNull { it.standaloneAlarmId }
+            .toSet()
         val standalones = db.standaloneAlarms().all().map { it.toModel() }
-        standalones.forEach { desired += AlarmExpander.expandStandalone(it, now = now, days = 14) }
+        standalones.forEach { alarm ->
+            if (alarm.daysOfWeek.isNotEmpty() || alarm.id !in consumedAlarmIds) {
+                desired += AlarmExpander.expandStandalone(alarm, now = now, days = 14)
+            }
+        }
 
         // カレンダーイベント
         // 「権限が無い」と「読み取り自体が失敗」を区別する。後者 (同期中の
@@ -250,16 +278,6 @@ class AlarmRepository(
 
         // 終了済み状態 (鳴動/停止/スヌーズ/見逃し) の同 id は蘇生させない。
         // 展開が同 id を再発行しても、ユーザーが「止めた」「スヌーズした」意味を守る。
-        val allRows = db.scheduledInstances().all()
-        val terminalIds = allRows.asSequence()
-            .filter {
-                it.state in setOf(
-                    AlarmState.FIRED.name, AlarmState.DISMISSED.name,
-                    AlarmState.SNOOZED.name, AlarmState.MISSED.name,
-                )
-            }
-            .map { it.id }
-            .toSet()
         desired.removeAll { it.id in terminalIds }
 
         // タイマー・スヌーズなど Expander が再生しない予約は「理想状態」へ持ち越す。
@@ -350,6 +368,9 @@ class AlarmRepository(
     suspend fun markMissed(id: String, detail: String? = null) {
         setState(id, AlarmState.MISSED)
         audit("MISS", if (detail == null) id else "$id: $detail")
+        db.scheduledInstances().byId(id)?.standaloneAlarmId?.let {
+            disableConsumedOneShots(setOf(it))
+        }
         onScheduleChanged?.invoke()
     }
 
@@ -362,8 +383,24 @@ class AlarmRepository(
             setState(it.id, AlarmState.MISSED)
             audit("MISS", it.id)
         }
-        if (stale.isNotEmpty()) onScheduleChanged?.invoke()
+        if (stale.isNotEmpty()) {
+            disableConsumedOneShots(stale.mapNotNull { it.standaloneAlarmId }.toSet())
+            onScheduleChanged?.invoke()
+        }
         return stale.size
+    }
+
+    /** 単発アラームの終端到達をアラーム本体の OFF に反映する。 */
+    private suspend fun disableConsumedOneShots(alarmIds: Set<Long>) {
+        if (alarmIds.isEmpty()) return
+        val alarms = db.standaloneAlarms().all().associateBy { it.id }
+        for (id in alarmIds) {
+            val e = alarms[id] ?: continue
+            if (e.daysMask == 0 && e.enabled) {
+                db.standaloneAlarms().upsert(e.copy(enabled = false))
+                audit("ALARM_OFF", "単発アラーム消費で停止: ${e.label} (id=$id)")
+            }
+        }
     }
 
     // ---- 設定更新 ----
@@ -372,6 +409,11 @@ class AlarmRepository(
         val entity = alarm.toEntity()
         val id = if (entity.id == 0L) db.standaloneAlarms().upsert(entity) else {
             db.standaloneAlarms().upsert(entity); entity.id
+        }
+        if (alarm.enabled && alarm.daysOfWeek.isEmpty()) {
+            // 単発アラームの再有効化は消費のリセット。終端行を消して
+            // 消費判定 (終端行の有無) に引っかからないようにする
+            db.scheduledInstances().deleteTerminalByAlarmId(id)
         }
         // 予約は再同期で整理する
         resync("alarm:$id updated")

@@ -170,6 +170,50 @@ class EngineTest {
     }
 
     @Test
+    fun `単発アラームは一度消費したら二度と鳴らない`() = runBlocking {
+        repository.upsertStandaloneAlarm(
+            StandaloneAlarm(enabled = true, hour = 7, minute = 0, label = "一回のみ"),
+        )
+        val aid = db.standaloneAlarms().all().first().id
+        // 鳴動→停止で終端に達する
+        val inst = AlarmInstance(
+            id = "sa:$aid:2026-10-05",
+            triggerAtMillis = System.currentTimeMillis() - 1000,
+            title = "t", kind = AlarmKind.STANDALONE, standaloneAlarmId = aid,
+        )
+        repository.scheduleAdhoc(inst)
+        repository.onFired(inst.id)
+        repository.onDismissed(inst.id)
+        repository.resync("test")
+        // アラーム本体が OFF になり、翌日分が二度と発行されない
+        assertEquals(false, db.standaloneAlarms().byId(aid)!!.enabled)
+        assertTrue(repository.pendingFlow().first().none { it.id.startsWith("sa:$aid:") })
+    }
+
+    @Test
+    fun `消費した単発アラームは再有効化で復活する`() = runBlocking {
+        repository.upsertStandaloneAlarm(
+            StandaloneAlarm(enabled = true, hour = 7, minute = 0),
+        )
+        val aid = db.standaloneAlarms().all().first().id
+        val inst = AlarmInstance(
+            id = "sa:$aid:2026-10-05",
+            triggerAtMillis = System.currentTimeMillis() - 1000,
+            title = "t", kind = AlarmKind.STANDALONE, standaloneAlarmId = aid,
+        )
+        repository.scheduleAdhoc(inst)
+        repository.onFired(inst.id)
+        repository.onDismissed(inst.id)
+        assertEquals(false, db.standaloneAlarms().byId(aid)!!.enabled)
+        // 再ONは消費のリセット: 翌日分が再発行される
+        repository.upsertStandaloneAlarm(
+            StandaloneAlarm(id = aid, enabled = true, hour = 7, minute = 0),
+        )
+        assertTrue(db.standaloneAlarms().byId(aid)!!.enabled)
+        assertTrue(repository.pendingFlow().first().any { it.id.startsWith("sa:$aid:") })
+    }
+
+    @Test
     fun `鳴動→停止で DISMISSED になり AlarmManager から消える`() = runBlocking {
         val inst = AlarmInstance(
             id = "ev:y", triggerAtMillis = System.currentTimeMillis() + 60_000,

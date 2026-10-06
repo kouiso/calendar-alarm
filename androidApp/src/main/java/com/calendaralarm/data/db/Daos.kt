@@ -36,6 +36,10 @@ interface ScheduledInstanceDao {
     /** 終了状態の行を発火時刻で掃除する (PENDING は触らない)。 */
     @Query("DELETE FROM scheduled_instances WHERE state != 'PENDING' AND triggerAtMillis < :before")
     suspend fun pruneTerminal(before: Long)
+
+    /** 単発アラームの消費リセット用: 特定アラームの終端行だけを消す (PENDING は触らない)。 */
+    @Query("DELETE FROM scheduled_instances WHERE standaloneAlarmId = :alarmId AND state != 'PENDING'")
+    suspend fun deleteTerminalByAlarmId(alarmId: Long)
 }
 
 @Dao
