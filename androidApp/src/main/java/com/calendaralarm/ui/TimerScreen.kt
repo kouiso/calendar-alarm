@@ -122,8 +122,9 @@ private fun TimerPane(repository: AlarmRepository) {
     var minutesInput by remember { mutableStateOf("5") }
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
-    LaunchedEffect(timer != null) {
-        while (true) {
+    // タイマーが無いのに500ms刻みで再コンポーズし続けないようガード
+    LaunchedEffect(timer?.id) {
+        while (timer != null) {
             nowMillis = System.currentTimeMillis()
             delay(500)
         }

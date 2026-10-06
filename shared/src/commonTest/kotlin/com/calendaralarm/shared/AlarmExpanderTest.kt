@@ -65,6 +65,21 @@ class AlarmExpanderTest {
     }
 
     @Test
+    fun `prefs行の無いカレンダーはグローバル既定ルールが効く`() {
+        // UIは「15分前」と表示するので、エンジンも既定で15分前に鳴るべき
+        // (calendar_prefs 行が無いカレンダーで開始時刻に鳴ってしまう退行防止)
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = emptyMap(), // pref 行なし
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon,
+            defaultRule = AlarmRule(minutesBefore = 15),
+        )
+        assertEquals(ldt("2026-10-05T09:45:00").toEpochMilliseconds(), out[0].triggerAtMillis)
+    }
+
+    @Test
     fun `イベント上書きがカレンダールールに優先する`() {
         val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
         val out = AlarmExpander.expandEvents(

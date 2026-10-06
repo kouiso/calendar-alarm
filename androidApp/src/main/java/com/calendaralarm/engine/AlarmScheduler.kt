@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import com.calendaralarm.MainActivity
 import com.calendaralarm.shared.model.AlarmInstance
 
@@ -48,7 +49,8 @@ class AlarmScheduler(private val context: Context) {
     }
 
     fun canScheduleExact(): Boolean =
-        alarmManager.canScheduleExactAlarms()
+        // API 31 未満はメソッド自体が存在せず、正確アラームも常時許可される
+        Build.VERSION.SDK_INT < 31 || alarmManager.canScheduleExactAlarms()
 
     /** 鳴動ブロードキャストの PendingIntent。id で完全に一意。 */
     private fun fireIntent(instanceId: String): PendingIntent {

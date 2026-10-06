@@ -56,6 +56,7 @@ import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.sync.SyncWorker
 import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.DailyForecast
+import com.calendaralarm.shared.weather.WeatherApi
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
@@ -487,7 +488,7 @@ private fun eventDate(ev: CalendarEvent): LocalDate {
 }
 
 private fun weatherText(f: DailyForecast): String =
-    "${f.tempMax.toInt()}°/${f.tempMin.toInt()}°" +
+    "${WeatherApi.describe(f.weatherCode)} ${f.tempMax.toInt()}°/${f.tempMin.toInt()}°" +
         (f.precipitationProbability?.let { " 降水$it%" } ?: "")
 
 private fun kotlinx.datetime.DayOfWeek.jaShort(): String = when (this) {

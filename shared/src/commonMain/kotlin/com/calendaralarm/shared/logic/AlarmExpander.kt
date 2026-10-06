@@ -47,11 +47,14 @@ object AlarmExpander {
         now: Instant,
         horizon: Instant,
         zone: TimeZone = TimeZone.currentSystemDefault(),
+        // calendar_prefs 行が無いカレンダー用の既定ルール。
+        // グローバル設定の「N分前」をここで効かせ、UI表示と実際の鳴動を一致させる。
+        defaultRule: AlarmRule = AlarmRule(),
     ): List<AlarmInstance> {
         val result = mutableListOf<AlarmInstance>()
         for (event in events) {
             if (event.calendarId in disabledCalendarIds) continue
-            val rule = calendarRules[event.calendarId] ?: AlarmRule()
+            val rule = calendarRules[event.calendarId] ?: defaultRule
             val override = overrides[event.instanceKey]
             if (override?.muted == true || !rule.enabled) continue
             // 終日イベントは startMillis が UTC 0時。深夜に鳴らさないため

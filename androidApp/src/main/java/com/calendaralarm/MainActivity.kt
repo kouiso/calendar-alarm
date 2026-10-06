@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -48,9 +49,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             CalendarAlarmTheme {
-                val onboarded by app.container.settings.flow
-                    .map { it.onboardingDone }
-                    .collectAsState(initial = true)
+                // recomposition 毎に Flow を作り直すと collectAsState が
+                // リセットされるため remember で固定する
+                val onboardedFlow = remember {
+                    app.container.settings.flow.map { it.onboardingDone }
+                }
+                val onboarded by onboardedFlow.collectAsState(initial = true)
 
                 // カレンダー権限はメイン画面の条件にしない。
                 // 無くてもタイマー・単発アラームは動く (resync が部分動作する設計)、

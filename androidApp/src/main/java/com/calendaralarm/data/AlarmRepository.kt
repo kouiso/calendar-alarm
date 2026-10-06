@@ -204,7 +204,11 @@ class AlarmRepository(
                 )
             }
             val disabledCalIds = prefs.filterValues { !it.enabled }.keys
-            val snoozeDefault = settings.flow.first().defaultSnoozeMinutes
+            val appSettings = settings.flow.first()
+            val snoozeDefault = appSettings.defaultSnoozeMinutes
+            // calendar_prefs 行が無いカレンダーはグローバル既定の「N分前」が効く。
+            // アジェンダ表示も同じ既定を読むため、UIとエンジンを一致させる。
+            val defaultRule = AlarmRule(minutesBefore = appSettings.defaultMinutesBefore)
             val expanded = runCatching {
                 val events = calendarReader.events(
                     now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
@@ -217,6 +221,7 @@ class AlarmRepository(
                     disabledCalendarIds = disabledCalIds,
                     now = now, horizon = horizon,
                     zone = TimeZone.currentSystemDefault(),
+                    defaultRule = defaultRule,
                 )
             }.getOrNull()
             if (expanded != null) {
@@ -246,13 +251,18 @@ class AlarmRepository(
         // タイマー・スヌーズなど Expander が再生しない予約は「理想状態」へ持ち越す。
         // 持ち越さないと差分計算で毎 resync キャンセルされてしまう。
         val pendingRows = allRows.filter { it.state == AlarmState.PENDING.name }
-        val adhoc = pendingRows.map { it.toInstance() }
-            .filter {
-                it.kind == AlarmKind.TIMER || it.snoozeSeq > 0 ||
-                    (keepPendingEvents && it.kind == AlarmKind.EVENT)
-            }
         val desiredIds = desired.map { it.id }.toSet()
-        desired += adhoc.filter { it.id !in desiredIds }
+        val adhoc = pendingRows.map { it.toInstance() }
+            .filter { inst ->
+                inst.id !in desiredIds && when {
+                    inst.kind == AlarmKind.TIMER -> true
+                    // スヌーズ中の子は「親が今も理想状態にある」場合だけ持ち越す。
+                    // 親アラームの無効化・削除・予定ミュート後にスヌーズだけ鳴るのを防ぐ。
+                    inst.snoozeSeq > 0 -> inst.id.substringBefore(":snz") in desiredIds
+                    else -> keepPendingEvents && inst.kind == AlarmKind.EVENT
+                }
+            }
+        desired += adhoc
 
         val scheduled = pendingRows.associate { it.id to it.triggerAtMillis }
         val plan = AlarmPlanner.plan(scheduled, desired, now)
@@ -300,6 +310,12 @@ class AlarmRepository(
         onScheduleChanged?.invoke()
     }
 
+    /** 鳴動中にプロセスが殺された後の再起動用: 鳴動猶予内の最新 FIRED を返す。 */
+    suspend fun firedWithinGrace(): AlarmInstance? {
+        val since = Clock.System.now().toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds
+        return db.scheduledInstances().latestFiredSince(since)?.toInstance()
+    }
+
     /** 単発指定で MISSED 化する。鳴動を試みたが起動を OS に拒否された時などに使う。 */
     suspend fun markMissed(id: String, detail: String? = null) {
         setState(id, AlarmState.MISSED)
@@ -316,6 +332,7 @@ class AlarmRepository(
             setState(it.id, AlarmState.MISSED)
             audit("MISS", it.id)
         }
+        if (stale.isNotEmpty()) onScheduleChanged?.invoke()
         return stale.size
     }
 

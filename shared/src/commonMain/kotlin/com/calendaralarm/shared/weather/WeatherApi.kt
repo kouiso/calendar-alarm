@@ -96,23 +96,25 @@ class WeatherApi(
         val precipitationProbability: List<Int?>? get() = precipitation_probability_max
     }
 
-    /** WMO weather code → 表示名 (ja)。 */
-    fun describe(code: Int): String = when (code) {
-        0 -> "快晴"
-        1 -> "晴れ"
-        2 -> "一部曇り"
-        3 -> "曇り"
-        45, 48 -> "霧"
-        51, 53, 55 -> "霧雨"
-        56, 57 -> "着氷霧雨"
-        61, 63, 65 -> "雨"
-        66, 67 -> "着氷雨"
-        71, 73, 75 -> "雪"
-        77 -> "雪粒"
-        80, 81, 82 -> "にわか雨"
-        85, 86 -> "にわか雪"
-        95 -> "雷雨"
-        96, 99 -> "雹伴う雷雨"
-        else -> "不明"
+    companion object {
+        /** WMO weather code → 表示名 (ja)。 */
+        fun describe(code: Int): String = when (code) {
+            0 -> "快晴"
+            1 -> "晴れ"
+            2 -> "一部曇り"
+            3 -> "曇り"
+            45, 48 -> "霧"
+            51, 53, 55 -> "霧雨"
+            56, 57 -> "着氷霧雨"
+            61, 63, 65 -> "雨"
+            66, 67 -> "着氷雨"
+            71, 73, 75 -> "雪"
+            77 -> "雪粒"
+            80, 81, 82 -> "にわか雨"
+            85, 86 -> "にわか雪"
+            95 -> "雷雨"
+            96, 99 -> "雹伴う雷雨"
+            else -> "不明"
+        }
     }
 }

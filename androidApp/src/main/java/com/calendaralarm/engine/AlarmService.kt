@@ -50,24 +50,6 @@ class AlarmService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> {
-                val id = intent.getStringExtra(EXTRA_INSTANCE_ID) ?: run {
-                    stopSelf(startId)
-                    return START_NOT_STICKY
-                }
-                if (!startForegroundWithNotification(id)) {
-                    // BOOT_COMPLETED 処理中など、mediaPlayback FGS の起動が
-                    // 禁止されているコンテキスト。ここで例外を上げると
-                    // クラッシュループになるので見逃し扱いにして静かに畳む。
-                    scope.launch {
-                        app.container.repository.markMissed(id, "鳴動サービスの前面化がOSに拒否")
-                        MissedNotifier.post(this@AlarmService, null)
-                        stopSelf(startId)
-                    }
-                    return START_NOT_STICKY
-                }
-                scope.launch { beginRinging(id) }
-            }
             ACTION_DISMISS -> {
                 val id = intent.getStringExtra(EXTRA_INSTANCE_ID)
                 scope.launch {
@@ -84,7 +66,29 @@ class AlarmService : Service() {
                     stopSelf(startId)
                 }
             }
-            else -> stopSelf(startId)
+            else -> {
+                // ACTION_START、または鳴動中にプロセスが殺された後の
+                // START_STICKY null-intent 再起動。後者は明示 id が無いので
+                // 鳴動猶予内の FIRED 行をDBから拾って鳴動を再開する。
+                scope.launch {
+                    val id = intent?.getStringExtra(EXTRA_INSTANCE_ID)
+                        ?: app.container.repository.firedWithinGrace()?.id
+                    if (id == null) {
+                        stopSelf(startId)
+                        return@launch
+                    }
+                    if (!startForegroundWithNotification(id)) {
+                        // BOOT_COMPLETED 処理中など、mediaPlayback FGS の起動が
+                        // 禁止されているコンテキスト。ここで例外を上げると
+                        // クラッシュループになるので見逃し扱いにして静かに畳む。
+                        app.container.repository.markMissed(id, "鳴動サービスの前面化がOSに拒否")
+                        MissedNotifier.post(this@AlarmService, null)
+                        stopSelf(startId)
+                        return@launch
+                    }
+                    beginRinging(id)
+                }
+            }
         }
         return START_STICKY
     }
@@ -275,12 +279,18 @@ class AlarmService : Service() {
         currentInstance?.let {
             // AlarmManager の予約はプロセスをまたいで残るので、直近に再鳴動を仕掛け直す。
             // DB も PENDING に戻して健全性チェックの差分と整合させる。
-            app.container.scheduler.schedule(
+            val rearmed = app.container.scheduler.schedule(
                 it.copy(triggerAtMillis = System.currentTimeMillis() + 15_000L),
             )
             scope.launch {
-                app.container.repository.audit("ERROR", "鳴動中にタスク除去: ${it.id} → 15秒後に再鳴動")
-                app.container.repository.setState(it.id, AlarmState.PENDING)
+                if (rearmed) {
+                    app.container.repository.audit("ERROR", "鳴動中にタスク除去: ${it.id} → 15秒後に再鳴動")
+                    app.container.repository.setState(it.id, AlarmState.PENDING)
+                } else {
+                    // 再武装そのものが拒否された場合も握り潰さず MISSED+通知に倒す
+                    app.container.repository.markMissed(it.id, "タスク除去後の再鳴動予約がOSに拒否")
+                    MissedNotifier.post(this@AlarmService, it.title)
+                }
             }
         }
         super.onTaskRemoved(rootIntent)

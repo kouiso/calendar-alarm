@@ -26,8 +26,9 @@ interface ScheduledInstanceDao {
     @Query("UPDATE scheduled_instances SET state = :state WHERE id = :id")
     suspend fun setState(id: String, state: String)
 
-    @Query("UPDATE scheduled_instances SET state = :state WHERE id IN (:ids)")
-    suspend fun setStates(ids: List<String>, state: String)
+    /** 鳴動猶予内の最新 FIRED 行。鳴動中プロセスキル後の再起動が拾う。 */
+    @Query("SELECT * FROM scheduled_instances WHERE state = 'FIRED' AND triggerAtMillis > :since ORDER BY triggerAtMillis DESC LIMIT 1")
+    suspend fun latestFiredSince(since: Long): ScheduledInstanceEntity?
 
     @Query("SELECT * FROM scheduled_instances ORDER BY triggerAtMillis ASC")
     fun allFlow(): Flow<List<ScheduledInstanceEntity>>

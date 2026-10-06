@@ -49,18 +49,19 @@ import java.util.Locale
 class RingingActivity : ComponentActivity() {
 
     private val app get() = application as CalendarAlarmApp
-    private var instanceId: String? = null
+    // singleTask: 鳴動中に別アラームが発火すると onNewIntent で差し替わるため state に持つ
+    private val instanceIdState = androidx.compose.runtime.mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         applyLockscreenFlags()
-        instanceId = intent.getStringExtra(EXTRA_INSTANCE_ID)
+        instanceIdState.value = intent.getStringExtra(EXTRA_INSTANCE_ID)
 
         setContent {
             CalendarAlarmTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val instance by app.container.repository
-                        .instanceFlow(instanceId ?: "")
+                        .instanceFlow(instanceIdState.value ?: "")
                         .map { it }
                         .collectAsState(initial = null)
                     RingingScreen(
@@ -75,11 +76,18 @@ class RingingActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // 鳴動画面が出たまま次のアラームが発火した時、停止/スヌーズが
+        // 旧インスタンスへ飛ばないよう差し替える
+        instanceIdState.value = intent.getStringExtra(EXTRA_INSTANCE_ID)
+    }
+
     private fun sendAction(action: String) {
         startService(
             Intent(this, AlarmService::class.java).apply {
                 this.action = action
-                putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
+                putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceIdState.value)
             },
         )
         finish()

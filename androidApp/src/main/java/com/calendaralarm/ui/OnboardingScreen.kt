@@ -76,8 +76,10 @@ fun OnboardingScreen(
         notifGranted = grants[Manifest.permission.POST_NOTIFICATIONS] ?: notifGranted
     }
 
-    val exactOk = activity.getSystemService(AlarmManager::class.java)
-        ?.canScheduleExactAlarms() ?: true
+    // canScheduleExactAlarms() は API 31+。それ未満は正確アラームが常時許可なので true。
+    val exactOk = Build.VERSION.SDK_INT < 31 ||
+        (activity.getSystemService(AlarmManager::class.java)
+            ?.canScheduleExactAlarms() ?: true)
 
     Column(
         Modifier.fillMaxSize().padding(24.dp),

@@ -4,6 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * AlarmManager → 鳴動の入口。
@@ -27,17 +30,24 @@ class AlarmReceiver : BroadcastReceiver() {
         val pending = goAsync()
         try {
             context.startForegroundService(service)
+            pending.finish()
         } catch (e: Exception) {
-            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                runCatching {
-                    (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
-                        .container.repository
-                        .markMissed(instanceId, "鳴動サービス起動がOSに拒否: ${e.javaClass.simpleName}")
+            // goAsync の延長中も onReceive はメインスレッド上にある。
+            // Room 冷起動をここでブロックするとブロードキャスト枠を食い尽くし
+            // ANR・強制終了になりうるので、DB書き込みは coroutine へ逃がす。
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    runCatching {
+                        (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
+                            .container.repository
+                            .markMissed(instanceId, "鳴動サービス起動がOSに拒否: ${e.javaClass.simpleName}")
+                    }
+                    // POST_NOTIFICATIONS 未付与で notify() が落ちても finish() へ辿る
+                    runCatching { MissedNotifier.post(context, null) }
+                } finally {
+                    pending.finish()
                 }
             }
-            MissedNotifier.post(context, null)
-        } finally {
-            pending.finish()
         }
     }
 

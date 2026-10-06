@@ -24,7 +24,9 @@ class SyncWorker(
         val app = applicationContext as CalendarAlarmApp
         val reason = inputData.getString(KEY_REASON) ?: "workManager"
         return try {
-            app.container.repository.resync(reason)
+            // resync より先に期限切れを MISSED 化する。resync の差分整合は
+            // desired に無い PENDING を CANCELLED に倒すので、先に拾わないと
+            // 「鳴らせなかった」事実が通知も状態も残さず消える。
             val missed = app.container.repository.markMissed()
             if (missed > 0) {
                 // 端末OFF/強制停止中に時刻を過ぎたアラームがあることを
@@ -32,6 +34,7 @@ class SyncWorker(
                 com.calendaralarm.engine.MissedNotifier
                     .postMissed(applicationContext, missed)
             }
+            app.container.repository.resync(reason)
             app.container.repository.pruneOldInstances()
             Result.success()
         } catch (e: Exception) {

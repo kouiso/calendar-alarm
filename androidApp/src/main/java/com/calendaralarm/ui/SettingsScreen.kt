@@ -250,7 +250,9 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
         ContextCompat.checkSelfPermission(
             context, android.Manifest.permission.POST_NOTIFICATIONS,
         ) == PackageManager.PERMISSION_GRANTED
-    val exactOk = context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() ?: true
+    // canScheduleExactAlarms() は API 31+。それ未満は正確アラームが常時許可なので true。
+    val exactOk = Build.VERSION.SDK_INT < 31 ||
+        (context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() ?: true)
     val fsiOk = if (Build.VERSION.SDK_INT >= 34) {
         context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() ?: true
     } else true
