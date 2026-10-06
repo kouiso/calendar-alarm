@@ -118,6 +118,7 @@ class AlarmRepository(
     suspend fun onFired(id: String) {
         setState(id, AlarmState.FIRED)
         audit("FIRE", id)
+        onScheduleChanged?.invoke()
     }
 
     suspend fun onDismissed(id: String?) {
@@ -125,6 +126,7 @@ class AlarmRepository(
         setState(id, AlarmState.DISMISSED)
         scheduler.cancel(id)
         audit("DISMISS", id)
+        onScheduleChanged?.invoke()
     }
 
     suspend fun onSnoozed(id: String?) {
@@ -137,6 +139,7 @@ class AlarmRepository(
         scheduler.schedule(snoozed)
         setState(instance.id, AlarmState.SNOOZED)
         audit("SNOOZE", "${instance.id} +${instance.snoozeMinutes}m → ${snoozed.id}")
+        onScheduleChanged?.invoke()
     }
 
     /** タイマーなど単発インスタンスを即座に予約する。 */
