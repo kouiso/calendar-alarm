@@ -37,6 +37,7 @@ object AlarmExpander {
      * @param disabledCalendarIds 無効化されたカレンダー
      * @param now 現在時刻
      * @param horizon 展開の上限時刻（now より後）
+     * @param zone 終日イベントの鳴動時刻を解決するローカルゾーン
      */
     fun expandEvents(
         events: List<CalendarEvent>,
@@ -45,29 +46,43 @@ object AlarmExpander {
         disabledCalendarIds: Set<String>,
         now: Instant,
         horizon: Instant,
+        zone: TimeZone = TimeZone.currentSystemDefault(),
     ): List<AlarmInstance> {
         val result = mutableListOf<AlarmInstance>()
         for (event in events) {
             if (event.calendarId in disabledCalendarIds) continue
-            if (event.allDay) {
-                // 終日イベントは startMillis が UTC 0時。現地日付の 9:00 換算に倒す設計は
-                // 後続フェーズで検討する。MVP ではプロバイダ基準の start をそのまま使う。
-            }
             val rule = calendarRules[event.calendarId] ?: AlarmRule()
             val override = overrides[event.instanceKey]
             if (override?.muted == true || !rule.enabled) continue
+            // 終日イベントは startMillis が UTC 0時。深夜に鳴らさないため
+            // イベント日のローカル allDayMinutes (既定9:00) に倒す。負数なら鳴らさない。
+            val eventStart = if (event.allDay) {
+                if (rule.allDayMinutes < 0) continue
+                val day = Instant.fromEpochMilliseconds(event.startMillis)
+                    .toLocalDateTime(TimeZone.UTC).date
+                LocalDateTime(
+                    day.year, day.month, day.dayOfMonth,
+                    rule.allDayMinutes / 60, rule.allDayMinutes % 60,
+                ).toInstant(zone).toEpochMilliseconds()
+            } else {
+                event.startMillis
+            }
             val minutesBefore = override?.minutesBefore ?: rule.minutesBefore
-            val triggerAt = Instant.fromEpochMilliseconds(event.startMillis) - minutesBefore.minutes
-            if (!inWindow(triggerAt, now, horizon)) continue
-            result += AlarmInstance(
-                id = "ev:${event.instanceKey}:b$minutesBefore",
-                triggerAtMillis = triggerAt.toEpochMilliseconds(),
-                title = event.title.ifBlank { "(タイトルなし)" },
-                kind = AlarmKind.EVENT,
-                eventId = event.instanceKey,
-                minutesBefore = minutesBefore,
-                eventStartMillis = event.startMillis,
-            )
+            val offsets = (listOf(minutesBefore) + (override?.extraOffsets ?: rule.extraOffsets))
+                .distinct().sorted()
+            for (m in offsets) {
+                val triggerAt = Instant.fromEpochMilliseconds(eventStart) - m.minutes
+                if (!inWindow(triggerAt, now, horizon)) continue
+                result += AlarmInstance(
+                    id = "ev:${event.instanceKey}:b$m",
+                    triggerAtMillis = triggerAt.toEpochMilliseconds(),
+                    title = event.title.ifBlank { "(タイトルなし)" },
+                    kind = AlarmKind.EVENT,
+                    eventId = event.instanceKey,
+                    minutesBefore = m,
+                    eventStartMillis = eventStart,
+                )
+            }
         }
         return result
     }

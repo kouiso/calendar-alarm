@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
         EventOverrideEntity::class,
         AuditLogEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

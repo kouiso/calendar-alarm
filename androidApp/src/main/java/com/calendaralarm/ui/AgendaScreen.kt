@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -136,9 +139,9 @@ fun AgendaScreen(repository: AlarmRepository) {
             EventDetailSheet(
                 item = item,
                 weatherEnabled = settings?.weatherEnabled ?: true,
-                onOverride = { muted, minutes ->
+                onOverride = { muted, minutes, extraOffsets ->
                     scope.launch {
-                        repository.setEventOverride(item.event.instanceKey, muted, minutes)
+                        repository.setEventOverride(item.event.instanceKey, muted, minutes, extraOffsets)
                         selected = null
                         refreshKey++
                     }
@@ -275,7 +278,8 @@ private fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
         if (!item.muted && item.minutesBefore > 0) {
             Spacer(Modifier.width(4.dp))
             Text(
-                "${item.minutesBefore}分前",
+                "${item.minutesBefore}分前" +
+                    if (item.extraOffsets.isNotEmpty()) " +${item.extraOffsets.size}" else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -288,13 +292,14 @@ private fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
 private fun EventDetailSheet(
     item: AlarmRepository.AgendaItem,
     weatherEnabled: Boolean,
-    onOverride: (muted: Boolean, minutesBefore: Int?) -> Unit,
+    onOverride: (muted: Boolean, minutesBefore: Int?, extraOffsets: List<Int>?) -> Unit,
     onClearOverride: () -> Unit,
     weatherLoader: suspend (String) -> List<DailyForecast>?,
 ) {
     val ev = item.event
     var muted by remember { mutableStateOf(item.muted) }
     var minutes by remember { mutableIntStateOf(item.minutesBefore) }
+    var extras by remember { mutableStateOf(item.extraOffsets) }
     var forecast by remember { mutableStateOf<List<DailyForecast>?>(null) }
 
     LaunchedEffect(ev.location, weatherEnabled) {
@@ -348,7 +353,7 @@ private fun EventDetailSheet(
                 checked = !muted,
                 onCheckedChange = { on ->
                     muted = !on
-                    onOverride(!on, if (on) minutes else null)
+                    onOverride(!on, if (on) minutes else null, if (on) extras else null)
                 },
             )
         }
@@ -363,7 +368,7 @@ private fun EventDetailSheet(
                         selected = minutes == v,
                         onClick = {
                             minutes = v
-                            onOverride(false, v)
+                            onOverride(false, v, extras)
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
                     ) { Text(label) }
@@ -376,10 +381,27 @@ private fun EventDetailSheet(
                         selected = minutes == v,
                         onClick = {
                             minutes = v
-                            onOverride(false, v)
+                            onOverride(false, v, extras)
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
                     ) { Text(label) }
+                }
+            }
+            // 追加リマインダー: メイン以外のタイミングでも鳴らす
+            Spacer(Modifier.height(10.dp))
+            Text("追加の通知 (複数可)", style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                options.filter { it.first != minutes }.forEach { (v, label) ->
+                    FilterChip(
+                        selected = v in extras,
+                        onClick = {
+                            extras = if (v in extras) extras - v else (extras + v).sorted()
+                            onOverride(false, minutes, extras)
+                        },
+                        label = { Text(label) },
+                        modifier = Modifier.padding(end = 6.dp),
+                    )
                 }
             }
         }

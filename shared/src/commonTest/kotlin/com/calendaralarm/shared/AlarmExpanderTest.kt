@@ -109,6 +109,67 @@ class AlarmExpanderTest {
         assertEquals(listOf("e1"), out.map { it.eventId?.split(":")?.get(1) })
     }
 
+    private fun allDayEvent(id: String, utcStartMillis: Long, calId: String = "c1") = CalendarEvent(
+        id = id, calendarId = calId, title = "終日予定",
+        startMillis = utcStartMillis, endMillis = utcStartMillis + 86_400_000,
+        allDay = true,
+    )
+
+    @Test
+    fun `終日イベントは深夜ではなくカレンダーの終日時刻に鳴る`() {
+        // Google 同期の終日イベントは startMillis=UTC 0:00 (=JST 9:00)。
+        // ルール 8:00 指定なら JST 8:00 に鳴るべき。既定 9:00 なら 9:00。
+        val utcStart = Instant.parse("2026-10-08T00:00:00Z").toEpochMilliseconds()
+        val ev = allDayEvent("ad1", utcStart)
+        val out8 = AlarmExpander.expandEvents(
+            listOf(ev), mapOf("c1" to AlarmRule(allDayMinutes = 480)),
+            emptyMap(), emptySet(), now, horizon, zone = TZ,
+        )
+        assertEquals(ldt("2026-10-08T08:00:00").toEpochMilliseconds(), out8.single().triggerAtMillis)
+        val outDefault = AlarmExpander.expandEvents(
+            listOf(ev), mapOf("c1" to AlarmRule()),
+            emptyMap(), emptySet(), now, horizon, zone = TZ,
+        )
+        assertEquals(ldt("2026-10-08T09:00:00").toEpochMilliseconds(), outDefault.single().triggerAtMillis)
+    }
+
+    @Test
+    fun `終日イベントの鳴動OFFは展開しない`() {
+        val ev = allDayEvent("ad1", Instant.parse("2026-10-08T00:00:00Z").toEpochMilliseconds())
+        val out = AlarmExpander.expandEvents(
+            listOf(ev), mapOf("c1" to AlarmRule(allDayMinutes = -1)),
+            emptyMap(), emptySet(), now, horizon, zone = TZ,
+        )
+        assertTrue(out.isEmpty())
+    }
+
+    @Test
+    fun `追加リマインダーが個別インスタンスになる`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 15, extraOffsets = listOf(30, 60))),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+        )
+        assertEquals(listOf(15, 30, 60), out.map { it.minutesBefore })
+        assertEquals(3, out.size)
+        assertEquals(ldt("2026-10-05T09:45:00").toEpochMilliseconds(), out[0].triggerAtMillis)
+        assertEquals(ldt("2026-10-05T09:00:00").toEpochMilliseconds(), out[2].triggerAtMillis)
+    }
+
+    @Test
+    fun `イベント個別の追加リマインダーがカレンダー既定を置き換える`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 15, extraOffsets = listOf(30))),
+            overrides = mapOf(ev.instanceKey to EventOverride(extraOffsets = listOf(60))),
+            disabledCalendarIds = emptySet(), now = now, horizon = horizon, zone = TZ,
+        )
+        assertEquals(listOf(15, 60), out.map { it.minutesBefore })
+    }
+
     @Test
     fun `曜日繰り返しと例外日`() {
         val alarm = StandaloneAlarm(

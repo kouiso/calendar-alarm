@@ -77,6 +77,10 @@ data class CalendarPrefEntity(
     @PrimaryKey val calendarId: String,
     val enabled: Boolean,
     val minutesBefore: Int,
+    /** 終日イベントを鳴らす現地時刻 (その日0時からの分数)。負数=鳴らさない。 */
+    val allDayMinutes: Int = 540,
+    /** 追加リマインダーの分数 "15,60" 形式。 */
+    val extraOffsetsCsv: String = "",
 )
 
 /** イベント個別のミュート・分数上書き。主キーは instanceKey (calendarId:eventId:startMillis)。 */
@@ -85,6 +89,8 @@ data class EventOverrideEntity(
     @PrimaryKey val instanceKey: String,
     val muted: Boolean,
     val minutesBefore: Int?,
+    /** null=カレンダー既定、空文字=追加なし、"15,60"=追加リマインダー。 */
+    val extraOffsetsCsv: String? = null,
 )
 
 /** 鳴動・予約・キャンセルの監査ログ。「鳴るはずが鳴らなかった」の検証材料。 */

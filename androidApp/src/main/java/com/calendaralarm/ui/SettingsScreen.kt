@@ -160,6 +160,32 @@ fun SettingsScreen(
                             )
                         }
                     }
+                    // 終日予定の鳴動時刻 (カレンダー毎)。OFF = 終日予定を鳴らさない
+                    Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "終日",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
+                        listOf(-1 to "OFF", 480 to "8:00", 540 to "9:00", 720 to "12:00").forEach { (v, label) ->
+                            FilterChip(
+                                selected = (pref?.allDayMinutes ?: 540) == v,
+                                onClick = {
+                                    scope.launch {
+                                        repository.setCalendarPref(
+                                            cal.id, true,
+                                            pref?.minutesBefore ?: (prefs?.defaultMinutesBefore ?: 0),
+                                            allDayMinutes = v,
+                                        )
+                                        calPrefs = repository.calendarPrefsFlowList().associateBy { it.calendarId }
+                                    }
+                                },
+                                label = { Text(label) },
+                                modifier = Modifier.padding(end = 4.dp),
+                            )
+                        }
+                    }
                 }
             }
             HorizontalDivider()

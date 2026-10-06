@@ -32,6 +32,16 @@ class AppContainer(val app: Application) {
 
     val db: AppDatabase by lazy {
         Room.databaseBuilder(app, AppDatabase::class.java, "calendar-alarm.db")
+            .addMigrations(
+                object : androidx.room.migration.Migration(1, 2) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        // v2: 終日イベントの鳴動時刻 + 複数リマインダーの列を追加
+                        db.execSQL("ALTER TABLE calendar_prefs ADD COLUMN allDayMinutes INTEGER NOT NULL DEFAULT 540")
+                        db.execSQL("ALTER TABLE calendar_prefs ADD COLUMN extraOffsetsCsv TEXT NOT NULL DEFAULT ''")
+                        db.execSQL("ALTER TABLE event_overrides ADD COLUMN extraOffsetsCsv TEXT")
+                    }
+                },
+            )
             .build()
     }
 

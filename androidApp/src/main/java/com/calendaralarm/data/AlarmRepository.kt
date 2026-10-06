@@ -36,6 +36,11 @@ import kotlin.time.Duration.Companion.days
  * 鳴動ドメインの統合リポジトリ。
  * 「理想状態の展開 → 差分 → AlarmManager/DB への適用」を一手に引き受ける。
  */
+private fun String?.toOffsets(): List<Int> =
+    this?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.filter { it > 0 } ?: emptyList()
+
+private fun List<Int>.toCsv(): String = distinct().sorted().joinToString(",")
+
 class AlarmRepository(
     private val db: AppDatabase,
     private val scheduler: AlarmScheduler,
@@ -80,6 +85,7 @@ class AlarmRepository(
         val calendarColor: Int,
         val muted: Boolean,
         val minutesBefore: Int,
+        val extraOffsets: List<Int>,
         val hasOverride: Boolean,
     )
 
@@ -103,6 +109,8 @@ class AlarmRepository(
                 muted = ov?.muted ?: (pref?.enabled == false),
                 minutesBefore = ov?.minutesBefore ?: pref?.minutesBefore
                     ?: settings.flow.first().defaultMinutesBefore,
+                extraOffsets = ov?.extraOffsetsCsv?.toOffsets()
+                    ?: pref?.extraOffsetsCsv.toOffsets(),
                 hasOverride = ov != null,
             )
         }
@@ -172,8 +180,21 @@ class AlarmRepository(
 
         // カレンダーイベント
         if (hasCalendarPermission()) {
-            val prefs = db.calendarPrefs().all().associate { it.calendarId to AlarmRule(it.enabled, it.minutesBefore) }
-            val overrides = db.eventOverrides().all().associate { it.instanceKey to EventOverride(it.muted, it.minutesBefore) }
+            val prefs = db.calendarPrefs().all().associate {
+                it.calendarId to AlarmRule(
+                    enabled = it.enabled,
+                    minutesBefore = it.minutesBefore,
+                    allDayMinutes = it.allDayMinutes,
+                    extraOffsets = it.extraOffsetsCsv.toOffsets(),
+                )
+            }
+            val overrides = db.eventOverrides().all().associate {
+                it.instanceKey to EventOverride(
+                    muted = it.muted,
+                    minutesBefore = it.minutesBefore,
+                    extraOffsets = it.extraOffsetsCsv?.toOffsets(),
+                )
+            }
             val disabledCalIds = prefs.filterValues { !it.enabled }.keys
             val events = calendarReader.events(
                 now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
@@ -185,6 +206,7 @@ class AlarmRepository(
                 overrides = overrides,
                 disabledCalendarIds = disabledCalIds,
                 now = now, horizon = horizon,
+                zone = TimeZone.currentSystemDefault(),
             )
         }
 
@@ -286,16 +308,37 @@ class AlarmRepository(
         resync("alarm:$id deleted")
     }
 
-    suspend fun setCalendarPref(calendarId: String, enabled: Boolean, minutesBefore: Int) {
-        db.calendarPrefs().upsert(CalendarPrefEntity(calendarId, enabled, minutesBefore))
+    suspend fun setCalendarPref(
+        calendarId: String,
+        enabled: Boolean,
+        minutesBefore: Int,
+        allDayMinutes: Int? = null,
+        extraOffsets: List<Int>? = null,
+    ) {
+        val current = db.calendarPrefs().all().firstOrNull { it.calendarId == calendarId }
+        db.calendarPrefs().upsert(
+            CalendarPrefEntity(
+                calendarId = calendarId,
+                enabled = enabled,
+                minutesBefore = minutesBefore,
+                allDayMinutes = allDayMinutes ?: current?.allDayMinutes ?: 540,
+                extraOffsetsCsv = extraOffsets?.toCsv() ?: current?.extraOffsetsCsv ?: "",
+            ),
+        )
         resync("calendar pref")
     }
 
-    suspend fun setEventOverride(instanceKey: String, muted: Boolean?, minutesBefore: Int?) {
+    suspend fun setEventOverride(
+        instanceKey: String,
+        muted: Boolean?,
+        minutesBefore: Int?,
+        extraOffsets: List<Int>? = null,
+    ) {
         val current = db.eventOverrides().all().firstOrNull { it.instanceKey == instanceKey }
         val m = muted ?: current?.muted ?: false
         val mb = minutesBefore ?: current?.minutesBefore
-        db.eventOverrides().upsert(EventOverrideEntity(instanceKey, m, mb))
+        val csv = extraOffsets?.toCsv() ?: current?.extraOffsetsCsv
+        db.eventOverrides().upsert(EventOverrideEntity(instanceKey, m, mb, csv))
         resync("event override")
     }
 

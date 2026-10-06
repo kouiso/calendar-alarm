@@ -40,6 +40,10 @@ data class CalendarEvent(
 data class AlarmRule(
     val enabled: Boolean = true,
     val minutesBefore: Int = 0,
+    /** 終日イベントを鳴らす現地時刻 (その日の0時からの分数)。負数は「終日イベントを鳴らさない」。 */
+    val allDayMinutes: Int = 540,
+    /** メインの鳴動に追加するリマインダー (開始何分前かの分数リスト)。 */
+    val extraOffsets: List<Int> = emptyList(),
 )
 
 /** イベント個別の上書き設定（ミュート or 分数の上書き）。 */
@@ -47,6 +51,8 @@ data class AlarmRule(
 data class EventOverride(
     val muted: Boolean = false,
     val minutesBefore: Int? = null,
+    /** null はカレンダー既定を使う。空リストは「追加リマインダーなし」。 */
+    val extraOffsets: List<Int>? = null,
 )
 
 /** 例外なし・例外付きの単発/曜日繰り返しアラーム。 */
