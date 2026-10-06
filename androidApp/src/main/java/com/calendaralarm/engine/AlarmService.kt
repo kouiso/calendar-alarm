@@ -132,7 +132,9 @@ class AlarmService : Service() {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)
-            .setSilent(true) // 音はサービス側の MediaPlayer に一本化
+            // setSilent(true) は入れない: Android 15 で「抑制グループ」扱いされ
+            // フルスクリーン Intent が自動起動しない (E2E 実測)。無音化は
+            // チャンネル側の setSound(null) に一本化し、音は MediaPlayer が出す。
             .setFullScreenIntent(fullScreen, true)
             .setContentIntent(fullScreen)
             .setDeleteIntent(dismiss)
