@@ -8,6 +8,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.calendaralarm.CalendarAlarmApp
+import com.calendaralarm.engine.MissedNotifier
 
 /**
  * 定期健全性チェック + 手動同期。
@@ -24,7 +25,13 @@ class SyncWorker(
         val reason = inputData.getString(KEY_REASON) ?: "workManager"
         return try {
             app.container.repository.resync(reason)
-            app.container.repository.markMissed()
+            val missed = app.container.repository.markMissed()
+            if (missed > 0) {
+                // 端末OFF/強制停止中に時刻を過ぎたアラームがあることを
+                // 黙って履歴に残すだけでなく、ユーザーへ通知する
+                com.calendaralarm.engine.MissedNotifier
+                    .postMissed(applicationContext, missed)
+            }
             app.container.repository.pruneOldInstances()
             Result.success()
         } catch (e: Exception) {

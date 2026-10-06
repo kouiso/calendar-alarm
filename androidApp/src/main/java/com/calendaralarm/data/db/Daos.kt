@@ -31,6 +31,10 @@ interface ScheduledInstanceDao {
 
     @Query("SELECT * FROM scheduled_instances ORDER BY triggerAtMillis ASC")
     fun allFlow(): Flow<List<ScheduledInstanceEntity>>
+
+    /** 終了状態の行を発火時刻で掃除する (PENDING は触らない)。 */
+    @Query("DELETE FROM scheduled_instances WHERE state != 'PENDING' AND triggerAtMillis < :before")
+    suspend fun pruneTerminal(before: Long)
 }
 
 @Dao

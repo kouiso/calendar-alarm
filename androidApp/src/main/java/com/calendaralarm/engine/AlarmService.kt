@@ -37,7 +37,8 @@ import kotlinx.coroutines.launch
  */
 class AlarmService : Service() {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // MediaPlayer#prepare 等のブロッキングが鳴動開始を遅らせないよう IO で回す
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var mediaPlayer: MediaPlayer? = null
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null

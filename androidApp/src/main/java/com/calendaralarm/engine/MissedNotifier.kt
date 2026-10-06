@@ -41,4 +41,25 @@ object MissedNotifier {
                 .build(),
         )
     }
+
+    /** 端末停止等で時刻を過ぎたまま MISSED 化した件数を伝える通知。 */
+    fun postMissed(context: Context, count: Int) {
+        if (count <= 0) return
+        val mgr = context.getSystemService(NotificationManager::class.java) ?: return
+        mgr.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "鳴らせなかったアラーム", NotificationManager.IMPORTANCE_HIGH),
+        )
+        val openApp = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            ?.let { PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE) }
+        mgr.notify(
+            NOTIFICATION_ID,
+            NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_alarm)
+                .setContentTitle("鳴らせなかったアラーム")
+                .setContentText("端末の停止等により ${count}件のアラームを鳴らせませんでした")
+                .setAutoCancel(true)
+                .apply { openApp?.let(::setContentIntent) }
+                .build(),
+        )
+    }
 }

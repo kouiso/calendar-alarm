@@ -153,13 +153,17 @@ class AlarmRepository(
 
     /** タイマーなど単発インスタンスを即座に予約する。 */
     suspend fun scheduleAdhoc(instance: AlarmInstance) = withContext(Dispatchers.IO) {
-        db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(instance)))
-        if (!scheduler.schedule(instance)) {
-            setState(instance.id, AlarmState.CANCELLED)
-            audit("EXACT_DENIED", "adhoc ${instance.id}")
+        // タイマー自体はスヌーズ分数を持たないので、設定の既定を載せる
+        val inst = instance.copy(
+            snoozeMinutes = settings.flow.first().defaultSnoozeMinutes,
+        )
+        db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(inst)))
+        if (!scheduler.schedule(inst)) {
+            setState(inst.id, AlarmState.CANCELLED)
+            audit("EXACT_DENIED", "adhoc ${inst.id}")
             return@withContext
         }
-        audit("SCHEDULE", "adhoc ${instance.id} @${instance.triggerAtMillis}")
+        audit("SCHEDULE", "adhoc ${inst.id} @${inst.triggerAtMillis}")
         onScheduleChanged?.invoke()
     }
 
@@ -179,6 +183,10 @@ class AlarmRepository(
         standalones.forEach { desired += AlarmExpander.expandStandalone(it, now = now, days = 14) }
 
         // カレンダーイベント
+        // 「権限が無い」と「読み取り自体が失敗」を区別する。後者 (同期中の
+        // 権限剥奪・プロバイダ障害) では既存の EVENT 予約を維持し、一時的な
+        // 障害で予定アラームが全部キャンセルされるのを防ぐ。
+        var keepPendingEvents = false
         if (hasCalendarPermission()) {
             val prefs = db.calendarPrefs().all().associate {
                 it.calendarId to AlarmRule(
@@ -196,18 +204,29 @@ class AlarmRepository(
                 )
             }
             val disabledCalIds = prefs.filterValues { !it.enabled }.keys
-            val events = calendarReader.events(
-                now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
-                horizon.toEpochMilliseconds(),
-            )
-            desired += AlarmExpander.expandEvents(
-                events = events,
-                calendarRules = prefs,
-                overrides = overrides,
-                disabledCalendarIds = disabledCalIds,
-                now = now, horizon = horizon,
-                zone = TimeZone.currentSystemDefault(),
-            )
+            val snoozeDefault = settings.flow.first().defaultSnoozeMinutes
+            val expanded = runCatching {
+                val events = calendarReader.events(
+                    now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
+                    horizon.toEpochMilliseconds(),
+                )
+                AlarmExpander.expandEvents(
+                    events = events,
+                    calendarRules = prefs,
+                    overrides = overrides,
+                    disabledCalendarIds = disabledCalIds,
+                    now = now, horizon = horizon,
+                    zone = TimeZone.currentSystemDefault(),
+                )
+            }.getOrNull()
+            if (expanded != null) {
+                // イベント由来インスタンスは固有のスヌーズ設定を持たないため
+                // 設定の既定を載せる
+                desired += expanded.map { it.copy(snoozeMinutes = snoozeDefault) }
+            } else {
+                audit("ERROR", "カレンダー読み取り失敗: 既存の予定アラームを維持")
+                keepPendingEvents = true
+            }
         }
 
         // 終了済み状態 (鳴動/停止/スヌーズ/見逃し) の同 id は蘇生させない。
@@ -228,7 +247,10 @@ class AlarmRepository(
         // 持ち越さないと差分計算で毎 resync キャンセルされてしまう。
         val pendingRows = allRows.filter { it.state == AlarmState.PENDING.name }
         val adhoc = pendingRows.map { it.toInstance() }
-            .filter { it.kind == AlarmKind.TIMER || it.snoozeSeq > 0 }
+            .filter {
+                it.kind == AlarmKind.TIMER || it.snoozeSeq > 0 ||
+                    (keepPendingEvents && it.kind == AlarmKind.EVENT)
+            }
         val desiredIds = desired.map { it.id }.toSet()
         desired += adhoc.filter { it.id !in desiredIds }
 
@@ -285,15 +307,16 @@ class AlarmRepository(
         onScheduleChanged?.invoke()
     }
 
-    /** 鳴動時刻が過去の PENDING 行を MISSED に整理する（健全性チェック用）。 */
-    suspend fun markMissed() {
+    /** 鳴動時刻が過去の PENDING 行を MISSED に整理する（健全性チェック用）。戻り値は見逃し件数。 */
+    suspend fun markMissed(): Int {
         val cutoff = Clock.System.now().toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds
-        db.scheduledInstances().pending()
+        val stale = db.scheduledInstances().pending()
             .filter { it.triggerAtMillis < cutoff }
-            .forEach {
-                setState(it.id, AlarmState.MISSED)
-                audit("MISS", it.id)
-            }
+        stale.forEach {
+            setState(it.id, AlarmState.MISSED)
+            audit("MISS", it.id)
+        }
+        return stale.size
     }
 
     // ---- 設定更新 ----
@@ -351,12 +374,14 @@ class AlarmRepository(
         resync("event override cleared")
     }
 
-    /** 終了済みインスタンス行を7日で掃除する。 */
+    /**
+     * 終了済み (PENDING 以外) インスタンス行を7日で削除する。
+     * 7日以上前の発火は展開窓 (現在〜+14日) に二度と入らないため、
+     * 削除しても終了状態の蘇生 (止めたアラームが再予約される) は起きない。
+     */
     suspend fun pruneOldInstances() {
         val cutoff = Clock.System.now().toEpochMilliseconds() - 7L * 24 * 60 * 60 * 1000
-        db.scheduledInstances().pending()
-            .filter { it.triggerAtMillis < cutoff }
-            .forEach { setState(it.id, AlarmState.MISSED) }
+        db.scheduledInstances().pruneTerminal(cutoff)
     }
 
     private suspend fun pruneOldLogs() {

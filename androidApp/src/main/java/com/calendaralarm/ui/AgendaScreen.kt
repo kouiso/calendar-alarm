@@ -210,9 +210,7 @@ private fun AgendaList(
     items: List<AlarmRepository.AgendaItem>,
     onSelect: (AlarmRepository.AgendaItem) -> Unit,
 ) {
-    val grouped = items.groupBy {
-        Instant.fromEpochMilliseconds(it.event.startMillis).toLocalDateTime(tz).date
-    }
+    val grouped = items.groupBy { eventDate(it.event) }
     LazyColumn {
         grouped.forEach { (date, dayItems) ->
             item(key = "d$date") {
@@ -375,7 +373,7 @@ private fun EventDetailSheet(
         Text(ev.title.ifBlank { "(タイトルなし)" }, style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(4.dp))
         Text(
-            "${dateLabel(ev.startMillis)}  ${timeLabel(ev.startMillis, ev.allDay)}" +
+            "${eventDate(ev).let { "${it.monthNumber}/${it.dayOfMonth}(${it.dayOfWeek.jaShort()})" }}  ${timeLabel(ev.startMillis, ev.allDay)}" +
                 (if (ev.allDay) "" else "〜${timeLabel(ev.endMillis, false)}") +
                 "  ${item.calendarName}",
             style = MaterialTheme.typography.bodyMedium,
@@ -399,7 +397,7 @@ private fun EventDetailSheet(
 
         // 天気: イベント日の予報を1行で
         forecast?.let { fc ->
-            val day = Instant.fromEpochMilliseconds(ev.startMillis).toLocalDateTime(tz).date
+            val day = eventDate(ev)
             fc.firstOrNull { it.date == day }?.let { f ->
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -482,8 +480,11 @@ private fun EventDetailSheet(
 private fun timeLabel(millis: Long, allDay: Boolean): String =
     if (allDay) "終日" else SimpleDateFormat("H:mm", Locale.getDefault()).format(Date(millis))
 
-private fun dateLabel(millis: Long): String =
-    SimpleDateFormat("M/d(E)", Locale.JAPAN).format(Date(millis))
+/** イベントの属する日付。終日イベントは UTC 0時基準なので UTC 解釈、それ以外はローカル。 */
+private fun eventDate(ev: CalendarEvent): LocalDate {
+    val inst = Instant.fromEpochMilliseconds(ev.startMillis)
+    return if (ev.allDay) inst.toLocalDateTime(TimeZone.UTC).date else inst.toLocalDateTime(tz).date
+}
 
 private fun weatherText(f: DailyForecast): String =
     "${f.tempMax.toInt()}°/${f.tempMin.toInt()}°" +

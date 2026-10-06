@@ -30,7 +30,8 @@ class CalendarContractReader(private val context: Context) {
             projection, null, null, null,
         )?.use { c ->
             while (c.moveToNext()) {
-                if (c.getInt(5) == 0) continue // 非表示カレンダーはスキップ
+                // VISIBLE=0 のカレンダーも予定は取得されるため、
+                // 鳴動は起きるのに設定画面で制御不可にならないよう全件返す
                 out += CalendarSource(
                     id = c.getLong(0).toString(),
                     name = c.getString(1) ?: c.getString(2) ?: "カレンダー",
