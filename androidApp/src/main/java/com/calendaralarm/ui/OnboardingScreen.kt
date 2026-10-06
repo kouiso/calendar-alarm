@@ -10,6 +10,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -80,12 +84,31 @@ fun OnboardingScreen(
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Column {
-            Spacer(Modifier.height(24.dp))
-            Text("Calendar Alarm", style = MaterialTheme.typography.headlineLarge)
+            Spacer(Modifier.height(32.dp))
+            // ブランドアイコン円
+            androidx.compose.foundation.layout.Box(
+                Modifier
+                    .size(56.dp)
+                    .background(
+                        MaterialTheme.colorScheme.primaryContainer,
+                        androidx.compose.foundation.shape.CircleShape,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                androidx.compose.material3.Icon(
+                    Icons.Default.Alarm,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            Text("Calendar Alarm", style = MaterialTheme.typography.headlineMedium)
             Text(
                 "カレンダーの予定を「絶対に見逃さない」アラームで鳴らすアプリです。" +
                     "初回だけ、確実に鳴らすための権限を設定します。",
                 style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
             )
             Spacer(Modifier.height(24.dp))

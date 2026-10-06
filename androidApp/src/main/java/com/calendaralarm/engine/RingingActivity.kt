@@ -8,25 +8,30 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -116,39 +121,57 @@ private fun RingingScreen(
     onSnooze: () -> Unit,
 ) {
     val time = SimpleDateFormat("H:mm", Locale.getDefault()).format(Date(triggerAtMillis))
-    Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween,
+    // 鳴動画面はテーマに依らず常時ダーク: 朝の暗い部屋で眩しくしない+集中させる
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(
+                listOf(Color(0xFF1B1B3A), Color(0xFF0B0B12)),
+            ),
+        ),
     ) {
-        Spacer(Modifier.height(24.dp))
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = time,
-                style = MaterialTheme.typography.displayLarge.copy(fontSize = 88.sp),
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center,
-            )
-        }
-        Column {
-            Button(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().height(72.dp),
-            ) {
-                Text("停止", fontSize = 24.sp)
+        Column(
+            modifier = Modifier.fillMaxSize().padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Spacer(Modifier.height(32.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = time,
+                    fontSize = 96.sp,
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = (-4).sp,
+                    color = Color.White,
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color(0xFFD6D6E6),
+                    textAlign = TextAlign.Center,
+                )
             }
-            Spacer(Modifier.height(16.dp))
-            OutlinedButton(
-                onClick = onSnooze,
-                modifier = Modifier.fillMaxWidth().height(64.dp),
-            ) {
-                Text("あと${snoozeMinutes}分 (スヌーズ)", fontSize = 20.sp)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(140.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF5B57E8),
+                    ),
+                ) {
+                    Text("停止", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.height(20.dp))
+                TextButton(onClick = onSnooze) {
+                    Text(
+                        "あと${snoozeMinutes}分 (スヌーズ)",
+                        fontSize = 18.sp,
+                        color = Color(0xFFB9B9E0),
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
             }
-            Spacer(Modifier.height(8.dp))
         }
     }
 }

@@ -24,14 +24,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -131,19 +129,29 @@ fun SettingsScreen(
 
         // ---- カレンダー ----
         item { SectionHeader("カレンダー") }
-        items(calendars, key = { it.id }) { cal ->
-            CalendarRow(
-                cal = cal,
-                pref = calPrefs[cal.id],
-                defaultMinutes = prefs?.defaultMinutesBefore ?: 0,
-                onChange = { enabled, minutes, allDay ->
-                    scope.launch {
-                        repository.setCalendarPref(cal.id, enabled, minutes, allDayMinutes = allDay)
-                        calPrefs = repository.calendarPrefsFlowList().associateBy { it.calendarId }
+        item {
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                ),
+            ) {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
+                    calendars.forEach { cal ->
+                        CalendarRow(
+                            cal = cal,
+                            pref = calPrefs[cal.id],
+                            defaultMinutes = prefs?.defaultMinutesBefore ?: 0,
+                            onChange = { enabled, minutes, allDay ->
+                                scope.launch {
+                                    repository.setCalendarPref(cal.id, enabled, minutes, allDayMinutes = allDay)
+                                    calPrefs = repository.calendarPrefsFlowList().associateBy { it.calendarId }
+                                }
+                            },
+                        )
                     }
-                },
-            )
-            HorizontalDivider()
+                }
+            }
         }
         item {
             Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
@@ -183,9 +191,6 @@ fun SettingsScreen(
 
         // ---- 監査ログ ----
         item { SectionHeader("鳴動ログ (直近50件)") }
-        items(audit, key = { it.id }) { log ->
-            AuditRow(log)
-        }
         if (audit.isEmpty()) {
             item {
                 Text(
@@ -193,6 +198,19 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        } else {
+            item {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
+                ) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                        audit.forEach { log -> AuditRow(log) }
+                    }
+                }
             }
         }
         item { Spacer(Modifier.height(32.dp)) }
@@ -204,8 +222,9 @@ private fun SectionHeader(title: String) {
     Text(
         title,
         style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
     )
 }
 
@@ -237,7 +256,12 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
     val batteryOk = context.getSystemService(PowerManager::class.java)
         ?.isIgnoringBatteryOptimizations(context.packageName) ?: true
 
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
         Column(Modifier.padding(16.dp)) {
             HealthRow("通知の許可", notifOk) {
                 activity?.let {

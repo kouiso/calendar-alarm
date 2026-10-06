@@ -26,7 +26,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -102,7 +101,7 @@ fun AgendaScreen(repository: AlarmRepository) {
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("今後2週間の予定", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text("今後2週間の予定", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             IconButton(onClick = {
                 SyncWorker.enqueueNow(context)
                 refreshKey++
@@ -164,23 +163,45 @@ fun AgendaScreen(repository: AlarmRepository) {
 @Composable
 private fun NextAlarmBanner(title: String, triggerAtMillis: Long) {
     val time = SimpleDateFormat("M/d(E) H:mm", Locale.JAPAN).format(Date(triggerAtMillis))
-    Row(
-        Modifier.fillMaxWidth()
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Card(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 12.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
     ) {
-        Icon(
-            Icons.Default.Notifications,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            "次: $time  $title",
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(34.dp)
+                    .background(
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f),
+                        CircleShape,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Default.Notifications,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    "次のアラーム",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                )
+                Text(
+                    "$time  $title",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+        }
     }
 }
 
@@ -195,30 +216,58 @@ private fun AgendaList(
     LazyColumn {
         grouped.forEach { (date, dayItems) ->
             item(key = "d$date") {
-                DayHeader(date)
-            }
-            items(dayItems, key = { it.event.instanceKey }) { item ->
-                EventRow(item, onClick = { onSelect(item) })
-                HorizontalDivider(Modifier.padding(start = 76.dp))
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    DayHeader(date)
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        colors = androidx.compose.material3.CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        ),
+                    ) {
+                        dayItems.forEach { item ->
+                            EventRow(item, onClick = { onSelect(item) })
+                        }
+                    }
+                }
             }
         }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
 @Composable
 private fun DayHeader(date: LocalDate) {
     val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(tz).date
-    val label = when (date) {
+    val rel = when (date) {
         today -> "今日"
         today + kotlinx.datetime.DatePeriod(days = 1) -> "明日"
-        else -> "${date.monthNumber}/${date.dayOfMonth}(${date.dayOfWeek.jaShort()})"
+        else -> null
     }
-    Text(
-        label,
-        modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 4.dp),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-    )
+    Row(
+        Modifier.padding(top = 14.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "${date.monthNumber}/${date.dayOfMonth}(${date.dayOfWeek.jaShort()})",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        rel?.let {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier.background(
+                    MaterialTheme.colorScheme.primaryContainer,
+                    androidx.compose.foundation.shape.RoundedCornerShape(50),
+                ).padding(horizontal = 8.dp, vertical = 1.dp),
+            ) {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -231,7 +280,7 @@ private fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 時刻列

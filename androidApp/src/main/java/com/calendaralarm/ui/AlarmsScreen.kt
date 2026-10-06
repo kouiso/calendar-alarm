@@ -72,7 +72,10 @@ fun AlarmsScreen(
                 }
             }
         } else {
-            LazyColumn(Modifier.padding(padding).padding(horizontal = 16.dp)) {
+            LazyColumn(
+            Modifier.padding(padding).padding(horizontal = 16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
+        ) {
                 items(alarms, key = { it.id }) { alarm ->
                     AlarmRow(
                         alarm = alarm,
@@ -102,22 +105,31 @@ private fun AlarmRow(
     onClick: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
         onClick = onClick,
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
     ) {
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
                     "%d:%02d".format(alarm.hour, alarm.minute),
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 42.sp,
+                    fontWeight = if (alarm.enabled) FontWeight.Medium else FontWeight.Light,
+                    letterSpacing = (-1).sp,
+                    color = if (alarm.enabled) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
                 Text(
                     repeatLabel(alarm),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (alarm.label.isNotBlank()) {

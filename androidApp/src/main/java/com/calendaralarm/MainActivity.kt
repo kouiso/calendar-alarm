@@ -108,7 +108,9 @@ private fun MainScaffold(
     Scaffold(
         bottomBar = {
             if (current != "alarm_edit") {
-                NavigationBar {
+                NavigationBar(
+                    containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainer,
+                ) {
                     tabs.forEach { tab ->
                         NavigationBarItem(
                             selected = current == tab.route,

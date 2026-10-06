@@ -1,6 +1,8 @@
 package com.calendaralarm.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +31,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,6 +48,8 @@ import kotlinx.datetime.Instant
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * タイマー (エンジン経由で鳴る) とストップウォッチ (画面内のみ)。
@@ -50,7 +59,10 @@ import java.util.Locale
 fun TimerScreen(repository: AlarmRepository) {
     var tab by remember { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = tab) {
+        TabRow(
+            selectedTabIndex = tab,
+            containerColor = MaterialTheme.colorScheme.surface,
+        ) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("タイマー") })
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("ストップウォッチ") })
         }
@@ -58,6 +70,46 @@ fun TimerScreen(repository: AlarmRepository) {
             0 -> TimerPane(repository)
             else -> StopwatchPane()
         }
+    }
+}
+
+/**
+ * 時計フェイス風リング。60分の目盛りを描き、中央に大きな数字を置く。
+ * 進捗は持たない (鳴動エンジン側は残秒しか知らない) が、視覚的な「時計らしさ」を出す。
+ */
+@Composable
+private fun ClockRing(content: @Composable () -> Unit) {
+    val ring = MaterialTheme.colorScheme.outlineVariant
+    val accent = MaterialTheme.colorScheme.primary
+    Box(contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(280.dp)) {
+            val r = size.minDimension / 2f
+            drawCircle(
+                color = ring,
+                radius = r - 3.dp.toPx(),
+                style = Stroke(width = 2.dp.toPx()),
+            )
+            for (i in 0 until 60) {
+                val major = i % 5 == 0
+                val angle = Math.toRadians((i * 6 - 90).toDouble())
+                val outer = r - 8.dp.toPx()
+                val inner = outer - (if (major) 12.dp else 6.dp).toPx()
+                drawLine(
+                    color = if (i == 0) accent else ring,
+                    start = Offset(
+                        center.x + outer * cos(angle).toFloat(),
+                        center.y + outer * sin(angle).toFloat(),
+                    ),
+                    end = Offset(
+                        center.x + inner * cos(angle).toFloat(),
+                        center.y + inner * sin(angle).toFloat(),
+                    ),
+                    strokeWidth = (if (major) 3.dp else 1.5.dp).toPx(),
+                    cap = StrokeCap.Round,
+                )
+            }
+        }
+        content()
     }
 }
 
@@ -84,33 +136,40 @@ private fun TimerPane(repository: AlarmRepository) {
     ) {
         if (timer != null) {
             val remain = (timer.triggerAtMillis - nowMillis).coerceAtLeast(0)
-            Text(
-                formatRemaining(remain),
-                fontSize = 64.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                SimpleDateFormat("H:mm", Locale.getDefault()).format(Date(timer.triggerAtMillis)) + " に鳴ります",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(24.dp))
-            OutlinedButton(onClick = {
-                scope.launch { repository.onDismissed(timer.id) }
-            }) {
+            ClockRing {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        formatRemaining(remain),
+                        fontSize = 64.sp,
+                        fontWeight = FontWeight.Light,
+                        letterSpacing = (-2).sp,
+                    )
+                    Text(
+                        SimpleDateFormat("H:mm", Locale.getDefault())
+                            .format(Date(timer.triggerAtMillis)) + " に鳴ります",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(32.dp))
+            OutlinedButton(
+                onClick = { scope.launch { repository.onDismissed(timer.id) } },
+                modifier = Modifier.height(52.dp),
+            ) {
                 Text("キャンセル")
             }
         } else {
-            Text("タイマー", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(16.dp))
-            OutlinedTextField(
-                value = minutesInput,
-                onValueChange = { minutesInput = it.filter { c -> c.isDigit() }.take(3) },
-                label = { Text("分数") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(0.6f),
-            )
-            Spacer(Modifier.height(16.dp))
+            ClockRing {
+                OutlinedTextField(
+                    value = minutesInput,
+                    onValueChange = { minutesInput = it.filter { c -> c.isDigit() }.take(3) },
+                    label = { Text("分数") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(0.5f),
+                )
+            }
+            Spacer(Modifier.height(28.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(1, 3, 5, 10, 30, 60).forEach { m ->
                     FilterChip(
@@ -120,7 +179,7 @@ private fun TimerPane(repository: AlarmRepository) {
                     )
                 }
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(28.dp))
             Button(
                 onClick = {
                     val minutes = minutesInput.toLongOrNull() ?: return@Button
@@ -133,8 +192,8 @@ private fun TimerPane(repository: AlarmRepository) {
                         repository.scheduleAdhoc(inst)
                     }
                 },
-                modifier = Modifier.height(56.dp),
-            ) { Text("開始") }
+                modifier = Modifier.fillMaxWidth(0.7f).height(56.dp),
+            ) { Text("開始", fontSize = 18.sp) }
         }
     }
 }
@@ -160,28 +219,40 @@ private fun StopwatchPane() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(formatStopwatch(elapsed), fontSize = 56.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(24.dp))
+        ClockRing {
+            Text(
+                formatStopwatch(elapsed),
+                fontSize = 56.sp,
+                fontWeight = FontWeight.Light,
+                letterSpacing = (-2).sp,
+            )
+        }
+        Spacer(Modifier.height(28.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = {
-                if (running) {
-                    accum += nowMillis - baseMillis
-                    running = false
-                } else {
-                    baseMillis = System.currentTimeMillis()
-                    running = true
-                }
-            }) {
-                Text(if (running) "停止" else "開始")
+            Button(
+                onClick = {
+                    if (running) {
+                        accum += nowMillis - baseMillis
+                        running = false
+                    } else {
+                        baseMillis = System.currentTimeMillis()
+                        running = true
+                    }
+                },
+                modifier = Modifier.height(52.dp),
+            ) {
+                Text(if (running) "停止" else "開始", fontSize = 16.sp)
             }
             OutlinedButton(
                 onClick = { laps = laps + elapsed },
                 enabled = running,
+                modifier = Modifier.height(52.dp),
             ) { Text("ラップ") }
             OutlinedButton(
                 onClick = {
                     running = false; accum = 0L; laps = emptyList()
                 },
+                modifier = Modifier.height(52.dp),
             ) { Text("リセット") }
         }
         Spacer(Modifier.height(16.dp))
