@@ -20,6 +20,9 @@ interface ScheduledInstanceDao {
     @Query("SELECT * FROM scheduled_instances WHERE id = :id")
     suspend fun byId(id: String): ScheduledInstanceEntity?
 
+    @Query("SELECT * FROM scheduled_instances")
+    suspend fun all(): List<ScheduledInstanceEntity>
+
     @Query("UPDATE scheduled_instances SET state = :state WHERE id = :id")
     suspend fun setState(id: String, state: String)
 

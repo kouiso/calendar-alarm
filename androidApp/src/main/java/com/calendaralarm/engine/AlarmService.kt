@@ -88,6 +88,7 @@ class AlarmService : Service() {
             return
         }
         currentInstance = instance
+        ringingInstanceId.value = instanceId
         app.container.repository.onFired(instanceId)
         // タイトルが取れたので通知を張り替える
         getSystemService(NotificationManager::class.java)
@@ -151,25 +152,42 @@ class AlarmService : Service() {
     }
 
     private fun startAudio(soundUri: String?) {
-        try {
-            val uri = soundUri?.let(Uri::parse)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            mediaPlayer = MediaPlayer().apply {
-                setAudioAttributes(
+        // カスタム音が失効していても無音にはしない。候補を順に試す。
+        val candidates = listOfNotNull(
+            soundUri?.let(Uri::parse),
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+        ).distinct()
+        for (uri in candidates) {
+            val player = MediaPlayer()
+            val ok = runCatching {
+                player.setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build(),
                 )
-                setDataSource(this@AlarmService, uri)
-                isLooping = true
-                prepare()
-                start()
+                player.setDataSource(this@AlarmService, uri)
+                player.isLooping = true
+                player.prepare()
+                player.start()
+            }.isSuccess
+            if (ok) {
+                mediaPlayer = player
+                if (uri != candidates.firstOrNull()) {
+                    scope.launch {
+                        app.container.repository.audit("ERROR", "希望の音が使えず代替音へ: $uri")
+                    }
+                }
+                return
             }
-        } catch (e: Exception) {
-            scope.launch { app.container.repository.audit("ERROR", "音声開始失敗: ${e.message}") }
+            player.release()
+            scope.launch {
+                app.container.repository.audit("ERROR", "音源 prepare 失敗 (次候補へ): $uri")
+            }
         }
+        scope.launch { app.container.repository.audit("ERROR", "全音源が失敗、無音のまま鳴動継続") }
     }
 
     private fun startVibration() {
@@ -212,6 +230,7 @@ class AlarmService : Service() {
         wakeLock = null
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
         currentInstance = null
+        ringingInstanceId.value = null
     }
 
     override fun onDestroy() {
@@ -242,5 +261,11 @@ class AlarmService : Service() {
         const val EXTRA_INSTANCE_ID = "instance_id"
         private const val CHANNEL_ID = "alarm_v1"
         private const val NOTIFICATION_ID = 1
+
+        /**
+         * 鳴動中インスタンス id。通知権限が無い等で鳴動画面が上がらない時の
+         * 救出経路として、メイン画面がこれを監視して鳴動画面へ誘導する。
+         */
+        val ringingInstanceId = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     }
 }

@@ -16,7 +16,11 @@ class AlarmScheduler(private val context: Context) {
 
     private val alarmManager = context.getSystemService(AlarmManager::class.java)
 
-    fun schedule(instance: AlarmInstance) {
+    /**
+     * 予約。USE_EXACT_ALARM が取り下げられた等で SecurityException が来た時は
+     * false を返す (呼び出し側が監査してスキップ判断する)。
+     */
+    fun schedule(instance: AlarmInstance): Boolean {
         val alarmPi = fireIntent(instance.id)
         val showPi = PendingIntent.getActivity(
             context, 0,
@@ -25,10 +29,15 @@ class AlarmScheduler(private val context: Context) {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        alarmManager.setAlarmClock(
-            AlarmManager.AlarmClockInfo(instance.triggerAtMillis, showPi),
-            alarmPi,
-        )
+        return try {
+            alarmManager.setAlarmClock(
+                AlarmManager.AlarmClockInfo(instance.triggerAtMillis, showPi),
+                alarmPi,
+            )
+            true
+        } catch (e: SecurityException) {
+            false
+        }
     }
 
     fun cancel(instanceId: String) {

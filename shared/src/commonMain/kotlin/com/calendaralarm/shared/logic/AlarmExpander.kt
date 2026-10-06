@@ -89,12 +89,15 @@ object AlarmExpander {
         val today = nowLocal.date
         for (i in 0..days) {
             val date = today.plus(i, kotlinx.datetime.DateTimeUnit.DAY)
-            if (date in alarm.exceptions) continue
+            if (date in alarm.exceptions) {
+                if (alarm.daysOfWeek.isEmpty()) break // 単発: 例外日を超えても未来回は作らない
+                continue
+            }
             if (alarm.daysOfWeek.isNotEmpty() && date.dayOfWeek !in alarm.daysOfWeek) continue
-            // daysOfWeek 空 = 1回のみ。今日の時刻が過ぎていたら明日以降に繰り越さない
-            if (alarm.daysOfWeek.isEmpty() && i > 0) break
             val triggerLocal = LocalDateTime(date.year, date.month, date.dayOfMonth, alarm.hour, alarm.minute)
             val triggerAt = triggerLocal.toInstant(zone)
+            // 単発: 最初に窓に入る回 (今日または明日以降) を採用。
+            // 「今日の時刻が既に過ぎた」= 翌日の同時刻に鳴らすのが期待値。
             if (!inWindow(triggerAt, now, horizon)) continue
             result += AlarmInstance(
                 id = "sa:${alarm.id}:${date}",

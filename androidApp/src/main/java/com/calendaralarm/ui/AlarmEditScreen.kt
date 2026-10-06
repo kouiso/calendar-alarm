@@ -94,6 +94,8 @@ fun AlarmEditScreen(
         }
     }
 
+    val timeState = rememberTimePickerState(initialHour = hour, initialMinute = minute, is24Hour = true)
+
     LaunchedEffect(existing?.id) {
         if (!loaded && existing != null) {
             hour = existing.hour
@@ -104,6 +106,10 @@ fun AlarmEditScreen(
             snooze = existing.snoozeMinutes
             soundUri = existing.soundUri
             enabled = existing.enabled
+            // TimePicker は remember の初期値しか見ないため、
+            // 既存アラームの読み込み後に明示的に同期する
+            timeState.hour = existing.hour
+            timeState.minute = existing.minute
             loaded = true
         }
     }
@@ -119,7 +125,6 @@ fun AlarmEditScreen(
         }
     }
 
-    val timeState = rememberTimePickerState(initialHour = hour, initialMinute = minute, is24Hour = true)
     LaunchedEffect(timeState.hour, timeState.minute) {
         hour = timeState.hour
         minute = timeState.minute

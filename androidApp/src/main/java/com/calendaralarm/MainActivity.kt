@@ -63,6 +63,19 @@ class MainActivity : ComponentActivity() {
                     androidx.compose.runtime.LaunchedEffect(Unit) {
                         app.container.repository.resync("app start")
                     }
+                    // 通知権限が無い等でフルスクリーン通知が出せない時でも、
+                    // アプリを開けば鳴動画面へ辿り着けるようにする (止める手段の確保)。
+                    androidx.compose.runtime.LaunchedEffect(Unit) {
+                        com.calendaralarm.engine.AlarmService.ringingInstanceId.collect { id ->
+                            id?.let {
+                                startActivity(
+                                    com.calendaralarm.engine.RingingActivity.intent(
+                                        this@MainActivity, it,
+                                    ),
+                                )
+                            }
+                        }
+                    }
                     MainScaffold(app.container.repository, app.container.settings)
                 }
             }

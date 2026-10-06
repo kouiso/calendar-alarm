@@ -137,7 +137,7 @@ class AlarmRepository(
             Clock.System.now().toEpochMilliseconds() + instance.snoozeMinutes * 60_000L,
         )
         db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(snoozed)))
-        scheduler.schedule(snoozed)
+        if (!scheduler.schedule(snoozed)) audit("EXACT_DENIED", snoozed.id)
         setState(instance.id, AlarmState.SNOOZED)
         audit("SNOOZE", "${instance.id} +${instance.snoozeMinutes}m → ${snoozed.id}")
         onScheduleChanged?.invoke()
@@ -146,7 +146,11 @@ class AlarmRepository(
     /** タイマーなど単発インスタンスを即座に予約する。 */
     suspend fun scheduleAdhoc(instance: AlarmInstance) = withContext(Dispatchers.IO) {
         db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(instance)))
-        scheduler.schedule(instance)
+        if (!scheduler.schedule(instance)) {
+            setState(instance.id, AlarmState.CANCELLED)
+            audit("EXACT_DENIED", "adhoc ${instance.id}")
+            return@withContext
+        }
         audit("SCHEDULE", "adhoc ${instance.id} @${instance.triggerAtMillis}")
         onScheduleChanged?.invoke()
     }
@@ -184,9 +188,23 @@ class AlarmRepository(
             )
         }
 
+        // 終了済み状態 (鳴動/停止/スヌーズ/見逃し) の同 id は蘇生させない。
+        // 展開が同 id を再発行しても、ユーザーが「止めた」「スヌーズした」意味を守る。
+        val allRows = db.scheduledInstances().all()
+        val terminalIds = allRows.asSequence()
+            .filter {
+                it.state in setOf(
+                    AlarmState.FIRED.name, AlarmState.DISMISSED.name,
+                    AlarmState.SNOOZED.name, AlarmState.MISSED.name,
+                )
+            }
+            .map { it.id }
+            .toSet()
+        desired.removeAll { it.id in terminalIds }
+
         // タイマー・スヌーズなど Expander が再生しない予約は「理想状態」へ持ち越す。
         // 持ち越さないと差分計算で毎 resync キャンセルされてしまう。
-        val pendingRows = db.scheduledInstances().pending()
+        val pendingRows = allRows.filter { it.state == AlarmState.PENDING.name }
         val adhoc = pendingRows.map { it.toInstance() }
             .filter { it.kind == AlarmKind.TIMER || it.snoozeSeq > 0 }
         val desiredIds = desired.map { it.id }.toSet()
@@ -212,12 +230,19 @@ class AlarmRepository(
         val toSchedule = desired.filter { it.id !in fireNowIds }
         if (toSchedule.isNotEmpty()) {
             db.scheduledInstances().upsert(toSchedule.map { ScheduledInstanceEntity.of(it) })
-            toSchedule.forEach { scheduler.schedule(it) }
+            toSchedule.forEach {
+                if (!scheduler.schedule(it)) {
+                    audit("EXACT_DENIED", it.id)
+                    setState(it.id, AlarmState.CANCELLED)
+                }
+            }
         }
         // グレース幅内の過去分: PENDING に戻して即時トリガ (サービス経由で鳴らす)
         for (fire in plan.toFireNow) {
             db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
-            scheduler.schedule(fire.copy(triggerAtMillis = Clock.System.now().toEpochMilliseconds()))
+            if (!scheduler.schedule(fire.copy(triggerAtMillis = Clock.System.now().toEpochMilliseconds()))) {
+                audit("EXACT_DENIED", fire.id)
+            }
         }
         audit(
             "RESYNC",

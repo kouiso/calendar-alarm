@@ -2,6 +2,10 @@ package com.calendaralarm
 
 import android.app.Application
 import android.content.pm.PackageManager
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
 import androidx.glance.appwidget.updateAll
 import androidx.room.Room
@@ -68,6 +72,23 @@ class CalendarAlarmApp : Application() {
         super.onCreate()
         container
         scheduleHealthCheck()
+        observeCalendarChanges()
+    }
+
+    /**
+     * カレンダー内容の変更検知。イベントの追加/移動/削除を拾って
+     * 即時 WorkManager 経由で予約を再整合させる (12h 周期待ちを防ぐ)。
+     * enqueueUniqueWork(REPLACE) により連続変更はデバウンスされる。
+     */
+    private fun observeCalendarChanges() {
+        contentResolver.registerContentObserver(
+            CalendarContract.Events.CONTENT_URI, true,
+            object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    runCatching { SyncWorker.enqueueNow(this@CalendarAlarmApp, "calendar change") }
+                }
+            },
+        )
     }
 
     /** 12時間ごとの健全性チェック。DB の PENDING 予約を AlarmManager に再主張する。 */

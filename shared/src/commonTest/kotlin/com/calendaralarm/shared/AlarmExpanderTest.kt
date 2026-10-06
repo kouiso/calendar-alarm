@@ -128,10 +128,12 @@ class AlarmExpanderTest {
     }
 
     @Test
-    fun `単発アラームは当日が過ぎたら展開されない`() {
-        val alarm = StandaloneAlarm(id = 1, hour = 6, minute = 0) // now=08:00 → 当日分は過去
+    fun `単発アラームは当日が過ぎたら翌日に繰り越す`() {
+        val alarm = StandaloneAlarm(id = 1, hour = 6, minute = 0) // now=08:00 → 当日分はグレース超過
         val out = AlarmExpander.expandStandalone(alarm, now = now, days = 14, zone = TZ)
-        assertTrue(out.isEmpty())
+        // 10-05T06:00 は2時間前(グレース60分超)→翌10-06T06:00が最初の回
+        assertEquals(1, out.size)
+        assertEquals(LocalDate(2026, 10, 6), Instant.fromEpochMilliseconds(out[0].triggerAtMillis).toLocalDateTime(TZ).date)
     }
 
     @Test
