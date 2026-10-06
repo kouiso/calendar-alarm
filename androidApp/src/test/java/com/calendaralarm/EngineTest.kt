@@ -128,6 +128,10 @@ class EngineTest {
         assertNotNull(snoozed)
         assertEquals(AlarmState.PENDING.name, snoozed!!.state)
         assertTrue(snoozed.triggerAtMillis > System.currentTimeMillis())
+
+        // resync してもスヌーズ中のタイマー子は生きる (TIMER は無条件持越し)
+        repository.resync("test")
+        assertEquals(AlarmState.PENDING.name, db.scheduledInstances().byId(snoozed.id)!!.state)
     }
 
     @Test

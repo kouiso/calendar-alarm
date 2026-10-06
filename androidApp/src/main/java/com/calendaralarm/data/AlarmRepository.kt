@@ -247,8 +247,11 @@ class AlarmRepository(
             // アジェンダ表示も同じ既定を読むため、UIとエンジンを一致させる。
             val defaultRule = AlarmRule(minutesBefore = appSettings.defaultMinutesBefore)
             val expanded = runCatching {
+                // 過去側はグレース幅ではなく14日に広げる。スヌーズ連鎖が親予定の
+                // 開始から長く伸びても liveEventKeys が親を見失わず、スヌーズ子が
+                // 無言キャンセルされない。in-window 外の予定は展開側で弾かれる。
                 val events = calendarReader.events(
-                    now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
+                    (now - 14.days).toEpochMilliseconds(),
                     horizon.toEpochMilliseconds(),
                 )
                 liveEventKeys = events.asSequence()
@@ -302,7 +305,8 @@ class AlarmRepository(
                                         standalones.any { it.id == aid && it.enabled }
                                     } == true
                             root.startsWith("ev:") ->
-                                root in desiredIds ||
+                                // カレンダー読み取り失敗時は平の EVENT 予約と同じく保守側に倒す
+                                keepPendingEvents || root in desiredIds ||
                                     root.removePrefix("ev:").substringBeforeLast(":b") in liveEventKeys
                             else -> keepPendingEvents && inst.kind == AlarmKind.EVENT
                         }
