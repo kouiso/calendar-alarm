@@ -224,6 +224,10 @@ private fun DayHeader(date: LocalDate) {
 @Composable
 private fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
     val ev = item.event
+    // 長さゼロ・23時間超のイベントも実質「終日」扱いにして 0:00/~0:00 表記を消す
+    val effectiveAllDay = ev.allDay ||
+        ev.endMillis - ev.startMillis >= 23L * 3_600_000L ||
+        ev.endMillis <= ev.startMillis
     Row(
         Modifier.fillMaxWidth()
             .clickable(onClick = onClick)
@@ -233,26 +237,36 @@ private fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
         // 時刻列
         Column(Modifier.width(52.dp)) {
             Text(
-                timeLabel(ev.startMillis, ev.allDay),
+                if (effectiveAllDay) "終日" else timeLabel(ev.startMillis, false),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
             )
-            Text(
-                if (ev.allDay) "" else "~" + timeLabel(ev.endMillis, false),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (!effectiveAllDay) {
+                Text(
+                    "~" + timeLabel(ev.endMillis, false),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
-        // カレンダー色ドット
+        // カレンダー色アクセントバー
         Box(
-            Modifier.size(10.dp)
-                .background(Color(item.calendarColor), CircleShape),
+            Modifier.width(4.dp).height(38.dp)
+                .background(
+                    Color(item.calendarColor),
+                    androidx.compose.foundation.shape.RoundedCornerShape(2.dp),
+                ),
         )
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 ev.title.ifBlank { "(タイトルなし)" },
                 style = MaterialTheme.typography.bodyLarge,
+                color = if (item.muted) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
                 maxLines = 1,
             )
             Text(
