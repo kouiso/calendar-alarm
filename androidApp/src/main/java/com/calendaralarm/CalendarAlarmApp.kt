@@ -82,23 +82,38 @@ class CalendarAlarmApp : Application() {
         super.onCreate()
         container
         scheduleHealthCheck()
-        observeCalendarChanges()
+        ensureCalendarObserver()
     }
+
+    private var calendarObserverRegistered = false
 
     /**
      * カレンダー内容の変更検知。イベントの追加/移動/削除を拾って
      * 即時 WorkManager 経由で予約を再整合させる (12h 周期待ちを防ぐ)。
      * enqueueUniqueWork(REPLACE) により連続変更はデバウンスされる。
+     *
+     * READ_CALENDAR 未付与で登録すると SecurityException で
+     * Application.onCreate ごと落ちる (権限なし初回起動で実害が出た)。
+     * そのため権限がある時だけ登録し、オンボーディングや設定アプリで
+     * 後から権限が付いたケースは MainActivity.onResume からの呼び出しで拾う。
      */
-    private fun observeCalendarChanges() {
-        contentResolver.registerContentObserver(
-            CalendarContract.Events.CONTENT_URI, true,
-            object : ContentObserver(Handler(Looper.getMainLooper())) {
-                override fun onChange(selfChange: Boolean) {
-                    runCatching { SyncWorker.enqueueNow(this@CalendarAlarmApp, "calendar change") }
-                }
-            },
-        )
+    fun ensureCalendarObserver() {
+        if (calendarObserverRegistered) return
+        if (ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.READ_CALENDAR,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) return
+        calendarObserverRegistered = runCatching {
+            contentResolver.registerContentObserver(
+                CalendarContract.Events.CONTENT_URI, true,
+                object : ContentObserver(Handler(Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        runCatching { SyncWorker.enqueueNow(this@CalendarAlarmApp, "calendar change") }
+                    }
+                },
+            )
+            true
+        }.getOrDefault(false)
     }
 
     /** 12時間ごとの健全性チェック。DB の PENDING 予約を AlarmManager に再主張する。 */

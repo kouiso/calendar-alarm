@@ -37,6 +37,13 @@ class MainActivity : ComponentActivity() {
 
     private val app get() = application as CalendarAlarmApp
 
+    override fun onResume() {
+        super.onResume()
+        // オンボーディングやアプリ設定で後からカレンダー権限が付いた場合に備え、
+        // 画面に戻る度に Observer 登録を試す (登録済みなら即リターン)。
+        app.ensureCalendarObserver()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
