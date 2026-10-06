@@ -131,6 +131,45 @@ class EngineTest {
     }
 
     @Test
+    fun `スヌーズ中の子は親アラームが有効ならグレース窓外でも消えない`() = runBlocking {
+        repository.upsertStandaloneAlarm(
+            StandaloneAlarm(enabled = true, hour = 7, minute = 0, label = "a"),
+        )
+        val aid = db.standaloneAlarms().all().first().id
+        // 親インスタンス (sa:aid:発生日) は鳴動済みでグレース窓外。
+        // インスタンス照合だと desired に居らず誤殺される退行防止テスト。
+        val child = AlarmInstance(
+            id = "sa:$aid:2020-01-01:snz1",
+            triggerAtMillis = System.currentTimeMillis() + 30 * 60_000,
+            title = "a", kind = AlarmKind.STANDALONE, snoozeSeq = 1,
+        )
+        repository.scheduleAdhoc(child)
+        repository.resync("test")
+        val row = db.scheduledInstances().byId(child.id)
+        assertEquals(AlarmState.PENDING.name, row!!.state)
+    }
+
+    @Test
+    fun `親アラームを無効化するとスヌーズ中の子も消える`() = runBlocking {
+        repository.upsertStandaloneAlarm(
+            StandaloneAlarm(enabled = true, hour = 7, minute = 0),
+        )
+        val aid = db.standaloneAlarms().all().first().id
+        repository.upsertStandaloneAlarm(
+            StandaloneAlarm(id = aid, enabled = false, hour = 7, minute = 0),
+        )
+        val child = AlarmInstance(
+            id = "sa:$aid:2020-01-01:snz1",
+            triggerAtMillis = System.currentTimeMillis() + 30 * 60_000,
+            title = "a", kind = AlarmKind.STANDALONE, snoozeSeq = 1,
+        )
+        repository.scheduleAdhoc(child)
+        repository.resync("test")
+        val row = db.scheduledInstances().byId(child.id)
+        assertEquals(AlarmState.CANCELLED.name, row!!.state)
+    }
+
+    @Test
     fun `鳴動→停止で DISMISSED になり AlarmManager から消える`() = runBlocking {
         val inst = AlarmInstance(
             id = "ev:y", triggerAtMillis = System.currentTimeMillis() + 60_000,

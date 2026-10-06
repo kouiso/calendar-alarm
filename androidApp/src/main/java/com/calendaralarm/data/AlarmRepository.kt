@@ -193,6 +193,9 @@ class AlarmRepository(
         // 権限剥奪・プロバイダ障害) では既存の EVENT 予約を維持し、一時的な
         // 障害で予定アラームが全部キャンセルされるのを防ぐ。
         var keepPendingEvents = false
+        // スヌーズ中インスタンスの親がまだ「鳴らすべき」かの判定に使う。
+        // 読み取り失敗時は空のまま (keepPendingEvents 経路で保護される)。
+        var liveEventKeys = emptySet<String>()
         if (hasCalendarPermission()) {
             val prefs = db.calendarPrefs().all().associate {
                 it.calendarId to AlarmRule(
@@ -220,6 +223,11 @@ class AlarmRepository(
                     now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
                     horizon.toEpochMilliseconds(),
                 )
+                liveEventKeys = events.asSequence()
+                    .filter { overrides[it.instanceKey]?.muted != true }
+                    .filter { prefs[it.calendarId]?.enabled != false }
+                    .map { it.instanceKey }
+                    .toSet()
                 AlarmExpander.expandEvents(
                     events = events,
                     calendarRules = prefs,
@@ -264,7 +272,23 @@ class AlarmRepository(
                     inst.kind == AlarmKind.TIMER -> true
                     // スヌーズ中の子は「親が今も理想状態にある」場合だけ持ち越す。
                     // 親アラームの無効化・削除・予定ミュート後にスヌーズだけ鳴るのを防ぐ。
-                    inst.snoozeSeq > 0 -> inst.id.substringBefore(":snz") in desiredIds
+                    inst.snoozeSeq > 0 -> {
+                        // 親の「鳴動意思」を見る。親インスタンス id の照合では
+                        // グレース窓 (60分) を跨ぐスヌーズが resync で誤殺される
+                        // ため、sa: はアラームの有効性、ev: は予定の存続+非ミュートを見る。
+                        val root = inst.id.substringBefore(":snz")
+                        when {
+                            root.startsWith("sa:") ->
+                                root.removePrefix("sa:").substringBefore(":")
+                                    .toLongOrNull()?.let { aid ->
+                                        standalones.any { it.id == aid && it.enabled }
+                                    } == true
+                            root.startsWith("ev:") ->
+                                root in desiredIds ||
+                                    root.removePrefix("ev:").substringBeforeLast(":b") in liveEventKeys
+                            else -> keepPendingEvents && inst.kind == AlarmKind.EVENT
+                        }
+                    }
                     else -> keepPendingEvents && inst.kind == AlarmKind.EVENT
                 }
             }
