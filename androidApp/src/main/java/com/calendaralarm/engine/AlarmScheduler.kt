@@ -35,7 +35,10 @@ class AlarmScheduler(private val context: Context) {
                 alarmPi,
             )
             true
-        } catch (e: SecurityException) {
+        } catch (e: Exception) {
+            // SecurityException (権限失効) に限らず、OEM 差異で
+            // IllegalStateException 等が飛ぶ場合がある。ここで投げると
+            // resync 全体が中断して他の予約まで巻き込むので false に倒す。
             false
         }
     }

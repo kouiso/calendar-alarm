@@ -248,8 +248,12 @@ class AlarmRepository(
         }
         // 差分が無い予約も毎回 AlarmManager に再主張する。
         // 再起動・強制終了・パッケージ更新で OS 側だけ消えるケースを潰すため。
+        // 近い順に予約する。AlarmManager の同時予約上限 (500) に万が一
+        // 触れた場合、最も遠い予約から落ちる退化になる (近い側が鳴れば
+        // 次回 resync で空きができて遠い側が拾い直される)。
         val fireNowIds = plan.toFireNow.map { it.id }.toSet()
         val toSchedule = desired.filter { it.id !in fireNowIds }
+            .sortedBy { it.triggerAtMillis }
         if (toSchedule.isNotEmpty()) {
             db.scheduledInstances().upsert(toSchedule.map { ScheduledInstanceEntity.of(it) })
             toSchedule.forEach {
