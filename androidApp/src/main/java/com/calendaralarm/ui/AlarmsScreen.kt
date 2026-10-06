@@ -25,7 +25,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -77,6 +80,29 @@ fun AlarmsScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
         ) {
                 items(alarms, key = { it.id }) { alarm ->
+                    var confirmDelete by remember { mutableStateOf(false) }
+                    if (confirmDelete) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { confirmDelete = false },
+                            title = { Text("アラームを削除") },
+                            text = {
+                                Text("%d:%02d %s のアラームを削除しますか？".format(alarm.hour, alarm.minute, alarm.label))
+                            },
+                            confirmButton = {
+                                androidx.compose.material3.TextButton(
+                                    onClick = {
+                                        confirmDelete = false
+                                        scope.launch { repository.deleteStandaloneAlarm(alarm.id) }
+                                    },
+                                ) { Text("削除") }
+                            },
+                            dismissButton = {
+                                androidx.compose.material3.TextButton(
+                                    onClick = { confirmDelete = false },
+                                ) { Text("キャンセル") }
+                            },
+                        )
+                    }
                     AlarmRow(
                         alarm = alarm,
                         nextInstance = pending.firstOrNull { it.standaloneAlarmId == alarm.id },
@@ -85,9 +111,7 @@ fun AlarmsScreen(
                                 repository.upsertStandaloneAlarm(alarm.copy(enabled = on))
                             }
                         },
-                        onDelete = {
-                            scope.launch { repository.deleteStandaloneAlarm(alarm.id) }
-                        },
+                        onDelete = { confirmDelete = true },
                         onClick = { onEdit(alarm.id) },
                     )
                 }
