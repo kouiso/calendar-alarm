@@ -1,7 +1,5 @@
 package com.calendaralarm
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -21,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -47,11 +44,11 @@ class MainActivity : ComponentActivity() {
                 val onboarded by app.container.settings.flow
                     .map { it.onboardingDone }
                     .collectAsState(initial = true)
-                val hasCalendarPerm = ContextCompat.checkSelfPermission(
-                    this, Manifest.permission.READ_CALENDAR,
-                ) == PackageManager.PERMISSION_GRANTED
 
-                if (!onboarded || !hasCalendarPerm) {
+                // カレンダー権限はメイン画面の条件にしない。
+                // 無くてもタイマー・単発アラームは動く (resync が部分動作する設計)、
+                // 不足分は権限ヘルスカードが誘導する。「権限なしで始める」の約束と一致。
+                if (!onboarded) {
                     OnboardingScreen(
                         repository = app.container.repository,
                         settings = app.container.settings,
