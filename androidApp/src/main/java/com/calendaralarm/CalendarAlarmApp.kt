@@ -70,6 +70,11 @@ class AppContainer(val app: Application) {
                     com.calendaralarm.widget.NextAlarmWidget().updateAll(app)
                 }
             },
+            onMissed = { n ->
+                runCatching {
+                    com.calendaralarm.engine.MissedNotifier.postMissed(app, n)
+                }
+            },
         )
     }
 }

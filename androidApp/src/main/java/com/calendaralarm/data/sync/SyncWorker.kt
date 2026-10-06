@@ -8,7 +8,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.calendaralarm.CalendarAlarmApp
-import com.calendaralarm.engine.MissedNotifier
 
 /**
  * 定期健全性チェック + 手動同期。
@@ -24,16 +23,8 @@ class SyncWorker(
         val app = applicationContext as CalendarAlarmApp
         val reason = inputData.getString(KEY_REASON) ?: "workManager"
         return try {
-            // resync より先に期限切れを MISSED 化する。resync の差分整合は
-            // desired に無い PENDING を CANCELLED に倒すので、先に拾わないと
-            // 「鳴らせなかった」事実が通知も状態も残さず消える。
-            val missed = app.container.repository.markMissed()
-            if (missed > 0) {
-                // 端末OFF/強制停止中に時刻を過ぎたアラームがあることを
-                // 黙って履歴に残すだけでなく、ユーザーへ通知する
-                com.calendaralarm.engine.MissedNotifier
-                    .postMissed(applicationContext, missed)
-            }
+            // 期限切れの MISSED 化+通知は resync 内部で行われる
+            // (boot/時刻変更/手動/アプリ起動のどの入口からも同じ経路を通る)。
             app.container.repository.resync(reason)
             app.container.repository.pruneOldInstances()
             Result.success()

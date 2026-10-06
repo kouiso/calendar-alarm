@@ -50,6 +50,8 @@ class AlarmRepository(
     private val appScope: CoroutineScope,
     /** 予約が変わった時の呼び出し (ウィジェット更新用)。 */
     private val onScheduleChanged: (suspend () -> Unit)? = null,
+    /** 期限切れが MISSED 化された件数の通知 (missed 通知用)。 */
+    private val onMissed: (suspend (Int) -> Unit)? = null,
 ) {
     // ---- 参照 ----
 
@@ -174,6 +176,10 @@ class AlarmRepository(
      * カレンダー権限が無くても単発アラームは展開する（部分動作を優先）。
      */
     suspend fun resync(reason: String) = withContext(Dispatchers.IO) {
+        // 差分計算は desired に無い PENDING を CANCELLED に倒すため、期限切れを
+        // 先に MISSED 化しないと「鳴らせなかった」事実が通知も状態も残さず消える。
+        // boot/時刻変更/手動/アプリ起動のどの入口からでも必ずここを通る。
+        markMissed().let { if (it > 0) onMissed?.invoke(it) }
         val now = Clock.System.now()
         val horizon = now + 14.days
         val desired = mutableListOf<AlarmInstance>()
