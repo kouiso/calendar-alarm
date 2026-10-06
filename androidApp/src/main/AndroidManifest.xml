@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- カレンダー読み取り -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- 通知（鳴動時のフルスクリーン Intent 起動に必要） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- アラーム中核アプリなので USE_EXACT_ALARM が自動付与される -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 鳴動 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- フォアグラウンドサービス（鳴動中の生存に必要） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- 再起動後のアラーム復元 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 電池最適化の除外をユーザーへ要求する Intent の起動に必要 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- 天気 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:name=".CalendarAlarmApp"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.CalendarAlarm"
+        tools:targetApi="35">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 鳴動画面。ロック画面・スリープ上に全面表示 -->
+        <activity
+            android:name=".engine.RingingActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 鳴動フォアグラウンドサービス -->
+        <service
+            android:name=".engine.AlarmService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- AlarmManager からの鳴動トリガ -->
+        <receiver
+            android:name=".engine.AlarmReceiver"
+            android:exported="false" />
+
+        <!-- 再起動・自分の更新後にアラームを復元 -->
+        <receiver
+            android:name=".engine.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 時刻・タイムゾーン・日付変更で再展開 -->
+        <receiver
+            android:name=".engine.TimeChangeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 次のアラーム表示ウィジェット -->
+        <receiver
+            android:name=".widget.NextAlarmWidgetReceiver"
+            android:exported="false"
+            android:label="次のアラーム">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/next_alarm_widget_info" />
+        </receiver>
+    </application>
+</manifest>

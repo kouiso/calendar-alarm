@@ -1,94 +1,29 @@
-# calendar_alarm
+# calendar-alarm
 
-## 環境構築手順
+カレンダーの予定に連動して「絶対に鳴る」ことを目指すアラームアプリ。
+Kotlin Multiplatform + Jetpack Compose (Material3) 製。Android 先行、iOS は Phase 3。
 
-### 必要なツールのインストール
+## 機能
 
-1. **brew のインストール**:
-   [Brew のインストール方法](https://brew.sh/ja/)を参照してください。Windows の場合は WSL を利用して環境構築を行います。
+- カレンダー自動取込 (端末の全カレンダーを CalendarContract 経由で読込。Google/Microsoft 等のアカウントは端末に登録するだけで連携)
+- カレンダー単位の鳴動 ON/OFF・既定オフセット・終日予定の鳴動時刻
+- 予定ごとの鳴動 ON/OFF・鳴らすタイミング上書き・複数リマインダー (最大5件)
+- 単発・曜日繰り返しアラーム + 例外日スキップ
+- スヌーズ / タイマー / ストップウォッチ
+- イベント場所の天気予報
+- ホームウィジェット (次のアラーム)
+- 鳴動監査ログ (鳴った/止めた/スヌーズ/鳴らせなかった を記録)
 
-2. **asdf のインストール**:
+## セットアップ
 
-   ```bash
-   brew install asdf
-   ```
+Android Studio (Ladybug 以降) または JDK 17 があれば動く。
 
-   asdf を使って複数のバージョンの言語ランタイムを管理します。
+```bash
+./gradlew :androidApp:assembleDebug   # androidApp/build/outputs/apk/debug/androidApp-debug.apk
+./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest  # テスト
+```
 
-3. **asdf のパス設定**:
-   asdf のパスをシステムの PATH に追加します。これにより、コマンドラインから asdf を利用できるようになります。
+## モジュール構成
 
-4. **Node.js と Yarn のインストール**:
-   asdf を使用してプロジェクトで必要な Node.js と Yarn のバージョンをインストールします。
-
-   ```bash
-   asdf plugin add nodejs
-   asdf install nodejs [適切なバージョン番号]
-
-   asdf plugin add yarn
-   asdf install yarn [適切なバージョン番号]
-   ```
-
-   もし以下のようなエラーが発生した場合、
-
-   ```bash
-   ⛔ Missing one or more of the following dependencies: tar, gpg
-   ```
-
-   以下をインストールしてください。
-
-   ```bash
-   brew install gpg
-   ```
-
-### Flutter 環境のセットアップ
-
-1. **Flutter SDK のインストール**:
-   Flutter の公式サイトから SDK をダウンロードし、インストールしてください。
-   [Flutter のインストール](https://flutter.dev/docs/get-started/install)
-
-2. **Flutter の環境変数設定**:
-   Flutter SDK のパスを環境変数に追加します。
-
-3. **Android Studio のインストール**:
-   Android アプリを開発するためには Android Studio が必要です。
-   [Android Studio のダウンロード](https://developer.android.com/studio)
-
-4. **Flutter Doctor の実行**:
-   Flutter 環境が正しく設定されているか確認するために、コマンドラインで`flutter doctor`を実行します。
-
-5. **Keystore の生成**:
-
-   ```bash
-   ./gradlew signingReport
-   ```
-
-### clone 後の環境構築手順
-
-1. **.env の編集**:
-   `.env.development.example`をコピーして`.env.development`を作成します。
-
-2. **依存関係のインストール**:
-   プロジェクトのルートディレクトリで以下のコマンドを実行します。
-
-   ```bash
-   yarn install
-   ```
-
-3. **開発サーバーの起動**:
-
-   ```bash
-   yarn dev
-   ```
-
-4. **ブラウザでの確認**:
-   `http://localhost:3000`にアクセスして、プロジェクトが正しく表示されるか確認します。
-
-## エディターについて
-
-1. **Visual Studio Code の使用**:
-   [Visual Studio Code のダウンロード](https://azure.microsoft.com/ja-jp/products/visual-studio-code/)
-
-2. **推奨の拡張機能**:
-   `.vscode/extensions.json`に記載されている拡張機能をインストールしてください。
-   [VSCode の拡張機能・設定共有について](https://qiita.com/otsuky/items/f46f5ee9eb11b3a9a4ba)
+- `shared/` — KMP 共有モジュール (鳴動スケジュール展開・ドメインロジック・天気クライアント)
+- `androidApp/` — Android アプリ (鳴動エンジン・カレンダー同期・Compose UI・ウィジェット)
