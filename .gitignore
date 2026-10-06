@@ -54,3 +54,12 @@ lib/firebase_options.dart
 
 .fvm/flutter_sdk
 node_modules
+
+# Android/KMP
+local.properties
+.gradle/
+**/build/
+.cxx/
+.kotlin/
+*.apk
+*.aab

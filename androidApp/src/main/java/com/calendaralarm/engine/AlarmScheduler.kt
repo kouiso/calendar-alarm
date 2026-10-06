@@ -1,0 +1,53 @@
+package com.calendaralarm.engine
+
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import com.calendaralarm.MainActivity
+import com.calendaralarm.shared.model.AlarmInstance
+
+/**
+ * AlarmManager への予約/取消。PendingIntent の同一性は
+ * data URI (alarm://<instanceId>) で決まるため、requestCode 衝突は起きない。
+ */
+class AlarmScheduler(private val context: Context) {
+
+    private val alarmManager = context.getSystemService(AlarmManager::class.java)
+
+    fun schedule(instance: AlarmInstance) {
+        val alarmPi = fireIntent(instance.id)
+        val showPi = PendingIntent.getActivity(
+            context, 0,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        alarmManager.setAlarmClock(
+            AlarmManager.AlarmClockInfo(instance.triggerAtMillis, showPi),
+            alarmPi,
+        )
+    }
+
+    fun cancel(instanceId: String) {
+        alarmManager.cancel(fireIntent(instanceId))
+    }
+
+    fun canScheduleExact(): Boolean =
+        alarmManager.canScheduleExactAlarms()
+
+    /** 鳴動ブロードキャストの PendingIntent。id で完全に一意。 */
+    private fun fireIntent(instanceId: String): PendingIntent {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            action = AlarmReceiver.ACTION_FIRE
+            data = Uri.parse("alarm://instance/$instanceId")
+        }
+        return PendingIntent.getBroadcast(
+            context, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+}
