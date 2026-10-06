@@ -1,4 +1,4 @@
 setup:
-  install: "flutter pub get"
-  test: "flutter test"
-  lint: "flutter analyze"
+  install: "./gradlew :shared:assemble :androidApp:assembleDebug"
+  test: "./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest"
+  lint: "./gradlew :androidApp:lintDebug"

@@ -1,4 +1,4 @@
-name: Flutter CI
+name: Android CI
 
 on:
   push:
@@ -12,40 +12,29 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup asdf
-        uses: asdf-vm/actions/setup@v1
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
-      - name: Install asdf plugins
-        run: |
-          asdf plugin add ruby
-          asdf plugin add flutter
-          asdf plugin add dart
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Install runtime versions
-        run: asdf install
+      - name: Run shared tests (common + JVM + Android)
+        run: ./gradlew :shared:jvmTest :shared:testDebugUnitTest --stacktrace
 
-      - name: Install dependencies
-        run: flutter pub get
+      - name: Run app unit tests
+        run: ./gradlew :androidApp:testDebugUnitTest --stacktrace
 
-      - name: Run Flutter tests
-        run: flutter test
+      - name: Build debug APK
+        run: ./gradlew :androidApp:assembleDebug --stacktrace
 
-      - name: Run Flutter Lint
-        run: flutter analyze
-
-      - name: Build Flutter Android app
-        run: flutter build apk
-
-      - name: Setup CocoaPods
-        run: sudo gem install cocoapods
-
-      - name: Install CocoaPods dependencies
-        run: cd ios && pod install
-
-      - name: Build Flutter iOS app
-        run: flutter build ios --release --no-codesign
-
-      - name: Build Flutter macOS app
-        run: flutter build macos --release
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-alarm-debug-apk
+          path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          retention-days: 14
