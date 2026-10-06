@@ -10,10 +10,12 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.calendaralarm.R
 
 // パレット方針: 夜の時計 = 深いインディゴを主色に、選択状態(チップ/ナビピル)は
 // 同系のくすみインディゴで揃える (secondaryContainer が M3 の標準選択色のため)。
@@ -86,34 +88,54 @@ private val DarkColors = darkColorScheme(
     surfaceContainerHighest = Color(0xFF33333B),
 )
 
-// 大きな時刻数字は薄めウェイト (時計アプリの定石)。等幅数字で桁ブレを防ぐ。
+// アプリ共通書体: IBM Plex Sans JP (英字/和文が一体設計)。
+// システム CJK フォールバックはロケール次第で中国語字形を選ぶため、日本語字形を
+// 保証するためにバンドルする (OFL)。
+val AppFontFamily = FontFamily(
+    Font(R.font.plex_sans_jp_light, FontWeight.Light),
+    Font(R.font.plex_sans_jp_regular, FontWeight.Normal),
+    Font(R.font.plex_sans_jp_medium, FontWeight.Medium),
+    Font(R.font.plex_sans_jp_semibold, FontWeight.SemiBold),
+    Font(R.font.plex_sans_jp_semibold, FontWeight.Bold),
+)
+
+private val baseTypography = Typography()
+
+// 全スタイルの fontFamily を AppFontFamily で統一 (未指定スタイルは platform 既定
+// = 中国語字形フォールバックに戻ってしまう)。大きな時刻数字は薄めウェイト (時計
+// アプリの定石)。
 private val AppTypography = Typography(
-    displayLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Light,
-        fontSize = 57.sp,
-        lineHeight = 64.sp,
-        letterSpacing = (-0.5).sp,
-    ),
+    displayLarge = baseTypography.displayLarge.copy(fontFamily = AppFontFamily),
+    displayMedium = baseTypography.displayMedium.copy(fontFamily = AppFontFamily),
+    displaySmall = baseTypography.displaySmall.copy(fontFamily = AppFontFamily),
+    headlineLarge = baseTypography.headlineLarge.copy(fontFamily = AppFontFamily),
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = AppFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 28.sp,
         lineHeight = 36.sp,
     ),
+    headlineSmall = baseTypography.headlineSmall.copy(fontFamily = AppFontFamily),
     titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = AppFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 22.sp,
         lineHeight = 28.sp,
     ),
     titleMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = AppFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 16.sp,
         lineHeight = 24.sp,
         letterSpacing = 0.15.sp,
     ),
+    titleSmall = baseTypography.titleSmall.copy(fontFamily = AppFontFamily),
+    bodyLarge = baseTypography.bodyLarge.copy(fontFamily = AppFontFamily),
+    bodyMedium = baseTypography.bodyMedium.copy(fontFamily = AppFontFamily),
+    bodySmall = baseTypography.bodySmall.copy(fontFamily = AppFontFamily),
+    labelLarge = baseTypography.labelLarge.copy(fontFamily = AppFontFamily),
+    labelMedium = baseTypography.labelMedium.copy(fontFamily = AppFontFamily),
+    labelSmall = baseTypography.labelSmall.copy(fontFamily = AppFontFamily),
 )
 
 // カードを全体的にやわらかく (Card=medium / BottomSheet・Dialog=large)
