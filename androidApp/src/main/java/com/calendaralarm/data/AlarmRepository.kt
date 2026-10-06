@@ -252,6 +252,13 @@ class AlarmRepository(
         onScheduleChanged?.invoke()
     }
 
+    /** 単発指定で MISSED 化する。鳴動を試みたが起動を OS に拒否された時などに使う。 */
+    suspend fun markMissed(id: String, detail: String? = null) {
+        setState(id, AlarmState.MISSED)
+        audit("MISS", if (detail == null) id else "$id: $detail")
+        onScheduleChanged?.invoke()
+    }
+
     /** 鳴動時刻が過去の PENDING 行を MISSED に整理する（健全性チェック用）。 */
     suspend fun markMissed() {
         val cutoff = Clock.System.now().toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds

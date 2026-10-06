@@ -22,7 +22,23 @@ class AlarmReceiver : BroadcastReceiver() {
             data = Uri.parse("alarm://instance/$instanceId")
             putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
         }
-        context.startForegroundService(service)
+        // BOOT_COMPLETED 直後など、FGS 起動自体が拒否されるコンテキストがあり得る。
+        // ここで落とすとプロセス死亡=クラッシュループになるので、見逃しに逃がす。
+        val pending = goAsync()
+        try {
+            context.startForegroundService(service)
+        } catch (e: Exception) {
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
+                        .container.repository
+                        .markMissed(instanceId, "鳴動サービス起動がOSに拒否: ${e.javaClass.simpleName}")
+                }
+            }
+            MissedNotifier.post(context, null)
+        } finally {
+            pending.finish()
+        }
     }
 
     companion object {

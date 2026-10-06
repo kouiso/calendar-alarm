@@ -22,6 +22,7 @@ import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 import com.calendaralarm.CalendarAlarmApp
 import com.calendaralarm.R
+import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmState
 import kotlinx.coroutines.CoroutineScope
@@ -53,7 +54,17 @@ class AlarmService : Service() {
                     stopSelf(startId)
                     return START_NOT_STICKY
                 }
-                startForegroundWithNotification(id)
+                if (!startForegroundWithNotification(id)) {
+                    // BOOT_COMPLETED 処理中など、mediaPlayback FGS の起動が
+                    // 禁止されているコンテキスト。ここで例外を上げると
+                    // クラッシュループになるので見逃し扱いにして静かに畳む。
+                    scope.launch {
+                        app.container.repository.markMissed(id, "鳴動サービスの前面化がOSに拒否")
+                        MissedNotifier.post(this@AlarmService, null)
+                        stopSelf(startId)
+                    }
+                    return START_NOT_STICKY
+                }
                 scope.launch { beginRinging(id) }
             }
             ACTION_DISMISS -> {
@@ -88,6 +99,16 @@ class AlarmService : Service() {
             return
         }
         currentInstance = instance
+        // グレース超過の過去分は鳴らさない。端末OFF中に過ぎたアラームを
+        // 起動直後に延々鳴らし続けるより、見逃した事実を知らせる方が正しい。
+        val overdueBy = System.currentTimeMillis() - instance.triggerAtMillis
+        if (overdueBy > AlarmExpander.FIRE_GRACE.inWholeMilliseconds) {
+            app.container.repository.markMissed(id = instanceId, detail = "鳴動時刻から${overdueBy / 60_000}分経過")
+            MissedNotifier.post(this, instance.title)
+            stopRinging()
+            stopSelf()
+            return
+        }
         ringingInstanceId.value = instanceId
         app.container.repository.onFired(instanceId)
         // タイトルが取れたので通知を張り替える
@@ -98,16 +119,24 @@ class AlarmService : Service() {
         acquireWakeLock()
     }
 
-    private fun startForegroundWithNotification(instanceId: String) {
+    /** FGS 前面化を試みる。OS に拒否された場合は false (例外は飲み込む)。 */
+    private fun startForegroundWithNotification(instanceId: String): Boolean {
         createChannel()
         val notification = buildNotification(instanceId)
-        if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(
-                NOTIFICATION_ID, notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        return try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(
+                    NOTIFICATION_ID, notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            true
+        } catch (e: Exception) {
+            // BOOT_COMPLETED 等では ForegroundServiceStartNotAllowedException。
+            // 落とすとクラッシュループになるので、呼び出し側で見逃し化する。
+            false
         }
     }
 
