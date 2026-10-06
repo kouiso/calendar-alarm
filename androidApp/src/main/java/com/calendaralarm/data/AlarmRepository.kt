@@ -11,6 +11,7 @@ import com.calendaralarm.engine.AlarmScheduler
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.logic.AlarmPlanner
 import com.calendaralarm.shared.model.AlarmInstance
+import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.AlarmState
 import com.calendaralarm.shared.model.EventOverride
@@ -183,18 +184,32 @@ class AlarmRepository(
             )
         }
 
-        val scheduled = db.scheduledInstances().pending()
-            .associate { it.id to it.triggerAtMillis }
+        // タイマー・スヌーズなど Expander が再生しない予約は「理想状態」へ持ち越す。
+        // 持ち越さないと差分計算で毎 resync キャンセルされてしまう。
+        val pendingRows = db.scheduledInstances().pending()
+        val adhoc = pendingRows.map { it.toInstance() }
+            .filter { it.kind == AlarmKind.TIMER || it.snoozeSeq > 0 }
+        val desiredIds = desired.map { it.id }.toSet()
+        desired += adhoc.filter { it.id !in desiredIds }
+
+        val scheduled = pendingRows.associate { it.id to it.triggerAtMillis }
         val plan = AlarmPlanner.plan(scheduled, desired, now)
-        applyPlan(plan, reason)
+        applyPlan(plan, desired, reason)
     }
 
-    private suspend fun applyPlan(plan: AlarmPlanner.Plan, reason: String) {
+    private suspend fun applyPlan(
+        plan: AlarmPlanner.Plan,
+        desired: List<AlarmInstance>,
+        reason: String,
+    ) {
         for (id in plan.toCancel) {
             scheduler.cancel(id)
             setState(id, AlarmState.CANCELLED)
         }
-        val toSchedule = plan.toSchedule.filter { it.id !in plan.toFireNow.map { f -> f.id } }
+        // 差分が無い予約も毎回 AlarmManager に再主張する。
+        // 再起動・強制終了・パッケージ更新で OS 側だけ消えるケースを潰すため。
+        val fireNowIds = plan.toFireNow.map { it.id }.toSet()
+        val toSchedule = desired.filter { it.id !in fireNowIds }
         if (toSchedule.isNotEmpty()) {
             db.scheduledInstances().upsert(toSchedule.map { ScheduledInstanceEntity.of(it) })
             toSchedule.forEach { scheduler.schedule(it) }

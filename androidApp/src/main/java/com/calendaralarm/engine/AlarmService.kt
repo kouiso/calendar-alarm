@@ -78,6 +78,8 @@ class AlarmService : Service() {
     }
 
     private suspend fun beginRinging(instanceId: String) {
+        // 同時刻に複数鳴った場合は新しい方へ張り替える（MediaPlayer のリークと多重発声を防ぐ）
+        stopRinging()
         val instance = app.container.repository.instanceById(instanceId)
         if (instance == null) {
             app.container.repository.audit("ERROR", "鳴動要求されたがインスタンス不明: $instanceId")
