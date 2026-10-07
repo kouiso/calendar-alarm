@@ -58,6 +58,17 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <!-- 通知アラーム: 他アプリの通知を監視してアラーム化。
+             「通知へのアクセス」権限をユーザーがシステム設定で許可した時のみ動く -->
+        <service
+            android:name=".engine.NotificationAlarmService"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- 「印刷→予定化」受け口。プリンタではなくメール本文の取込口として使う -->
         <service
             android:name=".ai.MailPrintService"

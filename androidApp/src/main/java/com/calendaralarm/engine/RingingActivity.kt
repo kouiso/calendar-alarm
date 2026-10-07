@@ -83,12 +83,24 @@ class RingingActivity : ComponentActivity() {
                             weather = app.container.weather.nowForLocation(loc)?.current
                         }
                     }
+                    // 通知アラーム由来なら「元の通知を開く」を出す
+                    val instKind = instance?.kind
+                    val canOpenSource = instKind ==
+                        com.calendaralarm.shared.model.AlarmKind.NOTIFICATION &&
+                        NotificationAlarmService.pendingOpens.containsKey(instanceIdState.value)
                     RingingScreen(
                         weather = weather,
                         title = instance?.title ?: "アラーム",
                         triggerAtMillis = instance?.triggerAtMillis ?: System.currentTimeMillis(),
                         snoozeMinutes = instance?.snoozeMinutes ?: 10,
                         snoozePresets = presets,
+                        canOpenSource = canOpenSource,
+                        onOpenSource = {
+                            instanceIdState.value
+                                ?.let { NotificationAlarmService.pendingOpens.remove(it) }
+                                ?.let { pi -> runCatching { pi.send() } }
+                            sendAction(AlarmService.ACTION_DISMISS)
+                        },
                         onDismiss = { sendAction(AlarmService.ACTION_DISMISS) },
                         onSnooze = { sendAction(AlarmService.ACTION_SNOOZE) },
                         onSnoozeAt = { m -> sendAction(AlarmService.ACTION_SNOOZE, m) },
@@ -152,6 +164,8 @@ private fun RingingScreen(
     snoozeMinutes: Int,
     snoozePresets: List<Int>,
     weather: CurrentWeather?,
+    canOpenSource: Boolean = false,
+    onOpenSource: () -> Unit = {},
     onDismiss: () -> Unit,
     onSnooze: () -> Unit,
     onSnoozeAt: (Int) -> Unit,
@@ -209,6 +223,12 @@ private fun RingingScreen(
                         fontSize = 18.sp,
                         color = Color(0xFFB9B9E0),
                     )
+                }
+                if (canOpenSource) {
+                    TextButton(onClick = onOpenSource) {
+                        Text("通知元を開く", fontSize = 16.sp, color = Color(0xFFB9B9E0))
+                    }
+                    Spacer(Modifier.height(4.dp))
                 }
                 Spacer(Modifier.height(8.dp))
                 // 元アプリのスヌーズプリセット (設定で並び替え/編集された一覧をそのまま出す)

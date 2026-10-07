@@ -70,6 +70,10 @@ class SettingsRepository(private val context: Context) {
         val openRouterApiKey: String? = null,
         /** OpenRouter のモデル指定。 */
         val openRouterModel: String = "openai/gpt-4.1-mini",
+        /** 通知アラーム (他アプリ通知→アラーム) の有効フラグ */
+        val notificationAlarmEnabled: Boolean = false,
+        /** 通知アラームのルール一覧 */
+        val notificationRules: List<com.calendaralarm.shared.model.NotificationRuleSpec> = emptyList(),
     )
 
     val flow: Flow<Settings> = context.dataStore.data.map { p ->
@@ -120,6 +124,12 @@ class SettingsRepository(private val context: Context) {
                 }.ifEmpty { DEFAULT_TIMER_PRESETS },
             openRouterApiKey = p[KEY_OPENROUTER_KEY]?.ifBlank { null },
             openRouterModel = p[KEY_OPENROUTER_MODEL] ?: "openai/gpt-4.1-mini",
+            notificationAlarmEnabled = p[KEY_NOTIF_ALARM] ?: false,
+            notificationRules = runCatching {
+                rulesJson.decodeFromString<List<com.calendaralarm.shared.model.NotificationRuleSpec>>(
+                    p[KEY_NOTIF_RULES] ?: "[]",
+                )
+            }.getOrDefault(emptyList()),
         )
     }
 
@@ -180,6 +190,17 @@ class SettingsRepository(private val context: Context) {
         if (v.isNullOrBlank()) it.remove(KEY_OPENROUTER_KEY) else it[KEY_OPENROUTER_KEY] = v
     }
     suspend fun setOpenRouterModel(v: String) = edit { it[KEY_OPENROUTER_MODEL] = v }
+    suspend fun setNotificationAlarmEnabled(v: Boolean) = edit { it[KEY_NOTIF_ALARM] = v }
+    suspend fun setNotificationRules(
+        v: List<com.calendaralarm.shared.model.NotificationRuleSpec>,
+    ) = edit {
+        it[KEY_NOTIF_RULES] = rulesJson.encodeToString(
+            kotlinx.serialization.builtins.ListSerializer(
+                com.calendaralarm.shared.model.NotificationRuleSpec.serializer(),
+            ),
+            v,
+        )
+    }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.dataStore.edit(block)
@@ -214,6 +235,10 @@ class SettingsRepository(private val context: Context) {
         val KEY_TIMER_PRESETS = stringPreferencesKey("timer_presets")
         val KEY_OPENROUTER_KEY = stringPreferencesKey("openrouter_api_key")
         val KEY_OPENROUTER_MODEL = stringPreferencesKey("openrouter_model")
+        val KEY_NOTIF_ALARM = booleanPreferencesKey("notif_alarm_enabled")
+        val KEY_NOTIF_RULES = stringPreferencesKey("notif_alarm_rules")
+
+        private val rulesJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
         /** 元アプリの定型タイマー (ゆで卵/パスタ/紅茶/ピザ/仮眠/集中/筋トレ休憩)。 */
         val DEFAULT_TIMER_PRESETS = listOf(

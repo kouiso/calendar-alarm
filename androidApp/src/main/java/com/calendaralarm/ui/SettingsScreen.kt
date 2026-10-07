@@ -210,6 +210,12 @@ fun SettingsScreen(
             }
         }
 
+        // ---- 通知アラーム: 他アプリ通知→アラーム (権限誘導+ルール) ----
+        item { Spacer(Modifier.height(12.dp)) }
+        item {
+            prefs?.let { p -> NotificationRulesCard(settings, p) }
+        }
+
         // ---- AI: OpenRouter キー (メール→予定・通知ルール生成に使用) ----
         item { Spacer(Modifier.height(12.dp)) }
         item {
@@ -424,7 +430,8 @@ fun SettingsScreen(
 
 /** 先頭に小さなアイコン、その右に操作を並べる行。ラベル文は置かない。 */
 @Composable
-private fun IconSettingRow(icon: ImageVector, content: @Composable () -> Unit) {
+// 設定画面内で共有するアイコン付き行 (通知ルールカードからも使う)
+internal fun IconSettingRow(icon: ImageVector, content: @Composable () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

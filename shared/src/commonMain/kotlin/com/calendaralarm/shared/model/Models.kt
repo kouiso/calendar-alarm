@@ -6,7 +6,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.serialization.Serializable
 
 /** アラーム種別。鳴動経路は共通で、種別ごとに鳴動画面の文言を変える。 */
-enum class AlarmKind { EVENT, STANDALONE, TIMER }
+enum class AlarmKind { EVENT, STANDALONE, TIMER, NOTIFICATION }
 
 /**
  * 鳴動アクションの3状態 (元アプリ仕様)。
