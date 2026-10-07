@@ -39,6 +39,8 @@ targets:
         embed: true
     entitlements:
       path: iosApp/CalendarAlarm.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.calendaralarm.ios]
     info:
       path: iosApp/Info.plist
       properties:
@@ -91,6 +93,8 @@ targets:
           - Info.plist
     entitlements:
       path: Widget/CalendarAlarmWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.calendaralarm.ios]
     info:
       path: Widget/Info.plist
       properties:
@@ -114,6 +118,8 @@ targets:
           - MailShareExt.entitlements
     entitlements:
       path: MailShareExt/MailShareExt.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.calendaralarm.ios]
     info:
       path: MailShareExt/Info.plist
       properties:
