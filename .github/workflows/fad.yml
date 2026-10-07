@@ -8,11 +8,6 @@ name: FAD Distribution
 # (新規 App ID/profile は match が ASC API 経由で作成・storage へ push する)
 
 on:
-  push:
-    branches:
-      # VERIFY: 検証用の一時トリガー（dispatch は default branch に無いと起動できない）。
-      # マージ前に取り除く
-      - devin/1791465000-fad-distribution
   workflow_dispatch:
     inputs:
       platform:

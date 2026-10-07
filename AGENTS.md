@@ -20,7 +20,7 @@ Android (Compose Material3) と iOS (SwiftUI + AlarmKit, iOS 26+) の両実装�
 # iOS (Xcode + xcodegen が必要)
 cd iosApp && xcodegen generate
 xcodebuild -project CalendarAlarm.xcodeproj -target iosApp -sdk iphonesimulator -configuration Debug build
-# 実機配布には App Group `group.com.calendaralarm.app` をプロビジョニングに登録すること
+# 実機配布には App Group `group.com.calendaralarm.ios` をプロビジョニングに登録すること
 ```
 
 ## Code Style
