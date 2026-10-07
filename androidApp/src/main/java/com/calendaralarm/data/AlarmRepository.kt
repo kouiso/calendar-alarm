@@ -329,7 +329,8 @@ class AlarmRepository(
         val adhoc = pendingRows.map { it.toInstance() }
             .filter { inst ->
                 inst.id !in desiredIds && when {
-                    inst.kind == AlarmKind.TIMER -> true
+                    // TIMER / NOTIFICATION は即時発火の adhoc。理想リストに無くても保持
+                    inst.kind == AlarmKind.TIMER || inst.kind == AlarmKind.NOTIFICATION -> true
                     // スヌーズ中の子は「親が今も理想状態にある」場合だけ持ち越す。
                     // 親アラームの無効化・削除・予定ミュート後にスヌーズだけ鳴るのを防ぐ。
                     inst.snoozeSeq > 0 -> {
