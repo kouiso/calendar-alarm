@@ -5,12 +5,16 @@ plugins {
 }
 
 kotlin {
+    applyDefaultHierarchyTemplate()
     androidTarget()
     jvm()
-    // iOS は Phase 3 用にターゲットだけ残す（konan 取得が重いので無効化する場合はこの3行を消す）
-    iosX64()
-    iosArm64()
-    iosSimulatorArm64()
+    // iOS: Swift から共有ドメインを呼ぶため Framework をエクスポート
+    listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach {
+        it.binaries.framework {
+            baseName = "SharedKit"
+            isStatic = true
+        }
+    }
 
     sourceSets {
         commonMain.dependencies {
@@ -21,6 +25,11 @@ kotlin {
             implementation(libs.ktor.client.cio)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
+        }
+        val iosMain by getting {
+            dependencies {
+                implementation(libs.ktor.client.darwin)
+            }
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

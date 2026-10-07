@@ -1,0 +1,155 @@
+import SwiftUI
+
+/// 予定詳細シート: ベルトグル + タイミング選択 + 追加リマインダーチップ + 場所/天気。
+/// Android EventDetailSheet と同じ構成 (アイコン主導・説明文なし)。
+struct EventDetailSheet: View {
+    @EnvironmentObject var engine: Engine
+    @EnvironmentObject var store: Store
+    @Environment(\.dismiss) private var dismiss
+
+    let display: DisplayEvent
+    let weather: [WeatherService.Forecast]?
+
+    private let timingOptions = [("開始時", 0), ("5分前", 5), ("10分前", 10), ("15分前", 15), ("30分前", 30), ("1時間前", 60)]
+    private let extraOptions = [5, 10, 15, 30, 60]
+
+    private var ev: CalendarEventDTO { display.event }
+    private var ov: EventOverrideDTO { store.state.overrides[ev.instanceKey] ?? EventOverrideDTO() }
+    private var rule: AlarmRuleDTO { store.rule(for: ev.calendarId) }
+
+    private var muted: Bool { ov.muted }
+    private var minutes: Int { ov.minutesBefore ?? rule.minutesBefore }
+    private var extras: [Int] { ov.extraOffsets ?? rule.extraOffsets }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    header
+                    bellRow
+                    timingPicker
+                    extraChips
+                    if !ev.location.isEmpty { locationRow }
+                    if let f = weather?.first { weatherRow(f) }
+                    if store.state.overrides[ev.instanceKey] != nil {
+                        resetButton
+                    }
+                }
+                .padding(20)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { dismiss() } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(ev.title).font(NightTheme.font(20, weight: .semibold))
+            Text(Self.dateStr(ev)).font(NightTheme.font(14)).foregroundStyle(.secondary)
+            if !display.calendarName.isEmpty {
+                HStack(spacing: 6) {
+                    Circle().fill(Color(argb: display.calendarColor)).frame(width: 8, height: 8)
+                    Text(display.calendarName).font(NightTheme.font(12)).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var bellRow: some View {
+        HStack {
+            Image(systemName: muted ? "bell.slash" : "bell.fill")
+                .foregroundStyle(muted ? .secondary : NightTheme.indigo)
+            Spacer()
+            Toggle("", isOn: Binding(get: { !muted }, set: { on in
+                store.setOverride(instanceKey: ev.instanceKey, muted: !on,
+                                  minutes: ov.minutesBefore, extras: ov.extraOffsets)
+                Task { await engine.resync(reason: "override") }
+            }))
+            .labelsHidden()
+        }
+    }
+
+    private var timingPicker: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+            ForEach(timingOptions, id: \.1) { label, m in
+                Button {
+                    store.setOverride(instanceKey: ev.instanceKey, muted: muted,
+                                      minutes: m, extras: ov.extraOffsets)
+                    Task { await engine.resync(reason: "override") }
+                } label: {
+                    Text(label)
+                        .font(NightTheme.font(13, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(minutes == m ? NightTheme.indigo : Color(uiColor: .secondarySystemGroupedBackground),
+                                    in: RoundedRectangle(cornerRadius: 10))
+                        .foregroundStyle(minutes == m ? .white : .primary)
+                }
+            }
+        }
+    }
+
+    private var extraChips: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "plus.bell").foregroundStyle(.secondary)
+            ForEach(extraOptions, id: \.self) { m in
+                let on = extras.contains(m)
+                Button {
+                    var e = extras
+                    if on { e.removeAll { $0 == m } } else if e.count < 5 { e.append(m); e.sort() }
+                    store.setOverride(instanceKey: ev.instanceKey, muted: muted,
+                                      minutes: ov.minutesBefore, extras: e)
+                    Task { await engine.resync(reason: "override") }
+                } label: {
+                    Text("+\(m)")
+                        .font(NightTheme.font(12, weight: .medium))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(on ? NightTheme.indigo.opacity(0.2) : Color(uiColor: .tertiarySystemGroupedBackground),
+                                    in: Capsule())
+                        .foregroundStyle(on ? NightTheme.indigo : .secondary)
+                }
+            }
+        }
+    }
+
+    private var locationRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "mappin").foregroundStyle(.secondary)
+            Text(ev.location).font(NightTheme.font(13)).foregroundStyle(.secondary).lineLimit(2)
+        }
+    }
+
+    private func weatherRow(_ f: WeatherService.Forecast) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: WeatherService.icon(f.weatherCode)).foregroundStyle(.secondary)
+            Text("\(Int(f.tempMax))° / \(Int(f.tempMin))°")
+                .font(NightTheme.font(13)).foregroundStyle(.secondary)
+            if let p = f.precipitationProbability {
+                Text("降水 \(p)%").font(NightTheme.font(12)).foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private var resetButton: some View {
+        Button {
+            store.removeOverride(instanceKey: ev.instanceKey)
+            Task { await engine.resync(reason: "override clear") }
+        } label: {
+            Label("既定に戻す", systemImage: "arrow.uturn.backward")
+                .font(NightTheme.font(13))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    static func dateStr(_ ev: CalendarEventDTO) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ja_JP")
+        f.dateFormat = ev.allDay ? "M月d日 (E) 終日" : "M月d日 (E) HH:mm"
+        return f.string(from: Date(timeIntervalSince1970: TimeInterval(ev.startMillis) / 1000))
+    }
+}

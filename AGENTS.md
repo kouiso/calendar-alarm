@@ -2,15 +2,25 @@
 
 ## Overview
 Kotlin Multiplatform (KMP) によるカレンダー連動アラームアプリ。
-Android 先行実装 (Compose Material3)。iOS は Phase 3 で `shared` の iOS ターゲット上に構築予定。
+Android (Compose Material3) と iOS (SwiftUI + AlarmKit, iOS 26+) の両実装が `shared` のドメイン層を共有する。
 
 ## Structure
 - `shared/` — KMP 共有モジュール (ドメイン層: 鳴動展開・オフセット計算・天気クライアント等)
+  - `bridge/SharedBridge.kt` — Swift から JSON 経由で共有ドメインを呼ぶブリッジ
 - `androidApp/` — Android アプリ (エンジン + Compose UI)
+- `iosApp/` — iOS アプリ (SwiftUI + AlarmKit + EventKit + WidgetKit)
+  - `project.yml` — xcodegen のプロジェクト定義。変更後は `xcodegen generate` で `CalendarAlarm.xcodeproj` を再生成する
+  - `iosApp/SharedKit.framework` は Gradle の `embedAndSignAppleFrameworkForXcode` タスクで自動生成される (ビルドフェーズで実行)
 
 ## Setup
 ```bash
+# Android
 ./gradlew :androidApp:assembleDebug
+
+# iOS (Xcode + xcodegen が必要)
+cd iosApp && xcodegen generate
+xcodebuild -project CalendarAlarm.xcodeproj -target iosApp -sdk iphonesimulator -configuration Debug build
+# 実機配布には App Group `group.com.calendaralarm.app` をプロビジョニングに登録すること
 ```
 
 ## Code Style

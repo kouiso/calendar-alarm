@@ -41,3 +41,8 @@ key.properties
 !.env.example
 
 node_modules/
+
+# iOS / Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/

@@ -1,0 +1,94 @@
+# CalendarAlarm iOS — XcodeGen 定義
+# `xcodegen generate` で iosApp.xcodeproj を再生する。
+name: CalendarAlarm
+options:
+  bundleIdPrefix: com.calendaralarm
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+
+schemes:
+  iosApp:
+    build:
+      targets:
+        iosApp: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+
+targets:
+  iosApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: iosApp
+        excludes:
+          - Info.plist
+          - CalendarAlarm.entitlements
+    dependencies:
+      - target: CalendarAlarmWidget
+        embed: true
+    entitlements:
+      path: iosApp/CalendarAlarm.entitlements
+    info:
+      path: iosApp/Info.plist
+      properties:
+        CFBundleDisplayName: Calendar Alarm
+        CFBundleIdentifier: com.calendaralarm.app
+        UILaunchScreen_Generation: YES
+        UIApplicationSceneManifest_Generation: YES
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSCalendarsFullAccessUsageDescription: カレンダーの予定をアラームで鳴らすために読み取ります
+        NSAlarmKitUsageDescription: 予定の時刻にアラームを鳴らすために使います
+        NSUserNotificationsUsageDescription: 通知によるアラームのために使います
+        UIAppFonts:
+          - Fonts/plex_sans_jp_regular.ttf
+          - Fonts/plex_sans_jp_medium.ttf
+          - Fonts/plex_sans_jp_semibold.ttf
+          - Fonts/plex_sans_jp_light.ttf
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.calendaralarm.resync
+        UIBackgroundModes:
+          - processing
+    preBuildScripts:
+      - name: Build SharedKit (KMP)
+        shell: /bin/sh
+        script: |
+          set -e
+          cd "$SRCROOT/.."
+          ./gradlew :shared:embedAndSignAppleFrameworkForXcode -q
+    settings:
+      base:
+        FRAMEWORK_SEARCH_PATHS: $(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
+        LD_RUNPATH_SEARCH_PATHS: $(inherited) @executable_path/Frameworks
+        OTHER_LDFLAGS: $(inherited) -framework SharedKit
+        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.app
+        GENERATE_INFOPLIST_FILE: NO
+
+  CalendarAlarmWidget:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Widget
+        excludes:
+          - Info.plist
+    entitlements:
+      path: Widget/CalendarAlarmWidget.entitlements
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleDisplayName: Calendar Alarm Widget
+        CFBundleIdentifier: com.calendaralarm.app.widget
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.app.widget
+        GENERATE_INFOPLIST_FILE: NO
