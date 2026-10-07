@@ -59,6 +59,14 @@ import com.calendaralarm.data.sync.SyncWorker
 import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.DailyForecast
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ViewColumn
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.calendaralarm.shared.weather.WeatherApi
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
@@ -71,6 +79,25 @@ import java.util.Date
 import java.util.Locale
 
 private val tz = TimeZone.currentSystemDefault()
+
+/** 予定画面のビュー種別 (元アプリ: 一覧/月/3日/日タイムライン)。 */
+internal enum class ViewMode {
+    LIST, MONTH, THREE_DAY, TIMELINE;
+
+    fun icon(): ImageVector = when (this) {
+        LIST -> Icons.Default.ViewAgenda
+        MONTH -> Icons.Default.CalendarMonth
+        THREE_DAY -> Icons.Default.ViewColumn
+        TIMELINE -> Icons.Default.Schedule
+    }
+
+    fun label(): String = when (this) {
+        LIST -> "一覧"
+        MONTH -> "月"
+        THREE_DAY -> "3日"
+        TIMELINE -> "タイムライン"
+    }
+}
 
 /**
  * 予定アジェンダ。カレンダーのイベントを日付ごとに並べ、
@@ -86,11 +113,19 @@ fun AgendaScreen(repository: AlarmRepository) {
     var items by remember { mutableStateOf<List<AlarmRepository.AgendaItem>?>(null) }
     var refreshKey by remember { mutableIntStateOf(0) }
     var selected by remember { mutableStateOf<AlarmRepository.AgendaItem?>(null) }
+    var viewMode by remember { mutableStateOf(ViewMode.LIST) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchOpen by remember { mutableStateOf(false) }
+    var focusDate by remember {
+        mutableStateOf(kotlinx.datetime.Clock.System.now().toLocalDateTime(tz).date)
+    }
     val pending by repository.pendingFlow().collectAsState(initial = emptyList())
     val settings by app.container.settings.flow.collectAsState(initial = null)
 
-    LaunchedEffect(refreshKey) {
-        items = repository.upcomingEvents()
+    // 月表示は今月を埋めるため42日分、それ以外は14日分を取る
+    val fetchDays = if (viewMode == ViewMode.MONTH) 42 else 14
+    LaunchedEffect(refreshKey, fetchDays) {
+        items = repository.upcomingEvents(days = fetchDays)
     }
 
     val nextAlarm = pending.firstOrNull()
@@ -101,10 +136,45 @@ fun AgendaScreen(repository: AlarmRepository) {
             NextAlarmBanner(nextAlarm.title, nextAlarm.triggerAtMillis)
         }
 
+        // ビュー切替 + 検索 + 同期 (元アプリ: 一覧/月/3日/日タイムライン + 検索)
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            ViewMode.entries.forEach { mode ->
+                IconButton(onClick = {
+                    viewMode = mode
+                    if (mode != ViewMode.LIST) {
+                        focusDate = kotlinx.datetime.Clock.System.now()
+                            .toLocalDateTime(tz).date
+                    }
+                }) {
+                    Icon(
+                        mode.icon(),
+                        contentDescription = mode.label(),
+                        tint = if (viewMode == mode) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = {
+                searchOpen = !searchOpen
+                if (!searchOpen) searchQuery = ""
+            }) {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = "予定を検索",
+                    tint = if (searchOpen) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
             IconButton(onClick = {
                 SyncWorker.enqueueNow(context)
                 refreshKey++
@@ -112,13 +182,34 @@ fun AgendaScreen(repository: AlarmRepository) {
                 Icon(Icons.Default.Refresh, contentDescription = "同期")
             }
         }
+        if (searchOpen) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                placeholder = { Text("タイトルで絞り込み") },
+                singleLine = true,
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "クリア")
+                        }
+                    }
+                },
+            )
+        }
 
         val list = items
+        val filtered = list?.let { l ->
+            if (searchQuery.isBlank()) l else l.filter {
+                it.event.title.contains(searchQuery, ignoreCase = true)
+            }
+        }
         when {
-            list == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            filtered == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
-            list.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            filtered.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         Icons.Default.DateRange,
@@ -127,13 +218,36 @@ fun AgendaScreen(repository: AlarmRepository) {
                         modifier = Modifier.size(40.dp),
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text("予定なし", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (searchQuery.isNotBlank()) "該当なし" else "予定なし",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-            else -> AgendaList(
-                items = list,
-                onSelect = { selected = it },
-            )
+            else -> when (viewMode) {
+                ViewMode.LIST -> AgendaList(
+                    items = filtered,
+                    onSelect = { selected = it },
+                )
+                ViewMode.MONTH -> MonthView(
+                    month = focusDate,
+                    items = filtered,
+                    focusDate = focusDate,
+                    onSelectDay = { focusDate = it },
+                    onSelectEvent = { selected = it },
+                )
+                ViewMode.THREE_DAY -> ThreeDayView(
+                    startDate = focusDate,
+                    items = filtered,
+                    onSelectDay = { focusDate = it },
+                    onSelectEvent = { selected = it },
+                )
+                ViewMode.TIMELINE -> DayTimelineView(
+                    date = focusDate,
+                    items = filtered,
+                    onSelectEvent = { selected = it },
+                )
+            }
         }
     }
 
@@ -266,7 +380,7 @@ private fun DayHeader(date: LocalDate) {
 }
 
 @Composable
-private fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
+internal fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
     val ev = item.event
     // 長さゼロ・23時間超のイベントも実質「終日」扱いにして 0:00/~0:00 表記を消す
     val effectiveAllDay = ev.allDay ||
@@ -508,7 +622,7 @@ private fun timeLabel(millis: Long, allDay: Boolean): String =
     if (allDay) "終日" else SimpleDateFormat("H:mm", Locale.getDefault()).format(Date(millis))
 
 /** イベントの属する日付。終日イベントは UTC 0時基準なので UTC 解釈、それ以外はローカル。 */
-private fun eventDate(ev: CalendarEvent): LocalDate {
+internal fun eventDate(ev: CalendarEvent): LocalDate {
     val inst = Instant.fromEpochMilliseconds(ev.startMillis)
     return if (ev.allDay) inst.toLocalDateTime(TimeZone.UTC).date else inst.toLocalDateTime(tz).date
 }
@@ -517,7 +631,7 @@ private fun weatherText(f: DailyForecast): String =
     "${WeatherApi.describe(f.weatherCode)} ${f.tempMax.toInt()}°/${f.tempMin.toInt()}°" +
         (f.precipitationProbability?.let { " 降水$it%" } ?: "")
 
-private fun kotlinx.datetime.DayOfWeek.jaShort(): String = when (this) {
+internal fun kotlinx.datetime.DayOfWeek.jaShort(): String = when (this) {
     kotlinx.datetime.DayOfWeek.SUNDAY -> "日"
     kotlinx.datetime.DayOfWeek.MONDAY -> "月"
     kotlinx.datetime.DayOfWeek.TUESDAY -> "火"

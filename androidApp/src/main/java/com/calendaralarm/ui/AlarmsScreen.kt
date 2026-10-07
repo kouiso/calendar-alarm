@@ -216,12 +216,3 @@ private fun repeatLabel(alarm: StandaloneAlarm): String =
         }
     }
 
-private fun DayOfWeek.jaShort(): String = when (this) {
-    DayOfWeek.SUNDAY -> "日"
-    DayOfWeek.MONDAY -> "月"
-    DayOfWeek.TUESDAY -> "火"
-    DayOfWeek.WEDNESDAY -> "水"
-    DayOfWeek.THURSDAY -> "木"
-    DayOfWeek.FRIDAY -> "金"
-    DayOfWeek.SATURDAY -> "土"
-}

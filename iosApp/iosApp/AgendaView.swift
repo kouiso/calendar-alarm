@@ -6,6 +6,10 @@ struct AgendaView: View {
     @EnvironmentObject var store: Store
     @State private var selected: DisplayEvent?
     @State private var weatherByLoc: [String: [WeatherService.Forecast]] = [:]
+    @State private var viewMode: AgendaViewMode = .list
+    @State private var searchText = ""
+    @State private var searchOpen = false
+    @State private var focusDate = Date()
 
     var body: some View {
         NavigationStack {
@@ -14,11 +18,18 @@ struct AgendaView: View {
                     if let next = nextAlarm {
                         NextAlarmBanner(instance: next)
                     }
-                    ForEach(groupedDays, id: \.0) { day, events in
-                        DayCard(dayLabel: dayLabel(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev })
-                    }
-                    if groupedDays.isEmpty {
-                        emptyState
+                    switch viewMode {
+                    case .list:
+                        ForEach(groupedDays, id: \.0) { day, events in
+                            DayCard(dayLabel: dayLabel(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev })
+                        }
+                        if groupedDays.isEmpty { emptyState }
+                    case .month:
+                        MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 })
+                    case .threeDay:
+                        ThreeDayColumnsView(startDate: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
+                    case .timeline:
+                        DayTimelineViewIOS(date: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
                     }
                 }
                 .padding()
@@ -26,9 +37,36 @@ struct AgendaView: View {
             .background(Color(uiColor: .systemGroupedBackground))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { await engine.resync(reason: "manual") } } label: {
-                        Image(systemName: "arrow.clockwise")
+                    HStack(spacing: 14) {
+                        ForEach(AgendaViewMode.allCases) { m in
+                            Button {
+                                viewMode = m
+                                if m != .list { focusDate = Date() }
+                            } label: {
+                                Image(systemName: m.icon)
+                                    .foregroundStyle(viewMode == m ? NightTheme.indigo : .secondary)
+                            }
+                        }
+                        Button {
+                            searchOpen.toggle()
+                            if !searchOpen { searchText = "" }
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(searchOpen ? NightTheme.indigo : .secondary)
+                        }
+                        Button { Task { await engine.resync(reason: "manual") } } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
                     }
+                }
+            }
+            .safeAreaInset(edge: .top) {
+                if searchOpen {
+                    TextField("タイトルで絞り込み", text: $searchText)
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.horizontal)
+                        .padding(.vertical, 4)
+                        .background(.bar)
                 }
             }
         }
@@ -60,11 +98,17 @@ struct AgendaView: View {
             }
     }
 
+    /// 検索クエリ適用後のイベント (タイトル部分一致)
+    private var filteredEvents: [DisplayEvent] {
+        if searchText.isEmpty { return displayEvents }
+        return displayEvents.filter { $0.event.title.localizedCaseInsensitiveContains(searchText) }
+    }
+
     private var groupedDays: [(String, [DisplayEvent])] {
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
         var groups: [(String, [DisplayEvent])] = []
-        for ev in displayEvents {
+        for ev in filteredEvents {
             let key = df.string(from: Date(timeIntervalSince1970: TimeInterval(ev.event.startMillis) / 1000))
             if let i = groups.firstIndex(where: { $0.0 == key }) {
                 groups[i].1.append(ev)
