@@ -118,6 +118,8 @@ targets:
       path: MailShareExt/Info.plist
       properties:
         CFBundleIdentifier: com.calendaralarm.ios.shareext
+        # appex は CFBundleDisplayName が無いと installd に拒否され install 失敗する
+        CFBundleDisplayName: 予定に変換
         # 共有シートに出すために必須。テキスト/URL の共有を受け付ける
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
