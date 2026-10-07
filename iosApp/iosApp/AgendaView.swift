@@ -6,6 +6,11 @@ struct AgendaView: View {
     @EnvironmentObject var store: Store
     @State private var selected: DisplayEvent?
     @State private var weatherByLoc: [String: [WeatherService.Forecast]] = [:]
+    @State private var nowForecast: WeatherService.NowForecast? = nil
+    @State private var viewMode: AgendaViewMode = .list
+    @State private var searchText = ""
+    @State private var searchOpen = false
+    @State private var focusDate = Date()
 
     var body: some View {
         NavigationStack {
@@ -14,11 +19,22 @@ struct AgendaView: View {
                     if let next = nextAlarm {
                         NextAlarmBanner(instance: next)
                     }
-                    ForEach(groupedDays, id: \.0) { day, events in
-                        DayCard(dayLabel: dayLabel(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev })
+                    // ヘッダー天気 (元アプリ: 現在気温+時間別予報)。地点設定がある時だけ。
+                    if let nf = nowForecast {
+                        WeatherHeaderRow(forecast: nf)
                     }
-                    if groupedDays.isEmpty {
-                        emptyState
+                    switch viewMode {
+                    case .list:
+                        ForEach(groupedDays, id: \.0) { day, events in
+                            DayCard(dayLabel: dayLabel(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev })
+                        }
+                        if groupedDays.isEmpty { emptyState }
+                    case .month:
+                        MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 })
+                    case .threeDay:
+                        ThreeDayColumnsView(startDate: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
+                    case .timeline:
+                        DayTimelineViewIOS(date: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
                     }
                 }
                 .padding()
@@ -26,9 +42,36 @@ struct AgendaView: View {
             .background(Color(uiColor: .systemGroupedBackground))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { await engine.resync(reason: "manual") } } label: {
-                        Image(systemName: "arrow.clockwise")
+                    HStack(spacing: 14) {
+                        ForEach(AgendaViewMode.allCases) { m in
+                            Button {
+                                viewMode = m
+                                if m != .list { focusDate = Date() }
+                            } label: {
+                                Image(systemName: m.icon)
+                                    .foregroundStyle(viewMode == m ? NightTheme.indigo : .secondary)
+                            }
+                        }
+                        Button {
+                            searchOpen.toggle()
+                            if !searchOpen { searchText = "" }
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(searchOpen ? NightTheme.indigo : .secondary)
+                        }
+                        Button { Task { await engine.resync(reason: "manual") } } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
                     }
+                }
+            }
+            .safeAreaInset(edge: .top) {
+                if searchOpen {
+                    TextField("タイトルで絞り込み", text: $searchText)
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.horizontal)
+                        .padding(.vertical, 4)
+                        .background(.bar)
                 }
             }
         }
@@ -54,17 +97,25 @@ struct AgendaView: View {
                     event: ev,
                     calendarName: cal?.name ?? "",
                     calendarColor: cal?.color ?? 0xFF888888,
-                    muted: ov?.muted == true || !rule.enabled,
+                    // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
+                    muted: ov?.muted == true || !rule.enabled
+                        || !store.state.inviteFilter.allows(ev.inviteStatus),
                     effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore
                 )
             }
+    }
+
+    /// 検索クエリ適用後のイベント (タイトル部分一致)
+    private var filteredEvents: [DisplayEvent] {
+        if searchText.isEmpty { return displayEvents }
+        return displayEvents.filter { $0.event.title.localizedCaseInsensitiveContains(searchText) }
     }
 
     private var groupedDays: [(String, [DisplayEvent])] {
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
         var groups: [(String, [DisplayEvent])] = []
-        for ev in displayEvents {
+        for ev in filteredEvents {
             let key = df.string(from: Date(timeIntervalSince1970: TimeInterval(ev.event.startMillis) / 1000))
             if let i = groups.firstIndex(where: { $0.0 == key }) {
                 groups[i].1.append(ev)
@@ -112,12 +163,54 @@ struct AgendaView: View {
     private func refreshWeather() async {
         guard store.state.weatherEnabled else { return }
         let svc = WeatherService()
+        // ヘッダー用 現在+時間別
+        let loc = store.state.weatherLocation
+        if store.state.weatherHeaderEnabled && !loc.isEmpty {
+            nowForecast = await svc.now(for: loc, hours: 9)
+        } else {
+            nowForecast = nil
+        }
         let locs = Set(displayEvents.map { $0.event.location }.filter { !$0.isEmpty })
         for loc in locs {
             if let f = await svc.forecast(for: loc) {
                 weatherByLoc[loc] = f
             }
         }
+    }
+}
+
+/// 現在気温 + 時間別チップの1行 (Android WeatherHeaderRow と同等)。
+struct WeatherHeaderRow: View {
+    let forecast: WeatherService.NowForecast
+    private static let hourFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "H時"; return f
+    }()
+    private static let isoFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd'T'HH:mm"; return f
+    }()
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 14) {
+                Label(
+                    "\(Int(forecast.current.temperature))°",
+                    systemImage: WeatherService.icon(forecast.current.weatherCode)
+                )
+                .font(NightTheme.font(14, weight: .medium))
+                ForEach(forecast.hourly.prefix(9), id: \.time) { h in
+                    let hr = Self.isoFmt.date(from: h.time).map { Self.hourFmt.string(from: $0) } ?? ""
+                    HStack(spacing: 4) {
+                        Text(hr)
+                        Image(systemName: WeatherService.icon(h.weatherCode))
+                        Text("\(Int(h.temperature))°")
+                    }
+                    .font(NightTheme.font(12))
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        .scrollIndicators(.hidden)
     }
 }
 

@@ -5,6 +5,47 @@ import Foundation
 
 // MARK: - ドメイン (shared JSON)
 
+/// Models.kt EventAction。予定トリガの配信方法。
+enum EventAction: String, Codable, Hashable, CaseIterable {
+    case alarm = "ALARM"
+    case notify = "NOTIFY"
+    case mute = "MUTE"
+}
+
+/// Models.kt InviteStatus。招待予定の自分の参加可否。
+enum InviteStatus: String, Codable, Hashable {
+    case accepted = "ACCEPTED"
+    case tentative = "TENTATIVE"
+    case needsAction = "NEEDS_ACTION"
+    case declined = "DECLINED"
+}
+
+/// Models.kt TitleCodeSettings。
+struct TitleCodeSettings: Codable, Hashable {
+    var alwaysCodes: [String] = []
+    var neverCodes: [String] = []
+    var applyToStart: Bool = true
+    var applyToReminders: Bool = true
+}
+
+/// Models.kt InviteFilter。
+struct InviteFilter: Codable, Hashable {
+    var accepted: Bool = true
+    var tentative: Bool = true
+    var needsAction: Bool = true
+    var declined: Bool = false
+
+    func allows(_ status: String?) -> Bool {
+        guard let raw = status, let s = InviteStatus(rawValue: raw) else { return true }
+        switch s {
+        case .accepted: return accepted
+        case .tentative: return tentative
+        case .needsAction: return needsAction
+        case .declined: return declined
+        }
+    }
+}
+
 struct CalendarEventDTO: Codable, Identifiable, Hashable {
     var id: String
     var calendarId: String
@@ -15,6 +56,10 @@ struct CalendarEventDTO: Codable, Identifiable, Hashable {
     var endMillis: Int64
     var allDay: Bool
     var timezone: String? = nil
+    /// 招待ステータス (自分主催の予定は null = フィルタ対象外)
+    var inviteStatus: String? = nil
+    /// カレンダー側に登録されたリマインダーの分数
+    var calendarReminderMinutes: [Int] = []
 
     /// Models.kt の instanceKey と同じ規則 ("calendarId:id:startMillis")
     var instanceKey: String { "\(calendarId):\(id):\(startMillis)" }
@@ -26,12 +71,97 @@ struct AlarmRuleDTO: Codable, Hashable {
     /// 終日イベントを鳴らす現地時刻 (0時からの分数)。負数 = 鳴らさない
     var allDayMinutes: Int = 540
     var extraOffsets: [Int] = []
+    var startAction: String = EventAction.alarm.rawValue
+    var reminderAction: String = EventAction.alarm.rawValue
 }
 
 struct EventOverrideDTO: Codable, Hashable {
-    var muted: Bool = false
+    /// "ALARM"/"NOTIFY"/"MUTE"。null = 既定に従う
+    var action: String? = nil
     var minutesBefore: Int? = nil
     var extraOffsets: [Int]? = nil
+
+    var muted: Bool { action == EventAction.mute.rawValue }
+
+    /// 旧形式 {muted: Bool} の store.json からの移行 (muted=true → "MUTE")
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let a = try c.decodeIfPresent(String.self, forKey: .action) {
+            action = a
+        } else if try c.decodeIfPresent(Bool.self, forKey: .muted) == true {
+            action = EventAction.mute.rawValue
+        } else {
+            action = nil
+        }
+        minutesBefore = try c.decodeIfPresent(Int.self, forKey: .minutesBefore)
+        extraOffsets = try c.decodeIfPresent([Int].self, forKey: .extraOffsets)
+    }
+    init(action: String? = nil, minutesBefore: Int? = nil, extraOffsets: [Int]? = nil) {
+        self.action = action
+        self.minutesBefore = minutesBefore
+        self.extraOffsets = extraOffsets
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case action, minutesBefore, extraOffsets
+        // 旧キー。書き出し時には含めない
+        case muted
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(action, forKey: .action)
+        try c.encodeIfPresent(minutesBefore, forKey: .minutesBefore)
+        try c.encodeIfPresent(extraOffsets, forKey: .extraOffsets)
+    }
+}
+
+/// タイマープリセット (元アプリの定型タイマー)。
+struct TimerPresetDTO: Codable, Hashable {
+    var label: String
+    /// 秒保持 (元アプリの 90秒休憩を潰さないため)。
+    /// 永続化 JSON の旧 "minutes" 値はデコード時に×60で移行する
+    var seconds: Int
+    var minutes: Int { seconds / 60 }
+
+    enum CodingKeys: String, CodingKey { case label, seconds, minutes }
+    init(label: String, seconds: Int) {
+        self.label = label
+        self.seconds = seconds
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        label = try c.decode(String.self, forKey: .label)
+        // 新形式は "seconds"、旧形式の "minutes" は×60で吸収
+        if let s = try c.decodeIfPresent(Int.self, forKey: .seconds) {
+            seconds = s
+        } else {
+            seconds = (try c.decodeIfPresent(Int.self, forKey: .minutes) ?? 0) * 60
+        }
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(label, forKey: .label)
+        try c.encode(seconds, forKey: .seconds)
+    }
+    /// "90秒" or "5分" の表示用
+    var durationLabel: String {
+        seconds % 60 == 0 ? "\(seconds / 60)分" : "\(seconds)秒"
+    }
+}
+
+/// デフォルトの定型タイマー (Android DEFAULT_TIMER_PRESETS と同一)。
+enum TimerPresets {
+    static let defaults: [TimerPresetDTO] = [
+        .init(label: "ゆで卵", seconds: 300),
+        .init(label: "パスタ", seconds: 540),
+        .init(label: "紅茶", seconds: 240),
+        .init(label: "ピザ", seconds: 720),
+        .init(label: "仮眠", seconds: 1200),
+        .init(label: "集中", seconds: 1500),
+        // 元アプリの 90秒休憩 (分保持では潰れるので秒保持必須)
+        .init(label: "筋トレ休憩", seconds: 90),
+    ]
 }
 
 struct StandaloneAlarmDTO: Codable, Identifiable, Hashable {
@@ -46,6 +176,17 @@ struct StandaloneAlarmDTO: Codable, Identifiable, Hashable {
     var snoozeMinutes: Int = 10
     /// "YYYY-MM-DD"
     var exceptions: Set<String> = []
+    /// 「ロック解除までミュート」(Android 側のみ意味を持つフラグ)
+    var muteUntilUnlock: Bool = false
+    /// 繰返しモード (RepeatMode.name)。nil=旧形式 (daysOfWeek 空→ONCE, 非空→WEEKLY)
+    var repeatMode: String? = nil
+    /// INTERVAL_* の間隔
+    var repeatInterval: Int = 1
+    /// MONTHLY/INTERVAL_* の起点日 (UTC 0時 epoch millis)
+    var repeatAnchorMillis: Int64? = nil
+
+    /// 旧データを含む実効モード
+    var effectiveRepeatMode: String { repeatMode ?? (daysOfWeek.isEmpty ? "ONCE" : "WEEKLY") }
 }
 
 struct AlarmInstanceDTO: Codable, Identifiable, Hashable {
@@ -60,6 +201,10 @@ struct AlarmInstanceDTO: Codable, Identifiable, Hashable {
     var minutesBefore: Int = 0
     var eventStartMillis: Int64? = nil
     var snoozeSeq: Int = 0
+    /// 配信方法 (ALARM=鳴動 / NOTIFY=通知のみ)
+    var delivery: String = EventAction.alarm.rawValue
+    /// STANDALONE の「ロック解除までミュート」コピー (Android 専用)
+    var muteUntilUnlock: Bool = false
 }
 
 // MARK: - SharedBridge ペイロード
@@ -76,6 +221,13 @@ struct ExpandRequest: Codable {
     var defaultMinutesBefore: Int = 0
     var defaultSnoozeMinutes: Int = 10
     var standaloneDays: Int = 14
+    var defaultStartAction: String = EventAction.alarm.rawValue
+    var defaultReminderAction: String = EventAction.alarm.rawValue
+    var titleCodes: TitleCodeSettings = TitleCodeSettings()
+    var inviteFilter: InviteFilter = InviteFilter()
+    var importEventReminders: Bool = false
+    /// 全アラームの一括ミュート (NOTIFY・タイマーには効かない)
+    var muteAll: Bool = false
 }
 
 struct ExpandResult: Codable {
@@ -154,5 +306,47 @@ enum Bridge {
     static func decode<T: Decodable>(_ type: T.Type, _ json: String?) -> T? {
         guard let json, let data = json.data(using: .utf8) else { return nil }
         return try? makeDecoder().decode(T.self, from: data)
+    }
+}
+
+// MARK: - 後方互換デコード
+// extension 内の init(from:) なので memberwise init は残る。
+// 旧 store.json には新キーが無いため decodeIfPresent に倒す。
+
+extension StandaloneAlarmDTO {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(Int64.self, forKey: .id) ?? 0
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        hour = try c.decode(Int.self, forKey: .hour)
+        minute = try c.decode(Int.self, forKey: .minute)
+        daysOfWeek = try c.decodeIfPresent(Set<String>.self, forKey: .daysOfWeek) ?? []
+        label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
+        soundUri = try c.decodeIfPresent(String.self, forKey: .soundUri)
+        snoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .snoozeMinutes) ?? 10
+        exceptions = try c.decodeIfPresent(Set<String>.self, forKey: .exceptions) ?? []
+        muteUntilUnlock = try c.decodeIfPresent(Bool.self, forKey: .muteUntilUnlock) ?? false
+        repeatMode = try c.decodeIfPresent(String.self, forKey: .repeatMode)
+        repeatInterval = try c.decodeIfPresent(Int.self, forKey: .repeatInterval) ?? 1
+        repeatAnchorMillis = try c.decodeIfPresent(Int64.self, forKey: .repeatAnchorMillis)
+    }
+}
+
+extension AlarmInstanceDTO {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        triggerAtMillis = try c.decode(Int64.self, forKey: .triggerAtMillis)
+        title = try c.decode(String.self, forKey: .title)
+        kind = try c.decode(String.self, forKey: .kind)
+        eventId = try c.decodeIfPresent(String.self, forKey: .eventId)
+        standaloneAlarmId = try c.decodeIfPresent(Int64.self, forKey: .standaloneAlarmId)
+        snoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .snoozeMinutes) ?? 10
+        soundUri = try c.decodeIfPresent(String.self, forKey: .soundUri)
+        minutesBefore = try c.decodeIfPresent(Int.self, forKey: .minutesBefore) ?? 0
+        eventStartMillis = try c.decodeIfPresent(Int64.self, forKey: .eventStartMillis)
+        snoozeSeq = try c.decodeIfPresent(Int.self, forKey: .snoozeSeq) ?? 0
+        delivery = try c.decodeIfPresent(String.self, forKey: .delivery) ?? EventAction.alarm.rawValue
+        muteUntilUnlock = try c.decodeIfPresent(Bool.self, forKey: .muteUntilUnlock) ?? false
     }
 }

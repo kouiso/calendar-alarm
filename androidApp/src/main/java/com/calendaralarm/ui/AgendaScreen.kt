@@ -36,7 +36,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,7 +57,16 @@ import com.calendaralarm.CalendarAlarmApp
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.sync.SyncWorker
 import com.calendaralarm.shared.model.CalendarEvent
+import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.DailyForecast
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ViewColumn
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.calendaralarm.shared.weather.WeatherApi
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
@@ -71,6 +79,25 @@ import java.util.Date
 import java.util.Locale
 
 private val tz = TimeZone.currentSystemDefault()
+
+/** 予定画面のビュー種別 (元アプリ: 一覧/月/3日/日タイムライン)。 */
+internal enum class ViewMode {
+    LIST, MONTH, THREE_DAY, TIMELINE;
+
+    fun icon(): ImageVector = when (this) {
+        LIST -> Icons.Default.ViewAgenda
+        MONTH -> Icons.Default.CalendarMonth
+        THREE_DAY -> Icons.Default.ViewColumn
+        TIMELINE -> Icons.Default.Schedule
+    }
+
+    fun label(): String = when (this) {
+        LIST -> "一覧"
+        MONTH -> "月"
+        THREE_DAY -> "3日"
+        TIMELINE -> "タイムライン"
+    }
+}
 
 /**
  * 予定アジェンダ。カレンダーのイベントを日付ごとに並べ、
@@ -86,11 +113,19 @@ fun AgendaScreen(repository: AlarmRepository) {
     var items by remember { mutableStateOf<List<AlarmRepository.AgendaItem>?>(null) }
     var refreshKey by remember { mutableIntStateOf(0) }
     var selected by remember { mutableStateOf<AlarmRepository.AgendaItem?>(null) }
+    var viewMode by remember { mutableStateOf(ViewMode.LIST) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchOpen by remember { mutableStateOf(false) }
+    var focusDate by remember {
+        mutableStateOf(kotlinx.datetime.Clock.System.now().toLocalDateTime(tz).date)
+    }
     val pending by repository.pendingFlow().collectAsState(initial = emptyList())
     val settings by app.container.settings.flow.collectAsState(initial = null)
 
-    LaunchedEffect(refreshKey) {
-        items = repository.upcomingEvents()
+    // 月表示は今月を埋めるため42日分、それ以外は14日分を取る
+    val fetchDays = if (viewMode == ViewMode.MONTH) 42 else 14
+    LaunchedEffect(refreshKey, fetchDays) {
+        items = repository.upcomingEvents(days = fetchDays)
     }
 
     val nextAlarm = pending.firstOrNull()
@@ -101,10 +136,45 @@ fun AgendaScreen(repository: AlarmRepository) {
             NextAlarmBanner(nextAlarm.title, nextAlarm.triggerAtMillis)
         }
 
+        // ビュー切替 + 検索 + 同期 (元アプリ: 一覧/月/3日/日タイムライン + 検索)
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            ViewMode.entries.forEach { mode ->
+                IconButton(onClick = {
+                    viewMode = mode
+                    if (mode != ViewMode.LIST) {
+                        focusDate = kotlinx.datetime.Clock.System.now()
+                            .toLocalDateTime(tz).date
+                    }
+                }) {
+                    Icon(
+                        mode.icon(),
+                        contentDescription = mode.label(),
+                        tint = if (viewMode == mode) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = {
+                searchOpen = !searchOpen
+                if (!searchOpen) searchQuery = ""
+            }) {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = "予定を検索",
+                    tint = if (searchOpen) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
             IconButton(onClick = {
                 SyncWorker.enqueueNow(context)
                 refreshKey++
@@ -112,13 +182,46 @@ fun AgendaScreen(repository: AlarmRepository) {
                 Icon(Icons.Default.Refresh, contentDescription = "同期")
             }
         }
+        if (searchOpen) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                placeholder = { Text("タイトルで絞り込み") },
+                singleLine = true,
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "クリア")
+                        }
+                    }
+                },
+            )
+        }
+
+        // ヘッダー天気 (元アプリ: 現在気温+時間別予報)。地点設定がある時だけ出す。
+        val weatherLoc = settings?.weatherLocation.orEmpty()
+        var nowForecast by remember { mutableStateOf<com.calendaralarm.shared.model.NowForecast?>(null) }
+        LaunchedEffect(weatherLoc, settings?.weatherHeaderEnabled, refreshKey) {
+            nowForecast = if (settings?.weatherHeaderEnabled == true && weatherLoc.isNotBlank()) {
+                runCatching { app.container.weather.nowForLocation(weatherLoc, hours = 9) }.getOrNull()
+            } else {
+                null
+            }
+        }
+        nowForecast?.let { nf -> WeatherHeaderRow(nf) }
 
         val list = items
+        val filtered = list?.let { l ->
+            if (searchQuery.isBlank()) l else l.filter {
+                it.event.title.contains(searchQuery, ignoreCase = true)
+            }
+        }
         when {
-            list == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            filtered == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
-            list.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            filtered.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         Icons.Default.DateRange,
@@ -127,13 +230,36 @@ fun AgendaScreen(repository: AlarmRepository) {
                         modifier = Modifier.size(40.dp),
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text("予定なし", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (searchQuery.isNotBlank()) "該当なし" else "予定なし",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-            else -> AgendaList(
-                items = list,
-                onSelect = { selected = it },
-            )
+            else -> when (viewMode) {
+                ViewMode.LIST -> AgendaList(
+                    items = filtered,
+                    onSelect = { selected = it },
+                )
+                ViewMode.MONTH -> MonthView(
+                    month = focusDate,
+                    items = filtered,
+                    focusDate = focusDate,
+                    onSelectDay = { focusDate = it },
+                    onSelectEvent = { selected = it },
+                )
+                ViewMode.THREE_DAY -> ThreeDayView(
+                    startDate = focusDate,
+                    items = filtered,
+                    onSelectDay = { focusDate = it },
+                    onSelectEvent = { selected = it },
+                )
+                ViewMode.TIMELINE -> DayTimelineView(
+                    date = focusDate,
+                    items = filtered,
+                    onSelectEvent = { selected = it },
+                )
+            }
         }
     }
 
@@ -142,9 +268,9 @@ fun AgendaScreen(repository: AlarmRepository) {
             EventDetailSheet(
                 item = item,
                 weatherEnabled = settings?.weatherEnabled ?: true,
-                onOverride = { muted, minutes, extraOffsets ->
+                onOverride = { action, minutes, extraOffsets ->
                     scope.launch {
-                        repository.setEventOverride(item.event.instanceKey, muted, minutes, extraOffsets)
+                        repository.setEventOverride(item.event.instanceKey, action, minutes, extraOffsets)
                         selected = null
                         refreshKey++
                     }
@@ -266,7 +392,7 @@ private fun DayHeader(date: LocalDate) {
 }
 
 @Composable
-private fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
+internal fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
     val ev = item.event
     // 長さゼロ・23時間超のイベントも実質「終日」扱いにして 0:00/~0:00 表記を消す
     val effectiveAllDay = ev.allDay ||
@@ -323,15 +449,24 @@ private fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
                 maxLines = 1,
             )
         }
-        // 鳴動状態アイコン
+        // 鳴動状態アイコン (アラーム/通知のみ/ミュートの3状態)
+        val (icon, iconTint) = when {
+            item.startAction == EventAction.MUTE && item.reminderAction == EventAction.MUTE ->
+                Icons.Default.NotificationsOff to
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+            item.startAction == EventAction.ALARM ->
+                Icons.Default.Notifications to MaterialTheme.colorScheme.primary
+            else ->
+                Icons.Default.Notifications to MaterialTheme.colorScheme.tertiary
+        }
         Icon(
-            if (item.muted) Icons.Default.NotificationsOff else Icons.Default.Notifications,
-            contentDescription = if (item.muted) "鳴動OFF" else "鳴動ON",
-            tint = if (item.muted) {
-                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-            } else {
-                MaterialTheme.colorScheme.primary
+            icon,
+            contentDescription = when {
+                item.muted -> "鳴動OFF"
+                item.startAction == EventAction.ALARM -> "アラーム"
+                else -> "通知のみ"
             },
+            tint = iconTint,
         )
         if (!item.muted && item.minutesBefore > 0) {
             Spacer(Modifier.width(4.dp))
@@ -350,12 +485,13 @@ private fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
 private fun EventDetailSheet(
     item: AlarmRepository.AgendaItem,
     weatherEnabled: Boolean,
-    onOverride: (muted: Boolean, minutesBefore: Int?, extraOffsets: List<Int>?) -> Unit,
+    onOverride: (action: EventAction, minutesBefore: Int?, extraOffsets: List<Int>?) -> Unit,
     onClearOverride: () -> Unit,
     weatherLoader: suspend (String) -> List<DailyForecast>?,
 ) {
     val ev = item.event
-    var muted by remember { mutableStateOf(item.muted) }
+    // 3状態。開始とリマインダーが混在する場合は開始側を初期値に
+    var action by remember { mutableStateOf(item.startAction) }
     var minutes by remember { mutableIntStateOf(item.minutesBefore) }
     var extras by remember { mutableStateOf(item.extraOffsets) }
     var forecast by remember { mutableStateOf<List<DailyForecast>?>(null) }
@@ -421,23 +557,25 @@ private fun EventDetailSheet(
         }
 
         Spacer(Modifier.height(20.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Default.Notifications,
-                contentDescription = "この予定でアラームを鳴らす",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp),
-            )
-            Spacer(Modifier.weight(1f))
-            Switch(
-                checked = !muted,
-                onCheckedChange = { on ->
-                    muted = !on
-                    onOverride(!on, if (on) minutes else null, if (on) extras else null)
-                },
-            )
+        // アクション3択: アラーム鳴動 / 通知のみ / 鳴らさない
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            listOf(
+                EventAction.ALARM to "アラーム",
+                EventAction.NOTIFY to "通知のみ",
+                EventAction.MUTE to "鳴らさない",
+            ).forEachIndexed { i, (a, label) ->
+                SegmentedButton(
+                    selected = action == a,
+                    onClick = {
+                        action = a
+                        onOverride(a, if (a == EventAction.MUTE) null else minutes,
+                            if (a == EventAction.MUTE) null else extras)
+                    },
+                    shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
+                ) { Text(label) }
+            }
         }
-        if (!muted) {
+        if (action != EventAction.MUTE) {
             Spacer(Modifier.height(8.dp))
             val options = listOf(0 to "開始時", 5 to "5分前", 10 to "10分前", 15 to "15分前", 30 to "30分前", 60 to "1時間前")
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -446,7 +584,7 @@ private fun EventDetailSheet(
                         selected = minutes == v,
                         onClick = {
                             minutes = v
-                            onOverride(false, v, extras)
+                            onOverride(action, v, extras)
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
                     ) { Text(label) }
@@ -459,7 +597,7 @@ private fun EventDetailSheet(
                         selected = minutes == v,
                         onClick = {
                             minutes = v
-                            onOverride(false, v, extras)
+                            onOverride(action, v, extras)
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
                     ) { Text(label) }
@@ -473,7 +611,7 @@ private fun EventDetailSheet(
                         selected = v in extras,
                         onClick = {
                             extras = if (v in extras) extras - v else (extras + v).sorted()
-                            onOverride(false, minutes, extras)
+                            onOverride(action, minutes, extras)
                         },
                         label = { Text("+$label") },
                         modifier = Modifier.padding(end = 6.dp),
@@ -496,7 +634,7 @@ private fun timeLabel(millis: Long, allDay: Boolean): String =
     if (allDay) "終日" else SimpleDateFormat("H:mm", Locale.getDefault()).format(Date(millis))
 
 /** イベントの属する日付。終日イベントは UTC 0時基準なので UTC 解釈、それ以外はローカル。 */
-private fun eventDate(ev: CalendarEvent): LocalDate {
+internal fun eventDate(ev: CalendarEvent): LocalDate {
     val inst = Instant.fromEpochMilliseconds(ev.startMillis)
     return if (ev.allDay) inst.toLocalDateTime(TimeZone.UTC).date else inst.toLocalDateTime(tz).date
 }
@@ -505,7 +643,7 @@ private fun weatherText(f: DailyForecast): String =
     "${WeatherApi.describe(f.weatherCode)} ${f.tempMax.toInt()}°/${f.tempMin.toInt()}°" +
         (f.precipitationProbability?.let { " 降水$it%" } ?: "")
 
-private fun kotlinx.datetime.DayOfWeek.jaShort(): String = when (this) {
+internal fun kotlinx.datetime.DayOfWeek.jaShort(): String = when (this) {
     kotlinx.datetime.DayOfWeek.SUNDAY -> "日"
     kotlinx.datetime.DayOfWeek.MONDAY -> "月"
     kotlinx.datetime.DayOfWeek.TUESDAY -> "火"
@@ -513,4 +651,52 @@ private fun kotlinx.datetime.DayOfWeek.jaShort(): String = when (this) {
     kotlinx.datetime.DayOfWeek.THURSDAY -> "木"
     kotlinx.datetime.DayOfWeek.FRIDAY -> "金"
     kotlinx.datetime.DayOfWeek.SATURDAY -> "土"
+}
+
+/** WMO コード → 絵文字。アイコン依存を増やさず視認性優先。 */
+private fun weatherEmoji(code: Int): String = when (code) {
+    0 -> "☀️"
+    1 -> "🌤️"
+    2 -> "⛅"
+    3 -> "☁️"
+    45, 48 -> "🌫️"
+    51, 53, 55, 56, 57 -> "🌦️"
+    61, 63, 65, 66, 67, 80, 81, 82 -> "🌧️"
+    71, 73, 75, 77, 85, 86 -> "❄️"
+    95, 96, 99 -> "⛈️"
+    else -> "—"
+}
+
+/** 現在気温 + 時間別予報チップの1行 (元アプリのヘッダー予報に相当)。 */
+@Composable
+private fun WeatherHeaderRow(f: com.calendaralarm.shared.model.NowForecast) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "${weatherEmoji(f.current.weatherCode)} ${f.current.temperature.toInt()}°",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            WeatherApi.describe(f.current.weatherCode),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(16.dp))
+        val fmt = remember { SimpleDateFormat("H時", Locale.getDefault()) }
+        f.hourly.take(9).forEach { h ->
+            Text(
+                "${fmt.format(Date(h.epochMillis))} ${weatherEmoji(h.weatherCode)} ${h.temperature.toInt()}°",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 12.dp),
+            )
+        }
+    }
 }

@@ -41,6 +41,7 @@ class AppContainer(val app: Application) {
                         db.execSQL("ALTER TABLE event_overrides ADD COLUMN extraOffsetsCsv TEXT")
                     }
                 },
+                *AppDatabase.MIGRATIONS,
             )
             .build()
     }

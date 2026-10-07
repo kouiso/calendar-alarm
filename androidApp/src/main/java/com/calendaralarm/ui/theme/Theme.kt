@@ -147,11 +147,16 @@ private val AppShapes = Shapes(
 
 @Composable
 fun CalendarAlarmTheme(
+    themeId: String = "default",
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
+    val palette = AppPalette.byId(themeId.takeIf { it != "default" })
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = themedScheme(
+            if (darkTheme) DarkColors else LightColors,
+            if (darkTheme) palette.dark else palette.light,
+        ),
         typography = AppTypography,
         shapes = AppShapes,
         content = content,

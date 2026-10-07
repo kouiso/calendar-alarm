@@ -5,6 +5,7 @@ import androidx.room.PrimaryKey
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmState
+import com.calendaralarm.shared.model.EventAction
 
 /** 予約中または鳴動済みの AlarmInstance スナップショット。再起動復元の種。 */
 @Entity(tableName = "scheduled_instances")
@@ -22,6 +23,10 @@ data class ScheduledInstanceEntity(
     val snoozeSeq: Int,
     /** PENDING/FIRED/DISMISSED/SNOOZED/MISSED/CANCELLED */
     val state: String,
+    /** ALARM=全画面鳴動 / NOTIFY=通知のみ (MUTEは予約自体を作らない)。 */
+    val delivery: String = EventAction.ALARM.name,
+    /** ロック解除まで鳴動を遅延するか。 */
+    val muteUntilUnlock: Boolean = false,
 ) {
     fun toInstance(): AlarmInstance = AlarmInstance(
         id = id,
@@ -35,6 +40,8 @@ data class ScheduledInstanceEntity(
         minutesBefore = minutesBefore,
         eventStartMillis = eventStartMillis,
         snoozeSeq = snoozeSeq,
+        delivery = EventAction.valueOf(delivery),
+        muteUntilUnlock = muteUntilUnlock,
     )
 
     companion object {
@@ -51,6 +58,8 @@ data class ScheduledInstanceEntity(
             eventStartMillis = i.eventStartMillis,
             snoozeSeq = i.snoozeSeq,
             state = state.name,
+            delivery = i.delivery.name,
+            muteUntilUnlock = i.muteUntilUnlock,
         )
     }
 }
@@ -69,6 +78,14 @@ data class StandaloneAlarmEntity(
     val snoozeMinutes: Int,
     /** 例外日 "yyyy-MM-dd" カンマ区切り。 */
     val exceptionsCsv: String,
+    /** ロック解除まで鳴動を遅延するか。 */
+    val muteUntilUnlock: Boolean = false,
+    /** 繰返しモード (RepeatMode.name)。null = 旧形式 (daysMask から導出)。 */
+    val repeatMode: String? = null,
+    /** INTERVAL_* の間隔。 */
+    val repeatInterval: Int = 1,
+    /** MONTHLY/INTERVAL_* の起点日 (UTC 0時 epoch millis)。 */
+    val repeatAnchorMillis: Long? = null,
 )
 
 /** カレンダー単位の鳴動ルール。 */
@@ -81,13 +98,20 @@ data class CalendarPrefEntity(
     val allDayMinutes: Int = 540,
     /** 追加リマインダーの分数 "15,60" 形式。 */
     val extraOffsetsCsv: String = "",
+    /** 開始時刻トリガのアクション (ALARM/NOTIFY/MUTE)。 */
+    val startAction: String = EventAction.ALARM.name,
+    /** リマインダートリガのアクション (ALARM/NOTIFY/MUTE)。 */
+    val reminderAction: String = EventAction.ALARM.name,
 )
 
-/** イベント個別のミュート・分数上書き。主キーは instanceKey (calendarId:eventId:startMillis)。 */
+/**
+ * イベント個別のアクション・分数上書き。主キーは instanceKey (calendarId:eventId:startMillis)。
+ * action は ALARM/NOTIFY/MUTE。null=既定に従う。
+ */
 @Entity(tableName = "event_overrides")
 data class EventOverrideEntity(
     @PrimaryKey val instanceKey: String,
-    val muted: Boolean,
+    val action: String? = null,
     val minutesBefore: Int?,
     /** null=カレンダー既定、空文字=追加なし、"15,60"=追加リマインダー。 */
     val extraOffsetsCsv: String? = null,

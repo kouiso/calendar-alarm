@@ -3,10 +3,14 @@ package com.calendaralarm.shared.bridge
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.logic.AlarmPlanner
 import com.calendaralarm.shared.model.AlarmInstance
+import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.CalendarEvent
+import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
+import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.StandaloneAlarm
+import com.calendaralarm.shared.model.TitleCodeSettings
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.serialization.Serializable
@@ -35,10 +39,22 @@ object SharedBridge {
         val zoneId: String,
         /** グローバル設定の「N分前」。calendar_prefs が無いカレンダーの既定。 */
         val defaultMinutesBefore: Int = 0,
+        /** グローバル既定の開始時アクション。 */
+        val defaultStartAction: EventAction = EventAction.ALARM,
+        /** グローバル既定のリマインダーアクション。 */
+        val defaultReminderAction: EventAction = EventAction.ALARM,
         /** 展開されたイベントインスタンスに載せるスヌーズ既定 (分)。 */
         val defaultSnoozeMinutes: Int = 10,
         /** 単発アラームの展開日数。 */
         val standaloneDays: Int = 14,
+        /** タイトルコード設定 (always/never + 適用スコープ)。 */
+        val titleCodes: TitleCodeSettings = TitleCodeSettings(),
+        /** 招待予定フィルタ。 */
+        val inviteFilter: InviteFilter = InviteFilter(),
+        /** 予定側リマインダーを展開に含めるか。 */
+        val importEventReminders: Boolean = false,
+        /** 一括ミュート: ALARM 鳴動を全て抑止 (NOTIFYとタイマーは残す)。 */
+        val muteAll: Boolean = false,
     )
 
     @Serializable
@@ -71,9 +87,20 @@ object SharedBridge {
             now = now,
             horizon = horizon,
             zone = zone,
-            defaultRule = AlarmRule(minutesBefore = req.defaultMinutesBefore),
+            defaultRule = AlarmRule(
+                minutesBefore = req.defaultMinutesBefore,
+                startAction = req.defaultStartAction,
+                reminderAction = req.defaultReminderAction,
+            ),
+            titleCodes = req.titleCodes,
+            inviteFilter = req.inviteFilter,
+            importEventReminders = req.importEventReminders,
+            muteAll = req.muteAll,
         )
         desired += expanded.map { it.copy(snoozeMinutes = req.defaultSnoozeMinutes) }
+        // 一括ミュート: イベント側は expandEvents 内で ALARM を落としている。
+        // 単発アラームは全て ALARM 鳴動なのでここでまとめて除外 (タイマーは別経路で残る)。
+        if (req.muteAll) desired.removeAll { it.kind == AlarmKind.STANDALONE }
         return json.encodeToString(ExpandResult.serializer(), ExpandResult(desired))
     }
 

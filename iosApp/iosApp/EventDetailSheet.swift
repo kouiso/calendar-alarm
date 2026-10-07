@@ -17,7 +17,12 @@ struct EventDetailSheet: View {
     private var ov: EventOverrideDTO { store.state.overrides[ev.instanceKey] ?? EventOverrideDTO() }
     private var rule: AlarmRuleDTO { store.rule(for: ev.calendarId) }
 
-    private var muted: Bool { ov.muted }
+    /// 3状態アクション。未指定ならルールの開始アクションを表示
+    private var action: EventAction {
+        ov.action.flatMap(EventAction.init(rawValue:)) ??
+            EventAction(rawValue: rule.startAction) ?? .alarm
+    }
+    private var muted: Bool { action == .mute }
     private var minutes: Int { ov.minutesBefore ?? rule.minutesBefore }
     private var extras: [Int] { ov.extraOffsets ?? rule.extraOffsets }
 
@@ -26,8 +31,8 @@ struct EventDetailSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     header
-                    bellRow
-                    timingPicker
+                    actionPicker
+                    if !muted { timingPicker }
                     extraChips
                     if !ev.location.isEmpty { locationRow }
                     if let f = weather?.first { weatherRow(f) }
@@ -60,17 +65,28 @@ struct EventDetailSheet: View {
         }
     }
 
-    private var bellRow: some View {
-        HStack {
-            Image(systemName: muted ? "bell.slash" : "bell.fill")
-                .foregroundStyle(muted ? .secondary : NightTheme.indigo)
+    /// アクション3択: アラーム鳴動 / 通知のみ / 鳴らさない (Android版と同じ)
+    private var actionPicker: some View {
+        HStack(spacing: 8) {
+            Image(systemName: action == .mute ? "bell.slash" : "bell.fill")
+                .foregroundStyle(action == .mute ? .secondary : NightTheme.indigo)
             Spacer()
-            Toggle("", isOn: Binding(get: { !muted }, set: { on in
-                store.setOverride(instanceKey: ev.instanceKey, muted: !on,
-                                  minutes: ov.minutesBefore, extras: ov.extraOffsets)
-                Task { await engine.resync(reason: "override") }
-            }))
-            .labelsHidden()
+            ForEach([(EventAction.alarm, "アラーム"), (.notify, "通知"), (.mute, "OFF")], id: \.0) { a, label in
+                Button {
+                    store.setOverride(
+                        instanceKey: ev.instanceKey, action: a,
+                        minutes: a == .mute ? nil : ov.minutesBefore,
+                        extras: a == .mute ? nil : ov.extraOffsets)
+                    Task { await engine.resync(reason: "override") }
+                } label: {
+                    Text(label)
+                        .font(NightTheme.font(12, weight: .medium))
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(action == a ? NightTheme.indigo : Color(uiColor: .tertiarySystemGroupedBackground),
+                                    in: Capsule())
+                        .foregroundStyle(action == a ? .white : .secondary)
+                }.buttonStyle(.plain)
+            }
         }
     }
 
@@ -78,7 +94,7 @@ struct EventDetailSheet: View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
             ForEach(timingOptions, id: \.1) { label, m in
                 Button {
-                    store.setOverride(instanceKey: ev.instanceKey, muted: muted,
+                    store.setOverride(instanceKey: ev.instanceKey, action: action,
                                       minutes: m, extras: ov.extraOffsets)
                     Task { await engine.resync(reason: "override") }
                 } label: {
@@ -102,7 +118,7 @@ struct EventDetailSheet: View {
                 Button {
                     var e = extras
                     if on { e.removeAll { $0 == m } } else if e.count < 5 { e.append(m); e.sort() }
-                    store.setOverride(instanceKey: ev.instanceKey, muted: muted,
+                    store.setOverride(instanceKey: ev.instanceKey, action: action,
                                       minutes: ov.minutesBefore, extras: e)
                     Task { await engine.resync(reason: "override") }
                 } label: {

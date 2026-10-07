@@ -4,13 +4,19 @@ import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.logic.AlarmPlanner
 import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.CalendarEvent
+import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
+import com.calendaralarm.shared.model.InviteFilter
+import com.calendaralarm.shared.model.InviteStatus
+import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
+import com.calendaralarm.shared.model.TitleCodeSettings
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.test.Test
@@ -104,7 +110,7 @@ class AlarmExpanderTest {
                 "offCal" to AlarmRule(),
                 "ruleOff" to AlarmRule(enabled = false),
             ),
-            overrides = mapOf(ev1.instanceKey to EventOverride(muted = true)),
+            overrides = mapOf(ev1.instanceKey to EventOverride(action = EventAction.MUTE)),
             disabledCalendarIds = setOf("offCal"),
             now = now, horizon = horizon,
         )
@@ -221,6 +227,165 @@ class AlarmExpanderTest {
         // 東京 9:00 = UTC 0:00、NY 9:00 = UTC 13:00(EDT)。同じ wall-clock でも絶対時刻は別
         assertTrue(outTokyo[0].triggerAtMillis < outNy[0].triggerAtMillis)
     }
+
+    // ---- 条件ドメイン (元アプリのタイトルコード/招待フィルタ/3状態アクション) ----
+
+    @Test
+    fun `アクションが NOTIFY のインスタンスは delivery に残る`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(startAction = EventAction.NOTIFY)),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+        )
+        assertEquals(EventAction.NOTIFY, out.single().delivery)
+    }
+
+    @Test
+    fun `リマインダーだけ通知のみにできる`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf(
+                "c1" to AlarmRule(
+                    minutesBefore = 15, extraOffsets = listOf(30),
+                    reminderAction = EventAction.NOTIFY,
+                ),
+            ),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+        )
+        // 開始15分前=アラーム、30分前=通知のみ
+        assertEquals(
+            listOf(EventAction.ALARM, EventAction.NOTIFY),
+            out.sortedBy { it.minutesBefore }.map { it.delivery },
+        )
+    }
+
+    @Test
+    fun `タイトルコードの必ず鳴らすがルール MUTE を上書く`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"), title = "朝会 -w")
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(startAction = EventAction.MUTE)),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            titleCodes = TitleCodeSettings(alwaysCodes = listOf("-w")),
+        )
+        assertEquals(1, out.size)
+        assertEquals(EventAction.ALARM, out[0].delivery)
+    }
+
+    @Test
+    fun `タイトルコードの鳴らさないが必ず鳴らすより優先される`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"), title = "朝会 -w -x")
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule()),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            titleCodes = TitleCodeSettings(
+                alwaysCodes = listOf("-w"), neverCodes = listOf("-x"),
+            ),
+        )
+        assertTrue(out.isEmpty())
+    }
+
+    @Test
+    fun `コードの適用範囲が開始のみなら追加リマインダーは強制しない`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"), title = "朝会 -w")
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf(
+                "c1" to AlarmRule(
+                    minutesBefore = 15, extraOffsets = listOf(30),
+                    startAction = EventAction.MUTE,
+                    reminderAction = EventAction.MUTE,
+                ),
+            ),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            titleCodes = TitleCodeSettings(
+                alwaysCodes = listOf("-w"),
+                applyToStart = true, applyToReminders = false,
+            ),
+        )
+        // 開始だけ強制ALARM。リマインダーはルール MUTE のまま
+        assertEquals(1, out.size)
+        assertEquals(15, out[0].minutesBefore)
+    }
+
+    @Test
+    fun `招待予定フィルタが拒否ステータスを落とす`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+            .copy(inviteStatus = InviteStatus.DECLINED)
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule()),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            inviteFilter = InviteFilter(declined = false),
+        )
+        assertTrue(out.isEmpty())
+    }
+
+    @Test
+    fun `明示的なアラーム指定は招待フィルタより優先する`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+            .copy(inviteStatus = InviteStatus.DECLINED)
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule()),
+            overrides = mapOf(ev.instanceKey to EventOverride(action = EventAction.ALARM)),
+            disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            inviteFilter = InviteFilter(declined = false),
+        )
+        assertEquals(1, out.size)
+    }
+
+    @Test
+    fun `予定側リマインダーが取り込まれる`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+            .copy(calendarReminderMinutes = listOf(10, 60))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 0)),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            importEventReminders = true,
+        )
+        assertEquals(listOf(0, 10, 60), out.map { it.minutesBefore })
+    }
+
+    @Test
+    fun `予定側リマインダー取込OFFでは出ない`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+            .copy(calendarReminderMinutes = listOf(10))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 0)),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            importEventReminders = false,
+        )
+        assertEquals(1, out.size)
+    }
+
+    @Test
+    fun `同時刻の開始と追加リマインダーは重複しない`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf(
+                "c1" to AlarmRule(minutesBefore = 15, extraOffsets = listOf(15, 30)),
+            ),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+        )
+        assertEquals(listOf(15, 30), out.map { it.minutesBefore })
+    }
 }
 
 class AlarmPlannerTest {
@@ -248,5 +413,165 @@ class AlarmPlannerTest {
         assertEquals(setOf("moved", "new", "overdue"), plan.toSchedule.map { it.id }.toSet())
         assertEquals(listOf("gone"), plan.toCancel)
         assertEquals(listOf("overdue"), plan.toFireNow.map { it.id })
+    }
+}
+
+class MuteAllTest {
+    private val now: Instant = ldt("2026-10-05T08:00:00")
+    private val horizon: Instant = ldt("2026-10-19T00:00:00")
+
+    private fun event(id: String, start: Instant, title: String = "予定") = CalendarEvent(
+        id = id, calendarId = "c1", title = title,
+        startMillis = start.toEpochMilliseconds(),
+        endMillis = start.toEpochMilliseconds() + 3_600_000,
+        allDay = false,
+    )
+
+    @Test
+    fun `一括ミュートはALARMだけ落とし NOTIFY は残る`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf(
+                "c1" to AlarmRule(
+                    minutesBefore = 15, extraOffsets = listOf(30),
+                    reminderAction = EventAction.NOTIFY,
+                ),
+            ),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            muteAll = true,
+        )
+        // 開始15分前=ALARM→消える、30分前=NOTIFY→残る
+        assertEquals(listOf(EventAction.NOTIFY), out.map { it.delivery })
+    }
+
+    @Test
+    fun `一括ミュートでも開始時の NOTIFY は残る`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(startAction = EventAction.NOTIFY)),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            muteAll = true,
+        )
+        assertEquals(1, out.size)
+        assertEquals(EventAction.NOTIFY, out[0].delivery)
+    }
+}
+
+class RepeatModeTest {
+    private val now: Instant = ldt("2026-10-05T08:00:00")
+
+    private fun alarm(
+        mode: RepeatMode? = null,
+        interval: Int = 1,
+        anchor: String? = null,
+        days: Set<DayOfWeek> = emptySet(),
+    ) = StandaloneAlarm(
+        id = 1, enabled = true, hour = 7, minute = 30,
+        daysOfWeek = days,
+        repeatMode = mode,
+        repeatInterval = interval,
+        repeatAnchorMillis = anchor?.let { LocalDate.parse(it).atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds() },
+    )
+
+    @Test
+    fun `旧形式は曜日なし=ONCE 曜日あり=WEEKLY`() {
+        assertEquals(RepeatMode.ONCE, alarm().effectiveRepeatMode())
+        assertEquals(RepeatMode.WEEKLY, alarm(days = setOf(DayOfWeek.MONDAY)).effectiveRepeatMode())
+    }
+
+    @Test
+    fun `毎月モードは窓外の次回も1件出す`() {
+        // 10/5 現在、毎月20日 → 14日窓には10/20が1件入る
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.MONTHLY, anchor = "2026-10-01"),
+            now = now, days = 14, zone = TZ,
+        )
+        assertTrue(out.isNotEmpty())
+        // anchor=1日だと日付は「1日」になる (起点日の日を使う)
+        val out20 = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.MONTHLY, anchor = "2026-10-20"),
+            now = now, days = 14, zone = TZ,
+        )
+        assertEquals(1, out20.size)
+        assertTrue(out20[0].id.endsWith(":2026-10-20"))
+    }
+
+    @Test
+    fun `毎月モードで窓を超える次回も拾う`() {
+        // 毎月25日、now=10/5 → 10/25は窓内。窓外だけのケース: 毎月1日で now=10/5 だと
+        // 次回 11/1 は窓(10/19)外でも1件出る
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.MONTHLY, anchor = "2026-09-01"),
+            now = now, days = 14, zone = TZ,
+        )
+        assertEquals(1, out.size)
+        assertTrue(out[0].id.endsWith(":2026-11-01"))
+    }
+
+    @Test
+    fun `月末をまたぐ毎月は短い月で丸める`() {
+        // 起点31日: 10月31日は窓外(10/19まで)なので次回=10/31が1件
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.MONTHLY, anchor = "2026-08-31"),
+            now = now, days = 14, zone = TZ,
+        )
+        assertEquals(1, out.size)
+        assertTrue(out[0].id.endsWith(":2026-10-31"))
+    }
+
+    @Test
+    fun `日ごとモードは過去の起点から次回を出す`() {
+        // 起点9/1の7日ごと → 10/5以降の最初の発生日を出す
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.INTERVAL_DAYS, interval = 7, anchor = "2026-09-01"),
+            now = now, days = 14, zone = TZ,
+        )
+        assertTrue(out.isNotEmpty())
+        assertTrue(out[0].triggerAtMillis > now.toEpochMilliseconds())
+        // 連続発生は7日周期のはず
+        if (out.size >= 2) {
+            val gap = out[1].triggerAtMillis - out[0].triggerAtMillis
+            assertEquals(7L * 24 * 3600 * 1000, gap)
+        }
+    }
+
+    @Test
+    fun `繰返しアラームの発生日は例外日を飛ばす`() {
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.INTERVAL_DAYS, interval = 1, anchor = "2026-10-05").copy(
+                exceptions = setOf(LocalDate(2026, 10, 6)),
+            ),
+            now = now, days = 7, zone = TZ,
+        )
+        assertTrue(out.none { it.id.endsWith(":2026-10-06") })
+    }
+
+    @Test
+    fun `周期型はグレース幅内の過去発生も残す`() {
+        // now=08:00、毎月5日 07:30 → 30分前の本日分がグレース(60分)内。
+        // 旧実装では triggerAt>now で落として次回(11/5)に飛び、
+        // resync で既存 pending 行が無言 CANCEL されて鳴らなかった
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.MONTHLY, anchor = "2026-10-05"),
+            now = now, days = 14, zone = TZ,
+        )
+        assertTrue(out.any { it.id.endsWith(":2026-10-05") })
+    }
+
+    @Test
+    fun `曜日空のWEEKLYはONCEとして次の1回を出す`() {
+        // 曜日未選択のまま毎週保存すると旧実装では永遠に鳴らなかった。
+        // 「毎週鳴らす意図に一番近いのは次の1回」なので ONCE に倒す
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.WEEKLY, days = emptySet()),
+            now = now, days = 14, zone = TZ,
+        )
+        // hour=7:30 は now=08:00 の30分前 = グレース内 → 当日分が即時鳴動対象で出る
+        assertEquals(1, out.size)
+        assertTrue(out[0].id.endsWith(":2026-10-05"))
     }
 }

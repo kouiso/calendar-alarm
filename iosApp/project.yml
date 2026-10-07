@@ -35,8 +35,12 @@ targets:
     dependencies:
       - target: CalendarAlarmWidget
         embed: true
+      - target: MailShareExt
+        embed: true
     entitlements:
       path: iosApp/CalendarAlarm.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.calendaralarm.ios]
     info:
       path: iosApp/Info.plist
       properties:
@@ -60,6 +64,10 @@ targets:
           - com.calendaralarm.resync
         UIBackgroundModes:
           - processing
+        # 共有拡張から本体アプリを開くカスタムスキーム (メール→予定の受け渡し)
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - calendaralarm-import
     preBuildScripts:
       - name: Build SharedKit (KMP)
         shell: /bin/sh
@@ -85,6 +93,8 @@ targets:
           - Info.plist
     entitlements:
       path: Widget/CalendarAlarmWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.calendaralarm.ios]
     info:
       path: Widget/Info.plist
       properties:
@@ -95,4 +105,33 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.ios.widget
+        GENERATE_INFOPLIST_FILE: NO
+
+  MailShareExt:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: MailShareExt
+        excludes:
+          - Info.plist
+          - MailShareExt.entitlements
+    entitlements:
+      path: MailShareExt/MailShareExt.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.calendaralarm.ios]
+    info:
+      path: MailShareExt/Info.plist
+      properties:
+        CFBundleIdentifier: com.calendaralarm.ios.shareext
+        # appex は CFBundleDisplayName が無いと installd に拒否され install 失敗する
+        CFBundleDisplayName: 予定に変換
+        # 共有シートに出すために必須。テキスト/URL の共有を受け付ける
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionActivationRule: "SUBQUERY (extensionItems, $extensionItem, ANY $extensionItem.attachments.conformsToType UTI \"public.plain-text\" OR ANY $extensionItem.attachments.conformsToType UTI \"public.url\").@count > 0"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.ios.shareext
         GENERATE_INFOPLIST_FILE: NO

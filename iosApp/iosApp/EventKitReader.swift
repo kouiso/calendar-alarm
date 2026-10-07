@@ -54,8 +54,75 @@ final class EventKitReader {
                 startMillis: Int64(ev.startDate.timeIntervalSince1970 * 1000),
                 endMillis: Int64((ev.endDate ?? ev.startDate).timeIntervalSince1970 * 1000),
                 allDay: ev.isAllDay,
-                timezone: tzId
+                timezone: tzId,
+                inviteStatus: Self.inviteStatus(of: ev),
+                calendarReminderMinutes: Self.reminderMinutes(of: ev)
             )
+        }
+    }
+
+    /// メール→予定: 抽出された予定をデフォルトの書き込み可カレンダーへ挿入。
+    /// allDay は日付のみのローカル時刻で入れる (EventKit が allDay として保存)。
+    /// 成功なら挿入したイベントの identifier、失敗なら nil。
+    @discardableResult
+    func insert(title: String, startIso: String, endIso: String?,
+                allDay: Bool, location: String?, notes: String?) -> String? {
+        guard authorizationGranted,
+              let cal = store.defaultCalendarForNewEvents else { return nil }
+        let ev = EKEvent(eventStore: store)
+        ev.title = title
+        ev.calendar = cal
+        ev.location = location
+        ev.notes = notes
+        ev.isAllDay = allDay
+        if allDay {
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd"
+            // 展開側の契約 (allDay は UTC の日解釈) に合わせる。
+            // ローカル時刻で保存すると西寄りTZで前日に鳴る
+            fmt.timeZone = TimeZone(secondsFromGMT: 0)
+            guard let s = fmt.date(from: startIso) else { return nil }
+            ev.startDate = s
+            ev.endDate = endIso.flatMap { fmt.date(from: $0) } ?? s.addingTimeInterval(86400)
+        } else {
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd'T'HH:mm"
+            fmt.timeZone = TimeZone.current
+            guard let s = fmt.date(from: startIso) else { return nil }
+            ev.startDate = s
+            ev.endDate = endIso.flatMap { fmt.date(from: $0) } ?? s.addingTimeInterval(3600)
+        }
+        do {
+            try store.save(ev, span: .thisEvent)
+            return ev.eventIdentifier
+        } catch {
+            return nil
+        }
+    }
+
+    /// 自分の参加可否 → InviteStatus。自分主催の予定は nil (フィルタ対象外)。
+    private static func inviteStatus(of ev: EKEvent) -> String? {
+        // 主催者が自分なら招待ではない
+        if ev.organizer?.isCurrentUser == true { return nil }
+        guard let me = ev.attendees?.first(where: { $0.isCurrentUser }) else { return nil }
+        switch me.participantStatus {
+        case .accepted: return InviteStatus.accepted.rawValue
+        case .tentative: return InviteStatus.tentative.rawValue
+        case .declined: return InviteStatus.declined.rawValue
+        case .pending: return InviteStatus.needsAction.rawValue
+        default: return nil
+        }
+    }
+
+    /// カレンダー側アラーム → 開始N分前の分数一覧。
+    private static func reminderMinutes(of ev: EKEvent) -> [Int] {
+        (ev.alarms ?? []).compactMap { alarm in
+            let seconds = alarm.relativeOffset
+            // relativeOffset は開始前が負値。絶対時刻指定のアラームは拾わない
+            // (absoluteDate 形式を minutes に倒すとイベント開始との差が必要で
+            //  読み取り時に毎回計算するより、近似は残すなら正確に残すべき)。
+            guard seconds < 0 else { return nil }
+            return Int(-seconds / 60)
         }
     }
 

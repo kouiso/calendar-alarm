@@ -32,7 +32,11 @@ struct TimerFace: View {
     @EnvironmentObject var engine: Engine
     @EnvironmentObject var store: Store
     @State private var minutes = 5
+    // プリセット選択時の秒数 (分入力とは別系統。90秒等の非分プリセット用)
+    @State private var presetSeconds: Int? = nil
     @State private var label = ""
+    @State private var showAddPreset = false
+    @State private var newPresetLabel = ""
     @State private var running: AlarmInstanceDTO? = nil
     @State private var remaining: Int = 0
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -49,7 +53,10 @@ struct TimerFace: View {
                     }
                 } else {
                     VStack(spacing: 4) {
-                        Picker("分", selection: $minutes) {
+                        Picker("分", selection: Binding(
+                            get: { minutes },
+                            // 分数入力を動かしたらプリセット選択を外す
+                            set: { minutes = $0; presetSeconds = nil })) {
                             ForEach([1, 3, 5, 10, 15, 20, 30, 45, 60], id: \.self) {
                                 Text("\($0)分").tag($0)
                             }
@@ -61,6 +68,56 @@ struct TimerFace: View {
             .frame(width: 260, height: 260)
 
             if running == nil {
+                // 定型タイマープリセット (元アプリの料理/仮眠チップ)。長押しで削除。
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(store.state.timerPresets.enumerated()), id: \.offset) { _, p in
+                            Button {
+                                presetSeconds = p.seconds
+                                label = p.label
+                            } label: {
+                                Text("\(p.label) \(p.durationLabel)")
+                                    .font(NightTheme.font(13))
+                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                    .background(
+                                        presetSeconds == p.seconds ? NightTheme.indigo.opacity(0.18) : Color(uiColor: .tertiarySystemGroupedBackground),
+                                        in: Capsule()
+                                    )
+                            }
+                            .contextMenu {
+                                Button("削除", role: .destructive) {
+                                    store.setTimerPresets(store.state.timerPresets.filter { $0 != p })
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(presetSeconds == p.seconds ? NightTheme.indigo : .primary)
+                        }
+                        Button { showAddPreset = true } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 13, weight: .medium))
+                                .padding(10)
+                                .background(Color(uiColor: .tertiarySystemGroupedBackground), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal)
+                }
+                .scrollIndicators(.hidden)
+                .alert("プリセットを追加", isPresented: $showAddPreset) {
+                    TextField("名前", text: $newPresetLabel)
+                    Button("保存") {
+                        let l = newPresetLabel.trimmingCharacters(in: .whitespaces)
+                        if !l.isEmpty {
+                            store.setTimerPresets(
+                                store.state.timerPresets + [TimerPresetDTO(label: l, seconds: minutes * 60)]
+                            )
+                        }
+                        newPresetLabel = ""
+                    }
+                    Button("戻る", role: .cancel) { newPresetLabel = "" }
+                } message: {
+                    Text("\(minutes)分のプリセット")
+                }
                 TextField("ラベル", text: $label)
                     .textFieldStyle(.roundedBorder).frame(width: 200)
             }
@@ -69,7 +126,7 @@ struct TimerFace: View {
                 if running == nil {
                     Button {
                         Task {
-                            await engine.scheduleTimer(durationMillis: Int64(minutes) * 60_000, label: label)
+                            await engine.scheduleTimer(durationMillis: Int64(presetSeconds ?? minutes * 60) * 1_000, label: label)
                             syncRunning()
                         }
                     } label: {
