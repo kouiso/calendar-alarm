@@ -118,7 +118,21 @@ final class Engine: ObservableObject {
         } else {
             store.audit("CAL_SKIP", "permission not granted (reason=\(reason))")
         }
-        let s = store.state
+        var s = store.state
+
+        // 期限切れ PENDING → MISSED + 通知。Android 同様 resync の先頭で処理する:
+        // 終端判定・preserved ・プランは全てこれ以降の状態を見る (逆順だと
+        // MISSED 化した行が preserved 経由で desired に復活して鳴り直す)。
+        let graceMillis = Int64(60 * 60 * 1000)
+        var missedAlarmIds: Set<Int64> = []
+        for rec in s.scheduled.values where rec.state == .pending && rec.instance.triggerAtMillis < now - graceMillis {
+            store.markState(rec.instance.id, .missed)
+            store.audit("MISSED", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis))")
+            notifyMissed(rec.instance)
+            if let aid = rec.instance.standaloneAlarmId { missedAlarmIds.insert(aid) }
+        }
+        disableConsumedOneShots(missedAlarmIds)
+        s = store.state
 
         // 終端行は先に読む。同 id の蘇生防止と単発アラームの消費判定の両方で使う
         // (Android AlarmRepository.resync と同じ意味論)。
@@ -188,17 +202,6 @@ final class Engine: ObservableObject {
         }
         desired += preserved
 
-        // 期限切れ PENDING → MISSED + 通知
-        let graceMillis = Int64(60 * 60 * 1000)
-        var missedAlarmIds: Set<Int64> = []
-        for rec in s.scheduled.values where rec.state == .pending && rec.instance.triggerAtMillis < now - graceMillis {
-            store.markState(rec.instance.id, .missed)
-            store.audit("MISSED", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis))")
-            notifyMissed(rec.instance)
-            if let aid = rec.instance.standaloneAlarmId { missedAlarmIds.insert(aid) }
-        }
-        disableConsumedOneShots(missedAlarmIds)
-
         // AlarmKit 側で予約だけが消えた PENDING 行を拾い直す (再起動や OS 内部の
         // 破棄でストア上は PENDING だが実体は無い → 二度と鳴らない穴を塞ぐ。
         // Android は毎回全件 AlarmManager へ再主張する方式で同じ問題を潰している)。
@@ -227,7 +230,12 @@ final class Engine: ObservableObject {
         // 記録は元時刻のまま・OS予約だけ最速の未来時刻にずらして実際に鳴らす。
         // fired 済み扱いで UI だけ出すと、アプリ非前面では音も通知も出ず無言消費になる。
         let fireNowIds = Set(plan.toFireNow.map { $0.id })
+        // 予約カウントは既存の AlarmKit 予約 (toCancel 消化後) から始める。
+        // 新規分だけ数えると温存分と合算で上限を超えて SCHEDULE_ERR になる。
         var scheduledCount = 0
+        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler {
+            scheduledCount = ak.allAlarms.count
+        }
         for inst in plan.toFireNow {
             let shifted = AlarmInstanceDTO(
                 id: inst.id,
@@ -304,12 +312,13 @@ final class Engine: ObservableObject {
         store.audit("DISMISS", inst.title)
     }
 
-    /// スヌーズ: AlarmKit なら countdown() でネイティブスヌーズ (postAlert 後に再アラート)、
+    /// スヌーズ: AlarmKit なら countdown() でネイティブスヌーズ (postAlert 後に再アラート)。
+    /// countdown が失敗した時は子インスタンス予約に落ちる (黙って消さない)。
     /// 通知経路は snoozeSeq+1 の子インスタンスを新規予約 (Android の snoozed() と同じ id 規則)。
     func snooze(_ inst: AlarmInstanceDTO) {
         alertingIds.remove(inst.id)
-        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler {
-            try? ak.countdown(uuid: AlarmKitScheduler.uuid(from: inst.id))
+        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler,
+           (try? ak.countdown(uuid: AlarmKitScheduler.uuid(from: inst.id))) != nil {
             store.markState(inst.id, .snoozed)
             store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m (native)")
             return

@@ -32,10 +32,10 @@
 	<string>通知によるアラームのために使います</string>
 	<key>UIAppFonts</key>
 	<array>
-		<string>Fonts/plex_sans_jp_regular.ttf</string>
-		<string>Fonts/plex_sans_jp_medium.ttf</string>
-		<string>Fonts/plex_sans_jp_semibold.ttf</string>
-		<string>Fonts/plex_sans_jp_light.ttf</string>
+		<string>plex_sans_jp_regular.ttf</string>
+		<string>plex_sans_jp_medium.ttf</string>
+		<string>plex_sans_jp_semibold.ttf</string>
+		<string>plex_sans_jp_light.ttf</string>
 	</array>
 	<key>UIApplicationSceneManifest_Generation</key>
 	<true/>
