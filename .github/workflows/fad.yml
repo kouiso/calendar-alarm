@@ -3,8 +3,9 @@ name: FAD Distribution
 # Firebase App Distribution への配布。
 # Android は debug 署名 APK（署名鍵は ANDROID_DEBUG_KEYSTORE_B64 で固定 —
 # ランナーごとに鍵が変わると端末側で INSTALL_FAILED_UPDATE_INCOMPATIBLE になる）。
-# iOS は ASC API キー + Xcode 自動署名で ad-hoc IPA を作る
-# (新規 UDID が Apple Portal に登録済みなら profile はビルド毎に自動更新される)。
+# iOS は equus-anatomy と同じ match 方式: ritmo-inc/apple-certificate (master) から
+# ad-hoc 証明書/profile を取り込み、gym で手動署名 IPA を作る。
+# (新規 App ID/profile は match が ASC API 経由で作成・storage へ push する)
 
 on:
   push:
@@ -120,71 +121,42 @@ jobs:
           xcodegen generate
           ls CalendarAlarm.xcodeproj
 
-      - name: Write App Store Connect API key
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Install fastlane
+        run: gem install fastlane --no-document
+
+      - name: Write signing material
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          MATCH_DEPLOY_KEY_B64: ${{ secrets.MATCH_DEPLOY_KEY_B64 }}
         run: |
+          set -e
           mkdir -p ~/private_keys
           printf '%s' "$ASC_KEY_P8" > "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
           chmod 600 "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          # match が ritmo-inc/apple-certificate (master) を clone する用の
+          # deploy key。read_write 権限あり（新規 profile の push に必要）
+          echo "$MATCH_DEPLOY_KEY_B64" | base64 -d > /tmp/match_deploy_key
+          chmod 600 /tmp/match_deploy_key
+          # match の git clone がこの鍵を使うよう ssh config に固定
+          mkdir -p ~/.ssh
+          printf 'Host github.com\n  IdentityFile /tmp/match_deploy_key\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
 
-      - name: Pre-resolve provisioning profiles
+      - name: Build IPA (match + gym, ad-hoc 手動署名)
         env:
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
           set -e
-          KEY="$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
-          # WHY: 自動署名が portal に作った profile の .mobileprovision 実体が
-          # archive 中にローカルへ降りない既知の競合がある（"Build input file
-          # cannot be found" になる）。先に素の build を走らせて署名解決と
-          # profile ダウンロードを確定させておくと archive が安定する。
-          xcodebuild -project iosApp/CalendarAlarm.xcodeproj \
-            -scheme iosApp \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            build
-
-      - name: Archive (ad-hoc, 自動署名)
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          set -e
-          KEY="$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
           # CFBundleVersion は run number で自動採番（FAD の新旧判別のため）
-          xcodebuild -project iosApp/CalendarAlarm.xcodeproj \
-            -scheme iosApp \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath build/ios/iosApp.xcarchive \
-            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            archive
-
-      - name: Export IPA
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          set -e
-          KEY="$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
-          xcodebuild -exportArchive \
-            -archivePath build/ios/iosApp.xcarchive \
-            -exportPath build/ios \
-            -exportOptionsPlist iosApp/exportOptions-fad.plist \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          fastlane fad build_number:"${{ github.run_number }}"
           ls -la build/ios/*.ipa
 
       - name: Distribute to Firebase App Distribution
