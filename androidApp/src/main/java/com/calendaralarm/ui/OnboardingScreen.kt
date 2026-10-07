@@ -107,8 +107,7 @@ fun OnboardingScreen(
             Spacer(Modifier.height(16.dp))
             Text("Calendar Alarm", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "カレンダーの予定を「絶対に見逃さない」アラームで鳴らすアプリです。" +
-                    "初回だけ、確実に鳴らすための権限を設定します。",
+                "カレンダーの予定をアラームで鳴らす。初回だけ権限を設定する。",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
@@ -163,7 +162,7 @@ fun OnboardingScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("権限なしで始める (あとで設定タブから許可できます)")
+                Text("権限なしで始める")
             }
         }
     }

@@ -19,9 +19,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.WbCloudy
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -100,9 +103,8 @@ fun AgendaScreen(repository: AlarmRepository) {
 
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
         ) {
-            Text("今後2週間の予定", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             IconButton(onClick = {
                 SyncWorker.enqueueNow(context)
                 refreshKey++
@@ -118,13 +120,14 @@ fun AgendaScreen(repository: AlarmRepository) {
             }
             list.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("今後2週間に予定はありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "カレンダー権限やカレンダー選択は「設定」タブで確認できます",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Icon(
+                        Icons.Default.DateRange,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(40.dp),
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Text("予定なし", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             else -> AgendaList(
@@ -190,18 +193,11 @@ private fun NextAlarmBanner(title: String, triggerAtMillis: Long) {
                 )
             }
             Spacer(Modifier.width(10.dp))
-            Column {
-                Text(
-                    "次のアラーム",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
-                )
-                Text(
-                    "$time  $title",
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    style = MaterialTheme.typography.titleMedium,
-                )
-            }
+            Text(
+                "$time  $title",
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                style = MaterialTheme.typography.titleMedium,
+            )
         }
     }
 }
@@ -381,11 +377,21 @@ private fun EventDetailSheet(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (ev.location.isNotBlank()) {
-            Text(
-                "場所: ${ev.location}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.LocationOn,
+                    contentDescription = "場所",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    ev.location,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         if (ev.description.isNotBlank()) {
             Spacer(Modifier.height(6.dp))
@@ -401,16 +407,28 @@ private fun EventDetailSheet(
             val day = eventDate(ev)
             fc.firstOrNull { it.date == day }?.let { f ->
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "当日の天気: ${weatherText(f)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.WbCloudy,
+                        contentDescription = "当日の天気",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(weatherText(f), style = MaterialTheme.typography.bodyMedium)
+                }
             }
         }
 
         Spacer(Modifier.height(20.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("この予定でアラームを鳴らす", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+            Icon(
+                Icons.Default.Notifications,
+                contentDescription = "この予定でアラームを鳴らす",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.weight(1f))
             Switch(
                 checked = !muted,
                 onCheckedChange = { on ->
@@ -421,8 +439,6 @@ private fun EventDetailSheet(
         }
         if (!muted) {
             Spacer(Modifier.height(8.dp))
-            Text("鳴らすタイミング", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(6.dp))
             val options = listOf(0 to "開始時", 5 to "5分前", 10 to "10分前", 15 to "15分前", 30 to "30分前", 60 to "1時間前")
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 options.take(3).forEachIndexed { i, (v, label) ->
@@ -449,10 +465,8 @@ private fun EventDetailSheet(
                     ) { Text(label) }
                 }
             }
-            // 追加リマインダー: メイン以外のタイミングでも鳴らす
+            // 追加リマインダー: 「+」付きチップ = その時刻にも鳴らす
             Spacer(Modifier.height(10.dp))
-            Text("追加の通知 (複数可)", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                 options.filter { it.first != minutes }.forEach { (v, label) ->
                     FilterChip(
@@ -461,7 +475,7 @@ private fun EventDetailSheet(
                             extras = if (v in extras) extras - v else (extras + v).sorted()
                             onOverride(false, minutes, extras)
                         },
-                        label = { Text(label) },
+                        label = { Text("+$label") },
                         modifier = Modifier.padding(end = 6.dp),
                     )
                 }
@@ -470,7 +484,7 @@ private fun EventDetailSheet(
         if (item.hasOverride) {
             Spacer(Modifier.height(12.dp))
             TextButton(onClick = onClearOverride) {
-                Text("個別設定を解除してカレンダー既定に戻す")
+                Text("既定に戻す")
             }
         }
     }

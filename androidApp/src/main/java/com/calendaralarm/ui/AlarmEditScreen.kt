@@ -18,6 +18,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.EventBusy
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Snooze
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
@@ -157,14 +161,21 @@ fun AlarmEditScreen(
             OutlinedTextField(
                 value = label,
                 onValueChange = { label = it },
-                label = { Text("ラベル (例: 出社)") },
+                label = { Text("ラベル") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(16.dp))
 
             // 曜日繰り返し
-            Text("繰り返し", Modifier.fillMaxWidth(), style = MaterialTheme.typography.labelLarge)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Repeat,
+                    contentDescription = "繰り返し",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(20.dp),
+                )
+            }
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 val order = listOf(
@@ -180,20 +191,18 @@ fun AlarmEditScreen(
                     )
                 }
             }
-            Text(
-                if (days.isEmpty()) "未選択 = 1回だけ鳴ります" else "毎週鳴ります",
-                Modifier.fillMaxWidth().padding(top = 4.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
             Spacer(Modifier.height(16.dp))
             // 休止日 (例外)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("鳴らない日 (休止日)", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-                TextButton(onClick = { showDatePicker = true }) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Text("追加")
+                Icon(
+                    Icons.Default.EventBusy,
+                    contentDescription = "鳴らない日",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(20.dp),
+                )
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = { showDatePicker = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "休止日を追加")
                 }
             }
             if (exceptions.isNotEmpty()) {
@@ -214,7 +223,13 @@ fun AlarmEditScreen(
             Spacer(Modifier.height(16.dp))
             // スヌーズ
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("スヌーズ", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                Icon(
+                    Icons.Default.Snooze,
+                    contentDescription = "スヌーズ",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(20.dp),
+                )
+                Spacer(Modifier.weight(1f))
                 listOf(5, 10, 15).forEach { m ->
                     FilterChip(
                         selected = snooze == m,
@@ -227,14 +242,36 @@ fun AlarmEditScreen(
 
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("アラーム音", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-                TextButton(onClick = {
+                Icon(
+                    Icons.Default.MusicNote,
+                    contentDescription = "アラーム音",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(20.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    if (soundUri == null) "標準" else "選択中",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                if (soundUri != null) {
+                    IconButton(onClick = { soundUri = null }) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "標準に戻す",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                IconButton(onClick = {
                     soundPicker.launch(arrayOf("audio/*"))
                 }) {
-                    Text(if (soundUri == null) "端末の標準音" else "選択済みの音")
-                }
-                if (soundUri != null) {
-                    TextButton(onClick = { soundUri = null }) { Text("標準に戻す") }
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "音を選ぶ",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
 
