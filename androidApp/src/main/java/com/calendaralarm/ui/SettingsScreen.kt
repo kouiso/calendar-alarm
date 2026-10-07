@@ -35,7 +35,7 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Snooze
 import androidx.compose.material.icons.filled.VerifiedUser
-import androidx.compose.material.icons.filled.WbCloudy
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -129,7 +129,7 @@ fun SettingsScreen(
                         }
                     }
                     // 天気
-                    IconSettingRow(Icons.Default.WbCloudy) {
+                    IconSettingRow(Icons.Default.WbSunny) {
                         Spacer(Modifier.weight(1f))
                         Switch(
                             checked = prefs?.weatherEnabled ?: true,

@@ -200,6 +200,12 @@ fun AlarmEditScreen(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.width(20.dp),
                 )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "休止日",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = { showDatePicker = true }) {
                     Icon(Icons.Default.Add, contentDescription = "休止日を追加")
