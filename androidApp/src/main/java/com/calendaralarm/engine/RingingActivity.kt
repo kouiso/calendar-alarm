@@ -28,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -37,6 +38,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
+import com.calendaralarm.shared.model.CurrentWeather
+import com.calendaralarm.ui.WeatherBackdrop
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
 import kotlinx.coroutines.flow.map
 import java.text.SimpleDateFormat
@@ -59,7 +62,8 @@ class RingingActivity : ComponentActivity() {
         instanceIdState.value = intent.getStringExtra(EXTRA_INSTANCE_ID)
 
         setContent {
-            CalendarAlarmTheme {
+            val settings by app.container.settings.flow.collectAsState(initial = null)
+            CalendarAlarmTheme(themeId = settings?.themeId ?: "default") {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val instance by app.container.repository
                         .instanceFlow(instanceIdState.value ?: "")
@@ -68,7 +72,19 @@ class RingingActivity : ComponentActivity() {
                     val presets by app.container.settings.flow
                         .map { it.snoozePresets }
                         .collectAsState(initial = listOf(instance?.snoozeMinutes ?: 10))
+                    // 鳴動画面の天気演出: 地点設定がある時だけ引く。
+                    // 鳴動画面でネットが遅くても鳴動自体を待たせないよう非同期読み。
+                    var weather by androidx.compose.runtime.remember {
+                        androidx.compose.runtime.mutableStateOf<CurrentWeather?>(null)
+                    }
+                    androidx.compose.runtime.LaunchedEffect(settings?.weatherLocation) {
+                        val loc = settings?.weatherLocation.orEmpty()
+                        if (settings?.weatherOnAlarmScreen == true && loc.isNotBlank()) {
+                            weather = app.container.weather.nowForLocation(loc)?.current
+                        }
+                    }
                     RingingScreen(
+                        weather = weather,
                         title = instance?.title ?: "アラーム",
                         triggerAtMillis = instance?.triggerAtMillis ?: System.currentTimeMillis(),
                         snoozeMinutes = instance?.snoozeMinutes ?: 10,
@@ -135,19 +151,24 @@ private fun RingingScreen(
     triggerAtMillis: Long,
     snoozeMinutes: Int,
     snoozePresets: List<Int>,
+    weather: CurrentWeather?,
     onDismiss: () -> Unit,
     onSnooze: () -> Unit,
     onSnoozeAt: (Int) -> Unit,
 ) {
     val time = SimpleDateFormat("H:mm", Locale.getDefault()).format(Date(triggerAtMillis))
     // 鳴動画面はテーマに依らず常時ダーク: 朝の暗い部屋で眩しくしない+集中させる
-    Box(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(
-                listOf(Color(0xFF1B1B3A), Color(0xFF0B0B12)),
-            ),
-        ),
-    ) {
+    Box(Modifier.fillMaxSize()) {
+        // 天気が取れていればアニメ背景、未取得/未設定なら従来のグラデ
+        if (weather != null) {
+            WeatherBackdrop(weatherCode = weather.weatherCode, isDay = weather.isDay)
+        } else {
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf(Color(0xFF1B1B3A), Color(0xFF0B0B12))),
+                ),
+            )
+        }
         Column(
             modifier = Modifier.fillMaxSize().padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// 設定タブ: Android 版のアイコン主導UIと同構成。
 /// 見出し・説明文なし — [アイコン + チップ/スイッチ] の行だけ。
@@ -10,6 +11,8 @@ struct SettingsView: View {
     @State private var showLog = false
     @State private var showAccountHelp = false
     @State private var showCodes = false
+    @State private var photoItem: PhotosPickerItem? = nil
+    @State private var weatherLocDraft = ""
 
     private let actionOptions: [(EventAction, String)] =
         [(.alarm, "アラーム"), (.notify, "通知"), (.mute, "OFF")]
@@ -52,6 +55,92 @@ struct SettingsView: View {
                             }
                         }
                     }
+
+                    // 外観カード: テーマ10種 + 背景画像 + 天気地点
+                    Card {
+                        VStack(spacing: 14) {
+                            // テーマ (10種の色スウォッチ)
+                            IconRow("paintpalette.fill") {
+                                ScrollView(.horizontal) {
+                                    HStack(spacing: 10) {
+                                        ForEach(AppPalette.allCases, id: \.self) { p in
+                                            let sel = (store.state.themeId == "default" ? .indigo : AppPalette.byId(store.state.themeId)) == p
+                                            Button { store.setThemeId(p == .indigo ? "default" : p.rawValue) } label: {
+                                                VStack(spacing: 3) {
+                                                    Circle()
+                                                        .fill(p.accent)
+                                                        .frame(width: 26, height: 26)
+                                                        .overlay {
+                                                            if sel {
+                                                                Image(systemName: "checkmark")
+                                                                    .font(.system(size: 11, weight: .bold))
+                                                                    .foregroundStyle(.white)
+                                                            }
+                                                        }
+                                                    Text(p.label)
+                                                        .font(NightTheme.font(9))
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                }
+                                .scrollIndicators(.hidden)
+                            }
+                            // カスタム背景
+                            IconRow("photo.fill") {
+                                PhotosPicker(
+                                    selection: $photoItem,
+                                    matching: .images,
+                                    photoLibrary: .shared()
+                                ) {
+                                    Image(systemName: "ellipsis")
+                                        .font(.system(size: 16)).foregroundStyle(NightTheme.indigo)
+                                }
+                                .onChange(of: photoItem) { _, item in
+                                    Task {
+                                        if let data = try? await item?.loadTransferable(type: Data.self) {
+                                            store.setCustomBackground(data: data)
+                                        }
+                                    }
+                                }
+                                if store.state.hasCustomBackground {
+                                    Button { store.setCustomBackground(data: nil) } label: {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 13)).foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                            }
+                            // 天気地点 (空=天気UI非表示) + 表示先
+                            IconRow("location.fill") {
+                                TextField("地点", text: $weatherLocDraft)
+                                    .font(NightTheme.font(14))
+                                    .textFieldStyle(.roundedBorder)
+                                Button {
+                                    store.setWeatherLocation(weatherLocDraft)
+                                } label: {
+                                    Text("保存").font(NightTheme.font(13)).foregroundStyle(NightTheme.indigo)
+                                }
+                            }
+                            if !store.state.weatherLocation.isEmpty {
+                                IconRow("rectangle.topthird.inset.filled") {
+                                    Text("ヘッダー").font(NightTheme.font(13)).foregroundStyle(.secondary)
+                                    Spacer()
+                                    Toggle("", isOn: Binding(get: { store.state.weatherHeaderEnabled },
+                                                              set: { store.setWeatherHeaderEnabled($0) })).labelsHidden()
+                                }
+                                IconRow("alarm.fill") {
+                                    Text("鳴動画面").font(NightTheme.font(13)).foregroundStyle(.secondary)
+                                    Spacer()
+                                    Toggle("", isOn: Binding(get: { store.state.weatherOnAlarmScreen },
+                                                              set: { store.setWeatherOnAlarmScreen($0) })).labelsHidden()
+                                }
+                            }
+                        }
+                    }
+                    .onAppear { weatherLocDraft = store.state.weatherLocation }
 
                     // 予定ルールカード (既定アクション/タイトルコード/招待フィルタ/リマインダー取込)
                     Card {
@@ -226,6 +315,18 @@ struct SettingsView: View {
                         }
                         if missingPerms.contains("alarm") {
                             permButton("アラーム", "bell.badge")
+                        }
+                        // 鳴らない時の最終確認: 10秒後に実際に鳴らして経路全体を検証
+                        Button {
+                            Task {
+                                await engine.scheduleTimer(durationMillis: 10_000, label: "テスト鳴動")
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "bell.and.waves.left.and.right").foregroundStyle(NightTheme.indigo)
+                                Text("10秒後に鳴動テスト").font(NightTheme.font(13))
+                                Spacer()
+                            }
                         }
                     }
                 }

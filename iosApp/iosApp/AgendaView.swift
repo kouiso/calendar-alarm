@@ -6,6 +6,7 @@ struct AgendaView: View {
     @EnvironmentObject var store: Store
     @State private var selected: DisplayEvent?
     @State private var weatherByLoc: [String: [WeatherService.Forecast]] = [:]
+    @State private var nowForecast: WeatherService.NowForecast? = nil
     @State private var viewMode: AgendaViewMode = .list
     @State private var searchText = ""
     @State private var searchOpen = false
@@ -17,6 +18,10 @@ struct AgendaView: View {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     if let next = nextAlarm {
                         NextAlarmBanner(instance: next)
+                    }
+                    // ヘッダー天気 (元アプリ: 現在気温+時間別予報)。地点設定がある時だけ。
+                    if let nf = nowForecast {
+                        WeatherHeaderRow(forecast: nf)
                     }
                     switch viewMode {
                     case .list:
@@ -156,12 +161,54 @@ struct AgendaView: View {
     private func refreshWeather() async {
         guard store.state.weatherEnabled else { return }
         let svc = WeatherService()
+        // ヘッダー用 現在+時間別
+        let loc = store.state.weatherLocation
+        if store.state.weatherHeaderEnabled && !loc.isEmpty {
+            nowForecast = await svc.now(for: loc, hours: 9)
+        } else {
+            nowForecast = nil
+        }
         let locs = Set(displayEvents.map { $0.event.location }.filter { !$0.isEmpty })
         for loc in locs {
             if let f = await svc.forecast(for: loc) {
                 weatherByLoc[loc] = f
             }
         }
+    }
+}
+
+/// 現在気温 + 時間別チップの1行 (Android WeatherHeaderRow と同等)。
+struct WeatherHeaderRow: View {
+    let forecast: WeatherService.NowForecast
+    private static let hourFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "H時"; return f
+    }()
+    private static let isoFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd'T'HH:mm"; return f
+    }()
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 14) {
+                Label(
+                    "\(Int(forecast.current.temperature))°",
+                    systemImage: WeatherService.icon(forecast.current.weatherCode)
+                )
+                .font(NightTheme.font(14, weight: .medium))
+                ForEach(forecast.hourly.prefix(9), id: \.time) { h in
+                    let hr = Self.isoFmt.date(from: h.time).map { Self.hourFmt.string(from: $0) } ?? ""
+                    HStack(spacing: 4) {
+                        Text(hr)
+                        Image(systemName: WeatherService.icon(h.weatherCode))
+                        Text("\(Int(h.temperature))°")
+                    }
+                    .font(NightTheme.font(12))
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        .scrollIndicators(.hidden)
     }
 }
 

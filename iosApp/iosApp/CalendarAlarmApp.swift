@@ -72,16 +72,27 @@ struct RootView: View {
     }
 
     private var mainTabs: some View {
-        TabView {
-            AgendaView()
-                .tabItem { Label("予定", systemImage: "calendar") }
-            AlarmsView()
-                .tabItem { Label("アラーム", systemImage: "alarm") }
-            TimerView()
-                .tabItem { Label("タイマー", systemImage: "timer") }
-            SettingsView()
-                .tabItem { Label("設定", systemImage: "gearshape") }
+        ZStack {
+            // カスタム背景 (元アプリの背景画像設定)
+            if store.state.hasCustomBackground,
+               let ui = UIImage(contentsOfFile: Store.backgroundImageURL.path) {
+                Image(uiImage: ui)
+                    .resizable().scaledToFill()
+                    .ignoresSafeArea()
+                Color(uiColor: .systemBackground).opacity(0.72).ignoresSafeArea()
+            }
+            TabView {
+                AgendaView()
+                    .tabItem { Label("予定", systemImage: "calendar") }
+                AlarmsView()
+                    .tabItem { Label("アラーム", systemImage: "alarm") }
+                TimerView()
+                    .tabItem { Label("タイマー", systemImage: "timer") }
+                SettingsView()
+                    .tabItem { Label("設定", systemImage: "gearshape") }
+            }
+            .scrollContentBackground(.hidden)
         }
-        .tint(NightTheme.indigo)
+        .tint(AppPalette.byId(store.state.themeId).accent)
     }
 }

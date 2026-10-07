@@ -1,6 +1,9 @@
 package com.calendaralarm.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,14 +14,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.data.AlarmRepository
+import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.model.AlarmKind
 import kotlinx.coroutines.delay
@@ -56,7 +64,7 @@ import kotlin.math.sin
  * タイマーの鳴動はアラームと同じ経路 = 止めるまで鳴る。
  */
 @Composable
-fun TimerScreen(repository: AlarmRepository) {
+fun TimerScreen(repository: AlarmRepository, settings: SettingsRepository) {
     var tab by remember { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize()) {
         TabRow(
@@ -67,7 +75,7 @@ fun TimerScreen(repository: AlarmRepository) {
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("ストップウォッチ") })
         }
         when (tab) {
-            0 -> TimerPane(repository)
+            0 -> TimerPane(repository, settings)
             else -> StopwatchPane()
         }
     }
@@ -114,13 +122,16 @@ private fun ClockRing(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun TimerPane(repository: AlarmRepository) {
+private fun TimerPane(repository: AlarmRepository, settings: SettingsRepository) {
     val scope = rememberCoroutineScope()
     val pending by repository.pendingFlow().collectAsState(initial = emptyList())
     val timer = pending.firstOrNull { it.kind == AlarmKind.TIMER }
+    val prefs by settings.flow.collectAsState(initial = null)
 
     var minutesInput by remember { mutableStateOf("5") }
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var showAddPreset by remember { mutableStateOf(false) }
+    var deletePreset by remember { mutableStateOf<SettingsRepository.TimerPreset?>(null) }
 
     // タイマーが無いのに500ms刻みで再コンポーズし続けないようガード
     LaunchedEffect(timer?.id) {
@@ -171,14 +182,58 @@ private fun TimerPane(repository: AlarmRepository) {
                 )
             }
             Spacer(Modifier.height(28.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(1, 3, 5, 10, 30, 60).forEach { m ->
-                    FilterChip(
-                        selected = minutesInput == m.toString(),
-                        onClick = { minutesInput = m.toString() },
-                        label = { Text("$m") },
+            // 定型タイマープリセット (元アプリ: ゆで卵/パスタ等)。タップで分数セット、
+            // 長押しで削除、「＋」で現在の分数を名前付き保存。
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                prefs?.timerPresets?.forEach { p ->
+                    PresetChip(
+                        label = "${p.label} ${p.minutes}分",
+                        selected = minutesInput == p.minutes.toString(),
+                        onClick = { minutesInput = p.minutes.toString() },
+                        onLongClick = { deletePreset = p },
                     )
                 }
+                PresetChip(
+                    label = "＋",
+                    selected = false,
+                    onClick = { showAddPreset = true },
+                )
+            }
+            if (showAddPreset) {
+                AddPresetDialog(
+                    initialMinutes = minutesInput.toIntOrNull() ?: 5,
+                    onDismiss = { showAddPreset = false },
+                    onSave = { label, minutes ->
+                        scope.launch {
+                            val cur = prefs?.timerPresets ?: emptyList()
+                            settings.setTimerPresets(
+                                cur + SettingsRepository.TimerPreset(label, minutes),
+                            )
+                        }
+                        showAddPreset = false
+                    },
+                )
+            }
+            deletePreset?.let { target ->
+                AlertDialog(
+                    onDismissRequest = { deletePreset = null },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            scope.launch {
+                                val cur = prefs?.timerPresets ?: emptyList()
+                                settings.setTimerPresets(cur - target)
+                            }
+                            deletePreset = null
+                        }) { Text("削除") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { deletePreset = null }) { Text("戻る") }
+                    },
+                    text = { Text("「${target.label}」を削除しますか？") },
+                )
             }
             Spacer(Modifier.height(28.dp))
             Button(
@@ -265,6 +320,78 @@ private fun StopwatchPane() {
             )
         }
     }
+}
+
+/** プリセット用チップ (長押し対応のため FilterChip ではなく自前)。 */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PresetChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer
+        else MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick,
+        ),
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** 現在の分数を名前付きプリセットとして保存する小さなダイアログ。 */
+@Composable
+private fun AddPresetDialog(
+    initialMinutes: Int,
+    onDismiss: () -> Unit,
+    onSave: (String, Int) -> Unit,
+) {
+    var label by remember { mutableStateOf("") }
+    var minutes by remember { mutableStateOf(initialMinutes.toString()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val m = minutes.toIntOrNull() ?: return@TextButton
+                    if (m <= 0 || label.isBlank()) return@TextButton
+                    onSave(label.trim(), m)
+                },
+            ) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("戻る") } },
+        title = { Text("プリセットを追加") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it.take(12) },
+                    label = { Text("名前") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = minutes,
+                    onValueChange = { minutes = it.filter { c -> c.isDigit() }.take(3) },
+                    label = { Text("分数") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+    )
 }
 
 private fun formatRemaining(ms: Long): String {

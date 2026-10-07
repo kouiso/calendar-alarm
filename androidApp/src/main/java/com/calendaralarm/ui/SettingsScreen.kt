@@ -10,6 +10,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -79,11 +82,16 @@ import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.db.CalendarPrefEntity
 import com.calendaralarm.data.db.AuditLogEntity
+import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.InviteStatus
 import com.calendaralarm.shared.model.TitleCodeSettings
+import com.calendaralarm.ui.theme.AppPalette
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -155,7 +163,49 @@ fun SettingsScreen(
                             onCheckedChange = { scope.launch { settings.setWeatherEnabled(it) } },
                         )
                     }
+                    // 天気の地点 (空ならヘッダー/鳴動の天気を出さない)
+                    IconSettingRow(Icons.Default.WbSunny) {
+                        var loc by remember(prefs?.weatherLocation) {
+                            mutableStateOf(prefs?.weatherLocation.orEmpty())
+                        }
+                        OutlinedTextField(
+                            value = loc,
+                            onValueChange = { loc = it },
+                            placeholder = { Text("地点 (例: 東京)") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(
+                            onClick = { scope.launch { settings.setWeatherLocation(loc) } },
+                        ) { Text("保存") }
+                    }
+                    // ヘッダー予報
+                    IconSettingRow(Icons.Default.WbSunny) {
+                        Text("ヘッダー", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.weight(1f))
+                        Switch(
+                            checked = prefs?.weatherHeaderEnabled ?: true,
+                            onCheckedChange = { scope.launch { settings.setWeatherHeaderEnabled(it) } },
+                        )
+                    }
+                    // 鳴動画面の天気
+                    IconSettingRow(Icons.Default.WbSunny) {
+                        Text("鳴動画面", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.weight(1f))
+                        Switch(
+                            checked = prefs?.weatherOnAlarmScreen ?: true,
+                            onCheckedChange = { scope.launch { settings.setWeatherOnAlarmScreen(it) } },
+                        )
+                    }
                 }
+            }
+        }
+
+        // ---- 外観: テーマ10種 + カスタム背景 ----
+        item { Spacer(Modifier.height(12.dp)) }
+        item {
+            prefs?.let { p ->
+                AppearanceCard(p, settings, scope, context)
             }
         }
 
@@ -274,7 +324,7 @@ fun SettingsScreen(
 
         // ---- 権限 ----
         item { Spacer(Modifier.height(16.dp)) }
-        item { PermissionHealthCard(context) }
+        item { PermissionHealthCard(context, repository) }
 
         // ---- 監査ログ ----
         item { Spacer(Modifier.height(16.dp)) }
@@ -344,7 +394,7 @@ private fun IconSettingRow(icon: ImageVector, content: @Composable () -> Unit) {
 
 /** 権限状態。既定はアイコン+結果だけの1行 — 欠落がある時だけ自動展開して修復導線を出す。 */
 @Composable
-private fun PermissionHealthCard(context: Context) {
+private fun PermissionHealthCard(context: Context, repository: AlarmRepository) {
     val activity = context as? Activity
 
     val notifOk = Build.VERSION.SDK_INT < 33 ||
@@ -437,6 +487,22 @@ private fun PermissionHealthCard(context: Context) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp),
                         )
+                    }
+                    // 鳴らない時の最終確認: 実際に10秒後に鳴らして経路全体を検証する
+                    val testScope = rememberCoroutineScope()
+                    TextButton(
+                        onClick = {
+                            testScope.launch {
+                                repository.scheduleAdhoc(
+                                    AlarmExpander.timerInstance(
+                                        durationMillis = 10_000L,
+                                        now = Clock.System.now(),
+                                    ).copy(title = "テスト鳴動"),
+                                )
+                            }
+                        },
+                    ) {
+                        Text("10秒後に鳴動テスト", color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
@@ -901,6 +967,110 @@ private fun RingingCard(
                     checked = p.muteAll,
                     onCheckedChange = { scope.launch { settings.setMuteAll(it) } },
                 )
+            }
+        }
+    }
+}
+
+/** テーマ10種 + カスタム背景画像。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AppearanceCard(
+    p: SettingsRepository.Settings,
+    settings: SettingsRepository,
+    scope: kotlinx.coroutines.CoroutineScope,
+    context: Context,
+) {
+    // 画像はアプリ領域にコピーして file:// で保持する (URI権限の寿命問題を避ける)
+    val pickImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val dest = java.io.File(context.filesDir, "custom_background.jpg")
+                val ok = withContext(Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            dest.outputStream().use { input.copyTo(it) }
+                            true
+                        } ?: false
+                    }.getOrDefault(false)
+                }
+                if (ok) settings.setBackgroundImageUri("file://${dest.absolutePath}")
+            }
+        }
+    }
+
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+            // テーマスウォッチ (10種): 各パレットの primary を丸で表示
+            FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                AppPalette.entries.forEach { palette ->
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clickable { scope.launch { settings.setThemeId(palette.id) } }
+                            .padding(6.dp),
+                    ) {
+                        Box(
+                            Modifier
+                                .size(34.dp)
+                                .background(
+                                    color = palette.light.primary,
+                                    shape = CircleShape,
+                                )
+                                .then(
+                                    if (p.themeId == palette.id || (p.themeId == "default" && palette == AppPalette.INDIGO)) {
+                                        Modifier.background(
+                                            Color.Transparent,
+                                            CircleShape,
+                                        )
+                                    } else Modifier,
+                                ),
+                        ) {
+                            if (p.themeId == palette.id || (p.themeId == "default" && palette == AppPalette.INDIGO)) {
+                                Icon(
+                                    Icons.Default.VerifiedUser,
+                                    contentDescription = "選択中",
+                                    tint = Color.White,
+                                    modifier = Modifier.align(Alignment.Center).size(16.dp),
+                                )
+                            }
+                        }
+                        Text(
+                            palette.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            // カスタム背景
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (p.backgroundImageUri != null) "背景: 設定済み" else "背景画像",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = {
+                    pickImage.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                }) { Text("選ぶ") }
+                if (p.backgroundImageUri != null) {
+                    TextButton(onClick = {
+                        scope.launch { settings.setBackgroundImageUri(null) }
+                    }) { Text("削除") }
+                }
             }
         }
     }

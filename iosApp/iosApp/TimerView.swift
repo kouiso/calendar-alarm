@@ -33,6 +33,8 @@ struct TimerFace: View {
     @EnvironmentObject var store: Store
     @State private var minutes = 5
     @State private var label = ""
+    @State private var showAddPreset = false
+    @State private var newPresetLabel = ""
     @State private var running: AlarmInstanceDTO? = nil
     @State private var remaining: Int = 0
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -61,6 +63,56 @@ struct TimerFace: View {
             .frame(width: 260, height: 260)
 
             if running == nil {
+                // 定型タイマープリセット (元アプリの料理/仮眠チップ)。長押しで削除。
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(store.state.timerPresets.enumerated()), id: \.offset) { _, p in
+                            Button {
+                                minutes = p.minutes
+                                label = p.label
+                            } label: {
+                                Text("\(p.label) \(p.minutes)分")
+                                    .font(NightTheme.font(13))
+                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                    .background(
+                                        minutes == p.minutes ? NightTheme.indigo.opacity(0.18) : Color(uiColor: .tertiarySystemGroupedBackground),
+                                        in: Capsule()
+                                    )
+                            }
+                            .contextMenu {
+                                Button("削除", role: .destructive) {
+                                    store.setTimerPresets(store.state.timerPresets.filter { $0 != p })
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(minutes == p.minutes ? NightTheme.indigo : .primary)
+                        }
+                        Button { showAddPreset = true } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 13, weight: .medium))
+                                .padding(10)
+                                .background(Color(uiColor: .tertiarySystemGroupedBackground), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal)
+                }
+                .scrollIndicators(.hidden)
+                .alert("プリセットを追加", isPresented: $showAddPreset) {
+                    TextField("名前", text: $newPresetLabel)
+                    Button("保存") {
+                        let l = newPresetLabel.trimmingCharacters(in: .whitespaces)
+                        if !l.isEmpty {
+                            store.setTimerPresets(
+                                store.state.timerPresets + [TimerPresetDTO(label: l, minutes: minutes)]
+                            )
+                        }
+                        newPresetLabel = ""
+                    }
+                    Button("戻る", role: .cancel) { newPresetLabel = "" }
+                } message: {
+                    Text("\(minutes)分のプリセット")
+                }
                 TextField("ラベル", text: $label)
                     .textFieldStyle(.roundedBorder).frame(width: 200)
             }

@@ -1,7 +1,10 @@
 package com.calendaralarm.shared.weather
 
+import com.calendaralarm.shared.model.CurrentWeather
 import com.calendaralarm.shared.model.DailyForecast
 import com.calendaralarm.shared.model.GeoPoint
+import com.calendaralarm.shared.model.HourlyWeather
+import com.calendaralarm.shared.model.NowForecast
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -9,6 +12,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.toInstant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -64,6 +68,55 @@ class WeatherApi(
         return forecast(point, days)
     }
 
+    /**
+     * 現在値 + 今後 hours 時間の時間別予報。ヘッダー予報と鳴動画面の
+     * 天気演出の両方がこれ1本で足りる。失敗時は null。
+     */
+    suspend fun now(point: GeoPoint, hours: Int = 12): NowForecast? {
+        val res = runCatching {
+            http.get("https://api.open-meteo.com/v1/forecast") {
+                parameter("latitude", point.latitude)
+                parameter("longitude", point.longitude)
+                parameter("current", "temperature_2m,weather_code,is_day")
+                parameter("hourly", "temperature_2m,weather_code,precipitation_probability")
+                parameter("timezone", "auto")
+                parameter("forecast_hours", hours)
+            }.body<NowResponse>()
+        }.getOrNull() ?: return null
+        val cur = res.current ?: return null
+        val hourly = res.hourly?.let { h ->
+            h.time.indices.mapNotNull { i ->
+                val epoch = runCatching {
+                    // "2026-10-04T14:00" を地点ローカル時刻として読む。
+                    // ヘッダー表示では時刻文字列しか使わないので UTC 近似で保持する。
+                    kotlinx.datetime.LocalDateTime.parse(h.time[i])
+                        .toInstant(kotlinx.datetime.TimeZone.UTC)
+                        .toEpochMilliseconds()
+                }.getOrNull() ?: return@mapNotNull null
+                HourlyWeather(
+                    epochMillis = epoch,
+                    weatherCode = h.weatherCode.getOrElse(i) { -1 },
+                    temperature = h.temperature.getOrElse(i) { Double.NaN },
+                    precipitationProbability = h.precipitationProbability?.getOrNull(i),
+                )
+            }
+        } ?: emptyList()
+        return NowForecast(
+            current = CurrentWeather(
+                weatherCode = cur.weatherCode,
+                temperature = cur.temperature,
+                isDay = cur.isDay != 0,
+            ),
+            hourly = hourly,
+        )
+    }
+
+    /** 場所文字列 → 現在+時間別予報。地点解決できなければ null。 */
+    suspend fun nowForLocation(location: String, hours: Int = 12): NowForecast? {
+        val point = geocode(location) ?: return null
+        return now(point, hours)
+    }
+
     @Serializable
     data class GeocodingResponse(
         val results: List<GeoResult>? = null,
@@ -80,6 +133,35 @@ class WeatherApi(
     data class ForecastResponse(
         val daily: Daily? = null,
     )
+
+    @Serializable
+    data class NowResponse(
+        val current: NowCurrent? = null,
+        val hourly: NowHourly? = null,
+    )
+
+    @Serializable
+    data class NowCurrent(
+        val temperature_2m: Double = Double.NaN,
+        val weather_code: Int = -1,
+        val is_day: Int = 1,
+    ) {
+        val temperature: Double get() = temperature_2m
+        val weatherCode: Int get() = weather_code
+        val isDay: Int get() = is_day
+    }
+
+    @Serializable
+    data class NowHourly(
+        val time: List<String> = emptyList(),
+        val temperature_2m: List<Double> = emptyList(),
+        val weather_code: List<Int> = emptyList(),
+        val precipitation_probability: List<Int?>? = null,
+    ) {
+        val temperature: List<Double> get() = temperature_2m
+        val weatherCode: List<Int> get() = weather_code
+        val precipitationProbability: List<Int?>? get() = precipitation_probability
+    }
 
     @Serializable
     data class Daily(

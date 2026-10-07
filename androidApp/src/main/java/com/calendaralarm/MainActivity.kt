@@ -15,11 +15,19 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -48,13 +56,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            CalendarAlarmTheme {
-                // recomposition 毎に Flow を作り直すと collectAsState が
-                // リセットされるため remember で固定する
-                val onboardedFlow = remember {
-                    app.container.settings.flow.map { it.onboardingDone }
-                }
-                val onboarded by onboardedFlow.collectAsState(initial = true)
+            // recomposition 毎に Flow を作り直すと collectAsState が
+            // リセットされるため remember で固定する
+            val themeIdFlow = remember { app.container.settings.flow.map { it.themeId } }
+            val themeId by themeIdFlow.collectAsState(initial = "default")
+            CalendarAlarmTheme(themeId = themeId) {
+                val bgFlow = remember { app.container.settings.flow.map { it.backgroundImageUri } }
+                val bgUri by bgFlow.collectAsState(initial = null)
+                AppBackground(bgUri) {
+                    // onboarded で既に設定済みの場合も flow は remember 必須
+                    val onboardedFlow = remember {
+                        app.container.settings.flow.map { it.onboardingDone }
+                    }
+                    val onboarded by onboardedFlow.collectAsState(initial = true)
 
                 // カレンダー権限はメイン画面の条件にしない。
                 // 無くてもタイマー・単発アラームは動く (resync が部分動作する設計)、
@@ -86,8 +100,47 @@ class MainActivity : ComponentActivity() {
                     }
                     MainScaffold(app.container.repository, app.container.settings)
                 }
+                }
             }
         }
+    }
+}
+
+/**
+ * カスタム背景画像。設定で選んだ画像を全画面の最背面に敷き、
+ * 読みやすさ優先でスクリム (薄暗い/薄明るいレイヤ) を被せる。
+ */
+@Composable
+private fun AppBackground(imageUri: String?, content: @Composable () -> Unit) {
+    val dark = isSystemInDarkTheme()
+    val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, imageUri) {
+        value = imageUri
+            ?.removePrefix("file://")
+            ?.let { path ->
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching {
+                        android.graphics.BitmapFactory.decodeFile(path)?.asImageBitmap()
+                    }.getOrNull()
+                }
+            }
+    }
+    Box(Modifier.fillMaxSize()) {
+        bitmap?.let { bmp ->
+            Image(
+                bitmap = bmp,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+            // 文字を潰さないよう常時スクリムを敷く
+            Box(
+                Modifier.fillMaxSize().background(
+                    if (dark) androidx.compose.ui.graphics.Color(0xD0101016)
+                    else androidx.compose.ui.graphics.Color(0xE8F6F6FA),
+                ),
+            )
+        }
+        content()
     }
 }
 
@@ -158,7 +211,7 @@ private fun MainScaffold(
                     onDone = { nav.popBackStack() },
                 )
             }
-            composable("timer") { TimerScreen(repository) }
+            composable("timer") { TimerScreen(repository, settings) }
             composable("settings") { SettingsScreen(repository, settings) }
         }
     }

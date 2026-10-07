@@ -116,6 +116,26 @@ struct EventOverrideDTO: Codable, Hashable {
     }
 }
 
+/// タイマープリセット (元アプリの定型タイマー)。
+struct TimerPresetDTO: Codable, Hashable {
+    var label: String
+    var minutes: Int
+}
+
+/// デフォルトの定型タイマー (Android DEFAULT_TIMER_PRESETS と同一)。
+enum TimerPresets {
+    static let defaults: [TimerPresetDTO] = [
+        .init(label: "ゆで卵", minutes: 5),
+        .init(label: "パスタ", minutes: 9),
+        .init(label: "紅茶", minutes: 4),
+        .init(label: "ピザ", minutes: 12),
+        .init(label: "仮眠", minutes: 20),
+        .init(label: "集中", minutes: 25),
+        // 元アプリの 90秒休憩を Android 同様 1分に切り捨てて保持
+        .init(label: "筋トレ休憩", minutes: 1),
+    ]
+}
+
 struct StandaloneAlarmDTO: Codable, Identifiable, Hashable {
     var id: Int64 = 0
     var enabled: Bool = true

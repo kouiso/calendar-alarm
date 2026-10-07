@@ -199,6 +199,18 @@ fun AgendaScreen(repository: AlarmRepository) {
             )
         }
 
+        // ヘッダー天気 (元アプリ: 現在気温+時間別予報)。地点設定がある時だけ出す。
+        val weatherLoc = settings?.weatherLocation.orEmpty()
+        var nowForecast by remember { mutableStateOf<com.calendaralarm.shared.model.NowForecast?>(null) }
+        LaunchedEffect(weatherLoc, settings?.weatherHeaderEnabled, refreshKey) {
+            nowForecast = if (settings?.weatherHeaderEnabled == true && weatherLoc.isNotBlank()) {
+                runCatching { app.container.weather.nowForLocation(weatherLoc, hours = 9) }.getOrNull()
+            } else {
+                null
+            }
+        }
+        nowForecast?.let { nf -> WeatherHeaderRow(nf) }
+
         val list = items
         val filtered = list?.let { l ->
             if (searchQuery.isBlank()) l else l.filter {
@@ -639,4 +651,52 @@ internal fun kotlinx.datetime.DayOfWeek.jaShort(): String = when (this) {
     kotlinx.datetime.DayOfWeek.THURSDAY -> "木"
     kotlinx.datetime.DayOfWeek.FRIDAY -> "金"
     kotlinx.datetime.DayOfWeek.SATURDAY -> "土"
+}
+
+/** WMO コード → 絵文字。アイコン依存を増やさず視認性優先。 */
+private fun weatherEmoji(code: Int): String = when (code) {
+    0 -> "☀️"
+    1 -> "🌤️"
+    2 -> "⛅"
+    3 -> "☁️"
+    45, 48 -> "🌫️"
+    51, 53, 55, 56, 57 -> "🌦️"
+    61, 63, 65, 66, 67, 80, 81, 82 -> "🌧️"
+    71, 73, 75, 77, 85, 86 -> "❄️"
+    95, 96, 99 -> "⛈️"
+    else -> "—"
+}
+
+/** 現在気温 + 時間別予報チップの1行 (元アプリのヘッダー予報に相当)。 */
+@Composable
+private fun WeatherHeaderRow(f: com.calendaralarm.shared.model.NowForecast) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "${weatherEmoji(f.current.weatherCode)} ${f.current.temperature.toInt()}°",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            WeatherApi.describe(f.current.weatherCode),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(16.dp))
+        val fmt = remember { SimpleDateFormat("H時", Locale.getDefault()) }
+        f.hourly.take(9).forEach { h ->
+            Text(
+                "${fmt.format(Date(h.epochMillis))} ${weatherEmoji(h.weatherCode)} ${h.temperature.toInt()}°",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 12.dp),
+            )
+        }
+    }
 }

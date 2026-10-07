@@ -202,6 +202,31 @@ data class GeoPoint(
     val longitude: Double,
 )
 
+/** 現在の天気 (ヘッダー/鳴動画面用)。 */
+@Serializable
+data class CurrentWeather(
+    val weatherCode: Int,
+    val temperature: Double,
+    /** 昼なら true。鳴動画面の背景演出で昼夜を分ける。 */
+    val isDay: Boolean,
+)
+
+/** 1時間分の予報 (ヘッダーの時間別予報チップ用)。 */
+@Serializable
+data class HourlyWeather(
+    val epochMillis: Long,
+    val weatherCode: Int,
+    val temperature: Double,
+    val precipitationProbability: Int?,
+)
+
+/** 現在+時間別予報の束。 */
+@Serializable
+data class NowForecast(
+    val current: CurrentWeather,
+    val hourly: List<HourlyWeather>,
+)
+
 /** Instant を延長してもコードを読みやすくするだけの小さなエイリアス。 */
 val Instant.isPast: Boolean
     get() = this < kotlinx.datetime.Clock.System.now()

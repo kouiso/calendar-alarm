@@ -20,6 +20,18 @@ final class Store: ObservableObject {
         var importEventReminders: Bool = false
         /// 全アラームの一括ミュート (通知・タイマーには効かない)
         var muteAll: Bool = false
+        /// テーマ id ("default"=インディゴ)
+        var themeId: String = "default"
+        /// カスタム背景画像を設定済みか (実体は Application Support/background.jpg 固定)
+        var hasCustomBackground: Bool = false
+        /// 天気の地点 (空=天気UI非表示)
+        var weatherLocation: String = ""
+        var weatherHeaderEnabled: Bool = true
+        var weatherOnAlarmScreen: Bool = true
+        var timerPresets: [TimerPresetDTO] = TimerPresets.defaults
+        /// OpenRouter APIキー (AI機能用)
+        var openRouterApiKey: String? = nil
+        var openRouterModel: String = "openai/gpt-4.1-mini"
         // calendar_prefs: calendarId -> AlarmRuleDTO
         var calendarRules: [String: AlarmRuleDTO] = [:]
         // event_overrides: instanceKey -> EventOverrideDTO
@@ -101,6 +113,29 @@ final class Store: ObservableObject {
     }
     func setImportEventReminders(_ v: Bool) { mutate { $0.importEventReminders = v } }
     func setMuteAll(_ v: Bool) { mutate { $0.muteAll = v } }
+    func setThemeId(_ v: String) { mutate { $0.themeId = v } }
+    func setWeatherLocation(_ v: String) { mutate { $0.weatherLocation = v.trimmingCharacters(in: .whitespacesAndNewlines) } }
+    func setWeatherHeaderEnabled(_ v: Bool) { mutate { $0.weatherHeaderEnabled = v } }
+    func setWeatherOnAlarmScreen(_ v: Bool) { mutate { $0.weatherOnAlarmScreen = v } }
+    func setTimerPresets(_ v: [TimerPresetDTO]) { mutate { $0.timerPresets = v } }
+    func setOpenRouterApiKey(_ v: String?) { mutate { $0.openRouterApiKey = v?.isEmpty == false ? v : nil } }
+    func setOpenRouterModel(_ v: String) { mutate { $0.openRouterModel = v } }
+
+    /// カスタム背景画像の保存先 (固定パス)。
+    static var backgroundImageURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("CalendarAlarm/background.jpg")
+    }
+
+    /// 背景画像を固定パスに保存 (PhotosPicker からの Data をそのまま書く)。
+    func setCustomBackground(data: Data?) {
+        if let data {
+            try? data.write(to: Store.backgroundImageURL, options: .atomic)
+        } else {
+            try? FileManager.default.removeItem(at: Store.backgroundImageURL)
+        }
+        mutate { $0.hasCustomBackground = (data != nil) }
+    }
 
     // MARK: - calendar prefs
 
@@ -234,6 +269,14 @@ extension Store.Persisted {
         inviteFilter = try c.decodeIfPresent(InviteFilter.self, forKey: .inviteFilter) ?? InviteFilter()
         importEventReminders = try c.decodeIfPresent(Bool.self, forKey: .importEventReminders) ?? false
         muteAll = try c.decodeIfPresent(Bool.self, forKey: .muteAll) ?? false
+        themeId = try c.decodeIfPresent(String.self, forKey: .themeId) ?? "default"
+        hasCustomBackground = try c.decodeIfPresent(Bool.self, forKey: .hasCustomBackground) ?? false
+        weatherLocation = try c.decodeIfPresent(String.self, forKey: .weatherLocation) ?? ""
+        weatherHeaderEnabled = try c.decodeIfPresent(Bool.self, forKey: .weatherHeaderEnabled) ?? true
+        weatherOnAlarmScreen = try c.decodeIfPresent(Bool.self, forKey: .weatherOnAlarmScreen) ?? true
+        timerPresets = try c.decodeIfPresent([TimerPresetDTO].self, forKey: .timerPresets) ?? TimerPresets.defaults
+        openRouterApiKey = try c.decodeIfPresent(String.self, forKey: .openRouterApiKey)
+        openRouterModel = try c.decodeIfPresent(String.self, forKey: .openRouterModel) ?? "openai/gpt-4.1-mini"
         calendarRules = try c.decodeIfPresent([String: AlarmRuleDTO].self, forKey: .calendarRules) ?? [:]
         overrides = try c.decodeIfPresent([String: EventOverrideDTO].self, forKey: .overrides) ?? [:]
         standaloneAlarms = try c.decodeIfPresent([StandaloneAlarmDTO].self, forKey: .standaloneAlarms) ?? []

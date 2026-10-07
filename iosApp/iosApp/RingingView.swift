@@ -6,6 +6,7 @@ struct RingingView: View {
     @EnvironmentObject var engine: Engine
     @EnvironmentObject var store: Store
     @State private var now = Date()
+    @State private var weather: WeatherService.NowForecast? = nil
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var current: AlarmInstanceDTO? {
@@ -14,9 +15,14 @@ struct RingingView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [NightTheme.nightBg, NightTheme.nightSurface],
-                           startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
+            if let w = weather {
+                // 天気演出 (元アプリの鳴動アニメ)
+                WeatherBackdropView(code: w.current.weatherCode, isDay: w.current.isDay)
+            } else {
+                LinearGradient(colors: [NightTheme.nightBg, NightTheme.nightSurface],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+            }
             VStack(spacing: 32) {
                 Spacer()
                 Text(now, format: .dateTime.hour().minute())
@@ -24,6 +30,14 @@ struct RingingView: View {
                     .foregroundStyle(NightTheme.onNight)
                     .onReceive(ticker) { now = $0 }
                 if let inst = current {
+                    if let w = weather {
+                        Label(
+                            "\(Int(w.current.temperature))°",
+                            systemImage: WeatherService.icon(w.current.weatherCode)
+                        )
+                        .font(NightTheme.font(14))
+                        .foregroundStyle(NightTheme.onNight.opacity(0.75))
+                    }
                     Text(inst.title)
                         .font(NightTheme.font(20)).foregroundStyle(NightTheme.onNight.opacity(0.8))
                     Spacer()
@@ -51,6 +65,12 @@ struct RingingView: View {
                     .padding(.bottom, 60)
                 }
             }
+        }
+        .task {
+            // 地点設定がある時だけ天気を取る (空=演出なし)
+            let loc = store.state.weatherLocation
+            guard store.state.weatherOnAlarmScreen, !loc.isEmpty else { return }
+            weather = await WeatherService().now(for: loc, hours: 1)
         }
     }
 }

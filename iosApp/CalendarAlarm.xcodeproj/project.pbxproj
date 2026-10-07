@@ -28,6 +28,7 @@
 		B419682EEBC47B0FA0D3144C /* AgendaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66A4F7800854676434D761F4 /* AgendaView.swift */; };
 		BD5D619B846CB9BA9C171212 /* TitleCodesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3A04452A7A85976807934D /* TitleCodesSheet.swift */; };
 		C81DC1220A1AA99DF92EE408 /* TimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */; };
+		C85633A926A38048ACF31244 /* WeatherBackdropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E77D9C74BAD6E368F79E4264 /* WeatherBackdropView.swift */; };
 		D00DDF3835BD77953502752A /* CalendarAlarmApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1664780F463A19E9DA0C56BA /* CalendarAlarmApp.swift */; };
 		D5FE40480C851F233EFBA4B6 /* plex_sans_jp_light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 93E52D4230819F38EC3DE33A /* plex_sans_jp_light.ttf */; };
 		FD5F5F9529EEDE44FE18F446 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4B1C1CFBE436D31467257B /* Models.swift */; };
@@ -80,6 +81,7 @@
 		DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAlarmWidget.swift; sourceTree = "<group>"; };
 		E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitReader.swift; sourceTree = "<group>"; };
 		E4F003771A83A79DB1D7C14D /* AlarmsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmsView.swift; sourceTree = "<group>"; };
+		E77D9C74BAD6E368F79E4264 /* WeatherBackdropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherBackdropView.swift; sourceTree = "<group>"; };
 		EB316460E096240BBFE8B475 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_medium.ttf; sourceTree = "<group>"; };
 		F4F8642EDA4CA9194F126132 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
@@ -136,6 +138,7 @@
 				C59894E1200D6FB530B33BED /* Theme.swift */,
 				A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */,
 				7A3A04452A7A85976807934D /* TitleCodesSheet.swift */,
+				E77D9C74BAD6E368F79E4264 /* WeatherBackdropView.swift */,
 				7384BC516B1FE4FB2F672E67 /* WeatherService.swift */,
 				292CEE1BCE2BA19DFEAD3CBA /* Fonts */,
 			);
@@ -296,6 +299,7 @@
 				70C15B080DE1D75F672A4741 /* Theme.swift in Sources */,
 				C81DC1220A1AA99DF92EE408 /* TimerView.swift in Sources */,
 				BD5D619B846CB9BA9C171212 /* TitleCodesSheet.swift in Sources */,
+				C85633A926A38048ACF31244 /* WeatherBackdropView.swift in Sources */,
 				78335F051083F14CA2C916EE /* WeatherService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

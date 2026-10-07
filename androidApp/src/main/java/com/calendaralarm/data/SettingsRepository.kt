@@ -60,6 +60,8 @@ class SettingsRepository(private val context: Context) {
         val weatherOnAlarmScreen: Boolean = true,
         /** 予定一覧ヘッダーに現在の天気を出すか。 */
         val weatherHeaderEnabled: Boolean = true,
+        /** 天気の地点 (地名)。空なら非表示にする (権限不要にするため現在地は取らない)。 */
+        val weatherLocation: String = "",
         /** 停止後に次のアラームを表示するか。 */
         val showNextAlarmAfterDismiss: Boolean = false,
         /** タイマープリセット。 */
@@ -106,6 +108,7 @@ class SettingsRepository(private val context: Context) {
             backgroundImageUri = p[KEY_BG_IMAGE_URI],
             weatherOnAlarmScreen = p[KEY_WEATHER_ALARM] ?: true,
             weatherHeaderEnabled = p[KEY_WEATHER_HEADER] ?: true,
+            weatherLocation = p[KEY_WEATHER_LOCATION] ?: "",
             showNextAlarmAfterDismiss = p[KEY_NEXT_ALARM_MSG] ?: false,
             timerPresets = (p[KEY_TIMER_PRESETS]
                 ?: DEFAULT_TIMER_PRESETS.joinToString(";") { "${it.label}|${it.minutes}" })
@@ -168,6 +171,7 @@ class SettingsRepository(private val context: Context) {
     }
     suspend fun setWeatherOnAlarmScreen(v: Boolean) = edit { it[KEY_WEATHER_ALARM] = v }
     suspend fun setWeatherHeaderEnabled(v: Boolean) = edit { it[KEY_WEATHER_HEADER] = v }
+    suspend fun setWeatherLocation(v: String) = edit { it[KEY_WEATHER_LOCATION] = v.trim() }
     suspend fun setShowNextAlarmAfterDismiss(v: Boolean) = edit { it[KEY_NEXT_ALARM_MSG] = v }
     suspend fun setTimerPresets(v: List<TimerPreset>) = edit {
         it[KEY_TIMER_PRESETS] = v.joinToString(";") { p -> "${p.label}|${p.minutes}" }
@@ -205,6 +209,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_BG_IMAGE_URI = stringPreferencesKey("background_image_uri")
         val KEY_WEATHER_ALARM = booleanPreferencesKey("weather_on_alarm_screen")
         val KEY_WEATHER_HEADER = booleanPreferencesKey("weather_header_enabled")
+        val KEY_WEATHER_LOCATION = stringPreferencesKey("weather_location")
         val KEY_NEXT_ALARM_MSG = booleanPreferencesKey("show_next_alarm_after_dismiss")
         val KEY_TIMER_PRESETS = stringPreferencesKey("timer_presets")
         val KEY_OPENROUTER_KEY = stringPreferencesKey("openrouter_api_key")
