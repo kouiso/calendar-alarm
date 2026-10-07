@@ -129,6 +129,27 @@ jobs:
           printf '%s' "$ASC_KEY_P8" > "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
           chmod 600 "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
 
+      - name: Pre-resolve provisioning profiles
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -e
+          KEY="$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          # WHY: 自動署名が portal に作った profile の .mobileprovision 実体が
+          # archive 中にローカルへ降りない既知の競合がある（"Build input file
+          # cannot be found" になる）。先に素の build を走らせて署名解決と
+          # profile ダウンロードを確定させておくと archive が安定する。
+          xcodebuild -project iosApp/CalendarAlarm.xcodeproj \
+            -scheme iosApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            build
+
       - name: Archive (ad-hoc, 自動署名)
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
