@@ -29,12 +29,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Snooze
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -45,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -54,15 +64,14 @@ import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.db.CalendarPrefEntity
 import com.calendaralarm.data.db.AuditLogEntity
 import com.calendaralarm.shared.model.CalendarSource
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * 設定。鳴動の既定値、カレンダー選択、権限の健康状態、監査ログ。
- * 「なぜ鳴らなかったか」をここで全部追跡できる設計。
+ * 設定。既定値・カレンダー選択・権限・監査ログ。
+ * 説明文を置かずアイコン+値で分かる設計。読ませるのはデータだけ。
  */
 @Composable
 fun SettingsScreen(
@@ -87,50 +96,52 @@ fun SettingsScreen(
     }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
-        // ---- 鳴動の既定値 ----
-        item { SectionHeader("鳴動") }
+        // ---- 既定値: 🔔通知タイミング / 😴スヌーズ / ☁天気 ----
+        item { Spacer(Modifier.height(8.dp)) }
         item {
-            val defaultMin = prefs?.defaultMinutesBefore ?: 0
-            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                Text("予定の通知タイミング", style = MaterialTheme.typography.bodyLarge)
-                Row(Modifier.padding(top = 4.dp)) {
-                    listOf(0, 5, 10, 15).forEach { m ->
-                        FilterChip(
-                            selected = defaultMin == m,
-                            onClick = { scope.launch { settings.setDefaultMinutesBefore(m) } },
-                            label = { Text(if (m == 0) "開始時" else "${m}分前") },
-                            modifier = Modifier.padding(end = 6.dp),
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                ),
+            ) {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                    // 通知タイミング
+                    IconSettingRow(Icons.Default.Notifications) {
+                        listOf(0, 5, 10, 15).forEach { m ->
+                            FilterChip(
+                                selected = (prefs?.defaultMinutesBefore ?: 0) == m,
+                                onClick = { scope.launch { settings.setDefaultMinutesBefore(m) } },
+                                label = { Text(if (m == 0) "開始時" else "${m}分", maxLines = 1) },
+                                modifier = Modifier.padding(end = 4.dp),
+                            )
+                        }
+                    }
+                    // スヌーズ
+                    IconSettingRow(Icons.Default.Snooze) {
+                        listOf(5, 10, 15).forEach { m ->
+                            FilterChip(
+                                selected = (prefs?.defaultSnoozeMinutes ?: 10) == m,
+                                onClick = { scope.launch { settings.setDefaultSnoozeMinutes(m) } },
+                                label = { Text("${m}分", maxLines = 1) },
+                                modifier = Modifier.padding(end = 4.dp),
+                            )
+                        }
+                    }
+                    // 天気
+                    IconSettingRow(Icons.Default.WbSunny) {
+                        Spacer(Modifier.weight(1f))
+                        Switch(
+                            checked = prefs?.weatherEnabled ?: true,
+                            onCheckedChange = { scope.launch { settings.setWeatherEnabled(it) } },
                         )
                     }
                 }
-            }
-        }
-        item {
-            val snooze = prefs?.defaultSnoozeMinutes ?: 10
-            SettingRow("スヌーズの既定") {
-                Row {
-                    listOf(5, 10, 15).forEach { m ->
-                        FilterChip(
-                            selected = snooze == m,
-                            onClick = { scope.launch { settings.setDefaultSnoozeMinutes(m) } },
-                            label = { Text("${m}分") },
-                            modifier = Modifier.padding(start = 4.dp),
-                        )
-                    }
-                }
-            }
-        }
-        item {
-            SettingRow("予定の場所の天気") {
-                Switch(
-                    checked = prefs?.weatherEnabled ?: true,
-                    onCheckedChange = { scope.launch { settings.setWeatherEnabled(it) } },
-                )
             }
         }
 
         // ---- カレンダー ----
-        item { SectionHeader("カレンダー") }
+        item { Spacer(Modifier.height(16.dp)) }
         item {
             Card(
                 Modifier.fillMaxWidth(),
@@ -158,10 +169,10 @@ fun SettingsScreen(
         item {
             var showAccountHelp by remember { mutableStateOf(false) }
             Row(
-                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                Modifier.fillMaxWidth().padding(vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                androidx.compose.material3.TextButton(
+                IconButton(
                     onClick = {
                         runCatching {
                             context.startActivity(
@@ -180,10 +191,13 @@ fun SettingsScreen(
                         }
                     },
                 ) {
-                    Text("＋ アカウントを追加")
+                    Icon(
+                        Icons.Default.PersonAdd,
+                        contentDescription = "アカウントを追加",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
                 }
-                Spacer(Modifier.width(4.dp))
-                androidx.compose.material3.IconButton(onClick = { showAccountHelp = true }) {
+                IconButton(onClick = { showAccountHelp = true }) {
                     Icon(
                         Icons.Default.Info,
                         contentDescription = "取り込みの説明",
@@ -192,23 +206,25 @@ fun SettingsScreen(
                     )
                 }
                 Spacer(Modifier.weight(1f))
-                androidx.compose.material3.TextButton(
-                    onClick = { scope.launch { repository.resync("manual") } },
-                ) {
-                    Text("今すぐ再同期")
+                IconButton(onClick = { scope.launch { repository.resync("manual") } }) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "今すぐ再同期",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
             if (showAccountHelp) {
                 androidx.compose.material3.AlertDialog(
                     onDismissRequest = { showAccountHelp = false },
                     confirmButton = {
-                        androidx.compose.material3.TextButton(onClick = { showAccountHelp = false }) {
-                            Text("閉じる")
-                        }
+                        TextButton(onClick = { showAccountHelp = false }) { Text("閉じる") }
                     },
                     text = {
                         Text(
-                            "端末に登録されたアカウントのカレンダーは自動で取り込まれます。\n\nMicrosoft(Outlook/Exchange) は Outlook アプリの「カレンダーと同期」をオンにするか、端末設定で Exchange アカウントを追加すると出てきます。",
+                            "端末に登録されたアカウントのカレンダーは自動で取り込まれます。\n\n" +
+                                "Microsoft(Outlook/Exchange) は Outlook アプリの「カレンダーと同期」をオンにするか、" +
+                                "端末設定で Exchange アカウントを追加すると出てきます。",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     },
@@ -216,12 +232,12 @@ fun SettingsScreen(
             }
         }
 
-        // ---- 権限の健康状態 ----
-        item { SectionHeader("権限") }
+        // ---- 権限 ----
+        item { Spacer(Modifier.height(16.dp)) }
         item { PermissionHealthCard(context) }
 
         // ---- 監査ログ ----
-        item { SectionHeader("鳴動ログ") }
+        item { Spacer(Modifier.height(16.dp)) }
         item {
             var logExpanded by remember { mutableStateOf(false) }
             Card(
@@ -238,8 +254,15 @@ fun SettingsScreen(
                             .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        Icon(
+                            Icons.Default.List,
+                            contentDescription = "鳴動ログ",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(12.dp))
                         Text(
-                            if (audit.isEmpty()) "まだログがありません" else "直近 ${audit.size} 件",
+                            if (audit.isEmpty()) "—" else "${audit.size}",
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f),
                         )
@@ -261,29 +284,25 @@ fun SettingsScreen(
     }
 }
 
+/** 先頭に小さなアイコン、その右に操作を並べる行。ラベル文は置かない。 */
 @Composable
-private fun SectionHeader(title: String) {
-    Text(
-        title,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
-    )
-}
-
-@Composable
-private fun SettingRow(label: String, content: @Composable () -> Unit) {
+private fun IconSettingRow(icon: ImageVector, content: @Composable () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        content()
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) { content() }
     }
 }
 
-/** 権限状態。既定は1行サマリ — 欠落がある時だけ自動展開して修復導線を出す。 */
+/** 権限状態。既定はアイコン+結果だけの1行 — 欠落がある時だけ自動展開して修復導線を出す。 */
 @Composable
 private fun PermissionHealthCard(context: Context) {
     val activity = context as? Activity
@@ -317,13 +336,20 @@ private fun PermissionHealthCard(context: Context) {
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("権限", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                Icon(
+                    Icons.Default.VerifiedUser,
+                    contentDescription = "権限",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(12.dp))
                 Text(
-                    if (ngCount == 0) "すべてOK" else "要対応 ${ngCount}件",
+                    if (ngCount == 0) "OK" else "要対応 ${ngCount}",
                     color = if (ngCount == 0) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
                 )
                 Icon(
                     if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
@@ -348,7 +374,7 @@ private fun PermissionHealthCard(context: Context) {
                             },
                         )
                     }
-                    HealthRow("フルスクリーン通知", fsiOk) {
+                    HealthRow("フルスクリーン", fsiOk) {
                         if (Build.VERSION.SDK_INT >= 34) {
                             activity?.startActivity(
                                 Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
@@ -357,7 +383,7 @@ private fun PermissionHealthCard(context: Context) {
                             )
                         }
                     }
-                    HealthRow("電池最適化から除外", batteryOk) {
+                    HealthRow("電池最適化", batteryOk) {
                         activity?.startActivity(
                             Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                                 data = Uri.parse("package:${context.packageName}")
@@ -399,7 +425,7 @@ private fun HealthRow(label: String, ok: Boolean, onFix: () -> Unit) {
 }
 
 /**
- * カレンダー1行。既定は折り畳み (名前・アカウント・鳴動サマリ・スイッチのみ)。
+ * カレンダー1行。既定は折り畳み (色・名前・サマリ・スイッチのみ)。
  * タップで鳴動タイミング/終日時刻のチップ群が展開する。
  */
 @Composable
@@ -431,8 +457,8 @@ private fun CalendarRow(
                         append(cal.accountName)
                         if (enabled) {
                             append("  ·  ")
-                            append(if (minutes == 0) "開始時" else "${minutes}分前")
-                            append(" / 終日")
+                            append(if (minutes == 0) "開始時" else "${minutes}分")
+                            append(" · 終日")
                             append(if (allDay < 0) "OFF" else "%d:%02d".format(allDay / 60, allDay % 60))
                         }
                     },

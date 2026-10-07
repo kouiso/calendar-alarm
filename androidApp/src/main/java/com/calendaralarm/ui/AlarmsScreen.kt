@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AlarmOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.FloatingActionButton
@@ -65,13 +67,14 @@ fun AlarmsScreen(
         if (alarms.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("アラームがありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "右下の + で作成できます",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Icon(
+                        Icons.Default.AlarmOff,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(40.dp),
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Text("アラームなし", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -86,7 +89,7 @@ fun AlarmsScreen(
                             onDismissRequest = { confirmDelete = false },
                             title = { Text("アラームを削除") },
                             text = {
-                                Text("%d:%02d %s のアラームを削除しますか？".format(alarm.hour, alarm.minute, alarm.label))
+                                Text("%d:%02d %s を削除?".format(alarm.hour, alarm.minute, alarm.label))
                             },
                             confirmButton = {
                                 androidx.compose.material3.TextButton(
@@ -161,14 +164,14 @@ private fun AlarmRow(
                 }
                 nextInstance?.let {
                     Text(
-                        "次: " + SimpleDateFormat("M/d(E) H:mm", Locale.JAPAN).format(Date(it.triggerAtMillis)),
+                        SimpleDateFormat("M/d(E) H:mm", Locale.JAPAN).format(Date(it.triggerAtMillis)),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
                 if (alarm.exceptions.isNotEmpty()) {
                     Text(
-                        "休止日: ${alarm.exceptions.size}件",
+                        "休止 ${alarm.exceptions.size}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
