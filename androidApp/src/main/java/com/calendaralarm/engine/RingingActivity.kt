@@ -95,12 +95,7 @@ class RingingActivity : ComponentActivity() {
                         snoozeMinutes = instance?.snoozeMinutes ?: 10,
                         snoozePresets = presets,
                         canOpenSource = canOpenSource,
-                        onOpenSource = {
-                            instanceIdState.value
-                                ?.let { NotificationAlarmService.pendingOpens.remove(it) }
-                                ?.let { pi -> runCatching { pi.send() } }
-                            sendAction(AlarmService.ACTION_DISMISS)
-                        },
+                        onOpenSource = { openSourcePendingIntent() },
                         onDismiss = { sendAction(AlarmService.ACTION_DISMISS) },
                         onSnooze = { sendAction(AlarmService.ACTION_SNOOZE) },
                         onSnoozeAt = { m -> sendAction(AlarmService.ACTION_SNOOZE, m) },
@@ -115,6 +110,28 @@ class RingingActivity : ComponentActivity() {
         // 鳴動画面が出たまま次のアラームが発火した時、停止/スヌーズが
         // 旧インスタンスへ飛ばないよう差し替える
         instanceIdState.value = intent.getStringExtra(EXTRA_INSTANCE_ID)
+    }
+
+    /**
+     * 通知アラームの「通知元を開く」。元アプリの contentIntent を送信してから鳴動を止める。
+     * API34+ は BAL hardening で裸の send() がブロックされるため、
+     * SystemUI と同じ MODE_BACKGROUND_ACTIVITY_START_ALLOWED をオプションで渡す。
+     */
+    private fun openSourcePendingIntent() {
+        val pi = instanceIdState.value
+            ?.let { NotificationAlarmService.pendingOpens.remove(it) }
+        if (pi != null) {
+            val options = if (Build.VERSION.SDK_INT >= 34) {
+                android.app.ActivityOptions.makeBasic()
+                    .setPendingIntentBackgroundActivityStartMode(
+                        android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED,
+                    ).toBundle()
+            } else {
+                null
+            }
+            runCatching { pi.send(this, 0, null, null, null, null, options) }
+        }
+        sendAction(AlarmService.ACTION_DISMISS)
     }
 
     private fun sendAction(action: String, snoozeMinutes: Int? = null) {
