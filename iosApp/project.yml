@@ -35,6 +35,8 @@ targets:
     dependencies:
       - target: CalendarAlarmWidget
         embed: true
+      - target: MailShareExt
+        embed: true
     entitlements:
       path: iosApp/CalendarAlarm.entitlements
     info:
@@ -60,6 +62,10 @@ targets:
           - com.calendaralarm.resync
         UIBackgroundModes:
           - processing
+        # 共有拡張から本体アプリを開くカスタムスキーム (メール→予定の受け渡し)
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - calendaralarm-import
     preBuildScripts:
       - name: Build SharedKit (KMP)
         shell: /bin/sh
@@ -95,4 +101,24 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.ios.widget
+        GENERATE_INFOPLIST_FILE: NO
+
+  MailShareExt:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: MailShareExt
+        excludes:
+          - Info.plist
+          - MailShareExt.entitlements
+    entitlements:
+      path: MailShareExt/MailShareExt.entitlements
+    info:
+      path: MailShareExt/Info.plist
+      properties:
+        CFBundleIdentifier: com.calendaralarm.ios.shareext
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.ios.shareext
         GENERATE_INFOPLIST_FILE: NO

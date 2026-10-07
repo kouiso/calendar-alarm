@@ -57,6 +57,9 @@ struct RootView: View {
     @EnvironmentObject var engine: Engine
     @EnvironmentObject var store: Store
 
+    /// 共有拡張経由で届いたメール本文。非nilで確認シートを表示する。
+    @State private var mailImportText: String? = nil
+
     var body: some View {
         ZStack {
             if !store.state.onboardingDone {
@@ -69,6 +72,31 @@ struct RootView: View {
                 RingingView()
             }
         }
+        .onOpenURL { url in
+            if url.scheme == "calendaralarm-import" { loadSharedMail() }
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { mailImportText != nil },
+                set: { if !$0 { mailImportText = nil } },
+            )
+        ) {
+            if let text = mailImportText {
+                MailImportSheet(rawText: text) { _ in mailImportText = nil }
+            }
+        }
+    }
+
+    /// 共有拡張が App Group に置いた mail-share.txt を読む。
+    private func loadSharedMail() {
+        guard let dir = FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: "group.com.calendaralarm.ios")
+        else { return }
+        let file = dir.appendingPathComponent("mail-share.txt")
+        guard let text = try? String(contentsOf: file, encoding: .utf8),
+              !text.isEmpty else { return }
+        try? FileManager.default.removeItem(at: file)
+        mailImportText = text
     }
 
     private var mainTabs: some View {

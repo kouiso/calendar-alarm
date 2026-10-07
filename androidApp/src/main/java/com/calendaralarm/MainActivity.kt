@@ -40,11 +40,24 @@ import com.calendaralarm.ui.OnboardingScreen
 import com.calendaralarm.ui.SettingsScreen
 import com.calendaralarm.ui.TimerScreen
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private val app get() = application as CalendarAlarmApp
+
+    /** メール→予定の通知から来た抽出結果 (JSON)。null でダイアログ非表示。 */
+    private val extractedJson = androidx.compose.runtime.mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra(EXTRA_EXTRACTED_EVENT)?.let {
+            extractedJson.value = it
+            this.intent.removeExtra(EXTRA_EXTRACTED_EVENT)
+        }
+    }
 
     override fun onResume() {
         super.onResume()
@@ -55,6 +68,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        intent?.getStringExtra(EXTRA_EXTRACTED_EVENT)?.let {
+            extractedJson.value = it
+            intent?.removeExtra(EXTRA_EXTRACTED_EVENT)
+        }
         setContent {
             // recomposition 毎に Flow を作り直すと collectAsState が
             // リセットされるため remember で固定する
@@ -99,10 +116,36 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     MainScaffold(app.container.repository, app.container.settings)
+                    // メール→予定: 抽出結果が届いていれば確認ダイアログを最前面に出す
+                    extractedJson.value?.let { json ->
+                        val ev = runCatching {
+                            kotlinx.serialization.json.Json {
+                                ignoreUnknownKeys = true
+                            }.decodeFromString<com.calendaralarm.shared.model.ExtractedEvent>(json)
+                        }.getOrNull()
+                        if (ev != null) {
+                            com.calendaralarm.ui.ExtractedEventDialog(
+                                event = ev,
+                                onDismiss = { extractedJson.value = null },
+                                onSaved = {
+                                    extractedJson.value = null
+                                    // 新しい予定を即時取り込んでアラーム化する
+                                    lifecycleScope.launch {
+                                        app.container.repository.resync("event inserted")
+                                    }
+                                },
+                            )
+                        }
+                    }
                 }
                 }
             }
         }
+    }
+
+    companion object {
+        /** MailPrintService が結果を渡す extra キー (ExtractedEvent の JSON)。 */
+        const val EXTRA_EXTRACTED_EVENT = "com.calendaralarm.extra.EXTRACTED_EVENT"
     }
 }
 

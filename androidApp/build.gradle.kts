@@ -80,6 +80,7 @@ dependencies {
     implementation(libs.kotlinx.datetime)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.pdfbox.android)
 
     debugImplementation(libs.compose.ui.tooling)
 

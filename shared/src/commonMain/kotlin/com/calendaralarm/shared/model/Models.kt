@@ -227,6 +227,48 @@ data class NowForecast(
     val hourly: List<HourlyWeather>,
 )
 
+/** AI がメール/文書から抽出した予定 (カレンダー書き込み前の確認画面へ渡す)。 */
+@Serializable
+data class ExtractedEvent(
+    val title: String,
+    /** "YYYY-MM-DDTHH:mm" (ローカル) または "YYYY-MM-DD" (allDay時) */
+    val start: String,
+    val end: String? = null,
+    val allDay: Boolean = false,
+    val location: String = "",
+    val description: String = "",
+)
+
+/**
+ * 通知アラームのルール (NotificationListenerService 側で評価する仕様)。
+ * AI生成・手動作成・テンプレート展開のすべてがこの形に収束する。
+ */
+@Serializable
+data class NotificationRuleSpec(
+    val name: String,
+    /** 監視対象アプリのパッケージ名。null/空 = 全アプリを監視 */
+    val packageName: String? = null,
+    /** 必須キーワード: すべて含む場合のみ発動 (AND) */
+    val requiredKeywords: List<String> = emptyList(),
+    /** 任意キーワード: いずれか1つを含めばよい (OR)。空=条件なし */
+    val anyKeywords: List<String> = emptyList(),
+    /** 除外キーワード: 1つでも含めば発動しない */
+    val excludeKeywords: List<String> = emptyList(),
+    /** 曜日 (1=月曜..7=日曜)。空=毎日 */
+    val daysOfWeek: List<Int> = emptyList(),
+    /** 時間帯フィルタ (分, 0-1439)。両方null=終日。深夜跨ぎは start>end で表現 */
+    val startMinuteOfDay: Int? = null,
+    val endMinuteOfDay: Int? = null,
+) {
+    /** 通知テキストがこのルールに一致するか。時刻条件は呼び出し側で済ませる想定。 */
+    fun matchesText(text: String): Boolean {
+        if (excludeKeywords.any { text.contains(it, ignoreCase = true) }) return false
+        if (requiredKeywords.any { !text.contains(it, ignoreCase = true) }) return false
+        if (anyKeywords.isNotEmpty() && anyKeywords.none { text.contains(it, ignoreCase = true) }) return false
+        return true
+    }
+}
+
 /** Instant を延長してもコードを読みやすくするだけの小さなエイリアス。 */
 val Instant.isPast: Boolean
     get() = this < kotlinx.datetime.Clock.System.now()

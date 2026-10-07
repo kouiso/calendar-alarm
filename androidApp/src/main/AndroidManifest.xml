@@ -2,8 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- カレンダー読み取り -->
+    <!-- カレンダー読み取り。書き込みは「メール→予定」の確定時に必要 -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <!-- 通知（鳴動時のフルスクリーン Intent 起動に必要） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- アラーム中核アプリなので USE_EXACT_ALARM が自動付与される -->
@@ -56,6 +57,19 @@
             android:name=".engine.AlarmService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- 「印刷→予定化」受け口。プリンタではなくメール本文の取込口として使う -->
+        <service
+            android:name=".ai.MailPrintService"
+            android:permission="android.permission.BIND_PRINT_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.printservice.PrintService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.printservice"
+                android:resource="@xml/printservice" />
+        </service>
 
         <!-- AlarmManager からの鳴動トリガ -->
         <receiver

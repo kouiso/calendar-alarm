@@ -75,6 +75,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -206,6 +207,53 @@ fun SettingsScreen(
         item {
             prefs?.let { p ->
                 AppearanceCard(p, settings, scope, context)
+            }
+        }
+
+        // ---- AI: OpenRouter キー (メール→予定・通知ルール生成に使用) ----
+        item { Spacer(Modifier.height(12.dp)) }
+        item {
+            prefs?.let { p ->
+                Card(
+                    Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
+                ) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                        IconSettingRow(Icons.Default.Email) {
+                            var key by remember(p.openRouterApiKey) {
+                                mutableStateOf(p.openRouterApiKey.orEmpty())
+                            }
+                            OutlinedTextField(
+                                value = key,
+                                onValueChange = { key = it },
+                                placeholder = { Text("OpenRouter キー") },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = {
+                                scope.launch { settings.setOpenRouterApiKey(key.ifBlank { null }) }
+                            }) { Text("保存") }
+                        }
+                        IconSettingRow(Icons.Default.Email) {
+                            var model by remember(p.openRouterModel) {
+                                mutableStateOf(p.openRouterModel)
+                            }
+                            OutlinedTextField(
+                                value = model,
+                                onValueChange = { model = it },
+                                placeholder = { Text("モデル") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = {
+                                scope.launch { settings.setOpenRouterModel(model) }
+                            }) { Text("保存") }
+                        }
+                    }
+                }
             }
         }
 

@@ -61,6 +61,43 @@ final class EventKitReader {
         }
     }
 
+    /// メール→予定: 抽出された予定をデフォルトの書き込み可カレンダーへ挿入。
+    /// allDay は日付のみのローカル時刻で入れる (EventKit が allDay として保存)。
+    /// 成功なら挿入したイベントの identifier、失敗なら nil。
+    @discardableResult
+    func insert(title: String, startIso: String, endIso: String?,
+                allDay: Bool, location: String?, notes: String?) -> String? {
+        guard authorizationGranted,
+              let cal = store.defaultCalendarForNewEvents else { return nil }
+        let ev = EKEvent(eventStore: store)
+        ev.title = title
+        ev.calendar = cal
+        ev.location = location
+        ev.notes = notes
+        ev.isAllDay = allDay
+        if allDay {
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd"
+            fmt.timeZone = TimeZone.current
+            guard let s = fmt.date(from: startIso) else { return nil }
+            ev.startDate = s
+            ev.endDate = endIso.flatMap { fmt.date(from: $0) } ?? s.addingTimeInterval(86400)
+        } else {
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd'T'HH:mm"
+            fmt.timeZone = TimeZone.current
+            guard let s = fmt.date(from: startIso) else { return nil }
+            ev.startDate = s
+            ev.endDate = endIso.flatMap { fmt.date(from: $0) } ?? s.addingTimeInterval(3600)
+        }
+        do {
+            try store.save(ev, span: .thisEvent)
+            return ev.eventIdentifier
+        } catch {
+            return nil
+        }
+    }
+
     /// 自分の参加可否 → InviteStatus。自分主催の予定は nil (フィルタ対象外)。
     private static func inviteStatus(of ev: EKEvent) -> String? {
         // 主催者が自分なら招待ではない
