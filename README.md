@@ -34,7 +34,7 @@ cd iosApp && xcodegen generate
 open CalendarAlarm.xcodeproj   # Xcode から実行。SharedKit.framework はビルドフェーズが Gradle で自動生成
 ```
 
-実機配布では App Group `group.com.calendaralarm.app` を Developer Portal / プロビジョニングに登録する。
+実機配布では App Group `group.com.calendaralarm.ios` を Developer Portal / プロビジョニングに登録する。
 
 ## モジュール構成
 

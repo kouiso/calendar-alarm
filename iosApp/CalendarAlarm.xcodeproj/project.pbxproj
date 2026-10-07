@@ -196,9 +196,11 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					519A56C55D325CCF69337FF6 = {
+						DevelopmentTeam = ZZ4FA7NLUY;
 						ProvisioningStyle = Automatic;
 					};
 					CF9949E44635BD9D5B3AD451 = {
+						DevelopmentTeam = ZZ4FA7NLUY;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -313,7 +315,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.app.widget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.ios.widget;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -331,7 +333,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				OTHER_LDFLAGS = "$(inherited) -framework SharedKit";
-				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.ios;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -349,7 +351,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.app.widget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.ios.widget;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -392,6 +394,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = ZZ4FA7NLUY;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -425,7 +428,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				OTHER_LDFLAGS = "$(inherited) -framework SharedKit";
-				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.ios;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -468,6 +471,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = ZZ4FA7NLUY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;

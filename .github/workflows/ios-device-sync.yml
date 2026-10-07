@@ -1,0 +1,224 @@
+name: iOS Device Sync
+
+# FAD テスターの招待登録と、テスターが提出した UDID の
+# Apple Developer Portal 登録 → 再配布を自動化する。
+# equus-anatomy の同名ワークフローをこのリポジトリ用に移植。
+# （署名は match + 手動署名: 新規 UDID をここで portal に登録してから
+#   fad.yml を再実行すれば、match が profile を再生成して端末を含める）
+# 手動で tester_email を渡すと即時招待、定期実行では新規端末の検出と再配布だけを回す。
+
+on:
+  workflow_dispatch:
+    inputs:
+      tester_email:
+        description: FAD に招待するメールアドレス（空ならテスター登録をスキップ）
+        required: false
+        default: ''
+        type: string
+      rebuild:
+        description: 新規端末を検出したら fad.yml の iOS 再配布を起動する
+        required: false
+        default: true
+        type: boolean
+  schedule:
+    # テスターが UDID を提出した後、こちらが何もしなくても
+    # 最悪6時間で登録→再配布まで自動で完了するようにする
+    - cron: '17 */6 * * *'
+
+env:
+  # Firebase project number は公開識別子で秘匿不要
+  FAD_PROJECT_NUMBER: '452308374396'
+  FAD_GROUP: 'beta-testers'
+  TEAM_ID: 'ZZ4FA7NLUY'
+
+jobs:
+  register-tester:
+    name: FAD tester 登録
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'workflow_dispatch' && inputs.tester_email != ''
+    permissions:
+      contents: none
+    steps:
+      - name: Validate tester_email
+        env:
+          TESTER_EMAIL: ${{ inputs.tester_email }}
+        run: |
+          set -euo pipefail
+          # WHY: 自由入力をそのまま FAD API の JSON に入れるので、ここで
+          # メアド形式以外を止める。JSON 組み立ては jq に任せてシェル展開を挟まない
+          if ! printf '%s' "$TESTER_EMAIL" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then
+            echo "::error::tester_email がメールアドレス形式ではありません" >&2
+            exit 1
+          fi
+
+      - name: Mint Google access token from FIREBASE_TOKEN
+        id: token
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          # WHY: firebase login:ci が発行する refresh token から、firebase-tools の
+          # 公開 OAuth クライアントで access token を鋳造する。
+          # client_id/secret は firebase-tools 同梱の公開値で秘匿対象ではない
+          resp="$(curl -sS -X POST https://oauth2.googleapis.com/token \
+            -d 'client_id=563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6' \
+            -d 'client_secret=j9iVZfS8kkCEFUPaAeJV0sAi' \
+            -d 'grant_type=refresh_token' \
+            -d "refresh_token=$FIREBASE_TOKEN")"
+          at="$(printf '%s' "$resp" | jq -r '.access_token // empty')"
+          [ -n "$at" ] || { echo "access token の鋳造に失敗: $resp" >&2; exit 1; }
+          echo "::add-mask::$at"
+          echo "access_token=$at" >> "$GITHUB_OUTPUT"
+
+      - name: Invite tester and join beta-testers
+        env:
+          FAD_ACCESS_TOKEN: ${{ steps.token.outputs.access_token }}
+          TESTER_EMAIL: ${{ inputs.tester_email }}
+        run: |
+          set -euo pipefail
+          fad_post() {
+            local url="$1" body="$2" resp code payload
+            resp="$(curl -sS -X POST \
+              -H "Authorization: Bearer $FAD_ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$body" \
+              -w '\n%{http_code}' \
+              "$url")" || return 1
+            code="${resp##*$'\n'}"
+            payload="${resp%$'\n'*}"
+            case "$code" in
+              2*|409) return 0 ;;
+            esac
+            if printf '%s' "$payload" | grep -q 'ALREADY_EXISTS'; then
+              return 0
+            fi
+            echo "FAD API error ($code): $payload" >&2
+            return 1
+          }
+
+          add_body="$(jq -n --arg email "$TESTER_EMAIL" '{emails: [$email]}')"
+          fad_post "https://firebaseappdistribution.googleapis.com/v1/projects/$FAD_PROJECT_NUMBER/testers:batchAdd" "$add_body"
+          echo "batchAdd: $TESTER_EMAIL"
+
+          join_body="$(jq -n --arg email "$TESTER_EMAIL" '{emails: [$email], createMissingTesters: false}')"
+          fad_post "https://firebaseappdistribution.googleapis.com/v1/projects/$FAD_PROJECT_NUMBER/groups/$FAD_GROUP:batchJoin" "$join_body"
+          echo "batchJoin: $TESTER_EMAIL -> $FAD_GROUP"
+          # テスター側の操作（招待受諾→UDID提出）だけが待ちになる。
+          # それ以降は schedule の sync-devices が拾って自動で再配布まで進む
+
+  sync-devices:
+    name: FAD UDID → Apple Portal 登録
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # fad.yml の workflow_dispatch 起動に必要
+      actions: write
+    concurrency:
+      # 直列化（同時に複数回走らせない）
+      group: ${{ github.workflow }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: false
+
+      - name: Install fastlane (API アクションのみ使用)
+        # firebase_app_distribution_get_udids は plugin gem 側のアクション
+        run: gem install fastlane fastlane-plugin-firebase_app_distribution --no-document
+
+      - name: Write App Store Connect API key file
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          # WHY: register_devices は api_key_path（JSON）を取るので
+          # 3分割 secret から一時ファイルを作る。改行入りの p8 を
+          # JSON に安全に乗せるため python3 で組み立てる
+          python3 - <<'PY'
+          import json, os
+          key = {
+            "key_id": os.environ["ASC_KEY_ID"],
+            "issuer_id": os.environ["ASC_ISSUER_ID"],
+            "key": os.environ["ASC_KEY_P8"],
+            "duration": 1200,
+            "in_house": False,
+          }
+          with open("/tmp/asc_key.json", "w") as f:
+            json.dump(key, f)
+          PY
+          chmod 600 /tmp/asc_key.json
+
+      - name: Fetch FAD device UDIDs and register to Apple Portal
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
+          TEAM_ID: ${{ env.TEAM_ID }}
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+        run: |
+          set -euo pipefail
+          mkdir -p .device-sync
+          # FAD が収集したテスター端末の UDID 一覧を書き出す
+          fastlane run firebase_app_distribution_get_udids \
+            app:"$FIREBASE_IOS_APP_ID" \
+            firebase_cli_token:"$FIREBASE_TOKEN" \
+            output_file:"$PWD/.device-sync/fad_devices.txt"
+          n=$(grep -v '^Device ID' .device-sync/fad_devices.txt | grep -c '[^[:space:]]' || true)
+          echo "devices=$n"
+          if [ "$n" -gt 0 ]; then
+            # Apple Developer Portal に未登録の UDID だけ register_devices が登録する
+            fastlane run register_devices \
+              devices_file:"$PWD/.device-sync/fad_devices.txt" \
+              team_id:"$TEAM_ID" \
+              api_key_path:/tmp/asc_key.json
+          fi
+
+      - name: Count registered devices
+        id: devices
+        run: |
+          f=".device-sync/fad_devices.txt"
+          n=0
+          if [ -f "$f" ]; then
+            n=$(grep -v '^Device ID' "$f" | grep -c '[^[:space:]]' || true)
+          fi
+          echo "count=$n" >> "$GITHUB_OUTPUT"
+          echo "devices=$n"
+
+      # devices ファイルのハッシュをキャッシュキーにして、UDID 集合が
+      # 変わった時だけ再配布を起動する。
+      # キャッシュ消失時の誤起動は冪等で害が無いので許容する
+      - name: Detect device set change
+        id: cache
+        if: steps.devices.outputs.count != '0'
+        uses: actions/cache/restore@v4
+        with:
+          path: .device-sync/fad_devices.txt
+          key: fad-devices-${{ hashFiles('.device-sync/fad_devices.txt') }}
+
+      - name: Trigger iOS rebuild & redistribute
+        if: steps.devices.outputs.count != '0' && steps.cache.outputs.cache-hit != 'true' && (github.event_name == 'schedule' || inputs.rebuild)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # WHY: Xcode 自動署名はビルド毎に登録済み端末全部を profile に含め直すので、
+          # ここでは profile 操作をせず fad.yml の iOS 再配布に委譲する
+          gh workflow run fad.yml --ref master \
+            -f platform=ios \
+            -f release_notes="device sync ($(date +%Y-%m-%d))"
+          echo "fad.yml (ios) を起動した"
+
+      - name: Save device set cache
+        # WHY: 明示 if は既定の success() チェックを上書きするので success() を
+        # 明示して、再配布の起動に失敗した時は cache を保存せず次回にリトライさせる
+        if: success() && steps.devices.outputs.count != '0' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .device-sync/fad_devices.txt
+          key: fad-devices-${{ hashFiles('.device-sync/fad_devices.txt') }}
