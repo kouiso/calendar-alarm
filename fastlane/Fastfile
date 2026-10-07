@@ -4,6 +4,7 @@
 
 APP_IDENTIFIER = "com.calendaralarm.ios"
 WIDGET_IDENTIFIER = "com.calendaralarm.ios.widget"
+SHAREEXT_IDENTIFIER = "com.calendaralarm.ios.shareext"
 TEAM_ID = "ZZ4FA7NLUY"
 MATCH_GIT_URL = "git@github.com:ritmo-inc/apple-certificate.git"
 MATCH_GIT_BRANCH = "master"
@@ -27,7 +28,7 @@ platform :ios do
     # force_for_new_devices で登録済みデバイス差分も常に profile へ反映する。
     match(
       type: "adhoc",
-      app_identifier: [APP_IDENTIFIER, WIDGET_IDENTIFIER],
+      app_identifier: [APP_IDENTIFIER, WIDGET_IDENTIFIER, SHAREEXT_IDENTIFIER],
       git_url: MATCH_GIT_URL,
       git_branch: MATCH_GIT_BRANCH,
       git_private_key: "/tmp/match_deploy_key",
@@ -52,6 +53,14 @@ platform :ios do
       code_sign_identity: "Apple Distribution",
       team_id: TEAM_ID,
     )
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "iosApp/CalendarAlarm.xcodeproj",
+      targets: ["MailShareExt"],
+      profile_name: "match AdHoc #{SHAREEXT_IDENTIFIER}",
+      code_sign_identity: "Apple Distribution",
+      team_id: TEAM_ID,
+    )
 
     build_app(
       project: "iosApp/CalendarAlarm.xcodeproj",
@@ -67,6 +76,7 @@ platform :ios do
         provisioningProfiles: {
           APP_IDENTIFIER => "match AdHoc #{APP_IDENTIFIER}",
           WIDGET_IDENTIFIER => "match AdHoc #{WIDGET_IDENTIFIER}",
+          SHAREEXT_IDENTIFIER => "match AdHoc #{SHAREEXT_IDENTIFIER}",
         },
       },
     )
