@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.calendaralarm.resync</string>
+	</array>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Calendar Alarm</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.calendaralarm.app</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>予定の時刻にアラームを鳴らすために使います</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>カレンダーの予定をアラームで鳴らすために読み取ります</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>通知によるアラームのために使います</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fonts/plex_sans_jp_regular.ttf</string>
+		<string>Fonts/plex_sans_jp_medium.ttf</string>
+		<string>Fonts/plex_sans_jp_semibold.ttf</string>
+		<string>Fonts/plex_sans_jp_light.ttf</string>
+	</array>
+	<key>UIApplicationSceneManifest_Generation</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
+	</array>
+	<key>UILaunchScreen_Generation</key>
+	<true/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+</dict>
+</plist>
