@@ -182,7 +182,7 @@ final class Store: ObservableObject {
 
     /// ウィジェットが読む「次のアラーム」スナップショットを共有コンテナに書く。
     func writeWidgetSnapshot() {
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.calendaralarm.app") else { return }
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.calendaralarm.ios") else { return }
         let next = state.scheduled.values
             .filter { $0.state == .pending && $0.instance.triggerAtMillis > Int64(Date().timeIntervalSince1970 * 1000) }
             .sorted { $0.instance.triggerAtMillis < $1.instance.triggerAtMillis }

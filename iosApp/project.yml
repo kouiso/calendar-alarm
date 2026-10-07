@@ -41,7 +41,7 @@ targets:
       path: iosApp/Info.plist
       properties:
         CFBundleDisplayName: Calendar Alarm
-        CFBundleIdentifier: com.calendaralarm.app
+        CFBundleIdentifier: com.calendaralarm.ios
         UILaunchScreen_Generation: YES
         UIApplicationSceneManifest_Generation: YES
         UISupportedInterfaceOrientations:
@@ -72,7 +72,7 @@ targets:
         FRAMEWORK_SEARCH_PATHS: $(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
         LD_RUNPATH_SEARCH_PATHS: $(inherited) @executable_path/Frameworks
         OTHER_LDFLAGS: $(inherited) -framework SharedKit
-        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.ios
         GENERATE_INFOPLIST_FILE: NO
 
   CalendarAlarmWidget:
@@ -89,10 +89,10 @@ targets:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: Calendar Alarm Widget
-        CFBundleIdentifier: com.calendaralarm.app.widget
+        CFBundleIdentifier: com.calendaralarm.ios.widget
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.app.widget
+        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.ios.widget
         GENERATE_INFOPLIST_FILE: NO

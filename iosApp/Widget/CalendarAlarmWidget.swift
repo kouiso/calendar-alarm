@@ -25,7 +25,7 @@ struct Provider: TimelineProvider {
     }
 
     private func load() -> NextAlarmEntry {
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.calendaralarm.app"),
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.calendaralarm.ios"),
               let data = try? Data(contentsOf: container.appendingPathComponent("next_alarm.json")),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let num = obj["triggerAtMillis"] as? NSNumber,
