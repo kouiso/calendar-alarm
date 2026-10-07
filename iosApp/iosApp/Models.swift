@@ -119,20 +119,48 @@ struct EventOverrideDTO: Codable, Hashable {
 /// タイマープリセット (元アプリの定型タイマー)。
 struct TimerPresetDTO: Codable, Hashable {
     var label: String
-    var minutes: Int
+    /// 秒保持 (元アプリの 90秒休憩を潰さないため)。
+    /// 永続化 JSON の旧 "minutes" 値はデコード時に×60で移行する
+    var seconds: Int
+    var minutes: Int { seconds / 60 }
+
+    enum CodingKeys: String, CodingKey { case label, seconds, minutes }
+    init(label: String, seconds: Int) {
+        self.label = label
+        self.seconds = seconds
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        label = try c.decode(String.self, forKey: .label)
+        // 新形式は "seconds"、旧形式の "minutes" は×60で吸収
+        if let s = try c.decodeIfPresent(Int.self, forKey: .seconds) {
+            seconds = s
+        } else {
+            seconds = (try c.decodeIfPresent(Int.self, forKey: .minutes) ?? 0) * 60
+        }
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(label, forKey: .label)
+        try c.encode(seconds, forKey: .seconds)
+    }
+    /// "90秒" or "5分" の表示用
+    var durationLabel: String {
+        seconds % 60 == 0 ? "\(seconds / 60)分" : "\(seconds)秒"
+    }
 }
 
 /// デフォルトの定型タイマー (Android DEFAULT_TIMER_PRESETS と同一)。
 enum TimerPresets {
     static let defaults: [TimerPresetDTO] = [
-        .init(label: "ゆで卵", minutes: 5),
-        .init(label: "パスタ", minutes: 9),
-        .init(label: "紅茶", minutes: 4),
-        .init(label: "ピザ", minutes: 12),
-        .init(label: "仮眠", minutes: 20),
-        .init(label: "集中", minutes: 25),
-        // 元アプリの 90秒休憩を Android 同様 1分に切り捨てて保持
-        .init(label: "筋トレ休憩", minutes: 1),
+        .init(label: "ゆで卵", seconds: 300),
+        .init(label: "パスタ", seconds: 540),
+        .init(label: "紅茶", seconds: 240),
+        .init(label: "ピザ", seconds: 720),
+        .init(label: "仮眠", seconds: 1200),
+        .init(label: "集中", seconds: 1500),
+        // 元アプリの 90秒休憩 (分保持では潰れるので秒保持必須)
+        .init(label: "筋トレ休憩", seconds: 90),
     ]
 }
 

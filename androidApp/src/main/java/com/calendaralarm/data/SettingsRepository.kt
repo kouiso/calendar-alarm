@@ -123,7 +123,7 @@ class SettingsRepository(private val context: Context) {
             weatherLocation = p[KEY_WEATHER_LOCATION] ?: "",
             showNextAlarmAfterDismiss = p[KEY_NEXT_ALARM_MSG] ?: false,
             timerPresets = (p[KEY_TIMER_PRESETS]
-                ?: DEFAULT_TIMER_PRESETS.joinToString(";") { "${it.label}|${it.seconds}" })
+                ?: DEFAULT_TIMER_PRESETS.joinToString(";") { "${it.label}|sec:${it.seconds}" })
                 .split(';').mapNotNull { part ->
                     val (label, num) = part.split('|').let {
                         it.getOrNull(0) to it.getOrNull(1)

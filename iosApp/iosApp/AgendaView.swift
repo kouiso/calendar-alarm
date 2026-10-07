@@ -97,7 +97,9 @@ struct AgendaView: View {
                     event: ev,
                     calendarName: cal?.name ?? "",
                     calendarColor: cal?.color ?? 0xFF888888,
-                    muted: ov?.muted == true || !rule.enabled,
+                    // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
+                    muted: ov?.muted == true || !rule.enabled
+                        || !store.state.inviteFilter.allows(ev.inviteStatus),
                     effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore
                 )
             }
