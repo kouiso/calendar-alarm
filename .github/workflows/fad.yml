@@ -7,6 +7,11 @@ name: FAD Distribution
 # (新規 UDID が Apple Portal に登録済みなら profile はビルド毎に自動更新される)。
 
 on:
+  push:
+    branches:
+      # VERIFY: 検証用の一時トリガー（dispatch は default branch に無いと起動できない）。
+      # マージ前に取り除く
+      - devin/1791465000-fad-distribution
   workflow_dispatch:
     inputs:
       platform:
