@@ -93,7 +93,7 @@ class NotificationAlarmService : NotificationListenerService() {
         }
         val start = startMinuteOfDay
         val end = endMinuteOfDay
-        if (start != null && end != null) {
+        if (start != null && end != null && start != end) {
             val now = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
             val inWindow = if (start <= end) now in start until end
                 else now >= start || now < end // 深夜跨ぎ (例 22:00-6:00)
