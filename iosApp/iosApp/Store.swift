@@ -13,6 +13,11 @@ final class Store: ObservableObject {
         var defaultMinutesBefore: Int = 0
         var defaultSnoozeMinutes: Int = 10
         var weatherEnabled: Bool = true
+        var defaultStartAction: String = EventAction.alarm.rawValue
+        var defaultReminderAction: String = EventAction.alarm.rawValue
+        var titleCodes: TitleCodeSettings = TitleCodeSettings()
+        var inviteFilter: InviteFilter = InviteFilter()
+        var importEventReminders: Bool = false
         // calendar_prefs: calendarId -> AlarmRuleDTO
         var calendarRules: [String: AlarmRuleDTO] = [:]
         // event_overrides: instanceKey -> EventOverrideDTO
@@ -79,6 +84,20 @@ final class Store: ObservableObject {
     func setDefaultMinutes(_ v: Int) { mutate { $0.defaultMinutesBefore = v } }
     func setDefaultSnooze(_ v: Int) { mutate { $0.defaultSnoozeMinutes = v } }
     func setWeatherEnabled(_ v: Bool) { mutate { $0.weatherEnabled = v } }
+    func setDefaultStartAction(_ a: EventAction) { mutate { $0.defaultStartAction = a.rawValue } }
+    func setDefaultReminderAction(_ a: EventAction) { mutate { $0.defaultReminderAction = a.rawValue } }
+    func setTitleCodes(_ v: TitleCodeSettings) { mutate { $0.titleCodes = v } }
+    func toggleInviteStatus(_ s: InviteStatus) {
+        mutate { f in
+            switch s {
+            case .accepted: f.inviteFilter.accepted.toggle()
+            case .tentative: f.inviteFilter.tentative.toggle()
+            case .needsAction: f.inviteFilter.needsAction.toggle()
+            case .declined: f.inviteFilter.declined.toggle()
+            }
+        }
+    }
+    func setImportEventReminders(_ v: Bool) { mutate { $0.importEventReminders = v } }
 
     // MARK: - calendar prefs
 
@@ -92,8 +111,8 @@ final class Store: ObservableObject {
 
     // MARK: - event overrides
 
-    func setOverride(instanceKey: String, muted: Bool, minutes: Int?, extras: [Int]?) {
-        mutate { $0.overrides[instanceKey] = EventOverrideDTO(muted: muted, minutesBefore: minutes, extraOffsets: extras) }
+    func setOverride(instanceKey: String, action: EventAction, minutes: Int?, extras: [Int]?) {
+        mutate { $0.overrides[instanceKey] = EventOverrideDTO(action: action.rawValue, minutesBefore: minutes, extraOffsets: extras) }
     }
     func removeOverride(instanceKey: String) { mutate { $0.overrides.removeValue(forKey: instanceKey) } }
 

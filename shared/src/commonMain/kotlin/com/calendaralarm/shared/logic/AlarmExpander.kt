@@ -4,8 +4,11 @@ import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.CalendarEvent
+import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
+import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.StandaloneAlarm
+import com.calendaralarm.shared.model.TitleCodeSettings
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -50,13 +53,22 @@ object AlarmExpander {
         // calendar_prefs 行が無いカレンダー用の既定ルール。
         // グローバル設定の「N分前」をここで効かせ、UI表示と実際の鳴動を一致させる。
         defaultRule: AlarmRule = AlarmRule(),
+        titleCodes: TitleCodeSettings = TitleCodeSettings(),
+        inviteFilter: InviteFilter = InviteFilter(),
+        /** true のときイベントがカレンダーに持つリマインダーも鳴動対象にする。 */
+        importEventReminders: Boolean = false,
     ): List<AlarmInstance> {
         val result = mutableListOf<AlarmInstance>()
         for (event in events) {
             if (event.calendarId in disabledCalendarIds) continue
             val rule = calendarRules[event.calendarId] ?: defaultRule
             val override = overrides[event.instanceKey]
-            if (override?.muted == true || !rule.enabled) continue
+            if (!rule.enabled || override?.action == EventAction.MUTE) continue
+            // 招待予定フィルタ。明示的に ALARM を選んだ予定はフィルタより優先
+            // (個別指定がカレンダー横断の既定より具体的な意思表示のため)。
+            if (override?.action != EventAction.ALARM &&
+                !inviteFilter.allows(event.inviteStatus)
+            ) continue
             // 終日イベントは startMillis が UTC 0時。深夜に鳴らさないため
             // イベント日のローカル allDayMinutes (既定9:00) に倒す。負数なら鳴らさない。
             val eventStart = if (event.allDay) {
@@ -70,21 +82,34 @@ object AlarmExpander {
             } else {
                 event.startMillis
             }
+            val startMillis = Instant.fromEpochMilliseconds(eventStart)
             val minutesBefore = override?.minutesBefore ?: rule.minutesBefore
-            val offsets = (listOf(minutesBefore) + (override?.extraOffsets ?: rule.extraOffsets))
-                .distinct().sorted()
-            for (m in offsets) {
-                val triggerAt = Instant.fromEpochMilliseconds(eventStart) - m.minutes
-                if (!inWindow(triggerAt, now, horizon)) continue
+            val extras = override?.extraOffsets ?: rule.extraOffsets
+            val (startAction, reminderAction) = resolveActions(event, rule, override, titleCodes)
+            val title = event.title.ifBlank { "(タイトルなし)" }
+            // triggerAt 重複を避けるため時刻単位で集約 (開始オフセットを優先)
+            val seenTriggers = mutableSetOf<Long>()
+            fun emit(minutes: Int, action: EventAction) {
+                if (action == EventAction.MUTE) return
+                val triggerAt = startMillis - minutes.minutes
+                if (!inWindow(triggerAt, now, horizon)) return
+                if (!seenTriggers.add(triggerAt.toEpochMilliseconds())) return
                 result += AlarmInstance(
-                    id = "ev:${event.instanceKey}:b$m",
+                    id = "ev:${event.instanceKey}:b$minutes",
                     triggerAtMillis = triggerAt.toEpochMilliseconds(),
-                    title = event.title.ifBlank { "(タイトルなし)" },
+                    title = title,
                     kind = AlarmKind.EVENT,
                     eventId = event.instanceKey,
-                    minutesBefore = m,
+                    minutesBefore = minutes,
                     eventStartMillis = eventStart,
+                    delivery = action,
                 )
+            }
+            emit(minutesBefore, startAction)
+            extras.sorted().forEach { emit(it, reminderAction) }
+            // カレンダー側リマインダーの取り込み (アプリ追加分と同じ trigger は重複除外)
+            if (importEventReminders) {
+                event.calendarReminderMinutes.sorted().forEach { emit(it, reminderAction) }
             }
         }
         return result
@@ -129,6 +154,33 @@ object AlarmExpander {
             if (alarm.daysOfWeek.isEmpty()) break
         }
         return result
+    }
+
+    /**
+     * イベントの開始/リマインダーそれぞれの鳴動アクションを解決する。
+     * 優先順位: 明示上書き > neverコード > alwaysコード > ルール既定。
+     * never を always より優先する (抑止を破る方が危ない)。
+     * アジェンダ表示側も同じ解決を使い、UIと実鳴動を一致させる。
+     */
+    fun resolveActions(
+        event: CalendarEvent,
+        rule: AlarmRule,
+        override: EventOverride?,
+        titleCodes: TitleCodeSettings,
+    ): Pair<EventAction, EventAction> {
+        val startAction = override?.action
+            ?: when {
+                titleCodes.applyToStart && titleCodes.neverMatch(event.title) -> EventAction.MUTE
+                titleCodes.applyToStart && titleCodes.alwaysMatch(event.title) -> EventAction.ALARM
+                else -> rule.startAction
+            }
+        val reminderAction = override?.action
+            ?: when {
+                titleCodes.applyToReminders && titleCodes.neverMatch(event.title) -> EventAction.MUTE
+                titleCodes.applyToReminders && titleCodes.alwaysMatch(event.title) -> EventAction.ALARM
+                else -> rule.reminderAction
+            }
+        return startAction to reminderAction
     }
 
     /** 指定時刻が「今すぐ鳴らすべき／未来に予約すべき」窓に入るか。 */

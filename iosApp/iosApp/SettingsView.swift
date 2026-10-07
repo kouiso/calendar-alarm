@@ -9,6 +9,10 @@ struct SettingsView: View {
     @State private var showPerms = false
     @State private var showLog = false
     @State private var showAccountHelp = false
+    @State private var showCodes = false
+
+    private let actionOptions: [(EventAction, String)] =
+        [(.alarm, "アラーム"), (.notify, "通知"), (.mute, "OFF")]
 
     private let minutesOptions = [0, 5, 10, 15, 30]
     private let snoozeOptions = [5, 10, 15]
@@ -35,6 +39,66 @@ struct SettingsView: View {
                             IconRow("sun.max.fill") {
                                 Toggle("", isOn: Binding(get: { store.state.weatherEnabled },
                                                          set: { store.setWeatherEnabled($0) })).labelsHidden()
+                            }
+                        }
+                    }
+
+                    // 予定ルールカード (既定アクション/タイトルコード/招待フィルタ/リマインダー取込)
+                    Card {
+                        VStack(spacing: 14) {
+                            // 開始時の既定アクション
+                            IconRow("alarm.fill") {
+                                Chips(items: actionOptions.map(\.0),
+                                      current: EventAction(rawValue: store.state.defaultStartAction) ?? .alarm) { a in
+                                    store.setDefaultStartAction(a); resync("default action")
+                                } label: { a in actionOptions.first { $0.0 == a }?.1 ?? "" }
+                            }
+                            // 通知分の既定アクション
+                            IconRow("bell.fill") {
+                                Chips(items: actionOptions.map(\.0),
+                                      current: EventAction(rawValue: store.state.defaultReminderAction) ?? .alarm) { a in
+                                    store.setDefaultReminderAction(a); resync("default action")
+                                } label: { a in actionOptions.first { $0.0 == a }?.1 ?? "" }
+                            }
+                            // タイトルコード
+                            IconRow("tag.fill") {
+                                let tc = store.state.titleCodes
+                                Text(tc.alwaysCodes.isEmpty && tc.neverCodes.isEmpty
+                                     ? "—" : "○\(tc.alwaysCodes.count) ×\(tc.neverCodes.count)")
+                                    .font(NightTheme.font(13)).foregroundStyle(.secondary)
+                                Spacer()
+                                Button("編集") { showCodes = true }
+                                    .font(NightTheme.font(13)).foregroundStyle(NightTheme.indigo)
+                            }
+                            // 招待予定フィルタ (複数選択)
+                            IconRow("person.2.fill") {
+                                let f = store.state.inviteFilter
+                                MultiChips(
+                                    items: [InviteStatus.accepted, .tentative, .needsAction, .declined],
+                                    isOn: { s in
+                                        switch s {
+                                        case .accepted: return f.accepted
+                                        case .tentative: return f.tentative
+                                        case .needsAction: return f.needsAction
+                                        case .declined: return f.declined
+                                        }
+                                    },
+                                    onToggle: { s in store.toggleInviteStatus(s); resync("invite filter") },
+                                    label: { s in
+                                        switch s {
+                                        case .accepted: return "出席"
+                                        case .tentative: return "未定"
+                                        case .needsAction: return "未回答"
+                                        case .declined: return "辞退"
+                                        }
+                                    })
+                            }
+                            // 予定側リマインダー取込
+                            IconRow("bell.badge.fill") {
+                                Toggle("", isOn: Binding(
+                                    get: { store.state.importEventReminders },
+                                    set: { store.setImportEventReminders($0); resync("import reminders") }
+                                )).labelsHidden()
                             }
                         }
                     }
@@ -105,6 +169,9 @@ struct SettingsView: View {
                 .padding()
             }
             .background(Color(uiColor: .systemGroupedBackground))
+            .sheet(isPresented: $showCodes) {
+                TitleCodesSheet()
+            }
             .alert("カレンダーの取り込み", isPresented: $showAccountHelp) {
                 Button("OK") {}
             } message: {
@@ -209,6 +276,21 @@ struct SettingsView: View {
                             m < 0 ? "OFF" : "\(m / 60):00"
                         }
                     }
+                    // 開始時 / 通知分のアクション (Android と同じ3択)
+                    IconRow("alarm.fill") {
+                        Chips(items: actionOptions.map(\.0),
+                              current: EventAction(rawValue: rule.startAction) ?? .alarm) { a in
+                            var r = rule; r.startAction = a.rawValue
+                            store.setCalendarRule(cal.id, r); resync("cal pref")
+                        } label: { a in actionOptions.first { $0.0 == a }?.1 ?? "" }
+                    }
+                    IconRow("bell.badge.fill") {
+                        Chips(items: actionOptions.map(\.0),
+                              current: EventAction(rawValue: rule.reminderAction) ?? .alarm) { a in
+                            var r = rule; r.reminderAction = a.rawValue
+                            store.setCalendarRule(cal.id, r); resync("cal pref")
+                        } label: { a in actionOptions.first { $0.0 == a }?.1 ?? "" }
+                    }
                 }
                 .padding(.bottom, 10)
             }
@@ -263,6 +345,28 @@ struct Chips<T: Hashable>: View {
             ForEach(items, id: \.self) { item in
                 let on = item == current
                 Button { onSelect(item) } label: {
+                    Text(label(item))
+                        .font(NightTheme.font(11, weight: .medium))
+                        .padding(.horizontal, 9).padding(.vertical, 6)
+                        .background(on ? NightTheme.indigo.opacity(0.2) : Color(uiColor: .tertiarySystemGroupedBackground), in: Capsule())
+                        .foregroundStyle(on ? NightTheme.indigo : .secondary)
+                }.buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+/// 複数選択トグル用のチップ列 (招待フィルタ等)
+struct MultiChips<T: Hashable>: View {
+    let items: [T]
+    let isOn: (T) -> Bool
+    let onToggle: (T) -> Void
+    let label: (T) -> String
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(items, id: \.self) { item in
+                let on = isOn(item)
+                Button { onToggle(item) } label: {
                     Text(label(item))
                         .font(NightTheme.font(11, weight: .medium))
                         .padding(.horizontal, 9).padding(.vertical, 6)

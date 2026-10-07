@@ -14,6 +14,7 @@ import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.AlarmState
+import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
 import com.calendaralarm.shared.model.StandaloneAlarm
 import kotlinx.coroutines.CoroutineScope
@@ -80,16 +81,23 @@ class AlarmRepository(
 
     fun auditFlow(limit: Int = 100) = db.auditLog().recentFlow(limit)
 
-    /** アジェンダ画面用: イベント + 有効な鳴動ルール。 */
+    /** アジェンダ画面用: イベント + 有効な鳴動ルールと解決済みアクション。 */
     data class AgendaItem(
         val event: com.calendaralarm.shared.model.CalendarEvent,
         val calendarName: String,
         val calendarColor: Int,
-        val muted: Boolean,
+        /** 解決後の開始時アクション (上書き>コード>ルール)。 */
+        val startAction: EventAction,
+        /** 解決後のリマインダーアクション。 */
+        val reminderAction: EventAction,
         val minutesBefore: Int,
         val extraOffsets: List<Int>,
         val hasOverride: Boolean,
-    )
+    ) {
+        /** 何も鳴らない状態 (UI のグレー化判定用)。 */
+        val muted: Boolean
+            get() = startAction == EventAction.MUTE && reminderAction == EventAction.MUTE
+    }
 
     suspend fun upcomingEvents(days: Int = 14): List<AgendaItem> = withContext(Dispatchers.IO) {
         if (!hasCalendarPermission()) return@withContext emptyList()
@@ -101,18 +109,34 @@ class AlarmRepository(
             now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
             (now + days.days).toEpochMilliseconds(),
         )
+        val appSettings = settings.flow.first()
         events.map { ev ->
             val pref = prefs[ev.calendarId]
             val ov = overrides[ev.instanceKey]
+            val rule = AlarmRule(
+                enabled = pref?.enabled != false,
+                minutesBefore = pref?.minutesBefore
+                    ?: appSettings.defaultMinutesBefore,
+                allDayMinutes = pref?.allDayMinutes ?: 540,
+                extraOffsets = pref?.extraOffsetsCsv.toOffsets(),
+                startAction = pref?.startAction?.toAction() ?: appSettings.defaultStartAction,
+                reminderAction = pref?.reminderAction?.toAction()
+                    ?: appSettings.defaultReminderAction,
+            )
+            val override = ov?.toModel()
+            val (start, reminder) = if (pref?.enabled == false) {
+                EventAction.MUTE to EventAction.MUTE
+            } else {
+                AlarmExpander.resolveActions(ev, rule, override, appSettings.titleCodes)
+            }
             AgendaItem(
                 event = ev,
                 calendarName = sources[ev.calendarId]?.name ?: ev.calendarId,
                 calendarColor = sources[ev.calendarId]?.color ?: 0xFF888888.toInt(),
-                muted = ov?.muted ?: (pref?.enabled == false),
-                minutesBefore = ov?.minutesBefore ?: pref?.minutesBefore
-                    ?: settings.flow.first().defaultMinutesBefore,
-                extraOffsets = ov?.extraOffsetsCsv?.toOffsets()
-                    ?: pref?.extraOffsetsCsv.toOffsets(),
+                startAction = start,
+                reminderAction = reminder,
+                minutesBefore = ov?.minutesBefore ?: rule.minutesBefore,
+                extraOffsets = ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets,
                 hasOverride = ov != null,
             )
         }
@@ -231,11 +255,13 @@ class AlarmRepository(
                     minutesBefore = it.minutesBefore,
                     allDayMinutes = it.allDayMinutes,
                     extraOffsets = it.extraOffsetsCsv.toOffsets(),
+                    startAction = it.startAction.toAction(),
+                    reminderAction = it.reminderAction.toAction(),
                 )
             }
             val overrides = db.eventOverrides().all().associate {
                 it.instanceKey to EventOverride(
-                    muted = it.muted,
+                    action = it.action.toActionOrNull(),
                     minutesBefore = it.minutesBefore,
                     extraOffsets = it.extraOffsetsCsv?.toOffsets(),
                 )
@@ -243,9 +269,13 @@ class AlarmRepository(
             val disabledCalIds = prefs.filterValues { !it.enabled }.keys
             val appSettings = settings.flow.first()
             val snoozeDefault = appSettings.defaultSnoozeMinutes
-            // calendar_prefs 行が無いカレンダーはグローバル既定の「N分前」が効く。
+            // calendar_prefs 行が無いカレンダーはグローバル既定が効く。
             // アジェンダ表示も同じ既定を読むため、UIとエンジンを一致させる。
-            val defaultRule = AlarmRule(minutesBefore = appSettings.defaultMinutesBefore)
+            val defaultRule = AlarmRule(
+                minutesBefore = appSettings.defaultMinutesBefore,
+                startAction = appSettings.defaultStartAction,
+                reminderAction = appSettings.defaultReminderAction,
+            )
             val expanded = runCatching {
                 // 過去側はグレース幅ではなく14日に広げる。スヌーズ連鎖が親予定の
                 // 開始から長く伸びても liveEventKeys が親を見失わず、スヌーズ子が
@@ -267,6 +297,9 @@ class AlarmRepository(
                     now = now, horizon = horizon,
                     zone = TimeZone.currentSystemDefault(),
                     defaultRule = defaultRule,
+                    titleCodes = appSettings.titleCodes,
+                    inviteFilter = appSettings.inviteFilter,
+                    importEventReminders = appSettings.importEventReminders,
                 )
             }.getOrNull()
             if (expanded != null) {
@@ -434,6 +467,8 @@ class AlarmRepository(
         minutesBefore: Int,
         allDayMinutes: Int? = null,
         extraOffsets: List<Int>? = null,
+        startAction: EventAction? = null,
+        reminderAction: EventAction? = null,
     ) {
         val current = db.calendarPrefs().all().firstOrNull { it.calendarId == calendarId }
         db.calendarPrefs().upsert(
@@ -443,6 +478,9 @@ class AlarmRepository(
                 minutesBefore = minutesBefore,
                 allDayMinutes = allDayMinutes ?: current?.allDayMinutes ?: 540,
                 extraOffsetsCsv = extraOffsets?.toCsv() ?: current?.extraOffsetsCsv ?: "",
+                startAction = startAction?.name ?: current?.startAction ?: EventAction.ALARM.name,
+                reminderAction = reminderAction?.name
+                    ?: current?.reminderAction ?: EventAction.ALARM.name,
             ),
         )
         resync("calendar pref")
@@ -450,15 +488,15 @@ class AlarmRepository(
 
     suspend fun setEventOverride(
         instanceKey: String,
-        muted: Boolean?,
+        action: EventAction?,
         minutesBefore: Int?,
         extraOffsets: List<Int>? = null,
     ) {
         val current = db.eventOverrides().all().firstOrNull { it.instanceKey == instanceKey }
-        val m = muted ?: current?.muted ?: false
+        val a = action?.name ?: current?.action
         val mb = minutesBefore ?: current?.minutesBefore
         val csv = extraOffsets?.toCsv() ?: current?.extraOffsetsCsv
-        db.eventOverrides().upsert(EventOverrideEntity(instanceKey, m, mb, csv))
+        db.eventOverrides().upsert(EventOverrideEntity(instanceKey, a, mb, csv))
         resync("event override")
     }
 
@@ -483,6 +521,18 @@ class AlarmRepository(
     }
 
     // ---- 変換 ----
+
+    private fun EventOverrideEntity.toModel() = EventOverride(
+        action = action.toActionOrNull(),
+        minutesBefore = minutesBefore,
+        extraOffsets = extraOffsetsCsv?.toOffsets(),
+    )
+
+    private fun String?.toAction(): EventAction =
+        runCatching { EventAction.valueOf(this ?: "") }.getOrDefault(EventAction.ALARM)
+
+    private fun String?.toActionOrNull(): EventAction? =
+        this?.let { runCatching { EventAction.valueOf(it) }.getOrNull() }
 
     private fun StandaloneAlarmEntity.toModel() = StandaloneAlarm(
         id = id,

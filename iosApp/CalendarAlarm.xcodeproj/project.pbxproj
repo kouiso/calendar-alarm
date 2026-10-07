@@ -25,6 +25,7 @@
 		A6D274A92BA0F9A706CB3085 /* CalendarAlarmWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */; };
 		A793851C3CD7E4B1FDBE5794 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F8642EDA4CA9194F126132 /* Store.swift */; };
 		B419682EEBC47B0FA0D3144C /* AgendaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66A4F7800854676434D761F4 /* AgendaView.swift */; };
+		BD5D619B846CB9BA9C171212 /* TitleCodesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3A04452A7A85976807934D /* TitleCodesSheet.swift */; };
 		C81DC1220A1AA99DF92EE408 /* TimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */; };
 		D00DDF3835BD77953502752A /* CalendarAlarmApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1664780F463A19E9DA0C56BA /* CalendarAlarmApp.swift */; };
 		D5FE40480C851F233EFBA4B6 /* plex_sans_jp_light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 93E52D4230819F38EC3DE33A /* plex_sans_jp_light.ttf */; };
@@ -64,6 +65,7 @@
 		66A4F7800854676434D761F4 /* AgendaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaView.swift; sourceTree = "<group>"; };
 		70278C1DA89E0C3594F39E2A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7384BC516B1FE4FB2F672E67 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
+		7A3A04452A7A85976807934D /* TitleCodesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleCodesSheet.swift; sourceTree = "<group>"; };
 		8688F25F9579677C2080FB0E /* RingingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingingView.swift; sourceTree = "<group>"; };
 		93E52D4230819F38EC3DE33A /* plex_sans_jp_light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_light.ttf; sourceTree = "<group>"; };
 		982C5C9DA1E0E6814EDAD684 /* AlarmKitScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmKitScheduler.swift; sourceTree = "<group>"; };
@@ -130,6 +132,7 @@
 				F4F8642EDA4CA9194F126132 /* Store.swift */,
 				C59894E1200D6FB530B33BED /* Theme.swift */,
 				A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */,
+				7A3A04452A7A85976807934D /* TitleCodesSheet.swift */,
 				7384BC516B1FE4FB2F672E67 /* WeatherService.swift */,
 				292CEE1BCE2BA19DFEAD3CBA /* Fonts */,
 			);
@@ -288,6 +291,7 @@
 				A793851C3CD7E4B1FDBE5794 /* Store.swift in Sources */,
 				70C15B080DE1D75F672A4741 /* Theme.swift in Sources */,
 				C81DC1220A1AA99DF92EE408 /* TimerView.swift in Sources */,
+				BD5D619B846CB9BA9C171212 /* TitleCodesSheet.swift in Sources */,
 				78335F051083F14CA2C916EE /* WeatherService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

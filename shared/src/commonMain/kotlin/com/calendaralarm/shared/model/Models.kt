@@ -8,6 +8,56 @@ import kotlinx.serialization.Serializable
 /** アラーム種別。鳴動経路は共通で、種別ごとに鳴動画面の文言を変える。 */
 enum class AlarmKind { EVENT, STANDALONE, TIMER }
 
+/**
+ * 鳴動アクションの3状態 (元アプリ仕様)。
+ * ALARM=フルスクリーン鳴動、NOTIFY=通知のみ、MUTE=何もしない。
+ */
+enum class EventAction { ALARM, NOTIFY, MUTE }
+
+/** 招待された予定の参加可否。null=自分の予定 (フィルタ対象外)。 */
+enum class InviteStatus { ACCEPTED, TENTATIVE, NEEDS_ACTION, DECLINED }
+
+/**
+ * 予定タイトルコード (元アプリ仕様)。
+ * タイトルに含まれるコードで鳴動を強制: always=必ずアラーム、never=鳴らさない。
+ * 各最大15個。適用範囲は開始時刻とリマインダーで分けられる。
+ */
+@Serializable
+data class TitleCodeSettings(
+    val alwaysCodes: List<String> = emptyList(),
+    val neverCodes: List<String> = emptyList(),
+    /** 開始時刻トリガにコードを適用するか。 */
+    val applyToStart: Boolean = true,
+    /** リマインダートリガにコードを適用するか。 */
+    val applyToReminders: Boolean = true,
+) {
+    fun alwaysMatch(title: String): Boolean =
+        alwaysCodes.any { it.isNotBlank() && title.contains(it, ignoreCase = true) }
+
+    fun neverMatch(title: String): Boolean =
+        neverCodes.any { it.isNotBlank() && title.contains(it, ignoreCase = true) }
+}
+
+/**
+ * 招待予定のフィルタ (元アプリ仕様)。
+ * 各ステータスを鳴らすかどうか。招待でない予定は常に対象。
+ */
+@Serializable
+data class InviteFilter(
+    val accepted: Boolean = true,
+    val tentative: Boolean = true,
+    val needsAction: Boolean = true,
+    val declined: Boolean = false,
+) {
+    fun allows(status: InviteStatus?): Boolean = when (status) {
+        null -> true
+        InviteStatus.ACCEPTED -> accepted
+        InviteStatus.TENTATIVE -> tentative
+        InviteStatus.NEEDS_ACTION -> needsAction
+        InviteStatus.DECLINED -> declined
+    }
+}
+
 /** 端末カレンダープロバイダが返すカレンダー。 */
 @Serializable
 data class CalendarSource(
@@ -30,6 +80,10 @@ data class CalendarEvent(
     val endMillis: Long,
     val allDay: Boolean,
     val timezone: String? = null,
+    /** 招待予定の自分の参加ステータス。null=招待でない (自分の予定)。 */
+    val inviteStatus: InviteStatus? = null,
+    /** カレンダー側に設定済みのリマインダー (開始何分前かの分数リスト)。 */
+    val calendarReminderMinutes: List<Int> = emptyList(),
 ) {
     /** 同一イベントの複数回を区別するため、開始時刻込みの安定キーを返す。 */
     val instanceKey: String get() = "$calendarId:$id:$startMillis"
@@ -44,16 +98,26 @@ data class AlarmRule(
     val allDayMinutes: Int = 540,
     /** メインの鳴動に追加するリマインダー (開始何分前かの分数リスト)。 */
     val extraOffsets: List<Int> = emptyList(),
+    /** 開始時刻トリガの既定アクション。 */
+    val startAction: EventAction = EventAction.ALARM,
+    /** 追加リマインダー/予定側リマインダーの既定アクション。 */
+    val reminderAction: EventAction = EventAction.ALARM,
 )
 
-/** イベント個別の上書き設定（ミュート or 分数の上書き）。 */
+/**
+ * イベント個別の上書き設定。
+ * action: null=既定に従う、MUTE=鳴らさない、NOTIFY=通知のみ、ALARM=必ず鳴らす。
+ * タイトルコードよりユーザーの明示操作を優先する (イベント1個への指定が最も具体的)。
+ */
 @Serializable
 data class EventOverride(
-    val muted: Boolean = false,
+    val action: EventAction? = null,
     val minutesBefore: Int? = null,
     /** null はカレンダー既定を使う。空リストは「追加リマインダーなし」。 */
     val extraOffsets: List<Int>? = null,
-)
+) {
+    val muted: Boolean get() = action == EventAction.MUTE
+}
 
 /** 例外なし・例外付きの単発/曜日繰り返しアラーム。 */
 @Serializable
@@ -86,6 +150,8 @@ data class AlarmInstance(
     val eventStartMillis: Long? = null,
     /** スヌーズ由来のインスタンスは1、それ以外は0。 */
     val snoozeSeq: Int = 0,
+    /** 鳴動方法。ALARM=全画面鳴動、NOTIFY=通知のみ。MUTE は展開段階で除外済み。 */
+    val delivery: EventAction = EventAction.ALARM,
 ) {
     fun snoozed(nextTriggerMillis: Long): AlarmInstance =
         // URI 経由で渡す都合上 '#' は使えない (fragment 扱いで lastPathSegment が化ける)

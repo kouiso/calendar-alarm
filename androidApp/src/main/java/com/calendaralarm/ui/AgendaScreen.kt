@@ -36,7 +36,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,6 +57,7 @@ import com.calendaralarm.CalendarAlarmApp
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.sync.SyncWorker
 import com.calendaralarm.shared.model.CalendarEvent
+import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.DailyForecast
 import com.calendaralarm.shared.weather.WeatherApi
 import kotlinx.coroutines.launch
@@ -142,9 +142,9 @@ fun AgendaScreen(repository: AlarmRepository) {
             EventDetailSheet(
                 item = item,
                 weatherEnabled = settings?.weatherEnabled ?: true,
-                onOverride = { muted, minutes, extraOffsets ->
+                onOverride = { action, minutes, extraOffsets ->
                     scope.launch {
-                        repository.setEventOverride(item.event.instanceKey, muted, minutes, extraOffsets)
+                        repository.setEventOverride(item.event.instanceKey, action, minutes, extraOffsets)
                         selected = null
                         refreshKey++
                     }
@@ -323,15 +323,24 @@ private fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
                 maxLines = 1,
             )
         }
-        // 鳴動状態アイコン
+        // 鳴動状態アイコン (アラーム/通知のみ/ミュートの3状態)
+        val (icon, iconTint) = when {
+            item.startAction == EventAction.MUTE && item.reminderAction == EventAction.MUTE ->
+                Icons.Default.NotificationsOff to
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+            item.startAction == EventAction.ALARM ->
+                Icons.Default.Notifications to MaterialTheme.colorScheme.primary
+            else ->
+                Icons.Default.Notifications to MaterialTheme.colorScheme.tertiary
+        }
         Icon(
-            if (item.muted) Icons.Default.NotificationsOff else Icons.Default.Notifications,
-            contentDescription = if (item.muted) "鳴動OFF" else "鳴動ON",
-            tint = if (item.muted) {
-                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-            } else {
-                MaterialTheme.colorScheme.primary
+            icon,
+            contentDescription = when {
+                item.muted -> "鳴動OFF"
+                item.startAction == EventAction.ALARM -> "アラーム"
+                else -> "通知のみ"
             },
+            tint = iconTint,
         )
         if (!item.muted && item.minutesBefore > 0) {
             Spacer(Modifier.width(4.dp))
@@ -350,12 +359,13 @@ private fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
 private fun EventDetailSheet(
     item: AlarmRepository.AgendaItem,
     weatherEnabled: Boolean,
-    onOverride: (muted: Boolean, minutesBefore: Int?, extraOffsets: List<Int>?) -> Unit,
+    onOverride: (action: EventAction, minutesBefore: Int?, extraOffsets: List<Int>?) -> Unit,
     onClearOverride: () -> Unit,
     weatherLoader: suspend (String) -> List<DailyForecast>?,
 ) {
     val ev = item.event
-    var muted by remember { mutableStateOf(item.muted) }
+    // 3状態。開始とリマインダーが混在する場合は開始側を初期値に
+    var action by remember { mutableStateOf(item.startAction) }
     var minutes by remember { mutableIntStateOf(item.minutesBefore) }
     var extras by remember { mutableStateOf(item.extraOffsets) }
     var forecast by remember { mutableStateOf<List<DailyForecast>?>(null) }
@@ -421,23 +431,25 @@ private fun EventDetailSheet(
         }
 
         Spacer(Modifier.height(20.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Default.Notifications,
-                contentDescription = "この予定でアラームを鳴らす",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp),
-            )
-            Spacer(Modifier.weight(1f))
-            Switch(
-                checked = !muted,
-                onCheckedChange = { on ->
-                    muted = !on
-                    onOverride(!on, if (on) minutes else null, if (on) extras else null)
-                },
-            )
+        // アクション3択: アラーム鳴動 / 通知のみ / 鳴らさない
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            listOf(
+                EventAction.ALARM to "アラーム",
+                EventAction.NOTIFY to "通知のみ",
+                EventAction.MUTE to "鳴らさない",
+            ).forEachIndexed { i, (a, label) ->
+                SegmentedButton(
+                    selected = action == a,
+                    onClick = {
+                        action = a
+                        onOverride(a, if (a == EventAction.MUTE) null else minutes,
+                            if (a == EventAction.MUTE) null else extras)
+                    },
+                    shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
+                ) { Text(label) }
+            }
         }
-        if (!muted) {
+        if (action != EventAction.MUTE) {
             Spacer(Modifier.height(8.dp))
             val options = listOf(0 to "開始時", 5 to "5分前", 10 to "10分前", 15 to "15分前", 30 to "30分前", 60 to "1時間前")
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -446,7 +458,7 @@ private fun EventDetailSheet(
                         selected = minutes == v,
                         onClick = {
                             minutes = v
-                            onOverride(false, v, extras)
+                            onOverride(action, v, extras)
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
                     ) { Text(label) }
@@ -459,7 +471,7 @@ private fun EventDetailSheet(
                         selected = minutes == v,
                         onClick = {
                             minutes = v
-                            onOverride(false, v, extras)
+                            onOverride(action, v, extras)
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
                     ) { Text(label) }
@@ -473,7 +485,7 @@ private fun EventDetailSheet(
                         selected = v in extras,
                         onClick = {
                             extras = if (v in extras) extras - v else (extras + v).sorted()
-                            onOverride(false, minutes, extras)
+                            onOverride(action, minutes, extras)
                         },
                         label = { Text("+$label") },
                         modifier = Modifier.padding(end = 6.dp),

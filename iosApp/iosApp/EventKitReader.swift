@@ -54,8 +54,36 @@ final class EventKitReader {
                 startMillis: Int64(ev.startDate.timeIntervalSince1970 * 1000),
                 endMillis: Int64((ev.endDate ?? ev.startDate).timeIntervalSince1970 * 1000),
                 allDay: ev.isAllDay,
-                timezone: tzId
+                timezone: tzId,
+                inviteStatus: Self.inviteStatus(of: ev),
+                calendarReminderMinutes: Self.reminderMinutes(of: ev)
             )
+        }
+    }
+
+    /// 自分の参加可否 → InviteStatus。自分主催の予定は nil (フィルタ対象外)。
+    private static func inviteStatus(of ev: EKEvent) -> String? {
+        // 主催者が自分なら招待ではない
+        if ev.organizer?.isCurrentUser == true { return nil }
+        guard let me = ev.attendees?.first(where: { $0.isCurrentUser }) else { return nil }
+        switch me.participantStatus {
+        case .accepted: return InviteStatus.accepted.rawValue
+        case .tentative: return InviteStatus.tentative.rawValue
+        case .declined: return InviteStatus.declined.rawValue
+        case .pending: return InviteStatus.needsAction.rawValue
+        default: return nil
+        }
+    }
+
+    /// カレンダー側アラーム → 開始N分前の分数一覧。
+    private static func reminderMinutes(of ev: EKEvent) -> [Int] {
+        (ev.alarms ?? []).compactMap { alarm in
+            let seconds = alarm.relativeOffset
+            // relativeOffset は開始前が負値。絶対時刻指定のアラームは拾わない
+            // (absoluteDate 形式を minutes に倒すとイベント開始との差が必要で
+            //  読み取り時に毎回計算するより、近似は残すなら正確に残すべき)。
+            guard seconds < 0 else { return nil }
+            return Int(-seconds / 60)
         }
     }
 

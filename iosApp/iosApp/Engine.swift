@@ -159,7 +159,12 @@ final class Engine: ObservableObject {
             zoneId: zone,
             defaultMinutesBefore: s.defaultMinutesBefore,
             defaultSnoozeMinutes: s.defaultSnoozeMinutes,
-            standaloneDays: horizonDays
+            standaloneDays: horizonDays,
+            defaultStartAction: s.defaultStartAction,
+            defaultReminderAction: s.defaultReminderAction,
+            titleCodes: s.titleCodes,
+            inviteFilter: s.inviteFilter,
+            importEventReminders: s.importEventReminders
         )
         guard var desired = SharedDomain.expand(expandReq)?.instances else {
             store.audit("RESYNC_FAIL", "shared expand returned nil")
@@ -172,7 +177,7 @@ final class Engine: ObservableObject {
         // スヌーズ中インスタンスの親がまだ「鳴らすべき」かの判定に使う。
         // 読み取り失敗時は空のまま (EVENT 温存経路で保護される)。
         let liveEventKeys: Set<String> = calendarsOk ? Set(events.filter {
-            s.overrides[$0.instanceKey]?.muted != true &&
+            s.overrides[$0.instanceKey]?.action != EventAction.mute.rawValue &&
             (s.calendarRules[$0.calendarId]?.enabled ?? true)
         }.map { $0.instanceKey }) : []
 
@@ -237,6 +242,11 @@ final class Engine: ObservableObject {
             scheduledCount = ak.allAlarms.count
         }
         for inst in plan.toFireNow {
+            // NOTIFY 配信はアラーム予約ではなく即時通知に倒す
+            if inst.delivery == EventAction.notify.rawValue {
+                deliverNotifyNow(inst)
+                continue
+            }
             let shifted = AlarmInstanceDTO(
                 id: inst.id,
                 triggerAtMillis: now + 5_000,
@@ -248,7 +258,8 @@ final class Engine: ObservableObject {
                 soundUri: inst.soundUri,
                 minutesBefore: inst.minutesBefore,
                 eventStartMillis: inst.eventStartMillis,
-                snoozeSeq: inst.snoozeSeq
+                snoozeSeq: inst.snoozeSeq,
+                delivery: inst.delivery
             )
             do {
                 let rid = try await scheduler.schedule(shifted)
@@ -264,6 +275,15 @@ final class Engine: ObservableObject {
             .filter { !fireNowIds.contains($0.id) && $0.triggerAtMillis > now }
             .sorted { ($0.snoozeSeq > 0 ? Int64.min : $0.triggerAtMillis) < ($1.snoozeSeq > 0 ? Int64.min : $1.triggerAtMillis) }
         for inst in future {
+            if inst.delivery == EventAction.notify.rawValue {
+                // NOTIFY は AlarmKit 枠を消費せず UN 通知として時刻指定で予約する。
+                // 発火時にアプリ側のコールバックは要らない — 記録は発火済み扱いで残し、
+                // 展開が同 id を再生しても terminalIds が蘇生を防ぐ。
+                scheduleEventNotification(inst, atMillis: inst.triggerAtMillis)
+                store.putScheduled(ScheduledRecord(instance: inst, state: .fired))
+                store.audit("NOTIFY_SCHED", "\(inst.title) @\(Self.hm(inst.triggerAtMillis))")
+                continue
+            }
             if scheduledCount >= capacity {
                 store.audit("CAPACITY_SKIP", "\(inst.title)")
                 continue
@@ -381,6 +401,33 @@ final class Engine: ObservableObject {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
         return f.string(from: Date(timeIntervalSince1970: TimeInterval(millis) / 1000))
+    }
+
+    /// NOTIFY 配信: 期限切れ分はその場で通知を出す。
+    private func deliverNotifyNow(_ inst: AlarmInstanceDTO) {
+        scheduleEventNotification(inst, atMillis: nil)
+        store.putScheduled(ScheduledRecord(instance: inst, state: .fired))
+        store.audit("NOTIFY", "\(inst.title)")
+    }
+
+    /// 予定の「通知のみ」アクションの通知を出す (atMillis=nil なら即時)。
+    private func scheduleEventNotification(_ inst: AlarmInstanceDTO, atMillis: Int64?) {
+        let content = UNMutableNotificationContent()
+        content.title = inst.title
+        content.body = inst.minutesBefore <= 0
+            ? "開始時刻です"
+            : "\(inst.minutesBefore)分前です"
+        content.sound = .default
+        var trigger: UNNotificationTrigger? = nil
+        if let at = atMillis {
+            let comps = Calendar.current.dateComponents(
+                [.year, .month, .day, .hour, .minute, .second],
+                from: Date(timeIntervalSince1970: TimeInterval(at) / 1000))
+            trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+        }
+        let req = UNNotificationRequest(
+            identifier: "notify-\(inst.id)", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(req) { _ in }
     }
 
     /// MISSED になったアラームの通知 (通知権限がある時のみ実際に出る)。
