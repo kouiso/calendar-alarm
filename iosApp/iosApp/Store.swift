@@ -46,6 +46,17 @@ final class Store: ObservableObject {
         }
     }
 
+    /// ディスクの最新状態を読み直す。BG タスクは別プロセス上の別 Store で動くため、
+    /// 前景復帰時にメモリのスナップショットが BG 側の保存を見落とすのを防ぐ。
+    /// 保存キューの未完了書き込みを先に flush してから読む。
+    func reload() {
+        saveQueue.sync {}
+        if let data = try? Data(contentsOf: fileURL),
+           let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
+            state = loaded
+        }
+    }
+
     /// 書き出しは直列キューで原子的に (tmp → rename)。呼び出し順=書き込み順なので最後の保存が常に最新。
     func save() {
         let snapshot = state

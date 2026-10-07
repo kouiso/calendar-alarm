@@ -23,6 +23,8 @@ struct CalendarAlarmApp: App {
                 }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active {
+                        // BG resync は別 Store で保存済み → 先にディスクを読み直してから resync
+                        engine.store.reload()
                         Task { await engine.resync(reason: "foreground") }
                     }
                 }
