@@ -9,6 +9,8 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
+    # 自動署名の対象チーム（FAD の ad-hoc 配布は RITMO の ADP アカウントで行う）
+    DEVELOPMENT_TEAM: ZZ4FA7NLUY
 
 schemes:
   iosApp:
