@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Card
@@ -91,7 +92,7 @@ fun SettingsScreen(
         item {
             val defaultMin = prefs?.defaultMinutesBefore ?: 0
             Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                Text("イベント連動の既定", style = MaterialTheme.typography.bodyLarge)
+                Text("予定の通知タイミング", style = MaterialTheme.typography.bodyLarge)
                 Row(Modifier.padding(top = 4.dp)) {
                     listOf(0, 5, 10, 15).forEach { m ->
                         FilterChip(
@@ -120,7 +121,7 @@ fun SettingsScreen(
             }
         }
         item {
-            SettingRow("イベント場所の天気予報") {
+            SettingRow("予定の場所の天気") {
                 Switch(
                     checked = prefs?.weatherEnabled ?: true,
                     onCheckedChange = { scope.launch { settings.setWeatherEnabled(it) } },
@@ -155,13 +156,11 @@ fun SettingsScreen(
             }
         }
         item {
-            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Text(
-                    "端末に登録されたアカウントのカレンダーは自動で取り込まれます。\nMicrosoft(Outlook/Exchange) は Outlook アプリの「カレンダーと同期」か、端末設定のアカウント追加 (Exchange) で出てきます。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
+            var showAccountHelp by remember { mutableStateOf(false) }
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 androidx.compose.material3.TextButton(
                     onClick = {
                         runCatching {
@@ -181,35 +180,79 @@ fun SettingsScreen(
                         }
                     },
                 ) {
-                    Text("＋ アカウントを追加してカレンダーを取り込む")
+                    Text("＋ アカウントを追加")
                 }
+                Spacer(Modifier.width(4.dp))
+                androidx.compose.material3.IconButton(onClick = { showAccountHelp = true }) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = "取り込みの説明",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                androidx.compose.material3.TextButton(
+                    onClick = { scope.launch { repository.resync("manual") } },
+                ) {
+                    Text("今すぐ再同期")
+                }
+            }
+            if (showAccountHelp) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showAccountHelp = false },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = { showAccountHelp = false }) {
+                            Text("閉じる")
+                        }
+                    },
+                    text = {
+                        Text(
+                            "端末に登録されたアカウントのカレンダーは自動で取り込まれます。\n\nMicrosoft(Outlook/Exchange) は Outlook アプリの「カレンダーと同期」をオンにするか、端末設定で Exchange アカウントを追加すると出てきます。",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    },
+                )
             }
         }
 
         // ---- 権限の健康状態 ----
-        item { SectionHeader("権限・信頼性") }
-        item { PermissionHealthCard(context, repository) }
+        item { SectionHeader("権限") }
+        item { PermissionHealthCard(context) }
 
         // ---- 監査ログ ----
-        item { SectionHeader("鳴動ログ (直近50件)") }
-        if (audit.isEmpty()) {
-            item {
-                Text(
-                    "まだログがありません",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        } else {
-            item {
-                Card(
-                    Modifier.fillMaxWidth(),
-                    colors = androidx.compose.material3.CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    ),
-                ) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-                        audit.forEach { log -> AuditRow(log) }
+        item { SectionHeader("鳴動ログ") }
+        item {
+            var logExpanded by remember { mutableStateOf(false) }
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                ),
+            ) {
+                Column {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { logExpanded = !logExpanded }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (audit.isEmpty()) "まだログがありません" else "直近 ${audit.size} 件",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(
+                            if (logExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (logExpanded) "畳む" else "開く",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (logExpanded) {
+                        Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 8.dp)) {
+                            audit.forEach { log -> AuditRow(log) }
+                        }
                     }
                 }
             }
@@ -240,10 +283,9 @@ private fun SettingRow(label: String, content: @Composable () -> Unit) {
     }
 }
 
-/** 権限状態を一覧し、足りなければ設定画面へ誘導する。 */
+/** 権限状態。既定は1行サマリ — 欠落がある時だけ自動展開して修復導線を出す。 */
 @Composable
-private fun PermissionHealthCard(context: Context, repository: AlarmRepository) {
-    val scope = rememberCoroutineScope()
+private fun PermissionHealthCard(context: Context) {
     val activity = context as? Activity
 
     val notifOk = Build.VERSION.SDK_INT < 33 ||
@@ -258,6 +300,8 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
     } else true
     val batteryOk = context.getSystemService(PowerManager::class.java)
         ?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+    val ngCount = listOf(notifOk, exactOk, fsiOk, batteryOk).count { !it }
+    var expanded by remember { mutableStateOf(ngCount > 0) }
 
     Card(
         Modifier.fillMaxWidth(),
@@ -265,54 +309,71 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
     ) {
-        Column(Modifier.padding(16.dp)) {
-            HealthRow("通知の許可", notifOk) {
-                activity?.let {
-                    val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        Column {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("権限", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    if (ngCount == 0) "すべてOK" else "要対応 ${ngCount}件",
+                    color = if (ngCount == 0) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Icon(
+                    if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (expanded) "畳む" else "開く",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (expanded) {
+                Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp)) {
+                    HealthRow("通知", notifOk) {
+                        activity?.let {
+                            val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            }
+                            it.startActivity(i)
+                        }
                     }
-                    it.startActivity(i)
+                    HealthRow("正確なアラーム", exactOk) {
+                        activity?.startActivity(
+                            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                            },
+                        )
+                    }
+                    HealthRow("フルスクリーン通知", fsiOk) {
+                        if (Build.VERSION.SDK_INT >= 34) {
+                            activity?.startActivity(
+                                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                },
+                            )
+                        }
+                    }
+                    HealthRow("電池最適化から除外", batteryOk) {
+                        activity?.startActivity(
+                            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                            },
+                        )
+                    }
+                    if (!batteryOk) {
+                        Text(
+                            "メーカー独自の節電機能がある端末では、メーカー設定でもこのアプリを「保護」にしてください。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                 }
             }
-            HealthRow("正確なアラーム", exactOk) {
-                activity?.startActivity(
-                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                        data = Uri.parse("package:${context.packageName}")
-                    },
-                )
-            }
-            HealthRow("フルスクリーン通知", fsiOk) {
-                if (Build.VERSION.SDK_INT >= 34) {
-                    activity?.startActivity(
-                        Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
-                            data = Uri.parse("package:${context.packageName}")
-                        },
-                    )
-                }
-            }
-            HealthRow("電池最適化から除外", batteryOk) {
-                activity?.startActivity(
-                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                        data = Uri.parse("package:${context.packageName}")
-                    },
-                )
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "メーカー独自の節電機能 (dontkillmyapp 系) がある端末では、メーカー設定でこのアプリを「保護」「起動許可」にしてください。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                "手動で今すぐ再同期",
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier
-                    .padding(top = 10.dp)
-                    .clickable {
-                        scope.launch { repository.resync("manual") }
-                    },
-            )
         }
     }
 }
