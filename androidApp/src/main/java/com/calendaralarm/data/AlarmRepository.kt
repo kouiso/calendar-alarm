@@ -169,16 +169,17 @@ class AlarmRepository(
         onScheduleChanged?.invoke()
     }
 
-    suspend fun onSnoozed(id: String?) {
+    suspend fun onSnoozed(id: String?, snoozeMinutes: Int? = null) {
         val entity = id?.let { db.scheduledInstances().byId(it) } ?: return
         val instance = entity.toInstance()
+        val minutes = snoozeMinutes ?: instance.snoozeMinutes
         val snoozed = instance.snoozed(
-            Clock.System.now().toEpochMilliseconds() + instance.snoozeMinutes * 60_000L,
-        )
+            Clock.System.now().toEpochMilliseconds() + minutes * 60_000L,
+        ).copy(snoozeMinutes = minutes)
         db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(snoozed)))
         if (!scheduler.schedule(snoozed)) audit("EXACT_DENIED", snoozed.id)
         setState(instance.id, AlarmState.SNOOZED)
-        audit("SNOOZE", "${instance.id} +${instance.snoozeMinutes}m → ${snoozed.id}")
+        audit("SNOOZE", "${instance.id} +${minutes}m → ${snoozed.id}")
         onScheduleChanged?.invoke()
     }
 
@@ -233,9 +234,13 @@ class AlarmRepository(
             .filter { it.id in terminalIds }
             .mapNotNull { it.standaloneAlarmId }
             .toSet()
+        val appSettings = settings.flow.first()
         val standalones = db.standaloneAlarms().all().map { it.toModel() }
         standalones.forEach { alarm ->
-            if (alarm.daysOfWeek.isNotEmpty() || alarm.id !in consumedAlarmIds) {
+            // 一括ミュート中は単発/繰返しアラーム自体を展開しない (全部 ALARM 鳴動のため)
+            if (!appSettings.muteAll &&
+                (alarm.daysOfWeek.isNotEmpty() || alarm.id !in consumedAlarmIds)
+            ) {
                 desired += AlarmExpander.expandStandalone(alarm, now = now, days = 14)
             }
         }
@@ -267,7 +272,6 @@ class AlarmRepository(
                 )
             }
             val disabledCalIds = prefs.filterValues { !it.enabled }.keys
-            val appSettings = settings.flow.first()
             val snoozeDefault = appSettings.defaultSnoozeMinutes
             // calendar_prefs 行が無いカレンダーはグローバル既定が効く。
             // アジェンダ表示も同じ既定を読むため、UIとエンジンを一致させる。
@@ -300,6 +304,7 @@ class AlarmRepository(
                     titleCodes = appSettings.titleCodes,
                     inviteFilter = appSettings.inviteFilter,
                     importEventReminders = appSettings.importEventReminders,
+                    muteAll = appSettings.muteAll,
                 )
             }.getOrNull()
             if (expanded != null) {
@@ -547,6 +552,7 @@ class AlarmRepository(
             .filter { it.isNotBlank() }
             .mapNotNull { runCatching { LocalDate.parse(it.trim()) }.getOrNull() }
             .toSet(),
+        muteUntilUnlock = muteUntilUnlock,
     )
 
     private fun StandaloneAlarm.toEntity() = StandaloneAlarmEntity(
@@ -559,6 +565,7 @@ class AlarmRepository(
         soundUri = soundUri,
         snoozeMinutes = snoozeMinutes,
         exceptionsCsv = exceptions.joinToString(",") { it.toString() },
+        muteUntilUnlock = muteUntilUnlock,
     )
 
     companion object {

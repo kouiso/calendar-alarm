@@ -164,7 +164,8 @@ final class Engine: ObservableObject {
             defaultReminderAction: s.defaultReminderAction,
             titleCodes: s.titleCodes,
             inviteFilter: s.inviteFilter,
-            importEventReminders: s.importEventReminders
+            importEventReminders: s.importEventReminders,
+            muteAll: s.muteAll
         )
         guard var desired = SharedDomain.expand(expandReq)?.instances else {
             store.audit("RESYNC_FAIL", "shared expand returned nil")

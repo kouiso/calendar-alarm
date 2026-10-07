@@ -40,7 +40,11 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Snooze
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -52,6 +56,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -190,6 +195,14 @@ fun SettingsScreen(
         item {
             prefs?.let { p ->
                 EventRulesCard(p, settings, scope)
+            }
+        }
+
+        // ---- 鳴動: 音量/クレッシェンド/バイブ/一括ミュート ----
+        item { Spacer(Modifier.height(12.dp)) }
+        item {
+            prefs?.let { p ->
+                RingingCard(p, settings, scope)
             }
         }
 
@@ -804,5 +817,91 @@ private fun AuditRow(log: AuditLogEntity) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+// ---- 鳴動設定: 元アプリの音量系 (独立音量・徐々に音量UP・バイブ) + 一括ミュート ----
+@Composable
+private fun RingingCard(
+    p: SettingsRepository.Settings,
+    settings: SettingsRepository,
+    scope: kotlinx.coroutines.CoroutineScope,
+) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+            // アラーム音量 (0 = 端末のアラーム音量に従う)
+            IconSettingRow(Icons.Default.VolumeUp) {
+                Text(
+                    if (p.alarmVolumePercent <= 0) "音量: 端末設定"
+                    else "音量: ${p.alarmVolumePercent}%",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Slider(
+                value = p.alarmVolumePercent.coerceIn(0, 100) / 100f,
+                onValueChange = { v ->
+                    scope.launch { settings.setAlarmVolumePercent((v * 100).toInt()) }
+                },
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+            // スヌーズプリセット (鳴動画面の +N分 ボタンに出る一覧)
+            IconSettingRow(Icons.Default.Snooze) {
+                listOf(1, 5, 10, 15, 20, 30, 45, 60, 90).forEach { m ->
+                    val on = m in p.snoozePresets
+                    FilterChip(
+                        selected = on,
+                        onClick = {
+                            val next = if (on) p.snoozePresets - m else (p.snoozePresets + m).sorted()
+                            scope.launch { settings.setSnoozePresets(next) }
+                        },
+                        label = { Text("${m}分", maxLines = 1) },
+                        modifier = Modifier.padding(end = 4.dp),
+                    )
+                }
+            }
+            IconSettingRow(Icons.Default.TrendingUp) {
+                Text(
+                    "音量を徐々に上げる",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                Switch(
+                    checked = p.volumeCrescendo,
+                    onCheckedChange = { scope.launch { settings.setVolumeCrescendo(it) } },
+                )
+            }
+            IconSettingRow(Icons.Default.Vibration) {
+                Text(
+                    "バイブレーション",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                Switch(
+                    checked = p.vibrateWhileRinging,
+                    onCheckedChange = { scope.launch { settings.setVibrateWhileRinging(it) } },
+                )
+            }
+            // 全アラーム一括ミュート (通知・タイマーは止めない)
+            IconSettingRow(Icons.Default.VolumeOff) {
+                Text(
+                    "すべてのアラームをミュート",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                Switch(
+                    checked = p.muteAll,
+                    onCheckedChange = { scope.launch { settings.setMuteAll(it) } },
+                )
+            }
+        }
     }
 }

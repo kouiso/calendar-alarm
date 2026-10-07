@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -64,12 +65,17 @@ class RingingActivity : ComponentActivity() {
                         .instanceFlow(instanceIdState.value ?: "")
                         .map { it }
                         .collectAsState(initial = null)
+                    val presets by app.container.settings.flow
+                        .map { it.snoozePresets }
+                        .collectAsState(initial = listOf(instance?.snoozeMinutes ?: 10))
                     RingingScreen(
                         title = instance?.title ?: "アラーム",
                         triggerAtMillis = instance?.triggerAtMillis ?: System.currentTimeMillis(),
                         snoozeMinutes = instance?.snoozeMinutes ?: 10,
+                        snoozePresets = presets,
                         onDismiss = { sendAction(AlarmService.ACTION_DISMISS) },
                         onSnooze = { sendAction(AlarmService.ACTION_SNOOZE) },
+                        onSnoozeAt = { m -> sendAction(AlarmService.ACTION_SNOOZE, m) },
                     )
                 }
             }
@@ -83,11 +89,14 @@ class RingingActivity : ComponentActivity() {
         instanceIdState.value = intent.getStringExtra(EXTRA_INSTANCE_ID)
     }
 
-    private fun sendAction(action: String) {
+    private fun sendAction(action: String, snoozeMinutes: Int? = null) {
         startService(
             Intent(this, AlarmService::class.java).apply {
                 this.action = action
                 putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceIdState.value)
+                if (snoozeMinutes != null) {
+                    putExtra(AlarmService.EXTRA_SNOOZE_MINUTES, snoozeMinutes)
+                }
             },
         )
         finish()
@@ -125,8 +134,10 @@ private fun RingingScreen(
     title: String,
     triggerAtMillis: Long,
     snoozeMinutes: Int,
+    snoozePresets: List<Int>,
     onDismiss: () -> Unit,
     onSnooze: () -> Unit,
+    onSnoozeAt: (Int) -> Unit,
 ) {
     val time = SimpleDateFormat("H:mm", Locale.getDefault()).format(Date(triggerAtMillis))
     // 鳴動画面はテーマに依らず常時ダーク: 朝の暗い部屋で眩しくしない+集中させる
@@ -177,6 +188,18 @@ private fun RingingScreen(
                         fontSize = 18.sp,
                         color = Color(0xFFB9B9E0),
                     )
+                }
+                Spacer(Modifier.height(8.dp))
+                // 元アプリのスヌーズプリセット (設定で並び替え/編集された一覧をそのまま出す)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    snoozePresets.take(6).forEach { m ->
+                        TextButton(
+                            onClick = { onSnoozeAt(m) },
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        ) {
+                            Text("+${m}分", fontSize = 14.sp, color = Color(0xFFB9B9E0))
+                        }
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
             }

@@ -1,5 +1,6 @@
 package com.calendaralarm.engine
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -27,6 +28,7 @@ import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
@@ -43,6 +45,7 @@ class AlarmService : Service() {
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var currentInstance: AlarmInstance? = null
+    private var crescendoJob: kotlinx.coroutines.Job? = null
 
     private val app get() = application as CalendarAlarmApp
 
@@ -60,8 +63,10 @@ class AlarmService : Service() {
             }
             ACTION_SNOOZE -> {
                 val id = intent.getStringExtra(EXTRA_INSTANCE_ID)
+                // 鳴動画面のプリセットからの分数指定 (未指定=インスタンス既定)
+                val mins = intent.getIntExtra(EXTRA_SNOOZE_MINUTES, 0).takeIf { it > 0 }
                 scope.launch {
-                    app.container.repository.onSnoozed(id ?: currentInstance?.id)
+                    app.container.repository.onSnoozed(id ?: currentInstance?.id, mins)
                     stopRinging()
                     stopSelf(startId)
                 }
@@ -114,13 +119,29 @@ class AlarmService : Service() {
             stopSelf()
             return
         }
+        // 「ロック解除までミュート」: 端末がロック中なら鳴らさず留保し、
+        // ACTION_USER_PRESENT で再発火する。予約は PENDING のまま残る。
+        if (instance.muteUntilUnlock &&
+            getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
+        ) {
+            UnlockRingReceiver.defer(this, instance.id)
+            app.container.repository.audit("DEFER", "${instance.id}: ロック解除まで鳴動を遅延")
+            stopRinging()
+            stopSelf()
+            return
+        }
+        val ringSettings = app.container.settings.flow.first()
         ringingInstanceId.value = instanceId
         app.container.repository.onFired(instanceId)
         // タイトルが取れたので通知を張り替える
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification(instanceId))
-        startAudio(instance.soundUri)
-        startVibration()
+        startAudio(
+            instance.soundUri ?: ringSettings.defaultSoundUri,
+            volumePercent = ringSettings.alarmVolumePercent,
+            crescendo = ringSettings.volumeCrescendo,
+        )
+        if (ringSettings.vibrateWhileRinging) startVibration()
         acquireWakeLock()
     }
 
@@ -187,7 +208,7 @@ class AlarmService : Service() {
         )
     }
 
-    private fun startAudio(soundUri: String?) {
+    private fun startAudio(soundUri: String?, volumePercent: Int, crescendo: Boolean) {
         // カスタム音が失効していても無音にはしない。候補を順に試す。
         val candidates = listOfNotNull(
             soundUri?.let(Uri::parse),
@@ -195,6 +216,8 @@ class AlarmService : Service() {
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
         ).distinct()
+        // 0以下はシステムのアラーム音量に追従 (setVolume しない)
+        val target = if (volumePercent > 0) volumePercent / 100f else -1f
         for (uri in candidates) {
             val player = MediaPlayer()
             val ok = runCatching {
@@ -206,11 +229,16 @@ class AlarmService : Service() {
                 )
                 player.setDataSource(this@AlarmService, uri)
                 player.isLooping = true
+                if (target >= 0f) {
+                    // クレッシェンド開始はほぼ無音から、そうでなければ即目標音量
+                    player.setVolume(if (crescendo) CRESCENDO_START else target, if (crescendo) CRESCENDO_START else target)
+                }
                 player.prepare()
                 player.start()
             }.isSuccess
             if (ok) {
                 mediaPlayer = player
+                if (crescendo && target >= 0f) startCrescendo(player, target)
                 if (uri != candidates.firstOrNull()) {
                     scope.launch {
                         app.container.repository.audit("ERROR", "希望の音が使えず代替音へ: $uri")
@@ -224,6 +252,19 @@ class AlarmService : Service() {
             }
         }
         scope.launch { app.container.repository.audit("ERROR", "全音源が失敗、無音のまま鳴動継続") }
+    }
+
+    /** 30秒かけて音量を目標値まで滑らかに上げる。 */
+    private fun startCrescendo(player: MediaPlayer, target: Float) {
+        val steps = 20
+        crescendoJob = scope.launch {
+            repeat(steps) { i ->
+                kotlinx.coroutines.delay(CRESCENDO_MS / steps)
+                if (mediaPlayer !== player || !player.isPlaying) return@launch
+                val v = CRESCENDO_START + (target - CRESCENDO_START) * (i + 1) / steps
+                runCatching { player.setVolume(v, v) }
+            }
+        }
     }
 
     private fun startVibration() {
@@ -259,6 +300,7 @@ class AlarmService : Service() {
     }
 
     private fun stopRinging() {
+        crescendoJob?.cancel(); crescendoJob = null
         runCatching { mediaPlayer?.stop() }
         mediaPlayer?.release(); mediaPlayer = null
         vibrator?.cancel(); vibrator = null
@@ -301,7 +343,11 @@ class AlarmService : Service() {
         const val ACTION_DISMISS = "com.calendaralarm.action.DISMISS"
         const val ACTION_SNOOZE = "com.calendaralarm.action.SNOOZE"
         const val EXTRA_INSTANCE_ID = "instance_id"
+        const val EXTRA_SNOOZE_MINUTES = "snooze_minutes"
         private const val CHANNEL_ID = "alarm_v1"
+        /** クレッシェンドの立ち上がり時間と開始音量。 */
+        private const val CRESCENDO_MS = 30_000L
+        private const val CRESCENDO_START = 0.05f
         private const val NOTIFICATION_ID = 1
 
         /**

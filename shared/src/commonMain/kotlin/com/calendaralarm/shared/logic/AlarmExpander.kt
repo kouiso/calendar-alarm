@@ -57,6 +57,9 @@ object AlarmExpander {
         inviteFilter: InviteFilter = InviteFilter(),
         /** true のときイベントがカレンダーに持つリマインダーも鳴動対象にする。 */
         importEventReminders: Boolean = false,
+        /** 元アプリの「一括ミュート」: ALARM 鳴動を全て抑止する。
+         *  NOTIFY (通知のみ) は鳴動ではないので残す。 */
+        muteAll: Boolean = false,
     ): List<AlarmInstance> {
         val result = mutableListOf<AlarmInstance>()
         for (event in events) {
@@ -91,6 +94,7 @@ object AlarmExpander {
             val seenTriggers = mutableSetOf<Long>()
             fun emit(minutes: Int, action: EventAction) {
                 if (action == EventAction.MUTE) return
+                if (muteAll && action == EventAction.ALARM) return
                 val triggerAt = startMillis - minutes.minutes
                 if (!inWindow(triggerAt, now, horizon)) return
                 if (!seenTriggers.add(triggerAt.toEpochMilliseconds())) return
@@ -150,6 +154,7 @@ object AlarmExpander {
                 standaloneAlarmId = alarm.id,
                 snoozeMinutes = alarm.snoozeMinutes,
                 soundUri = alarm.soundUri,
+                muteUntilUnlock = alarm.muteUntilUnlock,
             )
             if (alarm.daysOfWeek.isEmpty()) break
         }

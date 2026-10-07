@@ -40,6 +40,16 @@ struct SettingsView: View {
                                 Toggle("", isOn: Binding(get: { store.state.weatherEnabled },
                                                          set: { store.setWeatherEnabled($0) })).labelsHidden()
                             }
+                            // 全アラームの一括ミュート (通知・タイマーは止まらない)
+                            IconRow("bell.slash.fill") {
+                                Text("アラームをすべてミュート")
+                                    .font(NightTheme.font(13)).foregroundStyle(.secondary)
+                                Spacer()
+                                Toggle("", isOn: Binding(
+                                    get: { store.state.muteAll },
+                                    set: { store.setMuteAll($0); resync("mute all") }
+                                )).labelsHidden()
+                            }
                         }
                     }
 

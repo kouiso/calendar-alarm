@@ -413,3 +413,48 @@ class AlarmPlannerTest {
         assertEquals(listOf("overdue"), plan.toFireNow.map { it.id })
     }
 }
+
+class MuteAllTest {
+    private val now: Instant = ldt("2026-10-05T08:00:00")
+    private val horizon: Instant = ldt("2026-10-19T00:00:00")
+
+    private fun event(id: String, start: Instant, title: String = "予定") = CalendarEvent(
+        id = id, calendarId = "c1", title = title,
+        startMillis = start.toEpochMilliseconds(),
+        endMillis = start.toEpochMilliseconds() + 3_600_000,
+        allDay = false,
+    )
+
+    @Test
+    fun `一括ミュートはALARMだけ落とし NOTIFY は残る`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf(
+                "c1" to AlarmRule(
+                    minutesBefore = 15, extraOffsets = listOf(30),
+                    reminderAction = EventAction.NOTIFY,
+                ),
+            ),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            muteAll = true,
+        )
+        // 開始15分前=ALARM→消える、30分前=NOTIFY→残る
+        assertEquals(listOf(EventAction.NOTIFY), out.map { it.delivery })
+    }
+
+    @Test
+    fun `一括ミュートでも開始時の NOTIFY は残る`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(startAction = EventAction.NOTIFY)),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            muteAll = true,
+        )
+        assertEquals(1, out.size)
+        assertEquals(EventAction.NOTIFY, out[0].delivery)
+    }
+}

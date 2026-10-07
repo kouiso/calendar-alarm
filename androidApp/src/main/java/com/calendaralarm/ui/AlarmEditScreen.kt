@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EventBusy
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Snooze
@@ -89,6 +90,7 @@ fun AlarmEditScreen(
     var exceptions by remember { mutableStateOf(setOf<LocalDate>()) }
     var snooze by remember { mutableIntStateOf(10) }
     var soundUri by remember { mutableStateOf<String?>(null) }
+    var muteUntilUnlock by remember { mutableStateOf(false) }
     var enabled by remember { mutableStateOf(true) }
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -108,6 +110,7 @@ fun AlarmEditScreen(
             days = existing.daysOfWeek
             exceptions = existing.exceptions
             snooze = existing.snoozeMinutes
+            muteUntilUnlock = existing.muteUntilUnlock
             soundUri = existing.soundUri
             enabled = existing.enabled
             // TimePicker は remember の初期値しか見ないため、
@@ -281,6 +284,25 @@ fun AlarmEditScreen(
                 }
             }
 
+            Spacer(Modifier.height(16.dp))
+            // 「ロック解除までミュート」: 寝ている間に鳴らしたくない用途
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(20.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "ロック解除まで鳴らさない",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                Switch(checked = muteUntilUnlock, onCheckedChange = { muteUntilUnlock = it })
+            }
+
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = {
@@ -295,6 +317,7 @@ fun AlarmEditScreen(
                                 soundUri = soundUri,
                                 snoozeMinutes = snooze,
                                 exceptions = exceptions,
+                                muteUntilUnlock = muteUntilUnlock,
                             ),
                         )
                         onDone()

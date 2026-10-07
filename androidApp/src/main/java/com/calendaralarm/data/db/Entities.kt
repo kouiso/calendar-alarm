@@ -25,6 +25,8 @@ data class ScheduledInstanceEntity(
     val state: String,
     /** ALARM=全画面鳴動 / NOTIFY=通知のみ (MUTEは予約自体を作らない)。 */
     val delivery: String = EventAction.ALARM.name,
+    /** ロック解除まで鳴動を遅延するか。 */
+    val muteUntilUnlock: Boolean = false,
 ) {
     fun toInstance(): AlarmInstance = AlarmInstance(
         id = id,
@@ -39,6 +41,7 @@ data class ScheduledInstanceEntity(
         eventStartMillis = eventStartMillis,
         snoozeSeq = snoozeSeq,
         delivery = EventAction.valueOf(delivery),
+        muteUntilUnlock = muteUntilUnlock,
     )
 
     companion object {
@@ -56,6 +59,7 @@ data class ScheduledInstanceEntity(
             snoozeSeq = i.snoozeSeq,
             state = state.name,
             delivery = i.delivery.name,
+            muteUntilUnlock = i.muteUntilUnlock,
         )
     }
 }
@@ -74,6 +78,8 @@ data class StandaloneAlarmEntity(
     val snoozeMinutes: Int,
     /** 例外日 "yyyy-MM-dd" カンマ区切り。 */
     val exceptionsCsv: String,
+    /** ロック解除まで鳴動を遅延するか。 */
+    val muteUntilUnlock: Boolean = false,
 )
 
 /** カレンダー単位の鳴動ルール。 */

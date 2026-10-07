@@ -3,6 +3,7 @@ package com.calendaralarm.shared.bridge
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.logic.AlarmPlanner
 import com.calendaralarm.shared.model.AlarmInstance
+import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.EventAction
@@ -52,6 +53,8 @@ object SharedBridge {
         val inviteFilter: InviteFilter = InviteFilter(),
         /** 予定側リマインダーを展開に含めるか。 */
         val importEventReminders: Boolean = false,
+        /** 一括ミュート: ALARM 鳴動を全て抑止 (NOTIFYとタイマーは残す)。 */
+        val muteAll: Boolean = false,
     )
 
     @Serializable
@@ -92,8 +95,12 @@ object SharedBridge {
             titleCodes = req.titleCodes,
             inviteFilter = req.inviteFilter,
             importEventReminders = req.importEventReminders,
+            muteAll = req.muteAll,
         )
         desired += expanded.map { it.copy(snoozeMinutes = req.defaultSnoozeMinutes) }
+        // 一括ミュート: イベント側は expandEvents 内で ALARM を落としている。
+        // 単発アラームは全て ALARM 鳴動なのでここでまとめて除外 (タイマーは別経路で残る)。
+        if (req.muteAll) desired.removeAll { it.kind == AlarmKind.STANDALONE }
         return json.encodeToString(ExpandResult.serializer(), ExpandResult(desired))
     }
 

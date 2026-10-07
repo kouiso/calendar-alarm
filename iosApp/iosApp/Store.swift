@@ -18,6 +18,8 @@ final class Store: ObservableObject {
         var titleCodes: TitleCodeSettings = TitleCodeSettings()
         var inviteFilter: InviteFilter = InviteFilter()
         var importEventReminders: Bool = false
+        /// 全アラームの一括ミュート (通知・タイマーには効かない)
+        var muteAll: Bool = false
         // calendar_prefs: calendarId -> AlarmRuleDTO
         var calendarRules: [String: AlarmRuleDTO] = [:]
         // event_overrides: instanceKey -> EventOverrideDTO
@@ -98,6 +100,7 @@ final class Store: ObservableObject {
         }
     }
     func setImportEventReminders(_ v: Bool) { mutate { $0.importEventReminders = v } }
+    func setMuteAll(_ v: Bool) { mutate { $0.muteAll = v } }
 
     // MARK: - calendar prefs
 
@@ -211,5 +214,34 @@ final class Store: ObservableObject {
         } ?? [:]
         let url = container.appendingPathComponent("next_alarm.json")
         try? JSONSerialization.data(withJSONObject: payload).write(to: url, options: .atomic)
+    }
+}
+
+// MARK: - 後方互換デコード
+// フィールド追加時に旧 store.json の欠落キーで全体が初期化されるのを防ぐ。
+// extension 内 init なので memberwise init は残る。
+
+extension Store.Persisted {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        onboardingDone = try c.decodeIfPresent(Bool.self, forKey: .onboardingDone) ?? false
+        defaultMinutesBefore = try c.decodeIfPresent(Int.self, forKey: .defaultMinutesBefore) ?? 0
+        defaultSnoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .defaultSnoozeMinutes) ?? 10
+        weatherEnabled = try c.decodeIfPresent(Bool.self, forKey: .weatherEnabled) ?? true
+        defaultStartAction = try c.decodeIfPresent(String.self, forKey: .defaultStartAction) ?? EventAction.alarm.rawValue
+        defaultReminderAction = try c.decodeIfPresent(String.self, forKey: .defaultReminderAction) ?? EventAction.alarm.rawValue
+        titleCodes = try c.decodeIfPresent(TitleCodeSettings.self, forKey: .titleCodes) ?? TitleCodeSettings()
+        inviteFilter = try c.decodeIfPresent(InviteFilter.self, forKey: .inviteFilter) ?? InviteFilter()
+        importEventReminders = try c.decodeIfPresent(Bool.self, forKey: .importEventReminders) ?? false
+        muteAll = try c.decodeIfPresent(Bool.self, forKey: .muteAll) ?? false
+        calendarRules = try c.decodeIfPresent([String: AlarmRuleDTO].self, forKey: .calendarRules) ?? [:]
+        overrides = try c.decodeIfPresent([String: EventOverrideDTO].self, forKey: .overrides) ?? [:]
+        standaloneAlarms = try c.decodeIfPresent([StandaloneAlarmDTO].self, forKey: .standaloneAlarms) ?? []
+        scheduled = try c.decodeIfPresent([String: ScheduledRecord].self, forKey: .scheduled) ?? [:]
+        audit = try c.decodeIfPresent([AuditEntry].self, forKey: .audit) ?? []
+        nextAlarmId = try c.decodeIfPresent(Int64.self, forKey: .nextAlarmId) ?? 1
+        nextAuditId = try c.decodeIfPresent(Int64.self, forKey: .nextAuditId) ?? 1
+        calendars = try c.decodeIfPresent([CalendarSource].self, forKey: .calendars) ?? []
+        lastEvents = try c.decodeIfPresent([CalendarEventDTO].self, forKey: .lastEvents) ?? []
     }
 }

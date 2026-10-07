@@ -44,6 +44,8 @@ class SettingsRepository(private val context: Context) {
         val volumeCrescendo: Boolean = false,
         /** 鳴動中にバイブするか。 */
         val vibrateWhileRinging: Boolean = true,
+        /** 一括ミュート: ALARM鳴動を全て止める (通知のみは残す)。 */
+        val muteAll: Boolean = false,
         /** 既定の鳴動音 URI (カスタムMP3等)。null=システム既定。 */
         val defaultSoundUri: String? = null,
         /** 週番号を予定一覧に表示するか。 */
@@ -96,6 +98,7 @@ class SettingsRepository(private val context: Context) {
             alarmVolumePercent = p[KEY_ALARM_VOLUME] ?: 0,
             volumeCrescendo = p[KEY_VOL_CRESCENDO] ?: false,
             vibrateWhileRinging = p[KEY_VIBRATE] ?: true,
+            muteAll = p[KEY_MUTE_ALL] ?: false,
             defaultSoundUri = p[KEY_SOUND_URI],
             showWeekNumbers = p[KEY_WEEK_NUMBERS] ?: false,
             firstWeekday = p[KEY_FIRST_WEEKDAY] ?: 1,
@@ -153,6 +156,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAlarmVolumePercent(v: Int) = edit { it[KEY_ALARM_VOLUME] = v }
     suspend fun setVolumeCrescendo(v: Boolean) = edit { it[KEY_VOL_CRESCENDO] = v }
     suspend fun setVibrateWhileRinging(v: Boolean) = edit { it[KEY_VIBRATE] = v }
+    suspend fun setMuteAll(v: Boolean) = edit { it[KEY_MUTE_ALL] = v }
     suspend fun setDefaultSoundUri(v: String?) = edit {
         if (v == null) it.remove(KEY_SOUND_URI) else it[KEY_SOUND_URI] = v
     }
@@ -193,6 +197,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_ALARM_VOLUME = intPreferencesKey("alarm_volume_percent")
         val KEY_VOL_CRESCENDO = booleanPreferencesKey("volume_crescendo")
         val KEY_VIBRATE = booleanPreferencesKey("vibrate_while_ringing")
+        val KEY_MUTE_ALL = booleanPreferencesKey("mute_all")
         val KEY_SOUND_URI = stringPreferencesKey("default_sound_uri")
         val KEY_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
         val KEY_FIRST_WEEKDAY = intPreferencesKey("first_weekday")

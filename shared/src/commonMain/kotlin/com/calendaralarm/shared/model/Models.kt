@@ -132,6 +132,9 @@ data class StandaloneAlarm(
     val snoozeMinutes: Int = 10,
     /** この日は鳴らない例外日。 */
     val exceptions: Set<LocalDate> = emptySet(),
+    /** 元アプリの「ロック解除までミュート」: 発火時に端末ロック中なら鳴らさず、
+     *  解除された時点で鳴動を開始する。 */
+    val muteUntilUnlock: Boolean = false,
 )
 
 /** 鳴動エンジンが実際にスケジュールする1回分のアラーム。 */
@@ -152,6 +155,8 @@ data class AlarmInstance(
     val snoozeSeq: Int = 0,
     /** 鳴動方法。ALARM=全画面鳴動、NOTIFY=通知のみ。MUTE は展開段階で除外済み。 */
     val delivery: EventAction = EventAction.ALARM,
+    /** ロック解除まで鳴動を遅延するか (STANDALONE由来のみ)。 */
+    val muteUntilUnlock: Boolean = false,
 ) {
     fun snoozed(nextTriggerMillis: Long): AlarmInstance =
         // URI 経由で渡す都合上 '#' は使えない (fragment 扱いで lastPathSegment が化ける)

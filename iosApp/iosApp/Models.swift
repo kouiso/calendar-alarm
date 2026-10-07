@@ -128,6 +128,8 @@ struct StandaloneAlarmDTO: Codable, Identifiable, Hashable {
     var snoozeMinutes: Int = 10
     /// "YYYY-MM-DD"
     var exceptions: Set<String> = []
+    /// 「ロック解除までミュート」(Android 側のみ意味を持つフラグ)
+    var muteUntilUnlock: Bool = false
 }
 
 struct AlarmInstanceDTO: Codable, Identifiable, Hashable {
@@ -144,6 +146,8 @@ struct AlarmInstanceDTO: Codable, Identifiable, Hashable {
     var snoozeSeq: Int = 0
     /// 配信方法 (ALARM=鳴動 / NOTIFY=通知のみ)
     var delivery: String = EventAction.alarm.rawValue
+    /// STANDALONE の「ロック解除までミュート」コピー (Android 専用)
+    var muteUntilUnlock: Bool = false
 }
 
 // MARK: - SharedBridge ペイロード
@@ -165,6 +169,8 @@ struct ExpandRequest: Codable {
     var titleCodes: TitleCodeSettings = TitleCodeSettings()
     var inviteFilter: InviteFilter = InviteFilter()
     var importEventReminders: Bool = false
+    /// 全アラームの一括ミュート (NOTIFY・タイマーには効かない)
+    var muteAll: Bool = false
 }
 
 struct ExpandResult: Codable {
@@ -243,5 +249,44 @@ enum Bridge {
     static func decode<T: Decodable>(_ type: T.Type, _ json: String?) -> T? {
         guard let json, let data = json.data(using: .utf8) else { return nil }
         return try? makeDecoder().decode(T.self, from: data)
+    }
+}
+
+// MARK: - 後方互換デコード
+// extension 内の init(from:) なので memberwise init は残る。
+// 旧 store.json には新キーが無いため decodeIfPresent に倒す。
+
+extension StandaloneAlarmDTO {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(Int64.self, forKey: .id) ?? 0
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        hour = try c.decode(Int.self, forKey: .hour)
+        minute = try c.decode(Int.self, forKey: .minute)
+        daysOfWeek = try c.decodeIfPresent(Set<String>.self, forKey: .daysOfWeek) ?? []
+        label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
+        soundUri = try c.decodeIfPresent(String.self, forKey: .soundUri)
+        snoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .snoozeMinutes) ?? 10
+        exceptions = try c.decodeIfPresent(Set<String>.self, forKey: .exceptions) ?? []
+        muteUntilUnlock = try c.decodeIfPresent(Bool.self, forKey: .muteUntilUnlock) ?? false
+    }
+}
+
+extension AlarmInstanceDTO {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        triggerAtMillis = try c.decode(Int64.self, forKey: .triggerAtMillis)
+        title = try c.decode(String.self, forKey: .title)
+        kind = try c.decode(String.self, forKey: .kind)
+        eventId = try c.decodeIfPresent(String.self, forKey: .eventId)
+        standaloneAlarmId = try c.decodeIfPresent(Int64.self, forKey: .standaloneAlarmId)
+        snoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .snoozeMinutes) ?? 10
+        soundUri = try c.decodeIfPresent(String.self, forKey: .soundUri)
+        minutesBefore = try c.decodeIfPresent(Int.self, forKey: .minutesBefore) ?? 0
+        eventStartMillis = try c.decodeIfPresent(Int64.self, forKey: .eventStartMillis)
+        snoozeSeq = try c.decodeIfPresent(Int.self, forKey: .snoozeSeq) ?? 0
+        delivery = try c.decodeIfPresent(String.self, forKey: .delivery) ?? EventAction.alarm.rawValue
+        muteUntilUnlock = try c.decodeIfPresent(Bool.self, forKey: .muteUntilUnlock) ?? false
     }
 }
