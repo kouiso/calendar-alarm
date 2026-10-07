@@ -33,7 +33,13 @@ final class Engine: ObservableObject {
     var usesRealAlarms: Bool { scheduler.usesRealAlarms }
     var schedulerAuthorized: Bool { scheduler.authorizationGranted }
 
-    func authorizeScheduler() async { await scheduler.requestAuthorization() }
+    func authorizeScheduler() async {
+        await scheduler.requestAuthorization()
+        // MISSED 通知は AlarmKit とは別に UN の許可が要る。求めないと権限自体が
+        // 永久に notDetermined のまま通知が一度も出ない。
+        _ = try? await UNUserNotificationCenter.current()
+            .requestAuthorization(options: [.alert, .sound, .badge])
+    }
 
     // MARK: - AlarmKit 状態観測
 
@@ -101,8 +107,10 @@ final class Engine: ObservableObject {
         var events: [CalendarEventDTO] = []
         var calendarsOk = false
         if reader.authorizationGranted {
+            // 過去側はグレース幅でなく14日に広げる (Android と同じ)。スヌーズ連鎖が
+            // 親予定の開始から長く伸びても liveEventKeys が親を見失わない。
             events = reader.events(
-                from: Date(timeIntervalSince1970: TimeInterval(now) / 1000 - 86_400),
+                from: Date(timeIntervalSince1970: TimeInterval(now) / 1000 - Double(horizonDays) * 86_400),
                 to: Date(timeIntervalSince1970: TimeInterval(horizon) / 1000))
             store.setCalendars(reader.calendars())
             store.setLastEvents(events)
@@ -190,6 +198,19 @@ final class Engine: ObservableObject {
             if let aid = rec.instance.standaloneAlarmId { missedAlarmIds.insert(aid) }
         }
         disableConsumedOneShots(missedAlarmIds)
+
+        // AlarmKit 側で予約だけが消えた PENDING 行を拾い直す (再起動や OS 内部の
+        // 破棄でストア上は PENDING だが実体は無い → 二度と鳴らない穴を塞ぐ。
+        // Android は毎回全件 AlarmManager へ再主張する方式で同じ問題を潰している)。
+        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler, ak.authorizationGranted {
+            let liveIds = Set(ak.allAlarms.map { $0.id })
+            for (id, rec) in store.state.scheduled where rec.state == .pending {
+                if !liveIds.contains(AlarmKitScheduler.uuid(from: id)) {
+                    store.removeScheduled(id)
+                    store.audit("RECOVER", "\(id): AlarmKit予約喪失→再予約")
+                }
+            }
+        }
 
         let plan = SharedDomain.plan(PlanRequest(
             desired: desired,

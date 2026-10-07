@@ -30,6 +30,7 @@ struct CalendarAlarmApp: App {
     }
 
     /// バックグラウンドでの定期リシンク (展開ホライズンの繰り上げ用)。
+    /// 登録だけでは実行されないので投入も行い、各実行の末尾で次回を再投入する。
     private func registerBackgroundTask() {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.calendaralarm.resync", using: nil) { task in
             guard let task = task as? BGProcessingTask else { return }
@@ -37,8 +38,10 @@ struct CalendarAlarmApp: App {
                 let engine = Engine()
                 await engine.resync(reason: "bg")
                 task.setTaskCompleted(success: true)
+                Self.scheduleNextBgTask()
             }
         }
+        Self.scheduleNextBgTask()
     }
 
     static func scheduleNextBgTask() {

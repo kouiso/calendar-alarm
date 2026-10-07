@@ -31,7 +31,9 @@ final class Store: ObservableObject {
     @Published private(set) var state = Persisted()
 
     private let fileURL: URL
-    private var saveTask: Task<Void, Never>?
+    /// 保存は直列キューに流す。並列 detached だと古いスナップショットが後勝ちで残る
+    /// (書き込み順序が呼び出し順と逆転する) のを防ぐため FIFO にする。
+    private let saveQueue = DispatchQueue(label: "calendaralarm.store.save")
 
     init() {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -44,11 +46,10 @@ final class Store: ObservableObject {
         }
     }
 
-    /// 書き出しは coalesce して原子的に (tmp → rename)。
+    /// 書き出しは直列キューで原子的に (tmp → rename)。呼び出し順=書き込み順なので最後の保存が常に最新。
     func save() {
-        saveTask?.cancel()
         let snapshot = state
-        saveTask = Task.detached(priority: .utility) { [fileURL] in
+        saveQueue.async { [fileURL] in
             guard let data = try? JSONEncoder().encode(snapshot) else { return }
             let tmp = fileURL.appendingPathExtension("tmp")
             try? data.write(to: tmp, options: .atomic)
