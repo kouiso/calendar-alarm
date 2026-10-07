@@ -208,6 +208,21 @@ final class Engine: ObservableObject {
         }
         desired += preserved
 
+        // NOTIFY 用 UN 通知の照合: desired に残らない予約 (ミュート/削除/時刻変更)
+        // は取り消す。これをしないと鳴るべきでない通知が残って実際に鳴る
+        let notifyKeep = Set(desired.filter {
+            $0.delivery == EventAction.notify.rawValue
+        }.map { "notify-\($0.id)" })
+        let center = UNUserNotificationCenter.current()
+        let pendingReqs = await center.pendingNotificationRequests()
+        let staleReqIds = pendingReqs.filter {
+            $0.identifier.hasPrefix("notify-") && !notifyKeep.contains($0.identifier)
+        }.map { $0.identifier }
+        if !staleReqIds.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: staleReqIds)
+            store.audit("NOTIFY_CANCEL", "\(staleReqIds.count)件")
+        }
+
         // AlarmKit 側で予約だけが消えた PENDING 行を拾い直す (再起動や OS 内部の
         // 破棄でストア上は PENDING だが実体は無い → 二度と鳴らない穴を塞ぐ。
         // Android は毎回全件 AlarmManager へ再主張する方式で同じ問題を潰している)。
@@ -385,6 +400,8 @@ final class Engine: ObservableObject {
 
     func cancelInstance(_ id: String) async {
         await scheduler.cancel(instanceId: id, reservationId: store.state.scheduled[id]?.alarmKitId)
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: ["notify-\(id)"])
         store.removeScheduled(id)
     }
 
@@ -421,9 +438,12 @@ final class Engine: ObservableObject {
         content.sound = .default
         var trigger: UNNotificationTrigger? = nil
         if let at = atMillis {
-            let comps = Calendar.current.dateComponents(
+            var comps = Calendar.current.dateComponents(
                 [.year, .month, .day, .hour, .minute, .second],
                 from: Date(timeIntervalSince1970: TimeInterval(at) / 1000))
+            // 生成時のTZに固定しないと、TZ変更後に dateComponents の解釈がずれて
+            // 通知時刻が狂う (timeZone フィールドがトリガ解釈に使われる)
+            comps.timeZone = Calendar.current.timeZone
             trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
         }
         let req = UNNotificationRequest(

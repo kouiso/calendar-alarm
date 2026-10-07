@@ -18,5 +18,14 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionActivationRule</key>
+		<string>SUBQUERY (extensionItems, $extensionItem, ANY $extensionItem.attachments.conformsToType UTI "public.plain-text" OR ANY $extensionItem.attachments.conformsToType UTI "public.url").@count &gt; 0</string>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.share-services</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
+	</dict>
 </dict>
 </plist>

@@ -208,11 +208,16 @@ private fun repeatLabel(alarm: StandaloneAlarm): String =
         RepeatMode.INTERVAL_WEEKS -> "${alarm.repeatInterval}週ごと"
         RepeatMode.INTERVAL_MONTHS -> "${alarm.repeatInterval}ヶ月ごと"
         RepeatMode.WEEKLY -> {
-            val order = listOf(
-                DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
-                DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY,
-            )
-            "毎週 " + order.filter { it in alarm.daysOfWeek }.joinToString("") { it.jaShort() }
+            // 曜日空のWEEKLYはONCEとして鳴る
+            if (alarm.daysOfWeek.isEmpty()) {
+                "1回のみ"
+            } else {
+                val order = listOf(
+                    DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
+                    DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY,
+                )
+                "毎週 " + order.filter { it in alarm.daysOfWeek }.joinToString("") { it.jaShort() }
+            }
         }
     }
 

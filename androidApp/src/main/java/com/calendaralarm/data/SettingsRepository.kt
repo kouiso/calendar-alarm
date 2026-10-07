@@ -18,8 +18,16 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 /** アプリ全体設定。DataStore Preferences で保持する。 */
 class SettingsRepository(private val context: Context) {
 
-    /** タイマープリセット (元アプリの定型タイマーに相当)。 */
-    data class TimerPreset(val label: String, val minutes: Int)
+    /** タイマープリセット。90秒のような分未満の長さも表せるよう秒で持つ。 */
+    data class TimerPreset(val label: String, val seconds: Int) {
+        val minutes: Int get() = seconds / 60
+        /** 表示用: 60の倍数なら「5分」、端数ありなら「1分30秒」/「90秒」。 */
+        fun durationLabel(): String = when {
+            seconds % 60 == 0 -> "${seconds / 60}分"
+            seconds >= 60 -> "${seconds / 60}分${seconds % 60}秒"
+            else -> "${seconds}秒"
+        }
+    }
 
     data class Settings(
         val defaultMinutesBefore: Int = 0,
@@ -115,12 +123,20 @@ class SettingsRepository(private val context: Context) {
             weatherLocation = p[KEY_WEATHER_LOCATION] ?: "",
             showNextAlarmAfterDismiss = p[KEY_NEXT_ALARM_MSG] ?: false,
             timerPresets = (p[KEY_TIMER_PRESETS]
-                ?: DEFAULT_TIMER_PRESETS.joinToString(";") { "${it.label}|${it.minutes}" })
+                ?: DEFAULT_TIMER_PRESETS.joinToString(";") { "${it.label}|${it.seconds}" })
                 .split(';').mapNotNull { part ->
-                    val (label, min) = part.split('|').let {
+                    val (label, num) = part.split('|').let {
                         it.getOrNull(0) to it.getOrNull(1)
                     }
-                    label?.let { l -> min?.toIntOrNull()?.let { m -> TimerPreset(l, m) } }
+                    // 旧形式 `label|分` は分として、新形式 `label|sec:N` は秒として読む
+                    label?.let { l ->
+                        when {
+                            num?.startsWith("sec:") == true ->
+                                num.removePrefix("sec:").toIntOrNull()
+                                    ?.let { s -> TimerPreset(l, s) }
+                            else -> num?.toIntOrNull()?.let { m -> TimerPreset(l, m * 60) }
+                        }
+                    }
                 }.ifEmpty { DEFAULT_TIMER_PRESETS },
             openRouterApiKey = p[KEY_OPENROUTER_KEY]?.ifBlank { null },
             openRouterModel = p[KEY_OPENROUTER_MODEL] ?: "openai/gpt-4.1-mini",
@@ -128,8 +144,12 @@ class SettingsRepository(private val context: Context) {
             notificationRules = runCatching {
                 rulesJson.decodeFromString<List<com.calendaralarm.shared.model.NotificationRuleSpec>>(
                     p[KEY_NOTIF_RULES] ?: "[]",
-                )
-            }.getOrDefault(emptyList()),
+                ).also { lastGoodRules = it }
+            }.getOrElse {
+                // 書き込み途中の壊れたJSONで全ルールが黙って消えるのを防ぐ。
+                // 直前に読めた値を使い、無ければ空に倒す
+                lastGoodRules ?: emptyList()
+            },
         )
     }
 
@@ -184,7 +204,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setWeatherLocation(v: String) = edit { it[KEY_WEATHER_LOCATION] = v.trim() }
     suspend fun setShowNextAlarmAfterDismiss(v: Boolean) = edit { it[KEY_NEXT_ALARM_MSG] = v }
     suspend fun setTimerPresets(v: List<TimerPreset>) = edit {
-        it[KEY_TIMER_PRESETS] = v.joinToString(";") { p -> "${p.label}|${p.minutes}" }
+        // 旧版と同じキーで秒を保持。読み取り側は `sec:` 接頭辞で新形式と判別する
+        it[KEY_TIMER_PRESETS] = v.joinToString(";") { p -> "${p.label}|sec:${p.seconds}" }
     }
     suspend fun setOpenRouterApiKey(v: String?) = edit {
         if (v.isNullOrBlank()) it.remove(KEY_OPENROUTER_KEY) else it[KEY_OPENROUTER_KEY] = v
@@ -240,15 +261,18 @@ class SettingsRepository(private val context: Context) {
 
         private val rulesJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
+        /** 直近で正常に decode できた通知ルール。壊れたJSON時の退避先。 */
+        private var lastGoodRules: List<com.calendaralarm.shared.model.NotificationRuleSpec>? = null
+
         /** 元アプリの定型タイマー (ゆで卵/パスタ/紅茶/ピザ/仮眠/集中/筋トレ休憩)。 */
         val DEFAULT_TIMER_PRESETS = listOf(
-            TimerPreset("ゆで卵", 5),
-            TimerPreset("パスタ", 9),
-            TimerPreset("紅茶", 4),
-            TimerPreset("ピザ", 12),
-            TimerPreset("仮眠", 20),
-            TimerPreset("集中", 25),
-            TimerPreset("筋トレ休憩", 90 / 60),
+            TimerPreset("ゆで卵", 5 * 60),
+            TimerPreset("パスタ", 9 * 60),
+            TimerPreset("紅茶", 4 * 60),
+            TimerPreset("ピザ", 12 * 60),
+            TimerPreset("仮眠", 20 * 60),
+            TimerPreset("集中", 25 * 60),
+            TimerPreset("筋トレ休憩", 90),
         )
 
         fun String?.toCsvList(): List<String> =

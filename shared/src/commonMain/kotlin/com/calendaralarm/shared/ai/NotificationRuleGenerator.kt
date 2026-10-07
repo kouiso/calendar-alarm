@@ -24,6 +24,14 @@ class NotificationRuleGenerator(private val api: OpenRouterApi) {
         return runCatching { json.decodeFromString<NotificationRuleSpec>(body) }
             .getOrNull()
             ?.takeIf { it.name.isNotBlank() }
+            // AI生成値の検証: 範囲外の曜日/分数は死にルールになるので除去
+            ?.let { r ->
+                r.copy(
+                    daysOfWeek = r.daysOfWeek.filter { it in 1..7 },
+                    startMinuteOfDay = r.startMinuteOfDay?.takeIf { it in 0..1439 },
+                    endMinuteOfDay = r.endMinuteOfDay?.takeIf { it in 0..1439 },
+                )
+            }
     }
 
     private companion object {

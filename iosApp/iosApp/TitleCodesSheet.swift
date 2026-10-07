@@ -4,6 +4,7 @@ import SwiftUI
 /// 「必ず鳴らす」「鳴らさない」コードリスト + 適用範囲 (両方/開始のみ/通知分のみ)。
 struct TitleCodesSheet: View {
     @EnvironmentObject var store: Store
+    @EnvironmentObject var engine: Engine
     @Environment(\.dismiss) private var dismiss
 
     @State private var always: [String] = []
@@ -40,6 +41,7 @@ struct TitleCodesSheet: View {
                             alwaysCodes: always, neverCodes: never,
                             applyToStart: scope != 2, applyToReminders: scope != 1,
                         ))
+                        Task { await engine.resync(reason: "title codes") }
                         dismiss()
                     }
                     .fontWeight(.semibold)

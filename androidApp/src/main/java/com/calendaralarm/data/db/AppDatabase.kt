@@ -16,7 +16,9 @@ private val MIGRATION_2_3 = object : Migration(2, 3) {
         )
         db.execSQL(
             "INSERT INTO event_overrides_new (instanceKey, action, minutesBefore, extraOffsetsCsv) " +
-                "SELECT instanceKey, CASE WHEN muted = 1 THEN 'MUTE' ELSE NULL END, " +
+                // muted=0 の行は「ミュートを解除した」明示的意思として ALARM に写す。
+                // NULL (既定追従) に潰すと never コード等で意図に反して鳴らなくなる
+                "SELECT instanceKey, CASE WHEN muted = 1 THEN 'MUTE' ELSE 'ALARM' END, " +
                 "minutesBefore, extraOffsetsCsv FROM event_overrides",
         )
         db.execSQL("DROP TABLE event_overrides")

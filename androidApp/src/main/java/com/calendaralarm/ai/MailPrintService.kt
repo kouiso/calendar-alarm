@@ -104,6 +104,9 @@ class MailPrintService : PrintService() {
     }
 
     private fun notifyExtract(text: String, eventJson: String?) {
+        // 通知権限が無いと結果がどこにも届かないので、抽出結果は必ずファイルに退避。
+        // MainActivity.onResume で拾われる
+        if (eventJson != null) stashPending(this, eventJson)
         val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         mgr.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "メール→予定", NotificationManager.IMPORTANCE_DEFAULT),
@@ -128,7 +131,22 @@ class MailPrintService : PrintService() {
         )
     }
 
-    private companion object {
-        const val CHANNEL_ID = "mail_extract_v1"
+    companion object {
+        private const val CHANNEL_ID = "mail_extract_v1"
+        private const val PENDING_FILE = "mail_extract_pending.json"
+
+        /** 抽出結果の退避 (通知に届かない経路の保険)。 */
+        fun stashPending(context: Context, json: String) {
+            runCatching {
+                context.filesDir.resolve(PENDING_FILE).writeText(json)
+            }
+        }
+
+        /** 退避された抽出結果を1回だけ取り出す。 */
+        fun consumePending(context: Context): String? = runCatching {
+            val f = context.filesDir.resolve(PENDING_FILE)
+            if (!f.exists()) return null
+            f.readText().also { f.delete() }
+        }.getOrNull()
     }
 }

@@ -147,6 +147,13 @@ object AlarmExpander {
         days: Int,
         zone: TimeZone,
     ): List<AlarmInstance> {
+        // WEEKLY なのに曜日が1つも選ばれていないと永遠に鳴らない。
+        // 「毎週鳴らす意図に一番近いのは次の1回」として ONCE に倒す
+        val effectiveMode = if (mode == RepeatMode.WEEKLY && alarm.daysOfWeek.isEmpty()) {
+            RepeatMode.ONCE
+        } else {
+            mode
+        }
         val nowLocal = now.toLocalDateTime(zone)
         val horizon = now + days.days
         val result = mutableListOf<AlarmInstance>()
@@ -154,14 +161,14 @@ object AlarmExpander {
         for (i in 0..days) {
             val date = today.plus(i, DateTimeUnit.DAY)
             if (date in alarm.exceptions) {
-                if (mode == RepeatMode.ONCE) break // 単発: 例外日を超えても未来回は作らない
+                if (effectiveMode == RepeatMode.ONCE) break // 単発: 例外日を超えても未来回は作らない
                 continue
             }
-            if (mode == RepeatMode.WEEKLY && date.dayOfWeek !in alarm.daysOfWeek) continue
+            if (effectiveMode == RepeatMode.WEEKLY && date.dayOfWeek !in alarm.daysOfWeek) continue
             val triggerAt = triggerAt(alarm, date, zone) ?: continue
             if (!inWindow(triggerAt, now, horizon)) continue
             result += alarm.toInstance(date, triggerAt)
-            if (mode == RepeatMode.ONCE) break
+            if (effectiveMode == RepeatMode.ONCE) break
         }
         return result
     }
@@ -186,7 +193,9 @@ object AlarmExpander {
         while (guard++ < 400) {
             if (date !in alarm.exceptions) {
                 val triggerAt = triggerAt(alarm, date, zone)
-                if (triggerAt != null && triggerAt > now) {
+                // グレース幅内の過去発生も残す (inWindow と同じ下限)。
+                // 再起動直後の resync で周期アラームが無言 CANCEL されるのを防ぐ
+                if (triggerAt != null && triggerAt > now - FIRE_GRACE) {
                     result += alarm.toInstance(date, triggerAt)
                     // 窓を超えた初回のみ emit して終わる (周期的に1件あれば十分)
                     if (triggerAt > horizon) break

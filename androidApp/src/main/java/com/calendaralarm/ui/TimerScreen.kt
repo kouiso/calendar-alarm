@@ -129,6 +129,8 @@ private fun TimerPane(repository: AlarmRepository, settings: SettingsRepository)
     val prefs by settings.flow.collectAsState(initial = null)
 
     var minutesInput by remember { mutableStateOf("5") }
+    // プリセット選択時の秒指定 (分未満のプリセットを表すため分数入力と別に持つ)
+    var presetSeconds by remember { mutableStateOf<Int?>(null) }
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var showAddPreset by remember { mutableStateOf(false) }
     var deletePreset by remember { mutableStateOf<SettingsRepository.TimerPreset?>(null) }
@@ -175,7 +177,10 @@ private fun TimerPane(repository: AlarmRepository, settings: SettingsRepository)
             ClockRing {
                 OutlinedTextField(
                     value = minutesInput,
-                    onValueChange = { minutesInput = it.filter { c -> c.isDigit() }.take(3) },
+                    onValueChange = {
+                        minutesInput = it.filter { c -> c.isDigit() }.take(3)
+                        presetSeconds = null // 手入力に戻ったらプリセット選択を解除
+                    },
                     label = { Text("分数") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(0.5f),
@@ -190,9 +195,9 @@ private fun TimerPane(repository: AlarmRepository, settings: SettingsRepository)
             ) {
                 prefs?.timerPresets?.forEach { p ->
                     PresetChip(
-                        label = "${p.label} ${p.minutes}分",
-                        selected = minutesInput == p.minutes.toString(),
-                        onClick = { minutesInput = p.minutes.toString() },
+                        label = "${p.label} ${p.durationLabel()}",
+                        selected = presetSeconds == p.seconds,
+                        onClick = { presetSeconds = p.seconds },
                         onLongClick = { deletePreset = p },
                     )
                 }
@@ -210,7 +215,7 @@ private fun TimerPane(repository: AlarmRepository, settings: SettingsRepository)
                         scope.launch {
                             val cur = prefs?.timerPresets ?: emptyList()
                             settings.setTimerPresets(
-                                cur + SettingsRepository.TimerPreset(label, minutes),
+                                cur + SettingsRepository.TimerPreset(label, minutes * 60),
                             )
                         }
                         showAddPreset = false
@@ -238,11 +243,12 @@ private fun TimerPane(repository: AlarmRepository, settings: SettingsRepository)
             Spacer(Modifier.height(28.dp))
             Button(
                 onClick = {
-                    val minutes = minutesInput.toLongOrNull() ?: return@Button
-                    if (minutes <= 0) return@Button
+                    val durationMillis = presetSeconds?.let { it * 1_000L }
+                        ?: (minutesInput.toLongOrNull() ?: 0L) * 60_000L
+                    if (durationMillis <= 0) return@Button
                     scope.launch {
                         val inst = AlarmExpander.timerInstance(
-                            durationMillis = minutes * 60_000L,
+                            durationMillis = durationMillis,
                             now = Clock.System.now(),
                         )
                         repository.scheduleAdhoc(inst)

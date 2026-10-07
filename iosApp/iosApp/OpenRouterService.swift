@@ -52,7 +52,11 @@ struct OpenRouterService {
             ],
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        let (data, _) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        // 401/429 等のエラー応答は body が choices 形式でない → ステータスで弾く
+        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
         struct Resp: Decodable {
             struct Choice: Decodable {
                 struct Msg: Decodable { let content: String }

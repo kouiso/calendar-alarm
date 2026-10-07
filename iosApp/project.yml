@@ -118,6 +118,11 @@ targets:
       path: MailShareExt/Info.plist
       properties:
         CFBundleIdentifier: com.calendaralarm.ios.shareext
+        # 共有シートに出すために必須。テキスト/URL の共有を受け付ける
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionActivationRule: "SUBQUERY (extensionItems, $extensionItem, ANY $extensionItem.attachments.conformsToType UTI \"public.plain-text\" OR ANY $extensionItem.attachments.conformsToType UTI \"public.url\").@count > 0"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.ios.shareext

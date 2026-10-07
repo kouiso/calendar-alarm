@@ -125,7 +125,11 @@ class AlarmRepository(
                     ?: appSettings.defaultReminderAction,
             )
             val override = ov?.toModel()
-            val (start, reminder) = if (pref?.enabled == false) {
+            // 招待フィルタも反映する: 展開側で鳴らない予定が「アラーム」
+            // アイコン表示になるのは矛盾
+            val (start, reminder) = if (pref?.enabled == false ||
+                !appSettings.inviteFilter.allows(ev.inviteStatus)
+            ) {
                 EventAction.MUTE to EventAction.MUTE
             } else {
                 AlarmExpander.resolveActions(ev, rule, override, appSettings.titleCodes)

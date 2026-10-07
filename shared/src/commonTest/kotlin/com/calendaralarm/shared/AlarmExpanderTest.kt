@@ -549,4 +549,29 @@ class RepeatModeTest {
         )
         assertTrue(out.none { it.id.endsWith(":2026-10-06") })
     }
+
+    @Test
+    fun `周期型はグレース幅内の過去発生も残す`() {
+        // now=08:00、毎月5日 07:30 → 30分前の本日分がグレース(60分)内。
+        // 旧実装では triggerAt>now で落として次回(11/5)に飛び、
+        // resync で既存 pending 行が無言 CANCEL されて鳴らなかった
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.MONTHLY, anchor = "2026-10-05"),
+            now = now, days = 14, zone = TZ,
+        )
+        assertTrue(out.any { it.id.endsWith(":2026-10-05") })
+    }
+
+    @Test
+    fun `曜日空のWEEKLYはONCEとして次の1回を出す`() {
+        // 曜日未選択のまま毎週保存すると旧実装では永遠に鳴らなかった。
+        // 「毎週鳴らす意図に一番近いのは次の1回」なので ONCE に倒す
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.WEEKLY, days = emptySet()),
+            now = now, days = 14, zone = TZ,
+        )
+        // hour=7:30 は now=08:00 の30分前 = グレース内 → 当日分が即時鳴動対象で出る
+        assertEquals(1, out.size)
+        assertTrue(out[0].id.endsWith(":2026-10-05"))
+    }
 }

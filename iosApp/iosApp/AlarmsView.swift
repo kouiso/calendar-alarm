@@ -98,6 +98,8 @@ struct AlarmsView: View {
         case "INTERVAL_WEEKS": return "\(a.repeatInterval)週ごと"
         case "INTERVAL_MONTHS": return "\(a.repeatInterval)ヶ月ごと"
         default:
+            // 曜日空のWEEKLYはONCEとして鳴る (展開側と同じ意味)
+            if a.daysOfWeek.isEmpty { return "1回のみ" }
             if a.daysOfWeek.count == 7 { return "毎日" }
             let order = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"]
             return order.filter { a.daysOfWeek.contains($0) }.compactMap { Self.wdNames[$0] }.joined()

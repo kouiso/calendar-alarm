@@ -64,6 +64,10 @@ class MainActivity : ComponentActivity() {
         // オンボーディングやアプリ設定で後からカレンダー権限が付いた場合に備え、
         // 画面に戻る度に Observer 登録を試す (登録済みなら即リターン)。
         app.ensureCalendarObserver()
+        // 通知が届かなかった経路の抽出結果を拾う (通知権限なし端末)
+        com.calendaralarm.ai.MailPrintService.consumePending(this)?.let {
+            extractedJson.value = it
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

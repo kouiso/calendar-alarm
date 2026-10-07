@@ -2,6 +2,7 @@ package com.calendaralarm.ui
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -217,6 +218,18 @@ private fun RuleEditDialog(
     var any by remember { mutableStateOf(initial.anyKeywords.joinToString(",")) }
     var exc by remember { mutableStateOf(initial.excludeKeywords.joinToString(",")) }
     var days by remember { mutableStateOf(initial.daysOfWeek.toSet()) }
+    // 時間帯は "HH:mm" テキスト (空=終日)。開始=終了でも終日扱いなので空推奨
+    var startText by remember {
+        mutableStateOf(initial.startMinuteOfDay?.let { "%02d:%02d".format(it / 60, it % 60) } ?: "")
+    }
+    var endText by remember {
+        mutableStateOf(initial.endMinuteOfDay?.let { "%02d:%02d".format(it / 60, it % 60) } ?: "")
+    }
+
+    fun parseHm(s: String): Int? = s.trim().takeIf { it.isNotEmpty() }?.let {
+        "^([01]?[0-9]|2[0-3]):([0-5][0-9])$".toRegex().matchEntire(it)
+            ?.let { m -> m.groupValues[1].toInt() * 60 + m.groupValues[2].toInt() }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -242,6 +255,21 @@ private fun RuleEditDialog(
                 OutlinedTextField(value = exc, onValueChange = { exc = it },
                     label = { Text("除外キーワード") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = startText,
+                        onValueChange = { startText = it.take(5) },
+                        label = { Text("開始 HH:mm") }, singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = endText,
+                        onValueChange = { endText = it.take(5) },
+                        label = { Text("終了 HH:mm") }, singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 // 曜日 (1=月..7=日)
                 Row {
@@ -271,8 +299,8 @@ private fun RuleEditDialog(
                             anyKeywords = any.split(',').map { it.trim() }.filter { it.isNotEmpty() },
                             excludeKeywords = exc.split(',').map { it.trim() }.filter { it.isNotEmpty() },
                             daysOfWeek = days.sorted(),
-                            startMinuteOfDay = initial.startMinuteOfDay,
-                            endMinuteOfDay = initial.endMinuteOfDay,
+                            startMinuteOfDay = parseHm(startText),
+                            endMinuteOfDay = parseHm(endText),
                         ),
                     )
                 },

@@ -298,7 +298,7 @@ fun SettingsScreen(
         item { Spacer(Modifier.height(12.dp)) }
         item {
             prefs?.let { p ->
-                EventRulesCard(p, settings, scope)
+                EventRulesCard(p, settings, repository, scope)
             }
         }
 
@@ -306,7 +306,7 @@ fun SettingsScreen(
         item { Spacer(Modifier.height(12.dp)) }
         item {
             prefs?.let { p ->
-                RingingCard(p, settings, scope)
+                RingingCard(p, settings, repository, scope)
             }
         }
 
@@ -726,6 +726,7 @@ private fun String?.toActionOr(fallback: EventAction): EventAction =
 private fun EventRulesCard(
     prefs: SettingsRepository.Settings,
     settings: SettingsRepository,
+    repository: AlarmRepository,
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
     var showCodes by remember { mutableStateOf(false) }
@@ -745,7 +746,7 @@ private fun EventRulesCard(
                 ).forEach { (a, label) ->
                     FilterChip(
                         selected = prefs.defaultStartAction == a,
-                        onClick = { scope.launch { settings.setDefaultStartAction(a) } },
+                        onClick = { scope.launch { settings.setDefaultStartAction(a); repository.resync("settings") } },
                         label = { Text(label, maxLines = 1) },
                         modifier = Modifier.padding(end = 4.dp),
                     )
@@ -759,7 +760,7 @@ private fun EventRulesCard(
                 ).forEach { (a, label) ->
                     FilterChip(
                         selected = prefs.defaultReminderAction == a,
-                        onClick = { scope.launch { settings.setDefaultReminderAction(a) } },
+                        onClick = { scope.launch { settings.setDefaultReminderAction(a); repository.resync("settings") } },
                         label = { Text(label, maxLines = 1) },
                         modifier = Modifier.padding(end = 4.dp),
                     )
@@ -786,7 +787,7 @@ private fun EventRulesCard(
                 ).forEach { (s, label) ->
                     FilterChip(
                         selected = prefs.inviteFilter.allows(s),
-                        onClick = { scope.launch { settings.toggleInviteStatus(s) } },
+                        onClick = { scope.launch { settings.toggleInviteStatus(s); repository.resync("settings") } },
                         label = { Text(label, maxLines = 1) },
                         modifier = Modifier.padding(end = 4.dp),
                     )
@@ -798,7 +799,7 @@ private fun EventRulesCard(
                 Switch(
                     checked = prefs.importEventReminders,
                     onCheckedChange = {
-                        scope.launch { settings.setImportEventReminders(it) }
+                        scope.launch { settings.setImportEventReminders(it); repository.resync("settings") }
                     },
                 )
             }
@@ -808,7 +809,7 @@ private fun EventRulesCard(
         TitleCodeDialog(
             initial = prefs.titleCodes,
             onDismiss = { showCodes = false },
-            onSave = { scope.launch { settings.setTitleCodes(it) }; showCodes = false },
+            onSave = { scope.launch { settings.setTitleCodes(it); repository.resync("settings") }; showCodes = false },
         )
     }
 }
@@ -946,6 +947,7 @@ private fun AuditRow(log: AuditLogEntity) {
 private fun RingingCard(
     p: SettingsRepository.Settings,
     settings: SettingsRepository,
+    repository: AlarmRepository,
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
     Card(
@@ -1020,7 +1022,7 @@ private fun RingingCard(
                 Spacer(Modifier.weight(1f))
                 Switch(
                     checked = p.muteAll,
-                    onCheckedChange = { scope.launch { settings.setMuteAll(it) } },
+                    onCheckedChange = { scope.launch { settings.setMuteAll(it); repository.resync("settings") } },
                 )
             }
         }

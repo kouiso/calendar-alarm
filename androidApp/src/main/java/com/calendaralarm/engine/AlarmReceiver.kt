@@ -27,18 +27,35 @@ class AlarmReceiver : BroadcastReceiver() {
                         .container.repository
                     try {
                         val instance = repo.instanceById(instanceId)
+                        // NOTIFY でも通知権限が無いと何も届かない → 鳴る側に倒す
+                        val notificationsOk =
+                            androidx.core.app.NotificationManagerCompat.from(context)
+                                .areNotificationsEnabled()
                         when {
                             instance == null -> Unit
                             instance.delivery ==
-                                com.calendaralarm.shared.model.EventAction.NOTIFY -> {
+                                com.calendaralarm.shared.model.EventAction.NOTIFY &&
+                                notificationsOk -> {
                                 repo.onFired(instanceId)
                                 runCatching { EventNotifier.post(context, instance) }
                             }
-                            else -> startRingingService(context, instanceId)
+                            else -> {
+                                try {
+                                    context.startForegroundService(
+                                        ringingIntent(context, instanceId))
+                                } catch (e: Exception) {
+                                    // FGS起動自体が拒否されるコンテキストがあり得る。
+                                    // 見逃しに逃がす (同じ放送枠内で記録をコミットする)
+                                    repo.markMissed(
+                                        instanceId,
+                                        "鳴動サービス起動がOSに拒否: ${e.javaClass.simpleName}",
+                                    )
+                                    runCatching { MissedNotifier.post(context, null) }
+                                }
+                            }
                         }
                         return@launch
                     } finally {
-                        // startForegroundService は同期なのでここで畳んでよい
                         pending.finish()
                     }
                 }
@@ -60,27 +77,12 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun startRingingService(context: Context, instanceId: String) {
-        val service = Intent(context, AlarmService::class.java).apply {
+    private fun ringingIntent(context: Context, instanceId: String) =
+        Intent(context, AlarmService::class.java).apply {
             action = AlarmService.ACTION_START
             data = Uri.parse("alarm://instance/$instanceId")
             putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
         }
-        // BOOT_COMPLETED 直後など、FGS 起動自体が拒否されるコンテキストがあり得る。
-        // ここで落とすとプロセス死亡=クラッシュループになるので、見逃しに逃がす。
-        try {
-            context.startForegroundService(service)
-        } catch (e: Exception) {
-            CoroutineScope(Dispatchers.IO).launch {
-                runCatching {
-                    (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
-                        .container.repository
-                        .markMissed(instanceId, "鳴動サービス起動がOSに拒否: ${e.javaClass.simpleName}")
-                }
-                runCatching { MissedNotifier.post(context, null) }
-            }
-        }
-    }
 
     companion object {
         const val ACTION_FIRE = "com.calendaralarm.action.FIRE"

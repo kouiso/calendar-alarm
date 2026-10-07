@@ -32,12 +32,18 @@ object UnlockRingReceiver {
                 if (intent.action != Intent.ACTION_USER_PRESENT) return
                 val ids = deferred.toList()
                 deferred.clear()
+                // 放送→サービス直起動は API31+ で ForegroundServiceStartNotAllowed になる。
+                // setAlarmClock 経由 (免除ルート) で即時再武装する
                 ids.forEach { id ->
-                    ctx.sendBroadcast(
-                        Intent(ctx, AlarmReceiver::class.java)
-                            .setAction(AlarmReceiver.ACTION_FIRE)
-                            .setData(android.net.Uri.parse("alarm://instance/$id")),
-                    )
+                    (ctx.applicationContext as? com.calendaralarm.CalendarAlarmApp)
+                        ?.container?.scheduler?.schedule(
+                            com.calendaralarm.shared.model.AlarmInstance(
+                                id = id,
+                                triggerAtMillis = System.currentTimeMillis(),
+                                title = "",
+                                kind = com.calendaralarm.shared.model.AlarmKind.STANDALONE,
+                            ),
+                        )
                 }
             }
         }

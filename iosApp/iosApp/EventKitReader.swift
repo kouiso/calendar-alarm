@@ -78,7 +78,9 @@ final class EventKitReader {
         if allDay {
             let fmt = DateFormatter()
             fmt.dateFormat = "yyyy-MM-dd"
-            fmt.timeZone = TimeZone.current
+            // 展開側の契約 (allDay は UTC の日解釈) に合わせる。
+            // ローカル時刻で保存すると西寄りTZで前日に鳴る
+            fmt.timeZone = TimeZone(secondsFromGMT: 0)
             guard let s = fmt.date(from: startIso) else { return nil }
             ev.startDate = s
             ev.endDate = endIso.flatMap { fmt.date(from: $0) } ?? s.addingTimeInterval(86400)
