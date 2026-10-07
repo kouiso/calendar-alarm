@@ -130,6 +130,15 @@ struct StandaloneAlarmDTO: Codable, Identifiable, Hashable {
     var exceptions: Set<String> = []
     /// 「ロック解除までミュート」(Android 側のみ意味を持つフラグ)
     var muteUntilUnlock: Bool = false
+    /// 繰返しモード (RepeatMode.name)。nil=旧形式 (daysOfWeek 空→ONCE, 非空→WEEKLY)
+    var repeatMode: String? = nil
+    /// INTERVAL_* の間隔
+    var repeatInterval: Int = 1
+    /// MONTHLY/INTERVAL_* の起点日 (UTC 0時 epoch millis)
+    var repeatAnchorMillis: Int64? = nil
+
+    /// 旧データを含む実効モード
+    var effectiveRepeatMode: String { repeatMode ?? (daysOfWeek.isEmpty ? "ONCE" : "WEEKLY") }
 }
 
 struct AlarmInstanceDTO: Codable, Identifiable, Hashable {
@@ -269,6 +278,9 @@ extension StandaloneAlarmDTO {
         snoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .snoozeMinutes) ?? 10
         exceptions = try c.decodeIfPresent(Set<String>.self, forKey: .exceptions) ?? []
         muteUntilUnlock = try c.decodeIfPresent(Bool.self, forKey: .muteUntilUnlock) ?? false
+        repeatMode = try c.decodeIfPresent(String.self, forKey: .repeatMode)
+        repeatInterval = try c.decodeIfPresent(Int.self, forKey: .repeatInterval) ?? 1
+        repeatAnchorMillis = try c.decodeIfPresent(Int64.self, forKey: .repeatAnchorMillis)
     }
 }
 

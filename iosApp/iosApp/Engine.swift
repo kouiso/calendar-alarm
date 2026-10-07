@@ -149,7 +149,7 @@ final class Engine: ObservableObject {
         let expandReq = ExpandRequest(
             events: events,
             standalone: s.standaloneAlarms.filter {
-                !$0.daysOfWeek.isEmpty || !consumedAlarmIds.contains($0.id)
+                $0.effectiveRepeatMode != "ONCE" || !consumedAlarmIds.contains($0.id)
             },
             calendarRules: s.calendarRules,
             overrides: s.overrides,
@@ -316,7 +316,7 @@ final class Engine: ObservableObject {
     private func disableConsumedOneShots(_ alarmIds: Set<Int64>) {
         for aid in alarmIds {
             guard let a = store.state.standaloneAlarms.first(where: { $0.id == aid }),
-                  a.daysOfWeek.isEmpty, a.enabled else { continue }
+                  a.effectiveRepeatMode == "ONCE", a.enabled else { continue }
             store.setAlarmEnabled(id: aid, false)
             store.audit("ALARM_OFF", "単発アラーム消費で停止: \(a.label.isEmpty ? "アラーム" : a.label) (id=\(aid))")
         }

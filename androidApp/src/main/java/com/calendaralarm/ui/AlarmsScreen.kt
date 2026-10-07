@@ -37,10 +37,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.data.AlarmRepository
+import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -192,14 +196,24 @@ private fun AlarmRow(
 }
 
 private fun repeatLabel(alarm: StandaloneAlarm): String =
-    if (alarm.daysOfWeek.isEmpty()) {
-        "1回のみ"
-    } else {
-        val order = listOf(
-            DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
-            DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY,
-        )
-        "毎週 " + order.filter { it in alarm.daysOfWeek }.joinToString("") { it.jaShort() }
+    when (alarm.effectiveRepeatMode()) {
+        RepeatMode.ONCE -> "1回のみ"
+        RepeatMode.MONTHLY -> {
+            val day = alarm.repeatAnchorMillis?.let {
+                Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.UTC).dayOfMonth
+            }
+            if (day != null) "毎月${day}日" else "毎月"
+        }
+        RepeatMode.INTERVAL_DAYS -> "${alarm.repeatInterval}日ごと"
+        RepeatMode.INTERVAL_WEEKS -> "${alarm.repeatInterval}週ごと"
+        RepeatMode.INTERVAL_MONTHS -> "${alarm.repeatInterval}ヶ月ごと"
+        RepeatMode.WEEKLY -> {
+            val order = listOf(
+                DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
+                DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY,
+            )
+            "毎週 " + order.filter { it in alarm.daysOfWeek }.joinToString("") { it.jaShort() }
+        }
     }
 
 private fun DayOfWeek.jaShort(): String = when (this) {

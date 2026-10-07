@@ -143,7 +143,7 @@ final class Store: ObservableObject {
             s.standaloneAlarms.append(copy)
         }
         // 有効な単発の保存は消費のリセット (Android upsertStandaloneAlarm と同じ)。
-        if a.enabled && a.daysOfWeek.isEmpty { deleteTerminalByAlarmId(id) }
+        if a.enabled && a.effectiveRepeatMode == "ONCE" { deleteTerminalByAlarmId(id) }
         return id
     }
     func deleteAlarm(id: Int64) { mutate { $0.standaloneAlarms.removeAll { $0.id == id } } }
@@ -152,7 +152,7 @@ final class Store: ObservableObject {
         mutate { s in
             guard let i = s.standaloneAlarms.firstIndex(where: { $0.id == id }) else { return }
             s.standaloneAlarms[i].enabled = enabled
-            oneShot = s.standaloneAlarms[i].daysOfWeek.isEmpty
+            oneShot = s.standaloneAlarms[i].effectiveRepeatMode == "ONCE"
         }
         // 単発の再有効化は消費のリセット
         if enabled && oneShot { deleteTerminalByAlarmId(id) }

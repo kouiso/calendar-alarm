@@ -80,6 +80,12 @@ data class StandaloneAlarmEntity(
     val exceptionsCsv: String,
     /** ロック解除まで鳴動を遅延するか。 */
     val muteUntilUnlock: Boolean = false,
+    /** 繰返しモード (RepeatMode.name)。null = 旧形式 (daysMask から導出)。 */
+    val repeatMode: String? = null,
+    /** INTERVAL_* の間隔。 */
+    val repeatInterval: Int = 1,
+    /** MONTHLY/INTERVAL_* の起点日 (UTC 0時 epoch millis)。 */
+    val repeatAnchorMillis: Long? = null,
 )
 
 /** カレンダー単位の鳴動ルール。 */

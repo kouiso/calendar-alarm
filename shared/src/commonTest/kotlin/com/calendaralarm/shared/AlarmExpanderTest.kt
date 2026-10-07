@@ -8,6 +8,7 @@ import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
 import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.InviteStatus
+import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
 import com.calendaralarm.shared.model.TitleCodeSettings
 import kotlinx.datetime.DayOfWeek
@@ -15,6 +16,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.test.Test
@@ -456,5 +458,95 @@ class MuteAllTest {
         )
         assertEquals(1, out.size)
         assertEquals(EventAction.NOTIFY, out[0].delivery)
+    }
+}
+
+class RepeatModeTest {
+    private val now: Instant = ldt("2026-10-05T08:00:00")
+
+    private fun alarm(
+        mode: RepeatMode? = null,
+        interval: Int = 1,
+        anchor: String? = null,
+        days: Set<DayOfWeek> = emptySet(),
+    ) = StandaloneAlarm(
+        id = 1, enabled = true, hour = 7, minute = 30,
+        daysOfWeek = days,
+        repeatMode = mode,
+        repeatInterval = interval,
+        repeatAnchorMillis = anchor?.let { LocalDate.parse(it).atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds() },
+    )
+
+    @Test
+    fun `旧形式は曜日なし=ONCE 曜日あり=WEEKLY`() {
+        assertEquals(RepeatMode.ONCE, alarm().effectiveRepeatMode())
+        assertEquals(RepeatMode.WEEKLY, alarm(days = setOf(DayOfWeek.MONDAY)).effectiveRepeatMode())
+    }
+
+    @Test
+    fun `毎月モードは窓外の次回も1件出す`() {
+        // 10/5 現在、毎月20日 → 14日窓には10/20が1件入る
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.MONTHLY, anchor = "2026-10-01"),
+            now = now, days = 14, zone = TZ,
+        )
+        assertTrue(out.isNotEmpty())
+        // anchor=1日だと日付は「1日」になる (起点日の日を使う)
+        val out20 = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.MONTHLY, anchor = "2026-10-20"),
+            now = now, days = 14, zone = TZ,
+        )
+        assertEquals(1, out20.size)
+        assertTrue(out20[0].id.endsWith(":2026-10-20"))
+    }
+
+    @Test
+    fun `毎月モードで窓を超える次回も拾う`() {
+        // 毎月25日、now=10/5 → 10/25は窓内。窓外だけのケース: 毎月1日で now=10/5 だと
+        // 次回 11/1 は窓(10/19)外でも1件出る
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.MONTHLY, anchor = "2026-09-01"),
+            now = now, days = 14, zone = TZ,
+        )
+        assertEquals(1, out.size)
+        assertTrue(out[0].id.endsWith(":2026-11-01"))
+    }
+
+    @Test
+    fun `月末をまたぐ毎月は短い月で丸める`() {
+        // 起点31日: 10月31日は窓外(10/19まで)なので次回=10/31が1件
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.MONTHLY, anchor = "2026-08-31"),
+            now = now, days = 14, zone = TZ,
+        )
+        assertEquals(1, out.size)
+        assertTrue(out[0].id.endsWith(":2026-10-31"))
+    }
+
+    @Test
+    fun `日ごとモードは過去の起点から次回を出す`() {
+        // 起点9/1の7日ごと → 10/5以降の最初の発生日を出す
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.INTERVAL_DAYS, interval = 7, anchor = "2026-09-01"),
+            now = now, days = 14, zone = TZ,
+        )
+        assertTrue(out.isNotEmpty())
+        assertTrue(out[0].triggerAtMillis > now.toEpochMilliseconds())
+        // 連続発生は7日周期のはず
+        if (out.size >= 2) {
+            val gap = out[1].triggerAtMillis - out[0].triggerAtMillis
+            assertEquals(7L * 24 * 3600 * 1000, gap)
+        }
+    }
+
+    @Test
+    fun `繰返しアラームの発生日は例外日を飛ばす`() {
+        val out = AlarmExpander.expandStandalone(
+            alarm(mode = RepeatMode.INTERVAL_DAYS, interval = 1, anchor = "2026-10-05").copy(
+                exceptions = setOf(LocalDate(2026, 10, 6)),
+            ),
+            now = now, days = 7, zone = TZ,
+        )
+        assertTrue(out.none { it.id.endsWith(":2026-10-06") })
     }
 }

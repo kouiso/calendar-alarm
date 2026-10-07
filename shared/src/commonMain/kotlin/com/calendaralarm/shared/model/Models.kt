@@ -135,7 +135,27 @@ data class StandaloneAlarm(
     /** 元アプリの「ロック解除までミュート」: 発火時に端末ロック中なら鳴らさず、
      *  解除された時点で鳴動を開始する。 */
     val muteUntilUnlock: Boolean = false,
-)
+    /** 繰返しモード。null は旧形式 (daysOfWeek 空→ONCE, 非空→WEEKLY)。 */
+    val repeatMode: RepeatMode? = null,
+    /** INTERVAL_* の間隔 (x日ごと/x週ごと/xヶ月ごと)。 */
+    val repeatInterval: Int = 1,
+    /** MONTHLY/INTERVAL_* の起点日 (UTC 0時の epoch millis)。 */
+    val repeatAnchorMillis: Long? = null,
+) {
+    /** 旧データ (repeatMode 未設定) を含む実効モード。 */
+    fun effectiveRepeatMode(): RepeatMode =
+        repeatMode ?: if (daysOfWeek.isEmpty()) RepeatMode.ONCE else RepeatMode.WEEKLY
+}
+
+/** 単発アラームの繰返し種別。元アプリ: 1回のみ/曜日/毎月/x日ごと/x週ごと/xヶ月ごと。 */
+enum class RepeatMode {
+    ONCE,
+    WEEKLY,
+    MONTHLY,
+    INTERVAL_DAYS,
+    INTERVAL_WEEKS,
+    INTERVAL_MONTHS,
+}
 
 /** 鳴動エンジンが実際にスケジュールする1回分のアラーム。 */
 @Serializable

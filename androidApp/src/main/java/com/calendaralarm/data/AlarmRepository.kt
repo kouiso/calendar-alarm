@@ -16,6 +16,7 @@ import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.AlarmState
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
+import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -239,7 +240,7 @@ class AlarmRepository(
         standalones.forEach { alarm ->
             // 一括ミュート中は単発/繰返しアラーム自体を展開しない (全部 ALARM 鳴動のため)
             if (!appSettings.muteAll &&
-                (alarm.daysOfWeek.isNotEmpty() || alarm.id !in consumedAlarmIds)
+                (alarm.effectiveRepeatMode() != RepeatMode.ONCE || alarm.id !in consumedAlarmIds)
             ) {
                 desired += AlarmExpander.expandStandalone(alarm, now = now, days = 14)
             }
@@ -438,7 +439,8 @@ class AlarmRepository(
         val alarms = db.standaloneAlarms().all().associateBy { it.id }
         for (id in alarmIds) {
             val e = alarms[id] ?: continue
-            if (e.daysMask == 0 && e.enabled) {
+            // 消費されるのは「1回のみ」のアラームだけ (繰返しは消費しない)
+            if (e.enabled && (e.repeatMode == "ONCE" || (e.repeatMode == null && e.daysMask == 0))) {
                 db.standaloneAlarms().upsert(e.copy(enabled = false))
                 audit("ALARM_OFF", "単発アラーム消費で停止: ${e.label} (id=$id)")
             }
@@ -452,7 +454,7 @@ class AlarmRepository(
         val id = if (entity.id == 0L) db.standaloneAlarms().upsert(entity) else {
             db.standaloneAlarms().upsert(entity); entity.id
         }
-        if (alarm.enabled && alarm.daysOfWeek.isEmpty()) {
+        if (alarm.enabled && alarm.effectiveRepeatMode() == RepeatMode.ONCE) {
             // 単発アラームの再有効化は消費のリセット。終端行を消して
             // 消費判定 (終端行の有無) に引っかからないようにする
             db.scheduledInstances().deleteTerminalByAlarmId(id)
@@ -553,6 +555,9 @@ class AlarmRepository(
             .mapNotNull { runCatching { LocalDate.parse(it.trim()) }.getOrNull() }
             .toSet(),
         muteUntilUnlock = muteUntilUnlock,
+        repeatMode = repeatMode?.let { runCatching { RepeatMode.valueOf(it) }.getOrNull() },
+        repeatInterval = repeatInterval,
+        repeatAnchorMillis = repeatAnchorMillis,
     )
 
     private fun StandaloneAlarm.toEntity() = StandaloneAlarmEntity(
@@ -566,6 +571,9 @@ class AlarmRepository(
         snoozeMinutes = snoozeMinutes,
         exceptionsCsv = exceptions.joinToString(",") { it.toString() },
         muteUntilUnlock = muteUntilUnlock,
+        repeatMode = repeatMode?.name,
+        repeatInterval = repeatInterval,
+        repeatAnchorMillis = repeatAnchorMillis,
     )
 
     companion object {

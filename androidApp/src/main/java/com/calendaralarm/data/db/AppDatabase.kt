@@ -35,6 +35,15 @@ private val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+private val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // 繰返しモード拡張: 旧行は repeatMode=null のまま daysMask から実効値を導出する
+        db.execSQL("ALTER TABLE standalone_alarms ADD COLUMN repeatMode TEXT")
+        db.execSQL("ALTER TABLE standalone_alarms ADD COLUMN repeatInterval INTEGER NOT NULL DEFAULT 1")
+        db.execSQL("ALTER TABLE standalone_alarms ADD COLUMN repeatAnchorMillis INTEGER")
+    }
+}
+
 @Database(
     entities = [
         ScheduledInstanceEntity::class,
@@ -43,13 +52,13 @@ private val MIGRATION_3_4 = object : Migration(3, 4) {
         EventOverrideEntity::class,
         AuditLogEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     companion object {
         /** Room.databaseBuilder に渡すマイグレーション一覧。 */
-        val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4)
+        val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
     }
     abstract fun scheduledInstances(): ScheduledInstanceDao
     abstract fun standaloneAlarms(): StandaloneAlarmDao

@@ -60,10 +60,13 @@ import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.shared.model.StandaloneAlarm
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.calendaralarm.shared.model.RepeatMode
+import kotlinx.datetime.Clock
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
 
 /**
@@ -87,12 +90,20 @@ fun AlarmEditScreen(
     var minute by remember { mutableIntStateOf(0) }
     var label by remember { mutableStateOf("") }
     var days by remember { mutableStateOf(setOf<DayOfWeek>()) }
+    var repeatMode by remember { mutableStateOf(RepeatMode.ONCE) }
+    var repeatInterval by remember { mutableIntStateOf(1) }
+    var anchorDate by remember {
+        mutableStateOf(
+            Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date,
+        )
+    }
     var exceptions by remember { mutableStateOf(setOf<LocalDate>()) }
     var snooze by remember { mutableIntStateOf(10) }
     var soundUri by remember { mutableStateOf<String?>(null) }
     var muteUntilUnlock by remember { mutableStateOf(false) }
     var enabled by remember { mutableStateOf(true) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showAnchorPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         if (alarmId == 0L) {
@@ -108,6 +119,12 @@ fun AlarmEditScreen(
             minute = existing.minute
             label = existing.label
             days = existing.daysOfWeek
+            repeatMode = existing.effectiveRepeatMode()
+            repeatInterval = existing.repeatInterval
+            existing.repeatAnchorMillis?.let {
+                anchorDate = Instant.fromEpochMilliseconds(it)
+                    .toLocalDateTime(TimeZone.UTC).date
+            }
             exceptions = existing.exceptions
             snooze = existing.snoozeMinutes
             muteUntilUnlock = existing.muteUntilUnlock
@@ -170,7 +187,7 @@ fun AlarmEditScreen(
             )
             Spacer(Modifier.height(16.dp))
 
-            // 曜日繰り返し
+            // 繰り返しモード (元アプリ: 1回のみ/曜日/毎月/x日ごと/x週ごと/xヶ月ごと)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.Repeat,
@@ -181,17 +198,67 @@ fun AlarmEditScreen(
             }
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                val order = listOf(
-                    DayOfWeek.SUNDAY to "日", DayOfWeek.MONDAY to "月", DayOfWeek.TUESDAY to "火",
-                    DayOfWeek.WEDNESDAY to "水", DayOfWeek.THURSDAY to "木",
-                    DayOfWeek.FRIDAY to "金", DayOfWeek.SATURDAY to "土",
-                )
-                order.forEach { (d, ja) ->
+                listOf(
+                    RepeatMode.ONCE to "1回", RepeatMode.WEEKLY to "曜日",
+                    RepeatMode.MONTHLY to "毎月", RepeatMode.INTERVAL_DAYS to "日ごと",
+                    RepeatMode.INTERVAL_WEEKS to "週ごと", RepeatMode.INTERVAL_MONTHS to "月ごと",
+                ).forEach { (m, ja) ->
                     FilterChip(
-                        selected = d in days,
-                        onClick = { days = if (d in days) days - d else days + d },
+                        selected = repeatMode == m,
+                        onClick = { repeatMode = m },
                         label = { Text(ja) },
                     )
+                }
+            }
+            if (repeatMode == RepeatMode.WEEKLY) {
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val order = listOf(
+                        DayOfWeek.SUNDAY to "日", DayOfWeek.MONDAY to "月", DayOfWeek.TUESDAY to "火",
+                        DayOfWeek.WEDNESDAY to "水", DayOfWeek.THURSDAY to "木",
+                        DayOfWeek.FRIDAY to "金", DayOfWeek.SATURDAY to "土",
+                    )
+                    order.forEach { (d, ja) ->
+                        FilterChip(
+                            selected = d in days,
+                            onClick = { days = if (d in days) days - d else days + d },
+                            label = { Text(ja) },
+                        )
+                    }
+                }
+            }
+            if (repeatMode in setOf(
+                    RepeatMode.MONTHLY, RepeatMode.INTERVAL_DAYS,
+                    RepeatMode.INTERVAL_WEEKS, RepeatMode.INTERVAL_MONTHS,
+                )
+            ) {
+                // 起点日: 毎月=この日付の「日」、周期=この日から数える
+                Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (repeatMode == RepeatMode.MONTHLY) "毎月${anchorDate.dayOfMonth}日"
+                        else "起点: ${anchorDate.monthNumber}/${anchorDate.dayOfMonth}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { showAnchorPicker = true }) { Text("変更") }
+                }
+            }
+            if (repeatMode in setOf(
+                    RepeatMode.INTERVAL_DAYS, RepeatMode.INTERVAL_WEEKS,
+                    RepeatMode.INTERVAL_MONTHS,
+                )
+            ) {
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf(1, 2, 3, 5, 7, 10, 14, 30).forEach { n ->
+                        FilterChip(
+                            selected = repeatInterval == n,
+                            onClick = { repeatInterval = n },
+                            label = { Text("$n") },
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -312,12 +379,20 @@ fun AlarmEditScreen(
                                 id = alarmId,
                                 enabled = enabled,
                                 hour = hour, minute = minute,
-                                daysOfWeek = days,
+                                daysOfWeek = if (repeatMode == RepeatMode.WEEKLY) days else emptySet(),
                                 label = label.trim(),
                                 soundUri = soundUri,
                                 snoozeMinutes = snooze,
                                 exceptions = exceptions,
                                 muteUntilUnlock = muteUntilUnlock,
+                                repeatMode = repeatMode,
+                                repeatInterval = repeatInterval,
+                                repeatAnchorMillis = when (repeatMode) {
+                                    RepeatMode.MONTHLY, RepeatMode.INTERVAL_DAYS,
+                                    RepeatMode.INTERVAL_WEEKS, RepeatMode.INTERVAL_MONTHS ->
+                                        anchorDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
+                                    else -> null
+                                },
                             ),
                         )
                         onDone()
@@ -326,6 +401,30 @@ fun AlarmEditScreen(
                 modifier = Modifier.fillMaxWidth().height(56.dp),
             ) { Text("保存") }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+
+    if (showAnchorPicker) {
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis = anchorDate.atStartOfDayIn(TimeZone.UTC)
+                .toEpochMilliseconds(),
+        )
+        DatePickerDialog(
+            onDismissRequest = { showAnchorPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { millis ->
+                        anchorDate = Instant.fromEpochMilliseconds(millis)
+                            .toLocalDateTime(TimeZone.UTC).date
+                    }
+                    showAnchorPicker = false
+                }) { Text("決定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAnchorPicker = false }) { Text("キャンセル") }
+            },
+        ) {
+            DatePicker(state = state)
         }
     }
 
