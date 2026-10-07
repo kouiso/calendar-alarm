@@ -1,0 +1,181 @@
+name: FAD Distribution
+
+# Firebase App Distribution への配布。
+# Android は debug 署名 APK（署名鍵は ANDROID_DEBUG_KEYSTORE_B64 で固定 —
+# ランナーごとに鍵が変わると端末側で INSTALL_FAILED_UPDATE_INCOMPATIBLE になる）。
+# iOS は ASC API キー + Xcode 自動署名で ad-hoc IPA を作る
+# (新規 UDID が Apple Portal に登録済みなら profile はビルド毎に自動更新される)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 配布するプラットフォーム
+        required: true
+        default: both
+        type: choice
+        options:
+          - android
+          - ios
+          - both
+      release_notes:
+        description: テスターへ見せるリリースノート
+        required: false
+        default: ''
+        type: string
+
+env:
+  RELEASE_NOTES: ${{ inputs.release_notes || format('master {0}', github.sha) }}
+
+jobs:
+  android:
+    name: Android → FAD
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: inputs.platform != 'ios'
+    concurrency:
+      group: ${{ github.workflow }}-android
+      # 配布アップロード中に次の dispatch で殺されると中途半端な状態が残るので殺さない
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install fixed debug keystore
+        env:
+          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+        run: |
+          mkdir -p ~/.android
+          echo "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+          ls -la ~/.android/debug.keystore
+
+      - name: Build debug APK
+        run: ./gradlew :androidApp:assembleDebug --stacktrace
+
+      - name: Verify APK signature
+        run: |
+          APK=androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          [ -f "$APK" ] || { echo "APK が無い: $APK"; exit 1; }
+          APKSIGNERS=("$ANDROID_HOME"/build-tools/*/apksigner)
+          [ -x "${APKSIGNERS[-1]}" ] || { echo "apksigner が無い"; exit 1; }
+          "${APKSIGNERS[-1]}" verify --print-certs "$APK" | head -5
+
+      - name: Distribute to Firebase App Distribution
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+        run: |
+          npx -y firebase-tools@14.16.0 appdistribution:distribute \
+            androidApp/build/outputs/apk/debug/androidApp-debug.apk \
+            --app "$FIREBASE_ANDROID_APP_ID" \
+            --token "$FIREBASE_TOKEN" \
+            --groups "beta-testers" \
+            --release-notes "$RELEASE_NOTES"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calendar-alarm-android.apk
+          path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          retention-days: 14
+
+  ios:
+    name: iOS → FAD
+    runs-on: macos-latest
+    timeout-minutes: 60
+    if: inputs.platform != 'android'
+    concurrency:
+      group: ${{ github.workflow }}-ios
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Select Xcode 26 (AlarmKit は iOS 26 SDK が必要)
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          [ -n "$XCODE" ] || XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Using: $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd iosApp
+          xcodegen generate
+          ls CalendarAlarm.xcodeproj
+
+      - name: Write App Store Connect API key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p ~/private_keys
+          printf '%s' "$ASC_KEY_P8" > "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          chmod 600 "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+
+      - name: Archive (ad-hoc, 自動署名)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -e
+          KEY="$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          # CFBundleVersion は run number で自動採番（FAD の新旧判別のため）
+          xcodebuild -project iosApp/CalendarAlarm.xcodeproj \
+            -scheme iosApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/ios/iosApp.xcarchive \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            archive
+
+      - name: Export IPA
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -e
+          KEY="$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          xcodebuild -exportArchive \
+            -archivePath build/ios/iosApp.xcarchive \
+            -exportPath build/ios \
+            -exportOptionsPlist iosApp/exportOptions-fad.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          ls -la build/ios/*.ipa
+
+      - name: Distribute to Firebase App Distribution
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
+        run: |
+          IPA=$(ls build/ios/*.ipa | head -1)
+          npx -y firebase-tools@14.16.0 appdistribution:distribute \
+            "$IPA" \
+            --app "$FIREBASE_IOS_APP_ID" \
+            --token "$FIREBASE_TOKEN" \
+            --groups "beta-testers" \
+            --release-notes "$RELEASE_NOTES"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calendar-alarm-ios-adhoc.ipa
+          path: build/ios/*.ipa
+          retention-days: 14

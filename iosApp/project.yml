@@ -47,11 +47,13 @@ targets:
         NSCalendarsFullAccessUsageDescription: カレンダーの予定をアラームで鳴らすために読み取ります
         NSAlarmKitUsageDescription: 予定の時刻にアラームを鳴らすために使います
         NSUserNotificationsUsageDescription: 通知によるアラームのために使います
+        # Xcode の Resources コピーは Fonts/ を展開してフラットに置くため
+        # UIAppFonts は裸ファイル名で書く（Fonts/... だと FontParser が読めず全フォントが死ぬ）
         UIAppFonts:
-          - Fonts/plex_sans_jp_regular.ttf
-          - Fonts/plex_sans_jp_medium.ttf
-          - Fonts/plex_sans_jp_semibold.ttf
-          - Fonts/plex_sans_jp_light.ttf
+          - plex_sans_jp_regular.ttf
+          - plex_sans_jp_medium.ttf
+          - plex_sans_jp_semibold.ttf
+          - plex_sans_jp_light.ttf
         BGTaskSchedulerPermittedIdentifiers:
           - com.calendaralarm.resync
         UIBackgroundModes:
