@@ -75,7 +75,7 @@ struct AlarmsView: View {
     /// 最も近い pending の ALARM インスタンス (次発バナー用)
     private var nextAlarmInstance: AlarmInstanceDTO? {
         store.state.scheduled.values
-            .filter { $0.instance.kind == "ALARM" && $0.state == .pending }
+            .filter { $0.instance.standaloneAlarmId != nil && $0.state == .pending }
             .map { $0.instance }
             .min { $0.triggerAtMillis < $1.triggerAtMillis }
     }
