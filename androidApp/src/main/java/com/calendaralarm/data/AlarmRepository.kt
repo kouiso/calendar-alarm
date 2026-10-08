@@ -129,6 +129,9 @@ class AlarmRepository(
             // アイコン表示になるのは矛盾
             val (start, reminder) = if (pref?.enabled == false ||
                 !appSettings.inviteFilter.allows(ev.inviteStatus)
+                    || !appSettings.eventTypeFilter.allows(
+                        com.calendaralarm.shared.model.classifyEventType(ev.title)
+                    )
             ) {
                 EventAction.MUTE to EventAction.MUTE
             } else {
@@ -308,6 +311,7 @@ class AlarmRepository(
                     defaultRule = defaultRule,
                     titleCodes = appSettings.titleCodes,
                     inviteFilter = appSettings.inviteFilter,
+                    eventTypeFilter = appSettings.eventTypeFilter,
                     importEventReminders = appSettings.importEventReminders,
                     muteAll = appSettings.muteAll,
                 )

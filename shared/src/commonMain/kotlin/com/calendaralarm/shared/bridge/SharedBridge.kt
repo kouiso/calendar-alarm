@@ -8,6 +8,7 @@ import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
+import com.calendaralarm.shared.model.EventTypeFilter
 import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.StandaloneAlarm
 import com.calendaralarm.shared.model.TitleCodeSettings
@@ -51,6 +52,8 @@ object SharedBridge {
         val titleCodes: TitleCodeSettings = TitleCodeSettings(),
         /** 招待予定フィルタ。 */
         val inviteFilter: InviteFilter = InviteFilter(),
+        /** イベント種別フィルタ。 */
+        val eventTypeFilter: EventTypeFilter = EventTypeFilter(),
         /** 予定側リマインダーを展開に含めるか。 */
         val importEventReminders: Boolean = false,
         /** 一括ミュート: ALARM 鳴動を全て抑止 (NOTIFYとタイマーは残す)。 */
@@ -94,6 +97,7 @@ object SharedBridge {
             ),
             titleCodes = req.titleCodes,
             inviteFilter = req.inviteFilter,
+            eventTypeFilter = req.eventTypeFilter,
             importEventReminders = req.importEventReminders,
             muteAll = req.muteAll,
         )

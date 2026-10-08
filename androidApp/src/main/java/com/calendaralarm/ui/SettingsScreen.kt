@@ -87,6 +87,7 @@ import com.calendaralarm.data.db.AuditLogEntity
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
+import com.calendaralarm.shared.model.EventType
 import com.calendaralarm.shared.model.InviteStatus
 import com.calendaralarm.shared.model.TitleCodeSettings
 import com.calendaralarm.ui.theme.AppPalette
@@ -795,6 +796,23 @@ private fun EventRulesCard(
                     FilterChip(
                         selected = prefs.inviteFilter.allows(s),
                         onClick = { scope.launch { settings.toggleInviteStatus(s); repository.resync("settings") } },
+                        label = { Text(label, maxLines = 1) },
+                        modifier = Modifier.padding(end = 4.dp),
+                    )
+                }
+            }
+            // イベント種別フィルタ (誕生日/不在/勤務場所/タスク/予定)
+            IconSettingRow(Icons.Default.Category) {
+                listOf(
+                    EventType.BIRTHDAY to "誕生日",
+                    EventType.ABSENCE to "不在",
+                    EventType.WORKPLACE to "勤務場所",
+                    EventType.TASK to "タスク",
+                    EventType.EVENT to "予定",
+                ).forEach { (t, label) ->
+                    FilterChip(
+                        selected = prefs.eventTypeFilter.allows(t),
+                        onClick = { scope.launch { settings.toggleEventType(t); repository.resync("settings") } },
                         label = { Text(label, maxLines = 1) },
                         modifier = Modifier.padding(end = 4.dp),
                     )

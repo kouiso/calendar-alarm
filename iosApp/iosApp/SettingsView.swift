@@ -224,6 +224,15 @@ struct SettingsView: View {
                                         }
                                     })
                             }
+                            // イベント種別フィルタ (誕生日/不在/勤務場所/タスク/予定)
+                            IconRow("square.grid.2x2.fill") {
+                                let f = store.state.eventTypeFilter
+                                MultiChips(
+                                    items: EventType.allCases,
+                                    isOn: { t in f.allows(t) },
+                                    onToggle: { t in store.toggleEventType(t); resync("event type filter") },
+                                    label: { t in t.label })
+                            }
                             // 予定側リマインダー取込
                             IconRow("bell.badge.fill") {
                                 Toggle("", isOn: Binding(

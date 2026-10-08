@@ -58,6 +58,45 @@ data class InviteFilter(
     }
 }
 
+/**
+ * イベント種別 (元アプリのイベントタイプメニュー仕様)。
+ * 誕生日/不在/勤務場所/タスクはタイトル文字列で分類し、残りは通常予定。
+ * (Googleカレンダーの誕生日はタイトルに「誕生日」または"birthday"を含む前提)
+ */
+@Serializable
+enum class EventType { BIRTHDAY, ABSENCE, WORKPLACE, TASK, EVENT }
+
+/** タイトル文字からイベント種別を分類する。判定順 = 先勝ち (「誕生日」最優先)。 */
+fun classifyEventType(title: String): EventType {
+    val t = title.lowercase()
+    fun hit(vararg needles: String) = needles.any { t.contains(it) }
+    return when {
+        hit("誕生日", "バースデー", "birthday") -> EventType.BIRTHDAY
+        hit("不在", "休暇", "休み", "有休", "欠勤", "absence", "absent", "away", "out of office") -> EventType.ABSENCE
+        hit("勤務場所", "出社", "在宅勤務", "リモートワーク", "workplace", "work location", "office") -> EventType.WORKPLACE
+        hit("タスク", "todo", "to-do", "task") -> EventType.TASK
+        else -> EventType.EVENT
+    }
+}
+
+/** イベント種別ごとの鳴動ON/OFF (元アプリ仕様)。false の種別は鳴らさない。 */
+@Serializable
+data class EventTypeFilter(
+    val birthday: Boolean = true,
+    val absence: Boolean = true,
+    val workplace: Boolean = true,
+    val task: Boolean = true,
+    val event: Boolean = true,
+) {
+    fun allows(type: EventType): Boolean = when (type) {
+        EventType.BIRTHDAY -> birthday
+        EventType.ABSENCE -> absence
+        EventType.WORKPLACE -> workplace
+        EventType.TASK -> task
+        EventType.EVENT -> event
+    }
+}
+
 /** 端末カレンダープロバイダが返すカレンダー。 */
 @Serializable
 data class CalendarSource(
