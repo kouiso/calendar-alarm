@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FilterList
@@ -849,7 +850,7 @@ private fun EventRulesCard(
                     TextButton(onClick = {
                         googleLauncher.launch(
                             com.calendaralarm.data.calendar.GoogleCalendarTypes
-                                .signInClient(context).signInIntent
+                                .signInClient(LocalContext.current).signInIntent
                         )
                     }) { Text("連携") }
                 }
