@@ -155,11 +155,14 @@ struct AlarmEditView: View {
         NavigationStack {
             Form {
                 Section {
+                    // wheel スタイルで常時展開 (compact 展開だと行上に浮いて位置がずれて見える)
                     DatePicker("時刻", selection: Binding(
                         get: { dateFrom(hour: alarm.hour, minute: alarm.minute) },
                         set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0)
                                alarm.hour = c.hour ?? 8; alarm.minute = c.minute ?? 0 }),
                         displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
                     TextField("ラベル", text: $alarm.label)
                 }
                 Section {
