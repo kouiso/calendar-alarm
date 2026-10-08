@@ -43,11 +43,15 @@ struct MonthGridView: View {
         let gridStart = cal.date(byAdding: .day, value: -weekdayOffset, to: first)!
         let byDay = Dictionary(grouping: events) { Self.df.string(from: $0.startDate) }
 
+        // Night UI: 週番号列なし / 日曜赤・土曜青 / 34px 円
+        let dark = UITraitCollection.current.userInterfaceStyle == .dark
+        let sundayRed = dark ? Color(red: 1, green: 0.56, blue: 0.56) : Color(red: 0.78, green: 0.16, blue: 0.16)
+        let saturdayBlue = dark ? Color(red: 0.49, green: 0.53, blue: 1) : Color(red: 0.12, green: 0.44, blue: 0.82)
         VStack(spacing: 4) {
             HStack(spacing: 0) {
-                Text("").frame(width: 24)
-                ForEach(["日", "月", "火", "水", "木", "金", "土"], id: \.self) { d in
-                    Text(d).font(NightTheme.font(11)).foregroundStyle(.secondary)
+                ForEach(Array(["日", "月", "火", "水", "木", "金", "土"].enumerated()), id: \.offset) { i, d in
+                    Text(d).font(NightTheme.font(11))
+                        .foregroundStyle(i == 0 ? sundayRed : i == 6 ? saturdayBlue : .secondary)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -55,35 +59,38 @@ struct MonthGridView: View {
                 let weekStart = cal.date(byAdding: .day, value: w * 7, to: gridStart)!
                 if cal.isDate(weekStart, equalTo: first, toGranularity: .month) || weekStart < endOfMonth(first) {
                     HStack(spacing: 0) {
-                        // ISO 週番号
-                        Text("\(isoWeek(weekStart))")
-                            .font(NightTheme.font(10))
-                            .foregroundStyle(.tertiary)
-                            .frame(width: 24)
                         ForEach(0..<7, id: \.self) { d in
                             let date = cal.date(byAdding: .day, value: d, to: weekStart)!
                             let inMonth = cal.isDate(date, equalTo: first, toGranularity: .month)
                             let dayEvents = byDay[Self.df.string(from: date)] ?? []
+                            let isToday = cal.isDateInToday(date)
+                            let isFocus = cal.isDate(date, inSameDayAs: focusDate)
                             VStack(spacing: 2) {
-                                Text("\(cal.component(.day, from: date))")
-                                    .font(NightTheme.font(13,
-                                        weight: cal.isDateInToday(date) ? .semibold : .regular))
-                                    .foregroundStyle(
-                                        !inMonth ? Color.secondary.opacity(0.35)
-                                        : cal.isDateInToday(date) ? NightTheme.indigo
-                                        : .primary)
-                                HStack(spacing: 2) {
-                                    ForEach(dayEvents.prefix(3)) { ev in
-                                        Circle().fill(calendarColor(ev)).frame(width: 4, height: 4)
+                                ZStack {
+                                    Circle()
+                                        .fill(isToday ? Color.accentColor : Color.clear)
+                                        .frame(width: 34, height: 34)
+                                    Circle()
+                                        .stroke(Color.accentColor, lineWidth: isFocus ? 1.5 : 0)
+                                        .frame(width: 34, height: 34)
+                                    Text("\(cal.component(.day, from: date))")
+                                        .font(NightTheme.numFont(17,
+                                            weight: isToday ? .semibold : .regular))
+                                        .foregroundStyle(
+                                            isToday ? Color.white
+                                            : !inMonth ? Color.secondary.opacity(0.35)
+                                            : d == 0 ? sundayRed
+                                            : d == 6 ? saturdayBlue
+                                            : .primary)
+                                }
+                                HStack(spacing: 3) {
+                                    ForEach(dayEvents.prefix(2)) { ev in
+                                        Circle().fill(calendarColor(ev)).frame(width: 5, height: 5)
                                     }
                                 }
+                                .frame(height: 5)
                             }
                             .frame(maxWidth: .infinity).frame(height: 44)
-                            .background(
-                                cal.isDate(date, inSameDayAs: focusDate)
-                                    ? NightTheme.indigo.opacity(0.15)
-                                    : Color.clear,
-                                in: RoundedRectangle(cornerRadius: 8))
                             .onTapGesture { focusDate = date }
                         }
                     }
@@ -99,7 +106,7 @@ struct MonthGridView: View {
                     }
                 }
                 .background(Color(uiColor: .secondarySystemGroupedBackground),
-                            in: RoundedRectangle(cornerRadius: 14))
+                            in: RoundedRectangle(cornerRadius: 22))
                 .padding(.top, 8)
             }
         }
@@ -109,12 +116,6 @@ struct MonthGridView: View {
         cal.date(byAdding: DateComponents(month: 1, day: -1), to: first)!
     }
 
-    /// ISO-8601 週番号 (その週の木曜で年を決める)
-    private func isoWeek(_ date: Date) -> Int {
-        var c = Calendar(identifier: .gregorian)
-        c.firstWeekday = 2; c.minimumDaysInFirstWeek = 4
-        return c.component(.weekOfYear, from: date)
-    }
 }
 
 private extension DisplayEvent {
@@ -145,15 +146,19 @@ struct ThreeDayColumnsView: View {
                 let date = cal.date(byAdding: .day, value: i, to: startDate)!
                 let dayEvents = byDay[Self.df.string(from: date)] ?? []
                 VStack(spacing: 6) {
+                    // Night UI: 今日は accent-soft 背景 + Outfit 22
                     Text(Self.wdFmt.string(from: date))
-                        .font(NightTheme.font(13,
-                            weight: cal.isDateInToday(date) ? .semibold : .regular))
-                        .foregroundStyle(cal.isDateInToday(date) ? NightTheme.indigo : .primary)
+                        .font(NightTheme.numFont(22,
+                            weight: cal.isDateInToday(date) ? .semibold : .medium))
+                        .foregroundStyle(cal.isDateInToday(date) ? Color.accentColor : .primary)
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                        .background(cal.isDateInToday(date) ? Color.accentColor.opacity(0.15) : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 12))
                     ForEach(dayEvents) { ev in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(ev.event.allDay ? "終日" : Self.hm(ev.startDate))
-                                .font(NightTheme.font(10))
+                                .font(NightTheme.numFont(10))
                                 .foregroundStyle(.secondary)
                             Text(ev.event.title)
                                 .font(NightTheme.font(12))
@@ -162,7 +167,7 @@ struct ThreeDayColumnsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(6)
                         .background(calendarColor(ev).opacity(0.15),
-                                    in: RoundedRectangle(cornerRadius: 8))
+                                    in: RoundedRectangle(cornerRadius: 12))
                         .onTapGesture { onSelect(ev) }
                     }
                 }

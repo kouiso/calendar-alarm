@@ -16,12 +16,36 @@ struct AgendaView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
+                    // Night UI: 日付 H1
+                    Text(Self.todayLabel)
+                        .font(NightTheme.font(30, weight: .semibold))
+                        .padding(.top, 6)
                     if let next = nextAlarm {
-                        NextAlarmBanner(instance: next)
+                        NextAlarmBanner(instance: next, accent: accent)
                     }
                     // ヘッダー天気 (元アプリ: 現在気温+時間別予報)。地点設定がある時だけ。
                     if let nf = nowForecast {
                         WeatherHeaderRow(forecast: nf)
+                    }
+                    // Night UI: 4-way セグメント (一覧/3日/月/タイムライン) + 検索/同期
+                    HStack(spacing: 10) {
+                        NightSegment(labels: modes.map { $0.label }, selected: Binding(
+                            get: { modes.firstIndex(of: viewMode) ?? 0 },
+                            set: { i in
+                                viewMode = modes[i]
+                                if modes[i] != .list { focusDate = Date() }
+                            }))
+                        Button {
+                            searchOpen.toggle()
+                            if !searchOpen { searchText = "" }
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(searchOpen ? accent : .secondary)
+                        }
+                        Button { Task { await engine.resync(reason: "manual") } } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     switch viewMode {
                     case .list:
@@ -40,31 +64,6 @@ struct AgendaView: View {
                 .padding()
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 14) {
-                        ForEach(AgendaViewMode.allCases) { m in
-                            Button {
-                                viewMode = m
-                                if m != .list { focusDate = Date() }
-                            } label: {
-                                Image(systemName: m.icon)
-                                    .foregroundStyle(viewMode == m ? NightTheme.indigo : .secondary)
-                            }
-                        }
-                        Button {
-                            searchOpen.toggle()
-                            if !searchOpen { searchText = "" }
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundStyle(searchOpen ? NightTheme.indigo : .secondary)
-                        }
-                        Button { Task { await engine.resync(reason: "manual") } } label: {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                    }
-                }
-            }
             .safeAreaInset(edge: .top) {
                 if searchOpen {
                     TextField("タイトルで絞り込み", text: $searchText)
@@ -82,6 +81,15 @@ struct AgendaView: View {
     }
 
     // MARK: - データ整形
+
+    /// セグメント順 = 一覧/3日/月/タイムライン (Night UI スペック)
+    private let modes: [AgendaViewMode] = [.list, .threeDay, .month, .timeline]
+    private var accent: Color { AppPalette.byId(store.state.themeId).accent }
+    private static var todayLabel: String {
+        let f = DateFormatter(); f.dateFormat = "M月d日 (E)"
+        f.locale = Locale(identifier: "ja_JP")
+        return f.string(from: Date())
+    }
 
     private var displayEvents: [DisplayEvent] {
         let now = Engine.nowMillis
@@ -216,29 +224,34 @@ struct WeatherHeaderRow: View {
 
 // MARK: - 部品
 
+/// Night UI hero card: accent-soft 背景 r28 + Outfit 64 時刻 + ドット+タイトル
 struct NextAlarmBanner: View {
     let instance: AlarmInstanceDTO
+    let accent: Color
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(NightTheme.indigo.opacity(0.15)).frame(width: 44, height: 44)
-                Image(systemName: "bell.fill").foregroundStyle(NightTheme.indigo)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Self.timeStr(instance.triggerAtMillis))
-                    .font(NightTheme.numFont(22, weight: .light))
+        VStack(alignment: .leading, spacing: 6) {
+            Text("次のアラーム")
+                .font(NightTheme.font(12, weight: .semibold))
+                .tracking(1)
+                .foregroundStyle(accent)
+            Text(Self.timeStr(instance.triggerAtMillis))
+                .font(NightTheme.numFont(64, weight: .light))
+                .tracking(-2)
+                .foregroundStyle(NightTheme.onNight)
+            HStack(spacing: 8) {
+                Circle().fill(accent).frame(width: 8, height: 8)
                 Text(instance.title)
-                    .font(NightTheme.font(14))
-                    .foregroundStyle(.secondary)
+                    .font(NightTheme.font(15))
+                    .foregroundStyle(NightTheme.muted)
                     .lineLimit(1)
             }
-            Spacer()
         }
-        .padding(14)
-        .background(NightTheme.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 22).padding(.vertical, 18)
+        .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 28))
     }
     static func timeStr(_ millis: Int64) -> String {
-        let f = DateFormatter(); f.dateFormat = "M/d HH:mm"
+        let f = DateFormatter(); f.dateFormat = "H:mm"
         return f.string(from: Date(timeIntervalSince1970: TimeInterval(millis) / 1000))
     }
 }
@@ -261,12 +274,12 @@ struct DayCard: View {
                         .onTapGesture { onTap(ev) }
                 }
             }
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
         }
     }
 }
 
-/// 予定行: 時刻列 + カレンダー色アクセントバー + タイトル + ベル + オフセット
+/// 予定行: Outfit 時刻列 + カレンダー色ドット + タイトル + ベル + オフセット (Night UI)
 struct EventRow: View {
     let ev: DisplayEvent
     let accent: Color
@@ -274,11 +287,11 @@ struct EventRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(Self.timeStr(ev.event))
-                .font(NightTheme.font(14, weight: .medium))
+                .font(NightTheme.numFont(20, weight: .medium))
                 .frame(width: 52, alignment: .leading)
-            RoundedRectangle(cornerRadius: 2)
+            Circle()
                 .fill(accent)
-                .frame(width: 3, height: 34)
+                .frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 2) {
                 Text(ev.event.title)
                     .font(NightTheme.font(15))
@@ -295,11 +308,13 @@ struct EventRow: View {
             if ev.muted {
                 Image(systemName: "bell.slash").foregroundStyle(.secondary).font(.system(size: 14))
             } else {
-                Image(systemName: "bell.fill").foregroundStyle(NightTheme.indigo).font(.system(size: 14))
+                Image(systemName: "bell.fill").foregroundStyle(accent).font(.system(size: 14))
                 if ev.effectiveMinutes > 0 {
                     Text("\(ev.effectiveMinutes)分前")
                         .font(NightTheme.font(11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(accent)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
                 }
             }
         }

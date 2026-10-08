@@ -14,6 +14,8 @@ enum NightTheme {
     static let muted = adaptive(dark: 0x9AA3B2, light: 0x5B6372)
     static let divider = adaptive(dark: 0x1F2430, light: 0xE6E8EE)
     static let border = adaptive(dark: 0x262C38, light: 0xD7D8E3)
+    static let segmentTrack = adaptive(dark: 0x141821, light: 0xE6E8EE)
+    static let segmentSelected = adaptive(dark: 0x262C38, light: 0xFFFFFF)
 
     /// ライト/ダークで色を切り替える (Night UI スペックのペア値)。
     static func adaptive(dark: UInt32, light: UInt32) -> Color {
@@ -52,6 +54,38 @@ extension View {
     /// 全画面で Plex Sans JP を既定にする。
     func nightFont() -> some View {
         self.font(NightTheme.font(16))
+    }
+}
+
+/// Night UI セグメントコントロール (track r16 / item r12 h40)。
+/// iOS標準Picker(segmented)は見た目が違うためスペック通りに自前実装する。
+struct NightSegment: View {
+    let labels: [String]
+    @Binding var selected: Int
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(labels.indices, id: \.self) { i in
+                Button {
+                    selected = i
+                } label: {
+                    Text(labels[i])
+                        .font(NightTheme.font(14, weight: selected == i ? .semibold : .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(
+                            selected == i ? NightTheme.segmentSelected : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
+                        .foregroundStyle(selected == i ? NightTheme.onNight : NightTheme.muted)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(NightTheme.segmentTrack, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 

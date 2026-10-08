@@ -15,6 +15,26 @@ struct AlarmsView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: 12) {
+                    // Night UI: H1 + 44px FAB
+                    HStack {
+                        Text("アラーム")
+                            .font(NightTheme.font(30, weight: .semibold))
+                        Spacer()
+                        Button {
+                            editing = StandaloneAlarmDTO(hour: 8, minute: 0)
+                            editingNew = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 44, height: 44)
+                                .background(Color.accentColor, in: Circle())
+                        }
+                    }
+                    .padding(.bottom, 4)
+                    if let next = nextAlarmInstance {
+                        NextAlarmBanner(instance: next, accent: accent)
+                    }
                     ForEach(store.state.standaloneAlarms.sorted { ($0.hour, $0.minute) < ($1.hour, $1.minute) }) { a in
                         alarmRow(a)
                     }
@@ -49,6 +69,15 @@ struct AlarmsView: View {
             }
             Button("やめる", role: .cancel) { deleteTarget = nil }
         }
+    }
+
+    private var accent: Color { AppPalette.byId(store.state.themeId).accent }
+    /// 最も近い pending の ALARM インスタンス (次発バナー用)
+    private var nextAlarmInstance: AlarmInstanceDTO? {
+        store.state.scheduled.values
+            .filter { $0.instance.kind == "ALARM" && $0.state == .pending }
+            .map { $0.instance }
+            .min { $0.triggerAtMillis < $1.triggerAtMillis }
     }
 
     private func alarmRow(_ a: StandaloneAlarmDTO) -> some View {
@@ -86,7 +115,7 @@ struct AlarmsView: View {
             }
         }
         .padding(16)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
         .onTapGesture { editing = a; editingNew = false }
     }
 
