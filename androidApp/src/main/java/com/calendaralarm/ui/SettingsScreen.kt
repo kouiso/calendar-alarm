@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Email
@@ -128,6 +129,7 @@ fun SettingsScreen(
         item { Spacer(Modifier.height(8.dp)) }
         item {
             Card(
+                shape = RoundedCornerShape(22.dp),
                 Modifier.fillMaxWidth(),
                 colors = androidx.compose.material3.CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -221,6 +223,7 @@ fun SettingsScreen(
         item {
             prefs?.let { p ->
                 Card(
+                    shape = RoundedCornerShape(22.dp),
                     Modifier.fillMaxWidth(),
                     colors = androidx.compose.material3.CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -267,6 +270,7 @@ fun SettingsScreen(
         item { Spacer(Modifier.height(16.dp)) }
         item {
             Card(
+                shape = RoundedCornerShape(22.dp),
                 Modifier.fillMaxWidth(),
                 colors = androidx.compose.material3.CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -385,6 +389,7 @@ fun SettingsScreen(
         item {
             var logExpanded by remember { mutableStateOf(false) }
             Card(
+                shape = RoundedCornerShape(22.dp),
                 Modifier.fillMaxWidth(),
                 colors = androidx.compose.material3.CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -468,6 +473,7 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
     var expanded by remember { mutableStateOf(ngCount > 0) }
 
     Card(
+        shape = RoundedCornerShape(22.dp),
         Modifier.fillMaxWidth(),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -731,6 +737,7 @@ private fun EventRulesCard(
 ) {
     var showCodes by remember { mutableStateOf(false) }
     Card(
+        shape = RoundedCornerShape(22.dp),
         Modifier.fillMaxWidth(),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -951,6 +958,7 @@ private fun RingingCard(
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
     Card(
+        shape = RoundedCornerShape(22.dp),
         Modifier.fillMaxWidth(),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -1059,6 +1067,7 @@ private fun AppearanceCard(
     }
 
     Card(
+        shape = RoundedCornerShape(22.dp),
         Modifier.fillMaxWidth(),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -1066,7 +1075,7 @@ private fun AppearanceCard(
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
             // テーマスウォッチ (10種): 各パレットの primary を丸で表示
-            FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+            FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), maxItemsInEachRow = 5) {
                 AppPalette.entries.forEach { palette ->
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1076,7 +1085,7 @@ private fun AppearanceCard(
                     ) {
                         Box(
                             Modifier
-                                .size(34.dp)
+                                .size(38.dp)
                                 .background(
                                     color = palette.light.primary,
                                     shape = CircleShape,

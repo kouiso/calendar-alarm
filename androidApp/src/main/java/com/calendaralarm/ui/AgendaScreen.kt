@@ -1,6 +1,7 @@
 package com.calendaralarm.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -555,20 +556,41 @@ private fun EventDetailSheet(
             )
         }
 
-        // 天気: イベント日の予報を1行で
+        // Night UI: 天気ヒーロー (グラデ + Outfit 84 気温)
         forecast?.let { fc ->
             val day = eventDate(ev)
             fc.firstOrNull { it.date == day }?.let { f ->
                 Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.WbCloudy,
-                        contentDescription = "当日の天気",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(weatherText(f), style = MaterialTheme.typography.bodyMedium)
+                val dark = isSystemInDarkTheme()
+                val g = if (dark) {
+                    listOf(Color(0xFF182A44), Color(0xFF14203A))
+                } else {
+                    listOf(Color(0xFFC9DDF7), Color(0xFFD0E8F8))
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(g),
+                            androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                        )
+                        .padding(20.dp),
+                ) {
+                    Column(Modifier.align(Alignment.BottomStart)) {
+                        Text(
+                            "${f.tempMax.toInt()}°",
+                            fontFamily = OutfitFontFamily,
+                            fontWeight = FontWeight.ExtraLight,
+                            fontSize = 84.sp,
+                        )
+                        Text(
+                            weatherText(f),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
