@@ -129,8 +129,8 @@ fun SettingsScreen(
         item { Spacer(Modifier.height(8.dp)) }
         item {
             Card(
-                shape = RoundedCornerShape(22.dp),
                 Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
                 colors = androidx.compose.material3.CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 ),
@@ -223,8 +223,8 @@ fun SettingsScreen(
         item {
             prefs?.let { p ->
                 Card(
-                    shape = RoundedCornerShape(22.dp),
                     Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
                     colors = androidx.compose.material3.CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     ),
@@ -270,8 +270,8 @@ fun SettingsScreen(
         item { Spacer(Modifier.height(16.dp)) }
         item {
             Card(
-                shape = RoundedCornerShape(22.dp),
                 Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
                 colors = androidx.compose.material3.CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 ),
@@ -389,8 +389,8 @@ fun SettingsScreen(
         item {
             var logExpanded by remember { mutableStateOf(false) }
             Card(
-                shape = RoundedCornerShape(22.dp),
                 Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
                 colors = androidx.compose.material3.CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 ),
@@ -473,8 +473,8 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
     var expanded by remember { mutableStateOf(ngCount > 0) }
 
     Card(
-        shape = RoundedCornerShape(22.dp),
         Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -737,8 +737,8 @@ private fun EventRulesCard(
 ) {
     var showCodes by remember { mutableStateOf(false) }
     Card(
-        shape = RoundedCornerShape(22.dp),
         Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -958,8 +958,8 @@ private fun RingingCard(
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
     Card(
-        shape = RoundedCornerShape(22.dp),
         Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -1067,8 +1067,8 @@ private fun AppearanceCard(
     }
 
     Card(
-        shape = RoundedCornerShape(22.dp),
         Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),

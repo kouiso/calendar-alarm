@@ -580,7 +580,7 @@ private fun EventDetailSheet(
                     Column(Modifier.align(Alignment.BottomStart)) {
                         Text(
                             "${f.tempMax.toInt()}°",
-                            fontFamily = OutfitFontFamily,
+                            fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
                             fontWeight = FontWeight.ExtraLight,
                             fontSize = 84.sp,
                         )
