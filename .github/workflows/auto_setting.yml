@@ -6,7 +6,7 @@ on:
 
 jobs:
   assign_pr_to_creator:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - name: Auto Assign PR to Creator
         uses: actions/github-script@v5
@@ -24,7 +24,7 @@ jobs:
             console.log('PR assigned to creator.');
 
   auto-label:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - name: Add label based on branch name
         uses: actions/github-script@v5
@@ -80,7 +80,7 @@ jobs:
             }
 
   pull_request_taking_for_jira:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - name: Install Axios
         run: npm install axios
@@ -162,7 +162,7 @@ jobs:
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
 
   check-base-branch:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       # デフォルトブランチは master (develop は 2024 年の Flutter 版で放置中)。
       # かつては develop 強制だったが全 PR が master 向けなので常に落ちていた (#28)
