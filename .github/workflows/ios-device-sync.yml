@@ -45,6 +45,12 @@ jobs:
           TESTER_EMAIL: ${{ inputs.tester_email }}
         run: |
           set -euo pipefail
+          # WHY: ユーザー指示により FAD のテスターは kouiso@ritmo.co.jp 固定。
+          # 自由入力で他者を追加できないようホワイトリストで止める
+          if [ "$TESTER_EMAIL" != "kouiso@ritmo.co.jp" ]; then
+            echo "::error::FAD テスターは kouiso@ritmo.co.jp のみ許可: $TESTER_EMAIL" >&2
+            exit 1
+          fi
           # WHY: 自由入力をそのまま FAD API の JSON に入れるので、ここで
           # メアド形式以外を止める。JSON 組み立ては jq に任せてシェル展開を挟まない
           if ! printf '%s' "$TESTER_EMAIL" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then
@@ -128,8 +134,8 @@ jobs:
           bundler-cache: false
 
       - name: Install fastlane (API アクションのみ使用)
-        # firebase_app_distribution_get_udids は plugin gem 側のアクション
-        run: gem install fastlane fastlane-plugin-firebase_app_distribution --no-document
+        # register_devices はコア action。FAD plugin は get_udids 経由が不要になったので外す
+        run: gem install fastlane --no-document
 
       - name: Write App Store Connect API key file
         env:
@@ -155,20 +161,47 @@ jobs:
           PY
           chmod 600 /tmp/asc_key.json
 
-      - name: Fetch FAD device UDIDs and register to Apple Portal
+      - name: Mint Google access token from FIREBASE_TOKEN
+        id: token
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-          FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
+        run: |
+          set -euo pipefail
+          # register-tester ジョブと同じ手順 (firebase-tools 公開 OAuth クライアント)
+          resp="$(curl -sS -X POST https://oauth2.googleapis.com/token \
+            -d 'client_id=563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6' \
+            -d 'client_secret=j9iVZfS8kkCEFUPaAeJV0sAi' \
+            -d 'grant_type=refresh_token' \
+            -d "refresh_token=$FIREBASE_TOKEN")"
+          at="$(printf '%s' "$resp" | jq -r '.access_token // empty')"
+          [ -n "$at" ] || { echo "access token の鋳造に失敗: $resp" >&2; exit 1; }
+          echo "::add-mask::$at"
+          echo "access_token=$at" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch FAD device UDIDs and register to Apple Portal
+        env:
+          FAD_ACCESS_TOKEN: ${{ steps.token.outputs.access_token }}
           TEAM_ID: ${{ env.TEAM_ID }}
-          FASTLANE_SKIP_UPDATE_CHECK: '1'
         run: |
           set -euo pipefail
           mkdir -p .device-sync
-          # FAD が収集したテスター端末の UDID 一覧を書き出す
-          fastlane run firebase_app_distribution_get_udids \
-            app:"$FIREBASE_IOS_APP_ID" \
-            firebase_cli_token:"$FIREBASE_TOKEN" \
-            output_file:"$PWD/.device-sync/fad_devices.txt"
+          # WHY: fastlane-plugin の get_udids action は Pluginfile 未登録だと
+          # fastlane run から呼べない (実測失敗)。テスター+デバイス一覧は FAD REST
+          # API の testers.list で同じ結果が取れるのでそちらに切り替える
+          next=""
+          : > .device-sync/testers.jsonl
+          while :; do
+            url="https://firebaseappdistribution.googleapis.com/v1/projects/$FAD_PROJECT_NUMBER/testers?pageSize=1000"
+            [ -n "$next" ] && url="$url&pageToken=$next"
+            page="$(curl -sS -f -H "Authorization: Bearer $FAD_ACCESS_TOKEN" "$url")"
+            printf '%s' "$page" | jq -c '.testers[]?' >> .device-sync/testers.jsonl
+            next="$(printf '%s' "$page" | jq -r '.nextPageToken // empty')"
+            [ -n "$next" ] || break
+          done
+          # register_devices の devices_file 形式 (TSV: Device ID / Device Name) に変換
+          printf 'Device ID\tDevice Name\n' > .device-sync/fad_devices.txt
+          jq -r '.devices[]? | [.udid, (.model // "ios")] | @tsv' .device-sync/testers.jsonl \
+            >> .device-sync/fad_devices.txt
           n=$(grep -v '^Device ID' .device-sync/fad_devices.txt | grep -c '[^[:space:]]' || true)
           echo "devices=$n"
           if [ "$n" -gt 0 ]; then
