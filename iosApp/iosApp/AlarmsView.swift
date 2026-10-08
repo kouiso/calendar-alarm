@@ -49,14 +49,6 @@ struct AlarmsView: View {
                 .padding()
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        editing = StandaloneAlarmDTO(hour: 8, minute: 0)
-                        editingNew = true
-                    } label: { Image(systemName: "plus") }
-                }
-            }
         }
         .sheet(item: $editing) { a in
             AlarmEditView(alarm: a, isNew: editingNew)
@@ -72,7 +64,7 @@ struct AlarmsView: View {
     }
 
     private var accent: Color { AppPalette.byId(store.state.themeId).accent }
-    /// 最も近い pending の ALARM インスタンス (次発バナー用)
+    /// 最も近い pending のスタンドアロンアラームインスタンス (次発バナー用)
     private var nextAlarmInstance: AlarmInstanceDTO? {
         store.state.scheduled.values
             .filter { $0.instance.standaloneAlarmId != nil && $0.state == .pending }
