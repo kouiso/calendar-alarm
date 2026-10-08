@@ -834,6 +834,7 @@ private fun EventRulesCard(
                 }
             }
             IconSettingRow(Icons.Default.AccountCircle) {
+                val localContext = LocalContext.current
                 Column(Modifier.weight(1f)) {
                     Text(
                         prefs.googleAccountEmail
@@ -850,7 +851,7 @@ private fun EventRulesCard(
                     TextButton(onClick = {
                         googleLauncher.launch(
                             com.calendaralarm.data.calendar.GoogleCalendarTypes
-                                .signInClient(LocalContext.current).signInIntent
+                                .signInClient(localContext).signInIntent
                         )
                     }) { Text("連携") }
                 }
