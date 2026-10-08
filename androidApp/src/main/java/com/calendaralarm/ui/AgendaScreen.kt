@@ -131,36 +131,38 @@ fun AgendaScreen(repository: AlarmRepository) {
     val nextAlarm = pending.firstOrNull()
 
     Column(Modifier.fillMaxSize()) {
-        // 次のアラーム帯: いつ鳴るか常時見せるのが信頼感の肝
+        // Night UI: 日付 H1 + 天気ピルは WeatherHeaderRow が担う
+        Text(
+            SimpleDateFormat("M月d日 (E)", Locale.JAPAN).format(Date()),
+            fontSize = 30.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 20.dp, top = 58.dp),
+        )
+        // 次のアラーム帯: いつ鳴るか常時見せるのが信頼感の肝 (Night UI hero card)
         if (nextAlarm != null) {
             NextAlarmBanner(nextAlarm.title, nextAlarm.triggerAtMillis)
         }
 
-        // ビュー切替 + 検索 + 同期 (元アプリ: 一覧/月/3日/日タイムライン + 検索)
+        // ビュー切替 (Night UI 4-way segment) + 検索 + 同期
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ViewMode.entries.forEach { mode ->
-                IconButton(onClick = {
-                    viewMode = mode
-                    if (mode != ViewMode.LIST) {
+            val modes = listOf(
+                ViewMode.LIST, ViewMode.THREE_DAY, ViewMode.MONTH, ViewMode.TIMELINE,
+            )
+            NightSegment(
+                labels = modes.map { it.label() },
+                selected = modes.indexOf(viewMode),
+                onSelect = { i ->
+                    viewMode = modes[i]
+                    if (modes[i] != ViewMode.LIST) {
                         focusDate = kotlinx.datetime.Clock.System.now()
                             .toLocalDateTime(tz).date
                     }
-                }) {
-                    Icon(
-                        mode.icon(),
-                        contentDescription = mode.label(),
-                        tint = if (viewMode == mode) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-            }
-            Spacer(Modifier.weight(1f))
+                },
+                modifier = Modifier.weight(1f),
+            )
             IconButton(onClick = {
                 searchOpen = !searchOpen
                 if (!searchOpen) searchQuery = ""
@@ -292,38 +294,45 @@ fun AgendaScreen(repository: AlarmRepository) {
 
 @Composable
 private fun NextAlarmBanner(title: String, triggerAtMillis: Long) {
-    val time = SimpleDateFormat("M/d(E) H:mm", Locale.JAPAN).format(Date(triggerAtMillis))
+    val time = SimpleDateFormat("H:mm", Locale.JAPAN).format(Date(triggerAtMillis))
+    val accent = MaterialTheme.colorScheme.primary
     Card(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 12.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 12.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            containerColor = accent.copy(alpha = 0.15f),
         ),
     ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier.size(34.dp)
-                    .background(
-                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f),
-                        CircleShape,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Default.Notifications,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(18.dp),
+        Column(Modifier.padding(horizontal = 22.dp, vertical = 18.dp)) {
+            Text(
+                "次のアラーム",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp,
+                color = accent,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                time,
+                fontSize = 64.sp,
+                fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
+                fontWeight = FontWeight.Light,
+                letterSpacing = (-2).sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(8.dp).background(accent, CircleShape),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    title,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
             }
-            Spacer(Modifier.width(10.dp))
-            Text(
-                "$time  $title",
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                style = MaterialTheme.typography.titleMedium,
-            )
         }
     }
 }
@@ -341,6 +350,7 @@ private fun AgendaList(
                     DayHeader(date)
                     Card(
                         Modifier.fillMaxWidth(),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
                         colors = androidx.compose.material3.CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         ),
@@ -404,12 +414,13 @@ internal fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 時刻列
+        // 時刻列 (Night UI: Outfit 20/500)
         Column(Modifier.width(52.dp)) {
             Text(
                 if (effectiveAllDay) "終日" else timeLabel(ev.startMillis, false),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
+                fontWeight = FontWeight.Medium,
             )
             if (!effectiveAllDay) {
                 Text(
@@ -419,13 +430,10 @@ internal fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
                 )
             }
         }
-        // カレンダー色アクセントバー
+        // カレンダー色ドット
         Box(
-            Modifier.width(4.dp).height(38.dp)
-                .background(
-                    Color(item.calendarColor),
-                    androidx.compose.foundation.shape.RoundedCornerShape(2.dp),
-                ),
+            Modifier.size(8.dp)
+                .background(Color(item.calendarColor), CircleShape),
         )
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
@@ -469,13 +477,21 @@ internal fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
             tint = iconTint,
         )
         if (!item.muted && item.minutesBefore > 0) {
-            Spacer(Modifier.width(4.dp))
-            Text(
-                "${item.minutesBefore}分前" +
-                    if (item.extraOffsets.isNotEmpty()) " +${item.extraOffsets.size}" else "",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Spacer(Modifier.width(6.dp))
+            // 「N分前」は accent-soft の小チップ
+            Box(
+                Modifier.background(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                ).padding(horizontal = 8.dp, vertical = 3.dp),
+            ) {
+                Text(
+                    "${item.minutesBefore}分前" +
+                        if (item.extraOffsets.isNotEmpty()) " +${item.extraOffsets.size}" else "",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
 }
