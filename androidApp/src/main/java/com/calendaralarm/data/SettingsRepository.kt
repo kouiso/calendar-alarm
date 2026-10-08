@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.InviteFilter
+import com.calendaralarm.shared.model.EventType
 import com.calendaralarm.shared.model.EventTypeFilter
 import com.calendaralarm.shared.model.InviteStatus
 import com.calendaralarm.shared.model.TitleCodeSettings

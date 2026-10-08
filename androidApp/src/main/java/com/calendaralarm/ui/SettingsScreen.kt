@@ -802,7 +802,7 @@ private fun EventRulesCard(
                 }
             }
             // イベント種別フィルタ (誕生日/不在/勤務場所/タスク/予定)
-            IconSettingRow(Icons.Default.Category) {
+            IconSettingRow(Icons.Default.Notifications) {
                 listOf(
                     EventType.BIRTHDAY to "誕生日",
                     EventType.ABSENCE to "不在",
