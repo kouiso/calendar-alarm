@@ -55,6 +55,30 @@ class AlarmRepository(
     /** 期限切れが MISSED 化された件数の通知 (missed 通知用)。 */
     private val onMissed: (suspend (Int) -> Unit)? = null,
 ) {
+    // ---- Google Calendar eventType 取得 ----
+
+    /**
+     * Google連携済みアカウントの Calendar API から eventType を引き、
+     * iCalUID で照合して各イベントの googleEventType を埋める。
+     * 未連携・トークン失効・API失敗・型なしイベントはそのまま残し
+     * (resolveEventType がタイトル判定にフォールバックする)。
+     */
+    private suspend fun enrichWithGoogleTypes(
+        events: List<com.calendaralarm.shared.model.CalendarEvent>,
+        appSettings: SettingsRepository.Settings,
+        beginMillis: Long,
+        endMillis: Long,
+    ): List<com.calendaralarm.shared.model.CalendarEvent> {
+        val email = appSettings.googleAccountEmail ?: return events
+        val types = com.calendaralarm.data.calendar.GoogleCalendarTypes
+            .fetchEventTypes(calendarReader.appContext(), email, beginMillis, endMillis)
+            ?: return events
+        if (types.isEmpty()) return events
+        return events.map { ev ->
+            types[ev.iCalUID]?.let { ev.copy(googleEventType = it) } ?: ev
+        }
+    }
+
     // ---- 参照 ----
 
     fun pendingFlow(): Flow<List<AlarmInstance>> =
@@ -106,11 +130,16 @@ class AlarmRepository(
         val sources = calendarReader.calendars().associateBy { it.id }
         val prefs = db.calendarPrefs().all().associateBy { it.calendarId }
         val overrides = db.eventOverrides().all().associateBy { it.instanceKey }
-        val events = calendarReader.events(
+        val appSettings = settings.flow.first()
+        val events = enrichWithGoogleTypes(
+            calendarReader.events(
+                now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
+                (now + days.days).toEpochMilliseconds(),
+            ),
+            appSettings,
             now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
             (now + days.days).toEpochMilliseconds(),
         )
-        val appSettings = settings.flow.first()
         events.map { ev ->
             val pref = prefs[ev.calendarId]
             val ov = overrides[ev.instanceKey]
@@ -130,7 +159,7 @@ class AlarmRepository(
             val (start, reminder) = if (pref?.enabled == false ||
                 !appSettings.inviteFilter.allows(ev.inviteStatus)
                     || !appSettings.eventTypeFilter.allows(
-                        com.calendaralarm.shared.model.classifyEventType(ev.title)
+                        com.calendaralarm.shared.model.resolveEventType(ev)
                     )
             ) {
                 EventAction.MUTE to EventAction.MUTE
@@ -292,7 +321,12 @@ class AlarmRepository(
                 // 過去側はグレース幅ではなく14日に広げる。スヌーズ連鎖が親予定の
                 // 開始から長く伸びても liveEventKeys が親を見失わず、スヌーズ子が
                 // 無言キャンセルされない。in-window 外の予定は展開側で弾かれる。
-                val events = calendarReader.events(
+                val events = enrichWithGoogleTypes(
+                    calendarReader.events(
+                        (now - 14.days).toEpochMilliseconds(),
+                        horizon.toEpochMilliseconds(),
+                    ),
+                    appSettings,
                     (now - 14.days).toEpochMilliseconds(),
                     horizon.toEpochMilliseconds(),
                 )

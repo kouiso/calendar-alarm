@@ -79,6 +79,23 @@ fun classifyEventType(title: String): EventType {
     }
 }
 
+/** Google Calendar API の eventType 生値を EventType へ写像。未対応値は null。 */
+fun googleEventTypeToEventType(googleType: String?): EventType? = when (googleType) {
+    "birthday" -> EventType.BIRTHDAY
+    "outOfOffice" -> EventType.ABSENCE
+    "workingLocation" -> EventType.WORKPLACE
+    "task" -> EventType.TASK
+    "default", "focusTime", "fromGmail" -> EventType.EVENT
+    else -> null
+}
+
+/**
+ * イベントの実種別。Google Calendar API の eventType が取れていればそれを正本、
+ * 取れないイベントはタイトル文字列判定へフォールバックする。
+ */
+fun resolveEventType(event: CalendarEvent): EventType =
+    googleEventTypeToEventType(event.googleEventType) ?: classifyEventType(event.title)
+
 /** イベント種別ごとの鳴動ON/OFF (元アプリ仕様)。false の種別は鳴らさない。 */
 @Serializable
 data class EventTypeFilter(
@@ -123,6 +140,11 @@ data class CalendarEvent(
     val inviteStatus: InviteStatus? = null,
     /** カレンダー側に設定済みのリマインダー (開始何分前かの分数リスト)。 */
     val calendarReminderMinutes: List<Int> = emptyList(),
+    /** iCalendar UID (CalendarContract UID_2445 / EKCalendarItem.calendarItemExternalIdentifier)。
+     *  Google Calendar API の iCalUID と照合するためのキー。 */
+    val iCalUID: String? = null,
+    /** Google Calendar API の eventType 生値。連携済みアカウントで取得できた時のみ入る。 */
+    val googleEventType: String? = null,
 ) {
     /** 同一イベントの複数回を区別するため、開始時刻込みの安定キーを返す。 */
     val instanceKey: String get() = "$calendarId:$id:$startMillis"

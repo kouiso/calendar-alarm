@@ -15,6 +15,9 @@ import kotlinx.coroutines.withContext
  */
 class CalendarContractReader(private val context: Context) {
 
+    /** GoogleCalendarTypes 等、連携レイヤが使う Application Context。 */
+    fun appContext(): Context = context
+
     suspend fun calendars(): List<CalendarSource> = withContext(Dispatchers.IO) {
         val projection = arrayOf(
             CalendarContract.Calendars._ID,
@@ -94,8 +97,40 @@ class CalendarContractReader(private val context: Context) {
         }
         // カレンダー側リマインダーを基底イベントIDで一括取得し各回へ配る
         val reminders = eventReminders(baseEventIds)
-        out.map { it.copy(calendarReminderMinutes = reminders[it.id.toLongOrNull()] ?: emptyList()) }
+        // Google Calendar API の iCalUID 照合用に UID_2445 を基底イベント単位で拾う
+        val uids = eventUids(baseEventIds)
+        out.map {
+            it.copy(
+                calendarReminderMinutes = reminders[it.id.toLongOrNull()] ?: emptyList(),
+                iCalUID = uids[it.id.toLongOrNull()],
+            )
+        }
     }
+
+    /** Events テーブルから基底イベントID群の UID_2445 (iCalUID) を一括取得する。 */
+    private suspend fun eventUids(eventIds: Set<Long>): Map<Long, String> =
+        withContext(Dispatchers.IO) {
+            if (eventIds.isEmpty()) return@withContext emptyMap()
+            val out = mutableMapOf<Long, String>()
+            eventIds.chunked(200).forEach { chunk ->
+                val selection = "${CalendarContract.Events._ID} IN (" +
+                    chunk.joinToString(",") + ")"
+                context.contentResolver.query(
+                    CalendarContract.Events.CONTENT_URI,
+                    arrayOf(
+                        CalendarContract.Events._ID,
+                        CalendarContract.Events.UID_2445,
+                    ),
+                    selection, null, null,
+                )?.use { c ->
+                    while (c.moveToNext()) {
+                        val uid = c.getString(1)
+                        if (!uid.isNullOrEmpty()) out[c.getLong(0)] = uid
+                    }
+                }
+            }
+            out
+        }
 
     /**
      * 出席ステータス → InviteStatus。主催者=カレンダー所有者自身の予定は

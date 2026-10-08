@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FilterList
@@ -816,6 +817,43 @@ private fun EventRulesCard(
                         label = { Text(label, maxLines = 1) },
                         modifier = Modifier.padding(end = 4.dp),
                     )
+                }
+            }
+            // Googleカレンダー連携 (eventType を API の正本から取得)
+            val googleLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult()
+            ) { res ->
+                runCatching {
+                    com.google.android.gms.auth.api.signin.GoogleSignIn
+                        .getSignedInAccountFromIntent(res.data).result?.email
+                }.getOrNull()?.let { email ->
+                    scope.launch {
+                        settings.setGoogleAccount(email)
+                        repository.resync("google-link")
+                    }
+                }
+            }
+            IconSettingRow(Icons.Default.AccountCircle) {
+                val localContext = LocalContext.current
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        prefs.googleAccountEmail
+                            ?.let { "連携中: $it" }
+                            ?: "未連携 (種別はタイトル推測)",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (prefs.googleAccountEmail != null) {
+                    TextButton(onClick = {
+                        scope.launch { settings.setGoogleAccount(null); repository.resync("google-unlink") }
+                    }) { Text("解除") }
+                } else {
+                    TextButton(onClick = {
+                        googleLauncher.launch(
+                            com.calendaralarm.data.calendar.GoogleCalendarTypes
+                                .signInClient(localContext).signInIntent
+                        )
+                    }) { Text("連携") }
                 }
             }
             // 予定側リマインダーの取込

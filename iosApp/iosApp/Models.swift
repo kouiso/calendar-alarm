@@ -53,6 +53,23 @@ func classifyEventType(_ title: String) -> EventType {
     return .event
 }
 
+/// Models.kt googleEventTypeToEventType と同じ写像 (Google Calendar API の生値→EventType)。
+func googleEventTypeToEventType(_ googleType: String?) -> EventType? {
+    switch googleType {
+    case "birthday": return .birthday
+    case "outOfOffice": return .absence
+    case "workingLocation": return .workplace
+    case "task": return .task
+    case "default", "focusTime", "fromGmail": return .event
+    default: return nil
+    }
+}
+
+/// Models.kt resolveEventType と同じ優先順: API の正本があればそれ、なければタイトル判定。
+func resolveEventType(_ ev: CalendarEventDTO) -> EventType {
+    googleEventTypeToEventType(ev.googleEventType) ?? classifyEventType(ev.title)
+}
+
 /// Models.kt EventTypeFilter (false の種別は鳴らさない)。
 struct EventTypeFilter: Codable, Hashable {
     var birthday: Bool = true
@@ -104,6 +121,11 @@ struct CalendarEventDTO: Codable, Identifiable, Hashable {
     var inviteStatus: String? = nil
     /// カレンダー側に登録されたリマインダーの分数
     var calendarReminderMinutes: [Int] = []
+    /// iCalendar UID (EKCalendarItem.calendarItemExternalIdentifier)。
+    /// Google Calendar API の iCalUID 照合キー。
+    var iCalUID: String? = nil
+    /// Google Calendar API の eventType 生値 (連携取得できた時のみ)。
+    var googleEventType: String? = nil
 
     /// Models.kt の instanceKey と同じ規則 ("calendarId:id:startMillis")
     var instanceKey: String { "\(calendarId):\(id):\(startMillis)" }

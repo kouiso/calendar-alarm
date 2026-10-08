@@ -45,6 +45,9 @@ class SettingsRepository(private val context: Context) {
         /** 招待予定フィルタ。 */
         val inviteFilter: InviteFilter = InviteFilter(),
         val eventTypeFilter: EventTypeFilter = EventTypeFilter(),
+        /** Googleカレンダー連携のアカウントメール。連携済みなら Calendar API の
+         *  eventType を取りに行く。未連携は null (タイトル判定にフォールバック)。 */
+        val googleAccountEmail: String? = null,
         /** 予定側リマインダーを鳴動対象にするか。 */
         val importEventReminders: Boolean = false,
         /** 鳴動画面のスヌーズプリセット (分)。 */
@@ -116,6 +119,7 @@ class SettingsRepository(private val context: Context) {
                 task = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 8 != 0,
                 event = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 16 != 0,
             ),
+            googleAccountEmail = p[KEY_GOOGLE_ACCOUNT],
             importEventReminders = p[KEY_IMPORT_REMINDERS] ?: false,
             snoozePresets = (p[KEY_SNOOZE_PRESETS] ?: "5,10,15,30,45,60")
                 .toCsvList().mapNotNull { it.toIntOrNull() }.ifEmpty { listOf(10) },
@@ -210,6 +214,11 @@ class SettingsRepository(private val context: Context) {
     suspend fun setVolumeCrescendo(v: Boolean) = edit { it[KEY_VOL_CRESCENDO] = v }
     suspend fun setVibrateWhileRinging(v: Boolean) = edit { it[KEY_VIBRATE] = v }
     suspend fun setMuteAll(v: Boolean) = edit { it[KEY_MUTE_ALL] = v }
+
+    /** Googleカレンダー連携のアカウントを保存/解除。解除は null。 */
+    suspend fun setGoogleAccount(email: String?) = edit {
+        if (email.isNullOrBlank()) it.remove(KEY_GOOGLE_ACCOUNT) else it[KEY_GOOGLE_ACCOUNT] = email
+    }
     suspend fun setDefaultSoundUri(v: String?) = edit {
         if (v == null) it.remove(KEY_SOUND_URI) else it[KEY_SOUND_URI] = v
     }
@@ -259,6 +268,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_CODE_SCOPE = intPreferencesKey("title_code_scope")
         val KEY_INVITE_MASK = intPreferencesKey("invite_mask")
         val KEY_EVENT_TYPE_MASK = intPreferencesKey("event_type_mask")
+        val KEY_GOOGLE_ACCOUNT = stringPreferencesKey("google_account_email")
         val KEY_IMPORT_REMINDERS = booleanPreferencesKey("import_event_reminders")
         val KEY_SNOOZE_PRESETS = stringPreferencesKey("snooze_presets")
         val KEY_ALARM_VOLUME = intPreferencesKey("alarm_volume_percent")
