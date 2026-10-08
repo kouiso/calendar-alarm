@@ -15,12 +15,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,7 +32,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -93,6 +93,7 @@ class RingingActivity : ComponentActivity() {
                         weather = weather,
                         title = instance?.title ?: "アラーム",
                         triggerAtMillis = instance?.triggerAtMillis ?: System.currentTimeMillis(),
+                        eventStartMillis = instance?.eventStartMillis,
                         snoozeMinutes = instance?.snoozeMinutes ?: 10,
                         snoozePresets = presets,
                         canOpenSource = canOpenSource,
@@ -179,6 +180,7 @@ class RingingActivity : ComponentActivity() {
 private fun RingingScreen(
     title: String,
     triggerAtMillis: Long,
+    eventStartMillis: Long?,
     snoozeMinutes: Int,
     snoozePresets: List<Int>,
     weather: CurrentWeather?,
@@ -189,79 +191,145 @@ private fun RingingScreen(
     onSnoozeAt: (Int) -> Unit,
 ) {
     val time = SimpleDateFormat("H:mm", Locale.getDefault()).format(Date(triggerAtMillis))
-    // 鳴動画面はテーマに依らず常時ダーク: 朝の暗い部屋で眩しくしない+集中させる
+    val date = SimpleDateFormat("M月d日 (E)", Locale.JAPAN).format(Date(triggerAtMillis))
+    val accent = MaterialTheme.colorScheme.primary
+    val onAccent = MaterialTheme.colorScheme.onPrimary
+    // 鳴動画面はテーマに依らず常時ダーク (Night UI spec: bg #0A0C11 フラット)
     Box(Modifier.fillMaxSize()) {
-        // 天気が取れていればアニメ背景、未取得/未設定なら従来のグラデ
         if (weather != null) {
             WeatherBackdrop(weatherCode = weather.weatherCode, isDay = weather.isDay)
         } else {
-            Box(
-                Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(Color(0xFF1B1B3A), Color(0xFF0B0B12))),
-                ),
-            )
+            Box(Modifier.fillMaxSize().background(Color(0xFF0A0C11)))
         }
         Column(
-            modifier = Modifier.fillMaxSize().padding(32.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Spacer(Modifier.height(32.dp))
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // 日付チップ
+            Surface(
+                color = Color.White.copy(alpha = 0.06f),
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+            ) {
+                Text(
+                    date,
+                    fontSize = 13.sp,
+                    color = Color(0xFFB7BECB),
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            // アクセントリング 2重 (290/230) + 大時刻
+            Box(contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.size(290.dp).border(
+                        1.5.dp, accent.copy(alpha = 0.25f), CircleShape,
+                    ),
+                )
+                Box(
+                    Modifier.size(230.dp).border(
+                        1.dp, accent.copy(alpha = 0.15f), CircleShape,
+                    ),
+                )
                 Text(
                     text = time,
                     fontSize = 112.sp,
                     fontFamily = OutfitFontFamily,
                     fontWeight = FontWeight.ExtraLight,
                     letterSpacing = (-4).sp,
-                    color = Color.White,
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color(0xFFD6D6E6),
-                    textAlign = TextAlign.Center,
+                    color = Color(0xFFF4F5F8),
                 )
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.size(140.dp),
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF5B57E8),
-                    ),
+            Spacer(Modifier.height(18.dp))
+            // 開始までの残り (eventStartMillis が無い通知由来等は「まもなく開始」)
+            val remain = eventStartMillis?.minus(System.currentTimeMillis())
+            Text(
+                if (remain != null && remain > 0) {
+                    "${(remain + 30_000) / 60_000}分後に開始"
+                } else {
+                    "まもなく開始"
+                },
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = accent,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = title,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 42.sp,
+                color = Color(0xFFF4F5F8),
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+            )
+            if (weather != null) {
+                Spacer(Modifier.height(14.dp))
+                Surface(
+                    color = Color.White.copy(alpha = 0.06f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
                 ) {
-                    Text("停止", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-                }
-                Spacer(Modifier.height(20.dp))
-                TextButton(onClick = onSnooze) {
                     Text(
-                        "あと${snoozeMinutes}分 (スヌーズ)",
-                        fontSize = 18.sp,
-                        color = Color(0xFFB9B9E0),
+                        "${com.calendaralarm.shared.weather.WeatherApi.describe(weather.weatherCode)}" +
+                            " ${weather.temperature.toInt()}°",
+                        fontSize = 14.sp,
+                        color = Color(0xFFB7BECB),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
-                if (canOpenSource) {
-                    TextButton(onClick = onOpenSource) {
-                        Text("通知元を開く", fontSize = 16.sp, color = Color(0xFFB9B9E0))
-                    }
-                    Spacer(Modifier.height(4.dp))
-                }
-                Spacer(Modifier.height(8.dp))
-                // 元アプリのスヌーズプリセット (設定で並び替え/編集された一覧をそのまま出す)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    snoozePresets.take(6).forEach { m ->
-                        TextButton(
-                            onClick = { onSnoozeAt(m) },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        ) {
-                            Text("+${m}分", fontSize = 14.sp, color = Color(0xFFB9B9E0))
+            }
+            Spacer(Modifier.weight(1f))
+            // スヌーズプリセット 6列チップ
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                snoozePresets.take(6).forEach { m ->
+                    Surface(
+                        onClick = { onSnoozeAt(m) },
+                        modifier = Modifier.weight(1f).height(40.dp),
+                        color = Color.White.copy(alpha = 0.08f),
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("+${m}分", fontSize = 14.sp, color = Color(0xFFECEEF3))
                         }
                     }
                 }
-                Spacer(Modifier.height(12.dp))
+            }
+            Spacer(Modifier.height(12.dp))
+            // スヌーズ pill → 停止 pill (72h, 半径=高さ/2)
+            Surface(
+                onClick = onSnooze,
+                modifier = Modifier.fillMaxWidth().height(72.dp),
+                color = Color.White.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(36.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("スヌーズ ${snoozeMinutes}分", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFECEEF3))
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Surface(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth().height(72.dp),
+                color = accent,
+                shape = RoundedCornerShape(36.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("停止", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = onAccent)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Calendar Alarm", fontSize = 12.sp, color = Color(0xFF6E7686))
+                if (canOpenSource) {
+                    Text("・", fontSize = 12.sp, color = Color(0xFF6E7686))
+                    TextButton(onClick = onOpenSource) {
+                        Text("通知元を開く", fontSize = 12.sp, color = accent)
+                    }
+                }
             }
         }
     }

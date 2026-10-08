@@ -17,6 +17,7 @@ final class Store: ObservableObject {
         var defaultReminderAction: String = EventAction.alarm.rawValue
         var titleCodes: TitleCodeSettings = TitleCodeSettings()
         var inviteFilter: InviteFilter = InviteFilter()
+        var eventTypeFilter: EventTypeFilter = EventTypeFilter()
         var importEventReminders: Bool = false
         /// 全アラームの一括ミュート (通知・タイマーには効かない)
         var muteAll: Bool = false
@@ -101,6 +102,18 @@ final class Store: ObservableObject {
     func setDefaultStartAction(_ a: EventAction) { mutate { $0.defaultStartAction = a.rawValue } }
     func setDefaultReminderAction(_ a: EventAction) { mutate { $0.defaultReminderAction = a.rawValue } }
     func setTitleCodes(_ v: TitleCodeSettings) { mutate { $0.titleCodes = v } }
+    func setEventTypeFilter(_ v: EventTypeFilter) { mutate { $0.eventTypeFilter = v } }
+    func toggleEventType(_ t: EventType) {
+        var g = state.eventTypeFilter
+        switch t {
+        case .birthday: g.birthday.toggle()
+        case .absence: g.absence.toggle()
+        case .workplace: g.workplace.toggle()
+        case .task: g.task.toggle()
+        case .event: g.event.toggle()
+        }
+        mutate { $0.eventTypeFilter = g }
+    }
     func toggleInviteStatus(_ s: InviteStatus) {
         mutate { f in
             switch s {
@@ -267,6 +280,7 @@ extension Store.Persisted {
         defaultReminderAction = try c.decodeIfPresent(String.self, forKey: .defaultReminderAction) ?? EventAction.alarm.rawValue
         titleCodes = try c.decodeIfPresent(TitleCodeSettings.self, forKey: .titleCodes) ?? TitleCodeSettings()
         inviteFilter = try c.decodeIfPresent(InviteFilter.self, forKey: .inviteFilter) ?? InviteFilter()
+        eventTypeFilter = try c.decodeIfPresent(EventTypeFilter.self, forKey: .eventTypeFilter) ?? EventTypeFilter()
         importEventReminders = try c.decodeIfPresent(Bool.self, forKey: .importEventReminders) ?? false
         muteAll = try c.decodeIfPresent(Bool.self, forKey: .muteAll) ?? false
         themeId = try c.decodeIfPresent(String.self, forKey: .themeId) ?? "default"

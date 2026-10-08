@@ -1,6 +1,8 @@
 package com.calendaralarm.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -65,16 +67,21 @@ fun MonthView(
     val byDay = items.groupBy { eventDateOf(it) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {
-        // 曜日ヘッダ (週番号列分だけ 1列多い)
+        // 曜日ヘッダ (日曜=赤, 土曜=青。Night UI スペック)
+        val sundayRed = if (isSystemInDarkTheme()) Color(0xFFFF8F8F) else Color(0xFFC62828)
+        val saturdayBlue = if (isSystemInDarkTheme()) Color(0xFF7D88FF) else Color(0xFF1F6FD1)
         Row {
-            Box(Modifier.width(28.dp))
-            listOf("日", "月", "火", "水", "木", "金", "土").forEach {
+            listOf("日", "月", "火", "水", "木", "金", "土").forEachIndexed { i, w ->
                 Text(
-                    it,
+                    w,
                     Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = when (i) {
+                        0 -> sundayRed
+                        6 -> saturdayBlue
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
         }
@@ -84,45 +91,51 @@ fun MonthView(
                 .plus(DatePeriod(months = 1)).minus(DatePeriod(days = 1))
             if (weekStart > monthEnd) return@repeat
             Row(Modifier.padding(vertical = 2.dp)) {
-                // ISO 週番号
-                Text(
-                    "${isoWeekNumber(weekStart)}",
-                    Modifier.width(28.dp).align(Alignment.CenterVertically),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    textAlign = TextAlign.Center,
-                )
                 repeat(7) { d ->
                     val date = weekStart + DatePeriod(days = d)
                     val inMonth = date.month == month.month
                     val dayItems = byDay[date].orEmpty()
                     Column(
                         Modifier.weight(1f).aspectRatio(0.72f)
-                            .clickable { onSelectDay(date) }
-                            .background(
-                                when {
-                                    date == focusDate -> MaterialTheme.colorScheme.primaryContainer
-                                    date == today -> MaterialTheme.colorScheme.surfaceContainerHigh
-                                    else -> Color.Transparent
-                                },
-                                RoundedCornerShape(8.dp),
-                            )
-                            .padding(3.dp),
+                            .clickable { onSelectDay(date) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Text(
-                            "${date.dayOfMonth}",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = if (date == today) FontWeight.Bold else FontWeight.Normal,
-                            color = when {
-                                !inMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                                date == today -> MaterialTheme.colorScheme.primary
-                                else -> MaterialTheme.colorScheme.onSurface
-                            },
-                        )
-                        // イベントドット (最大3本、カレンダー色)
+                        // 34px 日付サークル: 今日=accent塗り, 選択=accentリング
+                        Box(
+                            Modifier.size(34.dp)
+                                .background(
+                                    if (date == today) MaterialTheme.colorScheme.primary
+                                    else Color.Transparent,
+                                    CircleShape,
+                                )
+                                .border(
+                                    width = if (date == focusDate && date != today) 1.5.dp else 0.dp,
+                                    color = if (date == focusDate && date != today) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else Color.Transparent,
+                                    shape = CircleShape,
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                "${date.dayOfMonth}",
+                                fontSize = 17.sp,
+                                fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
+                                fontWeight = if (date == today || date == focusDate) {
+                                    FontWeight.SemiBold
+                                } else FontWeight.Normal,
+                                color = when {
+                                    date == today -> MaterialTheme.colorScheme.onPrimary
+                                    !inMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                    date.dayOfWeek == DayOfWeek.SUNDAY -> sundayRed
+                                    date.dayOfWeek == DayOfWeek.SATURDAY -> saturdayBlue
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                },
+                            )
+                        }
+                        // イベントドット (最大2本、5px)
                         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            dayItems.take(3).forEach {
+                            dayItems.take(2).forEach {
                                 Box(
                                     Modifier.size(5.dp).background(
                                         Color(it.calendarColor),
@@ -130,14 +143,6 @@ fun MonthView(
                                     ),
                                 )
                             }
-                        }
-                        if (dayItems.isNotEmpty()) {
-                            Text(
-                                "${dayItems.size}件",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 8.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
                         }
                     }
                 }
@@ -194,12 +199,20 @@ fun ThreeDayView(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 4.dp),
             ) {
+                // 日ヘッダカード: 今日は accent-soft (Night UI スペック)
                 Text(
                     "${date.dayOfMonth}(${date.dayOfWeek.jaShort()})",
-                    Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                        .background(
+                            if (date == today) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            } else Color.Transparent,
+                            RoundedCornerShape(12.dp),
+                        ).padding(vertical = 4.dp),
                     textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = if (date == today) FontWeight.Bold else FontWeight.Normal,
+                    fontSize = 22.sp,
+                    fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
+                    fontWeight = if (date == today) FontWeight.Medium else FontWeight.Normal,
                     color = if (date == today) {
                         MaterialTheme.colorScheme.primary
                     } else {
@@ -213,7 +226,7 @@ fun ThreeDayView(
                         Modifier.fillMaxWidth().padding(bottom = 6.dp)
                             .background(
                                 Color(item.calendarColor).copy(alpha = 0.15f),
-                                RoundedCornerShape(8.dp),
+                                RoundedCornerShape(12.dp),
                             )
                             .clickable { onSelectEvent(item) }
                             .padding(6.dp),
@@ -283,7 +296,8 @@ fun DayTimelineView(
                     Text(
                         "%02d:00".format(h),
                         Modifier.width(44.dp),
-                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 11.sp,
+                        fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Box(

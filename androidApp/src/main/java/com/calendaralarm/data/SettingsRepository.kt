@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.InviteFilter
+import com.calendaralarm.shared.model.EventType
+import com.calendaralarm.shared.model.EventTypeFilter
 import com.calendaralarm.shared.model.InviteStatus
 import com.calendaralarm.shared.model.TitleCodeSettings
 import kotlinx.coroutines.flow.Flow
@@ -42,6 +44,7 @@ class SettingsRepository(private val context: Context) {
         val titleCodes: TitleCodeSettings = TitleCodeSettings(),
         /** 招待予定フィルタ。 */
         val inviteFilter: InviteFilter = InviteFilter(),
+        val eventTypeFilter: EventTypeFilter = EventTypeFilter(),
         /** 予定側リマインダーを鳴動対象にするか。 */
         val importEventReminders: Boolean = false,
         /** 鳴動画面のスヌーズプリセット (分)。 */
@@ -105,6 +108,13 @@ class SettingsRepository(private val context: Context) {
                 tentative = (p[KEY_INVITE_MASK] ?: 7) and 2 != 0,
                 needsAction = (p[KEY_INVITE_MASK] ?: 7) and 4 != 0,
                 declined = (p[KEY_INVITE_MASK] ?: 7) and 8 != 0,
+            ),
+            eventTypeFilter = EventTypeFilter(
+                birthday = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 1 != 0,
+                absence = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 2 != 0,
+                workplace = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 4 != 0,
+                task = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 8 != 0,
+                event = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 16 != 0,
             ),
             importEventReminders = p[KEY_IMPORT_REMINDERS] ?: false,
             snoozePresets = (p[KEY_SNOOZE_PRESETS] ?: "5,10,15,30,45,60")
@@ -184,6 +194,16 @@ class SettingsRepository(private val context: Context) {
         }
         p[KEY_INVITE_MASK] = (p[KEY_INVITE_MASK] ?: 7) xor bit
     }
+    suspend fun toggleEventType(type: EventType) = edit { p ->
+        val bit = when (type) {
+            EventType.BIRTHDAY -> 1
+            EventType.ABSENCE -> 2
+            EventType.WORKPLACE -> 4
+            EventType.TASK -> 8
+            EventType.EVENT -> 16
+        }
+        p[KEY_EVENT_TYPE_MASK] = (p[KEY_EVENT_TYPE_MASK] ?: 31) xor bit
+    }
     suspend fun setImportEventReminders(v: Boolean) = edit { it[KEY_IMPORT_REMINDERS] = v }
     suspend fun setSnoozePresets(v: List<Int>) = edit { it[KEY_SNOOZE_PRESETS] = v.joinToString(",") }
     suspend fun setAlarmVolumePercent(v: Int) = edit { it[KEY_ALARM_VOLUME] = v }
@@ -238,6 +258,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_NEVER_CODES = stringPreferencesKey("title_never_codes")
         val KEY_CODE_SCOPE = intPreferencesKey("title_code_scope")
         val KEY_INVITE_MASK = intPreferencesKey("invite_mask")
+        val KEY_EVENT_TYPE_MASK = intPreferencesKey("event_type_mask")
         val KEY_IMPORT_REMINDERS = booleanPreferencesKey("import_event_reminders")
         val KEY_SNOOZE_PRESETS = stringPreferencesKey("snooze_presets")
         val KEY_ALARM_VOLUME = intPreferencesKey("alarm_volume_percent")

@@ -62,13 +62,47 @@ fun AlarmsScreen(
     val alarms by repository.standaloneAlarmsFlow().collectAsState(initial = emptyList())
     val pending by repository.pendingFlow().collectAsState(initial = emptyList())
 
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(onClick = { onEdit(0L) }) {
-                Icon(Icons.Default.Add, contentDescription = "アラーム追加")
+    Scaffold { padding ->
+        Column(Modifier.padding(padding)) {
+            // Night UI: H1 + 44dp アクセント FAB (右上)
+            Row(
+                Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 58.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("アラーム", fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                androidx.compose.material3.Surface(
+                    onClick = { onEdit(0L) },
+                    modifier = Modifier.size(44.dp),
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "アラーム追加",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                }
             }
-        },
-    ) { padding ->
+            // 次に鳴るアラームのバナー (accent-soft)
+            pending.firstOrNull { it.standaloneAlarmId != null }?.let { next ->
+                androidx.compose.material3.Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+                ) {
+                    Text(
+                        "次のアラーム " + SimpleDateFormat("M/d(E) H:mm", Locale.JAPAN)
+                            .format(Date(next.triggerAtMillis)) + " " + next.title,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                        maxLines = 1,
+                    )
+                }
+            }
         if (alarms.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -126,6 +160,7 @@ fun AlarmsScreen(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -139,6 +174,7 @@ private fun AlarmRow(
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
         onClick = onClick,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -163,24 +199,43 @@ private fun AlarmRow(
                 Text(
                     repeatLabel(alarm),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // Night UI: 有効時は繰り返しラベルをアクセント色に
+                    color = if (alarm.enabled) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
                 if (alarm.label.isNotBlank()) {
                     Text(alarm.label, style = MaterialTheme.typography.bodyMedium)
                 }
-                nextInstance?.let {
-                    Text(
-                        SimpleDateFormat("M/d(E) H:mm", Locale.JAPAN).format(Date(it.triggerAtMillis)),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                if (alarm.exceptions.isNotEmpty()) {
-                    Text(
-                        "休止 ${alarm.exceptions.size}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (alarm.exceptions.isNotEmpty()) {
+                        // 「休止 N」はアウトラインの小ピル
+                        androidx.compose.material3.Surface(
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                            color = androidx.compose.ui.graphics.Color.Transparent,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp, MaterialTheme.colorScheme.outline,
+                            ),
+                        ) {
+                            Text(
+                                "休止 ${alarm.exceptions.size}",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            )
+                        }
+                        Spacer(Modifier.padding(start = 8.dp))
+                    }
+                    nextInstance?.let {
+                        Text(
+                            "次 " + SimpleDateFormat("H:mm", Locale.JAPAN)
+                                .format(Date(it.triggerAtMillis)),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        )
+                    }
                 }
             }
             Column(horizontalAlignment = Alignment.End) {

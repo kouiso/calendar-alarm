@@ -28,6 +28,50 @@ struct TitleCodeSettings: Codable, Hashable {
     var applyToReminders: Bool = true
 }
 
+/// Models.kt EventType (誕生日/不在/勤務場所/タスク/予定)。
+enum EventType: String, Codable, CaseIterable {
+    case birthday = "BIRTHDAY", absence = "ABSENCE", workplace = "WORKPLACE", task = "TASK", event = "EVENT"
+    var label: String {
+        switch self {
+        case .birthday: return "誕生日"
+        case .absence: return "不在"
+        case .workplace: return "勤務場所"
+        case .task: return "タスク"
+        case .event: return "予定"
+        }
+    }
+}
+
+/// Models.kt classifyEventType と同じ判定順・語彙 (タイトル文字列による分類)。
+func classifyEventType(_ title: String) -> EventType {
+    let t = title.lowercased()
+    func hit(_ needles: [String]) -> Bool { needles.contains { t.contains($0) } }
+    if hit(["誕生日","バースデー","birthday"]) { return .birthday }
+    if hit(["不在","休暇","休み","有休","欠勤","absence","absent","away","out of office"]) { return .absence }
+    if hit(["勤務場所","出社","在宅勤務","リモートワーク","workplace","work location","office"]) { return .workplace }
+    if hit(["タスク","todo","to-do","task"]) { return .task }
+    return .event
+}
+
+/// Models.kt EventTypeFilter (false の種別は鳴らさない)。
+struct EventTypeFilter: Codable, Hashable {
+    var birthday: Bool = true
+    var absence: Bool = true
+    var workplace: Bool = true
+    var task: Bool = true
+    var event: Bool = true
+
+    func allows(_ type: EventType) -> Bool {
+        switch type {
+        case .birthday: return birthday
+        case .absence: return absence
+        case .workplace: return workplace
+        case .task: return task
+        case .event: return event
+        }
+    }
+}
+
 /// Models.kt InviteFilter。
 struct InviteFilter: Codable, Hashable {
     var accepted: Bool = true
@@ -225,6 +269,7 @@ struct ExpandRequest: Codable {
     var defaultReminderAction: String = EventAction.alarm.rawValue
     var titleCodes: TitleCodeSettings = TitleCodeSettings()
     var inviteFilter: InviteFilter = InviteFilter()
+    var eventTypeFilter: EventTypeFilter = EventTypeFilter()
     var importEventReminders: Bool = false
     /// 全アラームの一括ミュート (NOTIFY・タイマーには効かない)
     var muteAll: Bool = false

@@ -6,6 +6,8 @@ import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
+import com.calendaralarm.shared.model.EventTypeFilter
+import com.calendaralarm.shared.model.classifyEventType
 import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
@@ -57,6 +59,8 @@ object AlarmExpander {
         defaultRule: AlarmRule = AlarmRule(),
         titleCodes: TitleCodeSettings = TitleCodeSettings(),
         inviteFilter: InviteFilter = InviteFilter(),
+        /** イベント種別ごとの鳴動ON/OFF (誕生日/不在/勤務場所/タスク/予定)。 */
+        eventTypeFilter: EventTypeFilter = EventTypeFilter(),
         /** true のときイベントがカレンダーに持つリマインダーも鳴動対象にする。 */
         importEventReminders: Boolean = false,
         /** 元アプリの「一括ミュート」: ALARM 鳴動を全て抑止する。
@@ -73,6 +77,10 @@ object AlarmExpander {
             // (個別指定がカレンダー横断の既定より具体的な意思表示のため)。
             if (override?.action != EventAction.ALARM &&
                 !inviteFilter.allows(event.inviteStatus)
+            ) continue
+            // イベント種別フィルタ。個別 ALARM 指定はフィルタより優先 (招待フィルタと同規則)
+            if (override?.action != EventAction.ALARM &&
+                !eventTypeFilter.allows(classifyEventType(event.title))
             ) continue
             // 終日イベントは startMillis が UTC 0時。深夜に鳴らさないため
             // イベント日のローカル allDayMinutes (既定9:00) に倒す。負数なら鳴らさない。

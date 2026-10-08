@@ -164,6 +164,7 @@ final class Engine: ObservableObject {
             defaultReminderAction: s.defaultReminderAction,
             titleCodes: s.titleCodes,
             inviteFilter: s.inviteFilter,
+            eventTypeFilter: s.eventTypeFilter,
             importEventReminders: s.importEventReminders,
             muteAll: s.muteAll
         )

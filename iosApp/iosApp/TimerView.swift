@@ -12,10 +12,10 @@ struct TimerView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    Picker("", selection: $mode) {
-                        ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
+                    // Night UI カスタムセグメント
+                    NightSegment(labels: Mode.allCases.map { $0.rawValue }, selected: Binding(
+                        get: { mode == .timer ? 0 : 1 },
+                        set: { mode = $0 == 0 ? .timer : .stopwatch }))
                     .padding(.horizontal)
                     if mode == .timer { TimerFace() } else { StopwatchFace() }
                 }
@@ -78,10 +78,10 @@ struct TimerFace: View {
                             } label: {
                                 Text("\(p.label) \(p.durationLabel)")
                                     .font(NightTheme.font(13))
-                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                    .padding(.horizontal, 14).frame(height: 44)
                                     .background(
-                                        presetSeconds == p.seconds ? NightTheme.indigo.opacity(0.18) : Color(uiColor: .tertiarySystemGroupedBackground),
-                                        in: Capsule()
+                                        presetSeconds == p.seconds ? Color.accentColor.opacity(0.15) : Color(uiColor: .tertiarySystemGroupedBackground),
+                                        in: RoundedRectangle(cornerRadius: 14)
                                     )
                             }
                             .contextMenu {
@@ -90,13 +90,13 @@ struct TimerFace: View {
                                 }
                             }
                             .buttonStyle(.plain)
-                            .foregroundStyle(presetSeconds == p.seconds ? NightTheme.indigo : .primary)
+                            .foregroundStyle(presetSeconds == p.seconds ? Color.accentColor : .primary)
                         }
                         Button { showAddPreset = true } label: {
                             Image(systemName: "plus")
                                 .font(.system(size: 13, weight: .medium))
-                                .padding(10)
-                                .background(Color(uiColor: .tertiarySystemGroupedBackground), in: Capsule())
+                                .padding(.horizontal, 12).frame(height: 44)
+                                .background(Color(uiColor: .tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
                         }
                         .buttonStyle(.plain)
                     }
@@ -130,10 +130,11 @@ struct TimerFace: View {
                             syncRunning()
                         }
                     } label: {
+                        // Night UI: 開始 = accent pill 64h
                         Label("開始", systemImage: "play.fill")
-                            .font(NightTheme.font(16, weight: .medium))
-                            .padding(.horizontal, 32).padding(.vertical, 12)
-                            .background(NightTheme.indigo, in: Capsule()).foregroundStyle(.white)
+                            .font(NightTheme.font(20, weight: .semibold))
+                            .frame(height: 64).padding(.horizontal, 44)
+                            .background(Color.accentColor, in: Capsule()).foregroundStyle(.white)
                     }
                 } else {
                     Button {

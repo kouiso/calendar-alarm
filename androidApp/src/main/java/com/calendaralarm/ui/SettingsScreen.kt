@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Email
@@ -86,6 +87,7 @@ import com.calendaralarm.data.db.AuditLogEntity
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
+import com.calendaralarm.shared.model.EventType
 import com.calendaralarm.shared.model.InviteStatus
 import com.calendaralarm.shared.model.TitleCodeSettings
 import com.calendaralarm.ui.theme.AppPalette
@@ -129,6 +131,7 @@ fun SettingsScreen(
         item {
             Card(
                 Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
                 colors = androidx.compose.material3.CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 ),
@@ -222,6 +225,7 @@ fun SettingsScreen(
             prefs?.let { p ->
                 Card(
                     Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
                     colors = androidx.compose.material3.CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     ),
@@ -268,6 +272,7 @@ fun SettingsScreen(
         item {
             Card(
                 Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
                 colors = androidx.compose.material3.CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 ),
@@ -386,6 +391,7 @@ fun SettingsScreen(
             var logExpanded by remember { mutableStateOf(false) }
             Card(
                 Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
                 colors = androidx.compose.material3.CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 ),
@@ -469,6 +475,7 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
 
     Card(
         Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -732,6 +739,7 @@ private fun EventRulesCard(
     var showCodes by remember { mutableStateOf(false) }
     Card(
         Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -788,6 +796,23 @@ private fun EventRulesCard(
                     FilterChip(
                         selected = prefs.inviteFilter.allows(s),
                         onClick = { scope.launch { settings.toggleInviteStatus(s); repository.resync("settings") } },
+                        label = { Text(label, maxLines = 1) },
+                        modifier = Modifier.padding(end = 4.dp),
+                    )
+                }
+            }
+            // イベント種別フィルタ (誕生日/不在/勤務場所/タスク/予定)
+            IconSettingRow(Icons.Default.Notifications) {
+                listOf(
+                    EventType.BIRTHDAY to "誕生日",
+                    EventType.ABSENCE to "不在",
+                    EventType.WORKPLACE to "勤務場所",
+                    EventType.TASK to "タスク",
+                    EventType.EVENT to "予定",
+                ).forEach { (t, label) ->
+                    FilterChip(
+                        selected = prefs.eventTypeFilter.allows(t),
+                        onClick = { scope.launch { settings.toggleEventType(t); repository.resync("settings") } },
                         label = { Text(label, maxLines = 1) },
                         modifier = Modifier.padding(end = 4.dp),
                     )
@@ -952,6 +977,7 @@ private fun RingingCard(
 ) {
     Card(
         Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -1060,13 +1086,14 @@ private fun AppearanceCard(
 
     Card(
         Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
             // テーマスウォッチ (10種): 各パレットの primary を丸で表示
-            FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+            FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), maxItemsInEachRow = 5) {
                 AppPalette.entries.forEach { palette ->
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1076,7 +1103,7 @@ private fun AppearanceCard(
                     ) {
                         Box(
                             Modifier
-                                .size(34.dp)
+                                .size(38.dp)
                                 .background(
                                     color = palette.light.primary,
                                     shape = CircleShape,
