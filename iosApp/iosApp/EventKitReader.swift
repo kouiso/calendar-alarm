@@ -56,7 +56,9 @@ final class EventKitReader {
                 allDay: ev.isAllDay,
                 timezone: tzId,
                 inviteStatus: Self.inviteStatus(of: ev),
-                calendarReminderMinutes: Self.reminderMinutes(of: ev)
+                calendarReminderMinutes: Self.reminderMinutes(of: ev),
+                // Google Calendar API の iCalUID と照合するための外部UID
+                iCalUID: ev.calendarItemExternalIdentifier
             )
         }
     }

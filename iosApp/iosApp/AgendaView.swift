@@ -108,7 +108,7 @@ struct AgendaView: View {
                     // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
                     muted: ov?.muted == true || !rule.enabled
                         || !store.state.inviteFilter.allows(ev.inviteStatus)
-                        || !store.state.eventTypeFilter.allows(classifyEventType(ev.title)),
+                        || !store.state.eventTypeFilter.allows(resolveEventType(ev)),
                     effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore
                 )
             }

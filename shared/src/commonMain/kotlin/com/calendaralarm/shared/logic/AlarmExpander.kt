@@ -7,7 +7,7 @@ import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
 import com.calendaralarm.shared.model.EventTypeFilter
-import com.calendaralarm.shared.model.classifyEventType
+import com.calendaralarm.shared.model.resolveEventType
 import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
@@ -80,7 +80,7 @@ object AlarmExpander {
             ) continue
             // イベント種別フィルタ。個別 ALARM 指定はフィルタより優先 (招待フィルタと同規則)
             if (override?.action != EventAction.ALARM &&
-                !eventTypeFilter.allows(classifyEventType(event.title))
+                !eventTypeFilter.allows(resolveEventType(event))
             ) continue
             // 終日イベントは startMillis が UTC 0時。深夜に鳴らさないため
             // イベント日のローカル allDayMinutes (既定9:00) に倒す。負数なら鳴らさない。

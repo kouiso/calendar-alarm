@@ -818,6 +818,42 @@ private fun EventRulesCard(
                     )
                 }
             }
+            // Googleカレンダー連携 (eventType を API の正本から取得)
+            val googleLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult()
+            ) { res ->
+                runCatching {
+                    com.google.android.gms.auth.api.signin.GoogleSignIn
+                        .getSignedInAccountFromIntent(res.data).result?.email
+                }.getOrNull()?.let { email ->
+                    scope.launch {
+                        settings.setGoogleAccount(email)
+                        repository.resync("google-link")
+                    }
+                }
+            }
+            IconSettingRow(Icons.Default.AccountCircle) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        prefs.googleAccountEmail
+                            ?.let { "連携中: $it" }
+                            ?: "未連携 (種別はタイトル推測)",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (prefs.googleAccountEmail != null) {
+                    TextButton(onClick = {
+                        scope.launch { settings.setGoogleAccount(null); repository.resync("google-unlink") }
+                    }) { Text("解除") }
+                } else {
+                    TextButton(onClick = {
+                        googleLauncher.launch(
+                            com.calendaralarm.data.calendar.GoogleCalendarTypes
+                                .signInClient(context).signInIntent
+                        )
+                    }) { Text("連携") }
+                }
+            }
             // 予定側リマインダーの取込
             IconSettingRow(Icons.Default.Email) {
                 Spacer(Modifier.weight(1f))

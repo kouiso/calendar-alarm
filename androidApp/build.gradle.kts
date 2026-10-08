@@ -79,6 +79,8 @@ dependencies {
 
     implementation(libs.kotlinx.datetime)
     implementation(libs.kotlinx.coroutines.android)
+    // Googleカレンダー連携 (Calendar API の eventType 取得に必要)
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.pdfbox.android)
 
