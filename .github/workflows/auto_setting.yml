@@ -164,9 +164,11 @@ jobs:
   check-base-branch:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - name: Fail if base branch is not develop
+      # デフォルトブランチは master (develop は 2024 年の Flutter 版で放置中)。
+      # かつては develop 強制だったが全 PR が master 向けなので常に落ちていた (#28)
+      - name: Fail if base branch is not master
         run: |
-          if [[ "${{ github.base_ref }}" != "develop" ]]; then
-            echo "Error: Base branch is not 'develop'. Please change the base branch to 'develop'."
+          if [[ "${{ github.base_ref }}" != "master" ]]; then
+            echo "Error: Base branch is not 'master'. Please change the base branch to 'master'."
             exit 1
           fi

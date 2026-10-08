@@ -72,11 +72,13 @@ jobs:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
           FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
         run: |
+          # 配布先は kouiso@ritmo.co.jp 固定 (ユーザー指示: 他者は FAD に追加しない)。
+          # グループ経由にするとグループへの追加で他者へ届くため、テスター直指定にする
           npx -y firebase-tools@14.16.0 appdistribution:distribute \
             androidApp/build/outputs/apk/debug/androidApp-debug.apk \
             --app "$FIREBASE_ANDROID_APP_ID" \
             --token "$FIREBASE_TOKEN" \
-            --groups "beta-testers" \
+            --testers "kouiso@ritmo.co.jp" \
             --release-notes "$RELEASE_NOTES"
 
       - uses: actions/upload-artifact@v4
@@ -160,11 +162,12 @@ jobs:
           FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
         run: |
           IPA=$(ls build/ios/*.ipa | head -1)
+          # 配布先は kouiso@ritmo.co.jp 固定 (ユーザー指示: 他者は FAD に追加しない)
           npx -y firebase-tools@14.16.0 appdistribution:distribute \
             "$IPA" \
             --app "$FIREBASE_IOS_APP_ID" \
             --token "$FIREBASE_TOKEN" \
-            --groups "beta-testers" \
+            --testers "kouiso@ritmo.co.jp" \
             --release-notes "$RELEASE_NOTES"
 
       - uses: actions/upload-artifact@v4
