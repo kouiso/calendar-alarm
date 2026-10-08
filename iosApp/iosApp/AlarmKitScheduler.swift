@@ -56,6 +56,30 @@ final class AlarmKitScheduler: AlarmScheduler {
     /// 鳴動中アラームを停止。
     func stop(uuid: UUID) throws { try manager.stop(id: uuid) }
 
+    /// 指定 UUID の AlarmKit 側の現在状態 (居なければ nil)。
+    func state(of uuid: UUID) -> Alarm.State? {
+        allAlarms.first { $0.id == uuid }?.state
+    }
+
+    /// 鳴動中アラームを OS 側が静かになるまで止める。
+    /// stop() は alerting 中しか効かない (countdown 中に投げると例外) ので、
+    /// 状態を見て stop → cancel の順にエスカレートし、結果を実状態で確認する。
+    /// @returns true = もう鳴っていない (or そもそも居ない)。false = まだ鳴動中。
+    func silence(uuid: UUID) -> Bool {
+        switch state(of: uuid) {
+        case .none:
+            return true
+        case .alerting:
+            try? manager.stop(id: uuid)
+        default:
+            // countdown/一時停止/他状態: 「停止」= 予約ごとキャンセル。
+            // stop() は alerting 以外で必ず投げるので cancel に倒す。
+            try? manager.cancel(id: uuid)
+        }
+        if state(of: uuid) == .alerting { try? manager.cancel(id: uuid) }
+        return state(of: uuid) != .alerting
+    }
+
     /// 鳴動中アラームを postAlert カウントダウンへ (ネイティブスヌーズ)。
     func countdown(uuid: UUID) throws { try manager.countdown(id: uuid) }
 
