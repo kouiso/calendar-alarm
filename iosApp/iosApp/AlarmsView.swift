@@ -107,7 +107,7 @@ struct AlarmsView: View {
             }
         }
         .padding(16)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
+        .background(NightTheme.nightSurface, in: RoundedRectangle(cornerRadius: 22))
         .onTapGesture { editing = a; editingNew = false }
     }
 

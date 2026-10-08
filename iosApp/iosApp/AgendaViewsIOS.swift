@@ -105,7 +105,7 @@ struct MonthGridView: View {
                             .onTapGesture { onSelect(ev) }
                     }
                 }
-                .background(Color(uiColor: .secondarySystemGroupedBackground),
+                .background(NightTheme.nightSurface,
                             in: RoundedRectangle(cornerRadius: 22))
                 .padding(.top, 8)
             }

@@ -102,7 +102,7 @@ struct EventDetailSheet: View {
                         .font(NightTheme.font(13, weight: .medium))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(minutes == m ? NightTheme.indigo : Color(uiColor: .secondarySystemGroupedBackground),
+                        .background(minutes == m ? NightTheme.indigo : NightTheme.nightSurface,
                                     in: RoundedRectangle(cornerRadius: 10))
                         .foregroundStyle(minutes == m ? .white : .primary)
                 }

@@ -274,7 +274,7 @@ struct DayCard: View {
                         .onTapGesture { onTap(ev) }
                 }
             }
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
+            .background(NightTheme.nightSurface, in: RoundedRectangle(cornerRadius: 22))
         }
     }
 }

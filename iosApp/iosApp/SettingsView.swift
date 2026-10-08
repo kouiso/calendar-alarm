@@ -451,7 +451,7 @@ struct Card<Content: View>: View {
         content
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
+            .background(NightTheme.nightSurface, in: RoundedRectangle(cornerRadius: 22))
     }
 }
 
