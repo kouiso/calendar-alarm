@@ -54,20 +54,22 @@ class AlarmService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_DISMISS -> {
-                val id = intent.getStringExtra(EXTRA_INSTANCE_ID)
+                // 物理停止を最優先に潰す。DB記録が例外/遅延しても
+                // 「UIは閉じたのに音だけ鳴り続ける」事故にしないため。
+                val targetId = intent.getStringExtra(EXTRA_INSTANCE_ID) ?: currentInstance?.id
+                stopRinging()
                 scope.launch {
-                    app.container.repository.onDismissed(id ?: currentInstance?.id)
-                    stopRinging()
+                    runCatching { app.container.repository.onDismissed(targetId) }
                     stopSelf(startId)
                 }
             }
             ACTION_SNOOZE -> {
-                val id = intent.getStringExtra(EXTRA_INSTANCE_ID)
+                val targetId = intent.getStringExtra(EXTRA_INSTANCE_ID) ?: currentInstance?.id
                 // 鳴動画面のプリセットからの分数指定 (未指定=インスタンス既定)
                 val mins = intent.getIntExtra(EXTRA_SNOOZE_MINUTES, 0).takeIf { it > 0 }
+                stopRinging()
                 scope.launch {
-                    app.container.repository.onSnoozed(id ?: currentInstance?.id, mins)
-                    stopRinging()
+                    runCatching { app.container.repository.onSnoozed(targetId, mins) }
                     stopSelf(startId)
                 }
             }
@@ -193,6 +195,8 @@ class AlarmService : Service() {
             .setFullScreenIntent(fullScreen, true)
             .setContentIntent(fullScreen)
             .setDeleteIntent(dismiss)
+            // 鳴動画面に辿り着けなくても通知シェードから必ず止められる退路
+            .addAction(0, "停止", dismiss)
             .build()
     }
 

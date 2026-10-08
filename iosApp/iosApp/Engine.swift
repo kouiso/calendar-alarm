@@ -243,7 +243,22 @@ final class Engine: ObservableObject {
             nowMillis: now
         )) ?? PlanResult(toSchedule: desired, toCancel: [], toFireNow: [])
 
+        // 鳴動中のアラームは plan に関係なく絶対にキャンセルしない。
+        // (resync 実行中に鳴り始めたアラームを差分が潰して「押してないのに
+        //   止まった」事象を防ぐための防衛線)
+        var alertingUuids = Set<UUID>()
+        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler {
+            alertingUuids = Set(ak.alertingAlarms.map { $0.id })
+        }
         for id in plan.toCancel {
+            var alertingOnOS = alertingIds.contains(id)
+            if #available(iOS 26.0, *) {
+                alertingOnOS = alertingOnOS || alertingUuids.contains(AlarmKitScheduler.uuid(from: id))
+            }
+            if alertingOnOS {
+                store.audit("CANCEL_SKIP", "\(id): 鳴動中のため差分キャンセルを抑止")
+                continue
+            }
             await scheduler.cancel(instanceId: id, reservationId: store.state.scheduled[id]?.alarmKitId)
             store.removeScheduled(id)
         }
@@ -338,12 +353,19 @@ final class Engine: ObservableObject {
         }
     }
 
-    /// 停止: AlarmKit なら stop()、通知経路なら記録のみ。
+    /// 停止: AlarmKit の実状態を見て止め切る。
+    /// 以前は `try? stop()` の結果を見ず UI だけ閉じていたため、停止が失敗すると
+    /// 「画面は全部閉じたのに音だけ鳴り続け、止める術が無い」事故になった。
+    /// ここでは OS 側が静かになるまでエスカレートし、失敗時は鳴動画面を残す。
     func dismiss(_ inst: AlarmInstanceDTO) {
-        alertingIds.remove(inst.id)
-        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler {
-            try? ak.stop(uuid: AlarmKitScheduler.uuid(from: inst.id))
+        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler,
+           !ak.silence(uuid: AlarmKitScheduler.uuid(from: inst.id)) {
+            // stop→cancel どちらを投げても鳴動継続: UI を消すと止める術が無くなるので
+            // 鳴動画面を残し、ユーザーに再度止めさせられる状態を維持する。
+            store.audit("ERROR", "停止失敗(鳴動継続): \(inst.id)")
+            return
         }
+        alertingIds.remove(inst.id)
         store.markState(inst.id, .dismissed)
         if let aid = inst.standaloneAlarmId { disableConsumedOneShots([aid]) }
         store.audit("DISMISS", inst.title)
@@ -353,13 +375,22 @@ final class Engine: ObservableObject {
     /// countdown が失敗した時は子インスタンス予約に落ちる (黙って消さない)。
     /// 通知経路は snoozeSeq+1 の子インスタンスを新規予約 (Android の snoozed() と同じ id 規則)。
     func snooze(_ inst: AlarmInstanceDTO) {
-        alertingIds.remove(inst.id)
         if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler,
            (try? ak.countdown(uuid: AlarmKitScheduler.uuid(from: inst.id))) != nil {
+            alertingIds.remove(inst.id)
             store.markState(inst.id, .snoozed)
             store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m (native)")
             return
         }
+        // countdown が投げた = 元アラームが alerting でない/居ない。
+        // まだ鳴り続けているのに UI だけ閉じると二重鳴動の元を残すので、
+        // 子予約の前に元を静かにしておく (止められないなら子も足さない)。
+        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler,
+           !ak.silence(uuid: AlarmKitScheduler.uuid(from: inst.id)) {
+            store.audit("ERROR", "スヌーズ失敗(元アラーム鳴動継続): \(inst.id)")
+            return
+        }
+        alertingIds.remove(inst.id)
         let next = AlarmInstanceDTO(
             id: "\(inst.id):snz\(inst.snoozeSeq + 1)",
             triggerAtMillis: Self.nowMillis + Int64(inst.snoozeMinutes) * 60_000,
