@@ -26,7 +26,7 @@ struct RingingView: View {
             VStack(spacing: 32) {
                 Spacer()
                 Text(now, format: .dateTime.hour().minute())
-                    .font(NightTheme.font(96, weight: .light))
+                    .font(NightTheme.numFont(112, weight: .ultraLight))
                     .foregroundStyle(NightTheme.onNight)
                     .onReceive(ticker) { now = $0 }
                 if let inst = current {

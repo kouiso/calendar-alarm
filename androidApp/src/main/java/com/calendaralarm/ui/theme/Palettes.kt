@@ -223,8 +223,8 @@ enum class AppPalette(
     ;
 
     companion object {
-        /** 設定に保存された ID → パレット。未知 ID は既定 (インディゴ) に落とす。 */
-        fun byId(id: String?): AppPalette = entries.firstOrNull { it.id == id } ?: INDIGO
+        /** 設定に保存された ID → パレット。未知 ID/未設定は既定 (琥珀) に落とす。 */
+        fun byId(id: String?): AppPalette = entries.firstOrNull { it.id == id } ?: AMBER
     }
 }
 
