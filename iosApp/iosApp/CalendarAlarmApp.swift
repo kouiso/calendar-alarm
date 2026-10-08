@@ -109,18 +109,58 @@ struct RootView: View {
                     .ignoresSafeArea()
                 Color(uiColor: .systemBackground).opacity(0.72).ignoresSafeArea()
             }
-            TabView {
-                AgendaView()
-                    .tabItem { Label("予定", systemImage: "calendar") }
-                AlarmsView()
-                    .tabItem { Label("アラーム", systemImage: "alarm") }
-                TimerView()
-                    .tabItem { Label("タイマー", systemImage: "timer") }
-                SettingsView()
-                    .tabItem { Label("設定", systemImage: "gearshape") }
+            // Night UI: フローティングタブバー (h66, r26, 半透明)
+            Group {
+                switch tab {
+                case 0: AgendaView()
+                case 1: AlarmsView()
+                case 2: TimerView()
+                default: SettingsView()
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollContentBackground(.hidden)
+            VStack {
+                Spacer()
+                HStack(spacing: 0) {
+                    NightTab(icon: "calendar", label: "予定", sel: tab == 0) { tab = 0 }
+                    NightTab(icon: "alarm", label: "アラーム", sel: tab == 1) { tab = 1 }
+                    NightTab(icon: "timer", label: "タイマー", sel: tab == 2) { tab = 2 }
+                    NightTab(icon: "gearshape", label: "設定", sel: tab == 3) { tab = 3 }
+                }
+                .frame(height: 66)
+                .background(NightTheme.nightSurface.opacity(0.92))
+                .clipShape(RoundedRectangle(cornerRadius: 26))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 26)
+                        .stroke(NightTheme.divider, lineWidth: 1)
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+            }
         }
         .tint(AppPalette.byId(store.state.themeId).accent)
+    }
+
+    @State private var tab = 0
+}
+
+private struct NightTab: View {
+    let icon: String
+    let label: String
+    let sel: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                Text(label)
+                    .font(.system(size: 11, weight: sel ? .semibold : .regular))
+            }
+            .foregroundColor(sel ? .accentColor : NightTheme.muted)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 }
