@@ -13,7 +13,7 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.calendaralarm.app</string>
+	<string>com.calendaralarm.ios</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -22,6 +22,15 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>calendaralarm-import</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSAlarmKitUsageDescription</key>
@@ -36,6 +45,11 @@
 		<string>plex_sans_jp_medium.ttf</string>
 		<string>plex_sans_jp_semibold.ttf</string>
 		<string>plex_sans_jp_light.ttf</string>
+		<string>outfit_extralight.ttf</string>
+		<string>outfit_light.ttf</string>
+		<string>outfit_regular.ttf</string>
+		<string>outfit_medium.ttf</string>
+		<string>outfit_semibold.ttf</string>
 	</array>
 	<key>UIApplicationSceneManifest_Generation</key>
 	<true/>

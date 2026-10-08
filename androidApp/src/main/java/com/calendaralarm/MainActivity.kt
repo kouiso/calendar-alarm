@@ -4,6 +4,17 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -11,15 +22,21 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -32,29 +49,56 @@ import com.calendaralarm.ui.OnboardingScreen
 import com.calendaralarm.ui.SettingsScreen
 import com.calendaralarm.ui.TimerScreen
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private val app get() = application as CalendarAlarmApp
+
+    /** メール→予定の通知から来た抽出結果 (JSON)。null でダイアログ非表示。 */
+    private val extractedJson = androidx.compose.runtime.mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra(EXTRA_EXTRACTED_EVENT)?.let {
+            extractedJson.value = it
+            this.intent.removeExtra(EXTRA_EXTRACTED_EVENT)
+        }
+    }
 
     override fun onResume() {
         super.onResume()
         // オンボーディングやアプリ設定で後からカレンダー権限が付いた場合に備え、
         // 画面に戻る度に Observer 登録を試す (登録済みなら即リターン)。
         app.ensureCalendarObserver()
+        // 通知が届かなかった経路の抽出結果を拾う (通知権限なし端末)
+        com.calendaralarm.ai.MailPrintService.consumePending(this)?.let {
+            extractedJson.value = it
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        intent?.getStringExtra(EXTRA_EXTRACTED_EVENT)?.let {
+            extractedJson.value = it
+            intent?.removeExtra(EXTRA_EXTRACTED_EVENT)
+        }
         setContent {
-            CalendarAlarmTheme {
-                // recomposition 毎に Flow を作り直すと collectAsState が
-                // リセットされるため remember で固定する
-                val onboardedFlow = remember {
-                    app.container.settings.flow.map { it.onboardingDone }
-                }
-                val onboarded by onboardedFlow.collectAsState(initial = true)
+            // recomposition 毎に Flow を作り直すと collectAsState が
+            // リセットされるため remember で固定する
+            val themeIdFlow = remember { app.container.settings.flow.map { it.themeId } }
+            val themeId by themeIdFlow.collectAsState(initial = "default")
+            CalendarAlarmTheme(themeId = themeId) {
+                val bgFlow = remember { app.container.settings.flow.map { it.backgroundImageUri } }
+                val bgUri by bgFlow.collectAsState(initial = null)
+                AppBackground(bgUri) {
+                    // onboarded で既に設定済みの場合も flow は remember 必須
+                    val onboardedFlow = remember {
+                        app.container.settings.flow.map { it.onboardingDone }
+                    }
+                    val onboarded by onboardedFlow.collectAsState(initial = true)
 
                 // カレンダー権限はメイン画面の条件にしない。
                 // 無くてもタイマー・単発アラームは動く (resync が部分動作する設計)、
@@ -85,9 +129,74 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     MainScaffold(app.container.repository, app.container.settings)
+                    // メール→予定: 抽出結果が届いていれば確認ダイアログを最前面に出す
+                    extractedJson.value?.let { json ->
+                        val ev = runCatching {
+                            kotlinx.serialization.json.Json {
+                                ignoreUnknownKeys = true
+                            }.decodeFromString<com.calendaralarm.shared.model.ExtractedEvent>(json)
+                        }.getOrNull()
+                        if (ev != null) {
+                            com.calendaralarm.ui.ExtractedEventDialog(
+                                event = ev,
+                                onDismiss = { extractedJson.value = null },
+                                onSaved = {
+                                    extractedJson.value = null
+                                    // 新しい予定を即時取り込んでアラーム化する
+                                    lifecycleScope.launch {
+                                        app.container.repository.resync("event inserted")
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
                 }
             }
         }
+    }
+
+    companion object {
+        /** MailPrintService が結果を渡す extra キー (ExtractedEvent の JSON)。 */
+        const val EXTRA_EXTRACTED_EVENT = "com.calendaralarm.extra.EXTRACTED_EVENT"
+    }
+}
+
+/**
+ * カスタム背景画像。設定で選んだ画像を全画面の最背面に敷き、
+ * 読みやすさ優先でスクリム (薄暗い/薄明るいレイヤ) を被せる。
+ */
+@Composable
+private fun AppBackground(imageUri: String?, content: @Composable () -> Unit) {
+    val dark = isSystemInDarkTheme()
+    val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, imageUri) {
+        value = imageUri
+            ?.removePrefix("file://")
+            ?.let { path ->
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching {
+                        android.graphics.BitmapFactory.decodeFile(path)?.asImageBitmap()
+                    }.getOrNull()
+                }
+            }
+    }
+    Box(Modifier.fillMaxSize()) {
+        bitmap?.let { bmp ->
+            Image(
+                bitmap = bmp,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+            // 文字を潰さないよう常時スクリムを敷く
+            Box(
+                Modifier.fillMaxSize().background(
+                    if (dark) androidx.compose.ui.graphics.Color(0xD0101016)
+                    else androidx.compose.ui.graphics.Color(0xE8F6F6FA),
+                ),
+            )
+        }
+        content()
     }
 }
 
@@ -116,22 +225,50 @@ private fun MainScaffold(
     Scaffold(
         bottomBar = {
             if (current != "alarm_edit") {
-                NavigationBar(
-                    containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainer,
+                // Night UI: フローティングタブバー (inset16, h66, r26, 半透明+境界)
+                androidx.compose.material3.Surface(
+                    modifier = Modifier
+                        .padding(start = 16.dp, end = 16.dp, bottom = 26.dp)
+                        .height(66.dp)
+                        .fillMaxWidth(),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(26.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp, MaterialTheme.colorScheme.outlineVariant,
+                    ),
+                    shadowElevation = 8.dp,
                 ) {
-                    tabs.forEach { tab ->
-                        NavigationBarItem(
-                            selected = current == tab.route,
-                            onClick = {
-                                nav.navigate(tab.route) {
-                                    popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = tab.icon,
-                            label = { Text(tab.label) },
-                        )
+                    Row(
+                        Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        tabs.forEach { tab ->
+                            val sel = current == tab.route
+                            Column(
+                                Modifier.weight(1f).fillMaxSize()
+                                    .clickable {
+                                        nav.navigate(tab.route) {
+                                            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                tab.icon()
+                                Text(
+                                    tab.label,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (sel) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -158,7 +295,7 @@ private fun MainScaffold(
                     onDone = { nav.popBackStack() },
                 )
             }
-            composable("timer") { TimerScreen(repository) }
+            composable("timer") { TimerScreen(repository, settings) }
             composable("settings") { SettingsScreen(repository, settings) }
         }
     }

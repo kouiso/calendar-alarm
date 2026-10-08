@@ -6,29 +6,71 @@ struct AgendaView: View {
     @EnvironmentObject var store: Store
     @State private var selected: DisplayEvent?
     @State private var weatherByLoc: [String: [WeatherService.Forecast]] = [:]
+    @State private var nowForecast: WeatherService.NowForecast? = nil
+    @State private var viewMode: AgendaViewMode = .list
+    @State private var searchText = ""
+    @State private var searchOpen = false
+    @State private var focusDate = Date()
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
+                    // Night UI: 日付 H1
+                    Text(Self.todayLabel)
+                        .font(NightTheme.font(30, weight: .semibold))
+                        .padding(.top, 6)
                     if let next = nextAlarm {
-                        NextAlarmBanner(instance: next)
+                        NextAlarmBanner(instance: next, accent: accent)
                     }
-                    ForEach(groupedDays, id: \.0) { day, events in
-                        DayCard(dayLabel: dayLabel(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev })
+                    // ヘッダー天気 (元アプリ: 現在気温+時間別予報)。地点設定がある時だけ。
+                    if let nf = nowForecast {
+                        WeatherHeaderRow(forecast: nf)
                     }
-                    if groupedDays.isEmpty {
-                        emptyState
+                    // Night UI: 4-way セグメント (一覧/3日/月/タイムライン) + 検索/同期
+                    HStack(spacing: 10) {
+                        NightSegment(labels: modes.map { $0.label }, selected: Binding(
+                            get: { modes.firstIndex(of: viewMode) ?? 0 },
+                            set: { i in
+                                viewMode = modes[i]
+                                if modes[i] != .list { focusDate = Date() }
+                            }))
+                        Button {
+                            searchOpen.toggle()
+                            if !searchOpen { searchText = "" }
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(searchOpen ? accent : .secondary)
+                        }
+                        Button { Task { await engine.resync(reason: "manual") } } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    switch viewMode {
+                    case .list:
+                        ForEach(groupedDays, id: \.0) { day, events in
+                            DayCard(dayLabel: dayLabel(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev })
+                        }
+                        if groupedDays.isEmpty { emptyState }
+                    case .month:
+                        MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 })
+                    case .threeDay:
+                        ThreeDayColumnsView(startDate: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
+                    case .timeline:
+                        DayTimelineViewIOS(date: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
                     }
                 }
                 .padding()
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { await engine.resync(reason: "manual") } } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
+            .safeAreaInset(edge: .top) {
+                if searchOpen {
+                    TextField("タイトルで絞り込み", text: $searchText)
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.horizontal)
+                        .padding(.vertical, 4)
+                        .background(.bar)
                 }
             }
         }
@@ -39,6 +81,15 @@ struct AgendaView: View {
     }
 
     // MARK: - データ整形
+
+    /// セグメント順 = 一覧/3日/月/タイムライン (Night UI スペック)
+    private let modes: [AgendaViewMode] = [.list, .threeDay, .month, .timeline]
+    private var accent: Color { AppPalette.byId(store.state.themeId).accent }
+    private static var todayLabel: String {
+        let f = DateFormatter(); f.dateFormat = "M月d日 (E)"
+        f.locale = Locale(identifier: "ja_JP")
+        return f.string(from: Date())
+    }
 
     private var displayEvents: [DisplayEvent] {
         let now = Engine.nowMillis
@@ -54,17 +105,26 @@ struct AgendaView: View {
                     event: ev,
                     calendarName: cal?.name ?? "",
                     calendarColor: cal?.color ?? 0xFF888888,
-                    muted: ov?.muted == true || !rule.enabled,
+                    // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
+                    muted: ov?.muted == true || !rule.enabled
+                        || !store.state.inviteFilter.allows(ev.inviteStatus)
+                        || !store.state.eventTypeFilter.allows(classifyEventType(ev.title)),
                     effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore
                 )
             }
+    }
+
+    /// 検索クエリ適用後のイベント (タイトル部分一致)
+    private var filteredEvents: [DisplayEvent] {
+        if searchText.isEmpty { return displayEvents }
+        return displayEvents.filter { $0.event.title.localizedCaseInsensitiveContains(searchText) }
     }
 
     private var groupedDays: [(String, [DisplayEvent])] {
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
         var groups: [(String, [DisplayEvent])] = []
-        for ev in displayEvents {
+        for ev in filteredEvents {
             let key = df.string(from: Date(timeIntervalSince1970: TimeInterval(ev.event.startMillis) / 1000))
             if let i = groups.firstIndex(where: { $0.0 == key }) {
                 groups[i].1.append(ev)
@@ -112,6 +172,13 @@ struct AgendaView: View {
     private func refreshWeather() async {
         guard store.state.weatherEnabled else { return }
         let svc = WeatherService()
+        // ヘッダー用 現在+時間別
+        let loc = store.state.weatherLocation
+        if store.state.weatherHeaderEnabled && !loc.isEmpty {
+            nowForecast = await svc.now(for: loc, hours: 9)
+        } else {
+            nowForecast = nil
+        }
         let locs = Set(displayEvents.map { $0.event.location }.filter { !$0.isEmpty })
         for loc in locs {
             if let f = await svc.forecast(for: loc) {
@@ -121,31 +188,71 @@ struct AgendaView: View {
     }
 }
 
+/// 現在気温 + 時間別チップの1行 (Android WeatherHeaderRow と同等)。
+struct WeatherHeaderRow: View {
+    let forecast: WeatherService.NowForecast
+    private static let hourFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "H時"; return f
+    }()
+    private static let isoFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd'T'HH:mm"; return f
+    }()
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 14) {
+                Label(
+                    "\(Int(forecast.current.temperature))°",
+                    systemImage: WeatherService.icon(forecast.current.weatherCode)
+                )
+                .font(NightTheme.font(14, weight: .medium))
+                ForEach(forecast.hourly.prefix(9), id: \.time) { h in
+                    let hr = Self.isoFmt.date(from: h.time).map { Self.hourFmt.string(from: $0) } ?? ""
+                    HStack(spacing: 4) {
+                        Text(hr)
+                        Image(systemName: WeatherService.icon(h.weatherCode))
+                        Text("\(Int(h.temperature))°")
+                    }
+                    .font(NightTheme.font(12))
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        .scrollIndicators(.hidden)
+    }
+}
+
 // MARK: - 部品
 
+/// Night UI hero card: accent-soft 背景 r28 + Outfit 64 時刻 + ドット+タイトル
 struct NextAlarmBanner: View {
     let instance: AlarmInstanceDTO
+    let accent: Color
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(NightTheme.indigo.opacity(0.15)).frame(width: 44, height: 44)
-                Image(systemName: "bell.fill").foregroundStyle(NightTheme.indigo)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Self.timeStr(instance.triggerAtMillis))
-                    .font(NightTheme.font(22, weight: .light))
+        VStack(alignment: .leading, spacing: 6) {
+            Text("次のアラーム")
+                .font(NightTheme.font(12, weight: .semibold))
+                .tracking(1)
+                .foregroundStyle(accent)
+            Text(Self.timeStr(instance.triggerAtMillis))
+                .font(NightTheme.numFont(64, weight: .light))
+                .tracking(-2)
+                .foregroundStyle(NightTheme.onNight)
+            HStack(spacing: 8) {
+                Circle().fill(accent).frame(width: 8, height: 8)
                 Text(instance.title)
-                    .font(NightTheme.font(14))
-                    .foregroundStyle(.secondary)
+                    .font(NightTheme.font(15))
+                    .foregroundStyle(NightTheme.muted)
                     .lineLimit(1)
             }
-            Spacer()
         }
-        .padding(14)
-        .background(NightTheme.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 22).padding(.vertical, 18)
+        .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 28))
     }
     static func timeStr(_ millis: Int64) -> String {
-        let f = DateFormatter(); f.dateFormat = "M/d HH:mm"
+        let f = DateFormatter(); f.dateFormat = "H:mm"
         return f.string(from: Date(timeIntervalSince1970: TimeInterval(millis) / 1000))
     }
 }
@@ -168,12 +275,12 @@ struct DayCard: View {
                         .onTapGesture { onTap(ev) }
                 }
             }
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+            .background(NightTheme.nightSurface, in: RoundedRectangle(cornerRadius: 22))
         }
     }
 }
 
-/// 予定行: 時刻列 + カレンダー色アクセントバー + タイトル + ベル + オフセット
+/// 予定行: Outfit 時刻列 + カレンダー色ドット + タイトル + ベル + オフセット (Night UI)
 struct EventRow: View {
     let ev: DisplayEvent
     let accent: Color
@@ -181,11 +288,11 @@ struct EventRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(Self.timeStr(ev.event))
-                .font(NightTheme.font(14, weight: .medium))
+                .font(NightTheme.numFont(20, weight: .medium))
                 .frame(width: 52, alignment: .leading)
-            RoundedRectangle(cornerRadius: 2)
+            Circle()
                 .fill(accent)
-                .frame(width: 3, height: 34)
+                .frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 2) {
                 Text(ev.event.title)
                     .font(NightTheme.font(15))
@@ -202,11 +309,13 @@ struct EventRow: View {
             if ev.muted {
                 Image(systemName: "bell.slash").foregroundStyle(.secondary).font(.system(size: 14))
             } else {
-                Image(systemName: "bell.fill").foregroundStyle(NightTheme.indigo).font(.system(size: 14))
+                Image(systemName: "bell.fill").foregroundStyle(accent).font(.system(size: 14))
                 if ev.effectiveMinutes > 0 {
                     Text("\(ev.effectiveMinutes)分前")
                         .font(NightTheme.font(11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(accent)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
                 }
             }
         }

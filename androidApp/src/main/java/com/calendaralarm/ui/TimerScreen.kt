@@ -1,6 +1,9 @@
 package com.calendaralarm.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,14 +14,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,7 +44,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.data.AlarmRepository
+import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.shared.logic.AlarmExpander
+import com.calendaralarm.ui.theme.OutfitFontFamily
 import com.calendaralarm.shared.model.AlarmKind
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -56,18 +63,23 @@ import kotlin.math.sin
  * タイマーの鳴動はアラームと同じ経路 = 止めるまで鳴る。
  */
 @Composable
-fun TimerScreen(repository: AlarmRepository) {
+fun TimerScreen(repository: AlarmRepository, settings: SettingsRepository) {
     var tab by remember { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize()) {
-        TabRow(
-            selectedTabIndex = tab,
-            containerColor = MaterialTheme.colorScheme.surface,
-        ) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("タイマー") })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("ストップウォッチ") })
-        }
+        Text(
+            "タイマー",
+            fontSize = 30.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 20.dp, top = 58.dp),
+        )
+        NightSegment(
+            labels = listOf("タイマー", "ストップウォッチ"),
+            selected = tab,
+            onSelect = { tab = it },
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp).fillMaxWidth(),
+        )
         when (tab) {
-            0 -> TimerPane(repository)
+            0 -> TimerPane(repository, settings)
             else -> StopwatchPane()
         }
     }
@@ -82,7 +94,7 @@ private fun ClockRing(content: @Composable () -> Unit) {
     val ring = MaterialTheme.colorScheme.outlineVariant
     val accent = MaterialTheme.colorScheme.primary
     Box(contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(280.dp)) {
+        Canvas(Modifier.size(260.dp)) {
             val r = size.minDimension / 2f
             drawCircle(
                 color = ring,
@@ -93,7 +105,7 @@ private fun ClockRing(content: @Composable () -> Unit) {
                 val major = i % 5 == 0
                 val angle = Math.toRadians((i * 6 - 90).toDouble())
                 val outer = r - 8.dp.toPx()
-                val inner = outer - (if (major) 12.dp else 6.dp).toPx()
+                val inner = outer - (if (major) 14.dp else 7.dp).toPx()
                 drawLine(
                     color = if (i == 0) accent else ring,
                     start = Offset(
@@ -114,13 +126,18 @@ private fun ClockRing(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun TimerPane(repository: AlarmRepository) {
+private fun TimerPane(repository: AlarmRepository, settings: SettingsRepository) {
     val scope = rememberCoroutineScope()
     val pending by repository.pendingFlow().collectAsState(initial = emptyList())
     val timer = pending.firstOrNull { it.kind == AlarmKind.TIMER }
+    val prefs by settings.flow.collectAsState(initial = null)
 
     var minutesInput by remember { mutableStateOf("5") }
+    // プリセット選択時の秒指定 (分未満のプリセットを表すため分数入力と別に持つ)
+    var presetSeconds by remember { mutableStateOf<Int?>(null) }
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var showAddPreset by remember { mutableStateOf(false) }
+    var deletePreset by remember { mutableStateOf<SettingsRepository.TimerPreset?>(null) }
 
     // タイマーが無いのに500ms刻みで再コンポーズし続けないようガード
     LaunchedEffect(timer?.id) {
@@ -141,7 +158,8 @@ private fun TimerPane(repository: AlarmRepository) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         formatRemaining(remain),
-                        fontSize = 64.sp,
+                        fontSize = 48.sp,
+                        fontFamily = OutfitFontFamily,
                         fontWeight = FontWeight.Light,
                         letterSpacing = (-2).sp,
                     )
@@ -162,39 +180,87 @@ private fun TimerPane(repository: AlarmRepository) {
             }
         } else {
             ClockRing {
-                OutlinedTextField(
-                    value = minutesInput,
-                    onValueChange = { minutesInput = it.filter { c -> c.isDigit() }.take(3) },
-                    label = { Text("分数") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(0.5f),
+                // ダイヤル中央は分数ホイール (Outfit 大数字 + 「分」)。スナップで1-90分。
+                MinuteWheel(
+                    minutes = presetSeconds?.let { it / 60 } ?: (minutesInput.toIntOrNull() ?: 5),
+                    onMinutes = {
+                        presetSeconds = null
+                        minutesInput = it.toString()
+                    },
                 )
             }
             Spacer(Modifier.height(28.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(1, 3, 5, 10, 30, 60).forEach { m ->
-                    FilterChip(
-                        selected = minutesInput == m.toString(),
-                        onClick = { minutesInput = m.toString() },
-                        label = { Text("$m") },
+            // 定型タイマープリセット (元アプリ: ゆで卵/パスタ等)。タップで分数セット、
+            // 長押しで削除、「＋」で現在の分数を名前付き保存。
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                prefs?.timerPresets?.forEach { p ->
+                    PresetChip(
+                        label = "${p.label} ${p.durationLabel()}",
+                        selected = presetSeconds == p.seconds,
+                        onClick = { presetSeconds = p.seconds },
+                        onLongClick = { deletePreset = p },
                     )
                 }
+                PresetChip(
+                    label = "＋",
+                    selected = false,
+                    onClick = { showAddPreset = true },
+                    dashed = true,
+                )
+            }
+            if (showAddPreset) {
+                AddPresetDialog(
+                    initialMinutes = minutesInput.toIntOrNull() ?: 5,
+                    onDismiss = { showAddPreset = false },
+                    onSave = { label, minutes ->
+                        scope.launch {
+                            val cur = prefs?.timerPresets ?: emptyList()
+                            settings.setTimerPresets(
+                                cur + SettingsRepository.TimerPreset(label, minutes * 60),
+                            )
+                        }
+                        showAddPreset = false
+                    },
+                )
+            }
+            deletePreset?.let { target ->
+                AlertDialog(
+                    onDismissRequest = { deletePreset = null },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            scope.launch {
+                                val cur = prefs?.timerPresets ?: emptyList()
+                                settings.setTimerPresets(cur - target)
+                            }
+                            deletePreset = null
+                        }) { Text("削除") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { deletePreset = null }) { Text("戻る") }
+                    },
+                    text = { Text("「${target.label}」を削除しますか？") },
+                )
             }
             Spacer(Modifier.height(28.dp))
             Button(
                 onClick = {
-                    val minutes = minutesInput.toLongOrNull() ?: return@Button
-                    if (minutes <= 0) return@Button
+                    val durationMillis = presetSeconds?.let { it * 1_000L }
+                        ?: (minutesInput.toLongOrNull() ?: 0L) * 60_000L
+                    if (durationMillis <= 0) return@Button
                     scope.launch {
                         val inst = AlarmExpander.timerInstance(
-                            durationMillis = minutes * 60_000L,
+                            durationMillis = durationMillis,
                             now = Clock.System.now(),
                         )
                         repository.scheduleAdhoc(inst)
                     }
                 },
-                modifier = Modifier.fillMaxWidth(0.7f).height(56.dp),
-            ) { Text("開始", fontSize = 18.sp) }
+                modifier = Modifier.fillMaxWidth().height(64.dp),
+                shape = RoundedCornerShape(32.dp),
+            ) { Text("開始", fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
         }
     }
 }
@@ -223,7 +289,8 @@ private fun StopwatchPane() {
         ClockRing {
             Text(
                 formatStopwatch(elapsed),
-                fontSize = 56.sp,
+                fontSize = 48.sp,
+                fontFamily = OutfitFontFamily,
                 fontWeight = FontWeight.Light,
                 letterSpacing = (-2).sp,
             )
@@ -263,6 +330,136 @@ private fun StopwatchPane() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/** プリセット用チップ (長押し対応のため FilterChip ではなく自前)。Night UI: 44h, r14, 選択=accent縁。 */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PresetChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    dashed: Boolean = false,
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) accent.copy(alpha = 0.15f)
+        else MaterialTheme.colorScheme.surfaceContainer,
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (dashed || selected) 1.dp else 0.dp,
+            color = if (selected) accent
+            else MaterialTheme.colorScheme.outline,
+        ),
+        modifier = Modifier.height(44.dp).combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick,
+        ),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                label,
+                modifier = Modifier.padding(horizontal = 14.dp),
+                fontSize = 14.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** 現在の分数を名前付きプリセットとして保存する小さなダイアログ。 */
+@Composable
+private fun AddPresetDialog(
+    initialMinutes: Int,
+    onDismiss: () -> Unit,
+    onSave: (String, Int) -> Unit,
+) {
+    var label by remember { mutableStateOf("") }
+    var minutes by remember { mutableStateOf(initialMinutes.toString()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val m = minutes.toIntOrNull() ?: return@TextButton
+                    if (m <= 0 || label.isBlank()) return@TextButton
+                    onSave(label.trim(), m)
+                },
+            ) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("戻る") } },
+        title = { Text("プリセットを追加") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it.take(12) },
+                    label = { Text("名前") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = minutes,
+                    onValueChange = { minutes = it.filter { c -> c.isDigit() }.take(3) },
+                    label = { Text("分数") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+    )
+}
+
+/** ダイヤル中央の分数ホイール。スナップで1-90分、中央の値が選択分。 */
+@Composable
+private fun MinuteWheel(minutes: Int, onMinutes: (Int) -> Unit) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState(
+        initialFirstVisibleItemIndex = (minutes - 1).coerceIn(0, 89),
+    )
+    // 中央にあるアイテムを選択分として確定する
+    val centerItem by androidx.compose.runtime.derivedStateOf {
+        val info = listState.layoutInfo
+        val center = (info.viewportStartOffset + info.viewportEndOffset) / 2
+        info.visibleItemsInfo.minByOrNull {
+            kotlin.math.abs(it.offset + it.size / 2 - center)
+        }?.index?.plus(1)
+    }
+    LaunchedEffect(centerItem) {
+        centerItem?.let { if (it != minutes) onMinutes(it) }
+    }
+    androidx.compose.foundation.lazy.LazyColumn(
+        state = listState,
+        flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(listState),
+        modifier = Modifier.height(120.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        items(90) { i ->
+            val sel = i + 1 == (centerItem ?: minutes)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${i + 1}",
+                    fontSize = if (sel) 48.sp else 24.sp,
+                    fontFamily = OutfitFontFamily,
+                    fontWeight = if (sel) FontWeight.Light else FontWeight.ExtraLight,
+                    color = if (sel) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (sel) {
+                    Text(
+                        "分",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                    )
+                }
+            }
         }
     }
 }

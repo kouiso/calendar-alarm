@@ -14,7 +14,9 @@ import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.AlarmState
+import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
+import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -80,16 +82,23 @@ class AlarmRepository(
 
     fun auditFlow(limit: Int = 100) = db.auditLog().recentFlow(limit)
 
-    /** アジェンダ画面用: イベント + 有効な鳴動ルール。 */
+    /** アジェンダ画面用: イベント + 有効な鳴動ルールと解決済みアクション。 */
     data class AgendaItem(
         val event: com.calendaralarm.shared.model.CalendarEvent,
         val calendarName: String,
         val calendarColor: Int,
-        val muted: Boolean,
+        /** 解決後の開始時アクション (上書き>コード>ルール)。 */
+        val startAction: EventAction,
+        /** 解決後のリマインダーアクション。 */
+        val reminderAction: EventAction,
         val minutesBefore: Int,
         val extraOffsets: List<Int>,
         val hasOverride: Boolean,
-    )
+    ) {
+        /** 何も鳴らない状態 (UI のグレー化判定用)。 */
+        val muted: Boolean
+            get() = startAction == EventAction.MUTE && reminderAction == EventAction.MUTE
+    }
 
     suspend fun upcomingEvents(days: Int = 14): List<AgendaItem> = withContext(Dispatchers.IO) {
         if (!hasCalendarPermission()) return@withContext emptyList()
@@ -101,18 +110,41 @@ class AlarmRepository(
             now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
             (now + days.days).toEpochMilliseconds(),
         )
+        val appSettings = settings.flow.first()
         events.map { ev ->
             val pref = prefs[ev.calendarId]
             val ov = overrides[ev.instanceKey]
+            val rule = AlarmRule(
+                enabled = pref?.enabled != false,
+                minutesBefore = pref?.minutesBefore
+                    ?: appSettings.defaultMinutesBefore,
+                allDayMinutes = pref?.allDayMinutes ?: 540,
+                extraOffsets = pref?.extraOffsetsCsv.toOffsets(),
+                startAction = pref?.startAction?.toAction() ?: appSettings.defaultStartAction,
+                reminderAction = pref?.reminderAction?.toAction()
+                    ?: appSettings.defaultReminderAction,
+            )
+            val override = ov?.toModel()
+            // 招待フィルタも反映する: 展開側で鳴らない予定が「アラーム」
+            // アイコン表示になるのは矛盾
+            val (start, reminder) = if (pref?.enabled == false ||
+                !appSettings.inviteFilter.allows(ev.inviteStatus)
+                    || !appSettings.eventTypeFilter.allows(
+                        com.calendaralarm.shared.model.classifyEventType(ev.title)
+                    )
+            ) {
+                EventAction.MUTE to EventAction.MUTE
+            } else {
+                AlarmExpander.resolveActions(ev, rule, override, appSettings.titleCodes)
+            }
             AgendaItem(
                 event = ev,
                 calendarName = sources[ev.calendarId]?.name ?: ev.calendarId,
                 calendarColor = sources[ev.calendarId]?.color ?: 0xFF888888.toInt(),
-                muted = ov?.muted ?: (pref?.enabled == false),
-                minutesBefore = ov?.minutesBefore ?: pref?.minutesBefore
-                    ?: settings.flow.first().defaultMinutesBefore,
-                extraOffsets = ov?.extraOffsetsCsv?.toOffsets()
-                    ?: pref?.extraOffsetsCsv.toOffsets(),
+                startAction = start,
+                reminderAction = reminder,
+                minutesBefore = ov?.minutesBefore ?: rule.minutesBefore,
+                extraOffsets = ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets,
                 hasOverride = ov != null,
             )
         }
@@ -145,16 +177,17 @@ class AlarmRepository(
         onScheduleChanged?.invoke()
     }
 
-    suspend fun onSnoozed(id: String?) {
+    suspend fun onSnoozed(id: String?, snoozeMinutes: Int? = null) {
         val entity = id?.let { db.scheduledInstances().byId(it) } ?: return
         val instance = entity.toInstance()
+        val minutes = snoozeMinutes ?: instance.snoozeMinutes
         val snoozed = instance.snoozed(
-            Clock.System.now().toEpochMilliseconds() + instance.snoozeMinutes * 60_000L,
-        )
+            Clock.System.now().toEpochMilliseconds() + minutes * 60_000L,
+        ).copy(snoozeMinutes = minutes)
         db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(snoozed)))
         if (!scheduler.schedule(snoozed)) audit("EXACT_DENIED", snoozed.id)
         setState(instance.id, AlarmState.SNOOZED)
-        audit("SNOOZE", "${instance.id} +${instance.snoozeMinutes}m → ${snoozed.id}")
+        audit("SNOOZE", "${instance.id} +${minutes}m → ${snoozed.id}")
         onScheduleChanged?.invoke()
     }
 
@@ -209,9 +242,13 @@ class AlarmRepository(
             .filter { it.id in terminalIds }
             .mapNotNull { it.standaloneAlarmId }
             .toSet()
+        val appSettings = settings.flow.first()
         val standalones = db.standaloneAlarms().all().map { it.toModel() }
         standalones.forEach { alarm ->
-            if (alarm.daysOfWeek.isNotEmpty() || alarm.id !in consumedAlarmIds) {
+            // 一括ミュート中は単発/繰返しアラーム自体を展開しない (全部 ALARM 鳴動のため)
+            if (!appSettings.muteAll &&
+                (alarm.effectiveRepeatMode() != RepeatMode.ONCE || alarm.id !in consumedAlarmIds)
+            ) {
                 desired += AlarmExpander.expandStandalone(alarm, now = now, days = 14)
             }
         }
@@ -231,21 +268,26 @@ class AlarmRepository(
                     minutesBefore = it.minutesBefore,
                     allDayMinutes = it.allDayMinutes,
                     extraOffsets = it.extraOffsetsCsv.toOffsets(),
+                    startAction = it.startAction.toAction(),
+                    reminderAction = it.reminderAction.toAction(),
                 )
             }
             val overrides = db.eventOverrides().all().associate {
                 it.instanceKey to EventOverride(
-                    muted = it.muted,
+                    action = it.action.toActionOrNull(),
                     minutesBefore = it.minutesBefore,
                     extraOffsets = it.extraOffsetsCsv?.toOffsets(),
                 )
             }
             val disabledCalIds = prefs.filterValues { !it.enabled }.keys
-            val appSettings = settings.flow.first()
             val snoozeDefault = appSettings.defaultSnoozeMinutes
-            // calendar_prefs 行が無いカレンダーはグローバル既定の「N分前」が効く。
+            // calendar_prefs 行が無いカレンダーはグローバル既定が効く。
             // アジェンダ表示も同じ既定を読むため、UIとエンジンを一致させる。
-            val defaultRule = AlarmRule(minutesBefore = appSettings.defaultMinutesBefore)
+            val defaultRule = AlarmRule(
+                minutesBefore = appSettings.defaultMinutesBefore,
+                startAction = appSettings.defaultStartAction,
+                reminderAction = appSettings.defaultReminderAction,
+            )
             val expanded = runCatching {
                 // 過去側はグレース幅ではなく14日に広げる。スヌーズ連鎖が親予定の
                 // 開始から長く伸びても liveEventKeys が親を見失わず、スヌーズ子が
@@ -267,6 +309,11 @@ class AlarmRepository(
                     now = now, horizon = horizon,
                     zone = TimeZone.currentSystemDefault(),
                     defaultRule = defaultRule,
+                    titleCodes = appSettings.titleCodes,
+                    inviteFilter = appSettings.inviteFilter,
+                    eventTypeFilter = appSettings.eventTypeFilter,
+                    importEventReminders = appSettings.importEventReminders,
+                    muteAll = appSettings.muteAll,
                 )
             }.getOrNull()
             if (expanded != null) {
@@ -290,7 +337,8 @@ class AlarmRepository(
         val adhoc = pendingRows.map { it.toInstance() }
             .filter { inst ->
                 inst.id !in desiredIds && when {
-                    inst.kind == AlarmKind.TIMER -> true
+                    // TIMER / NOTIFICATION は即時発火の adhoc。理想リストに無くても保持
+                    inst.kind == AlarmKind.TIMER || inst.kind == AlarmKind.NOTIFICATION -> true
                     // スヌーズ中の子は「親が今も理想状態にある」場合だけ持ち越す。
                     // 親アラームの無効化・削除・予定ミュート後にスヌーズだけ鳴るのを防ぐ。
                     inst.snoozeSeq > 0 -> {
@@ -400,7 +448,8 @@ class AlarmRepository(
         val alarms = db.standaloneAlarms().all().associateBy { it.id }
         for (id in alarmIds) {
             val e = alarms[id] ?: continue
-            if (e.daysMask == 0 && e.enabled) {
+            // 消費されるのは「1回のみ」のアラームだけ (繰返しは消費しない)
+            if (e.enabled && (e.repeatMode == "ONCE" || (e.repeatMode == null && e.daysMask == 0))) {
                 db.standaloneAlarms().upsert(e.copy(enabled = false))
                 audit("ALARM_OFF", "単発アラーム消費で停止: ${e.label} (id=$id)")
             }
@@ -414,7 +463,7 @@ class AlarmRepository(
         val id = if (entity.id == 0L) db.standaloneAlarms().upsert(entity) else {
             db.standaloneAlarms().upsert(entity); entity.id
         }
-        if (alarm.enabled && alarm.daysOfWeek.isEmpty()) {
+        if (alarm.enabled && alarm.effectiveRepeatMode() == RepeatMode.ONCE) {
             // 単発アラームの再有効化は消費のリセット。終端行を消して
             // 消費判定 (終端行の有無) に引っかからないようにする
             db.scheduledInstances().deleteTerminalByAlarmId(id)
@@ -434,6 +483,8 @@ class AlarmRepository(
         minutesBefore: Int,
         allDayMinutes: Int? = null,
         extraOffsets: List<Int>? = null,
+        startAction: EventAction? = null,
+        reminderAction: EventAction? = null,
     ) {
         val current = db.calendarPrefs().all().firstOrNull { it.calendarId == calendarId }
         db.calendarPrefs().upsert(
@@ -443,6 +494,9 @@ class AlarmRepository(
                 minutesBefore = minutesBefore,
                 allDayMinutes = allDayMinutes ?: current?.allDayMinutes ?: 540,
                 extraOffsetsCsv = extraOffsets?.toCsv() ?: current?.extraOffsetsCsv ?: "",
+                startAction = startAction?.name ?: current?.startAction ?: EventAction.ALARM.name,
+                reminderAction = reminderAction?.name
+                    ?: current?.reminderAction ?: EventAction.ALARM.name,
             ),
         )
         resync("calendar pref")
@@ -450,15 +504,15 @@ class AlarmRepository(
 
     suspend fun setEventOverride(
         instanceKey: String,
-        muted: Boolean?,
+        action: EventAction?,
         minutesBefore: Int?,
         extraOffsets: List<Int>? = null,
     ) {
         val current = db.eventOverrides().all().firstOrNull { it.instanceKey == instanceKey }
-        val m = muted ?: current?.muted ?: false
+        val a = action?.name ?: current?.action
         val mb = minutesBefore ?: current?.minutesBefore
         val csv = extraOffsets?.toCsv() ?: current?.extraOffsetsCsv
-        db.eventOverrides().upsert(EventOverrideEntity(instanceKey, m, mb, csv))
+        db.eventOverrides().upsert(EventOverrideEntity(instanceKey, a, mb, csv))
         resync("event override")
     }
 
@@ -484,6 +538,18 @@ class AlarmRepository(
 
     // ---- 変換 ----
 
+    private fun EventOverrideEntity.toModel() = EventOverride(
+        action = action.toActionOrNull(),
+        minutesBefore = minutesBefore,
+        extraOffsets = extraOffsetsCsv?.toOffsets(),
+    )
+
+    private fun String?.toAction(): EventAction =
+        runCatching { EventAction.valueOf(this ?: "") }.getOrDefault(EventAction.ALARM)
+
+    private fun String?.toActionOrNull(): EventAction? =
+        this?.let { runCatching { EventAction.valueOf(it) }.getOrNull() }
+
     private fun StandaloneAlarmEntity.toModel() = StandaloneAlarm(
         id = id,
         enabled = enabled,
@@ -497,6 +563,10 @@ class AlarmRepository(
             .filter { it.isNotBlank() }
             .mapNotNull { runCatching { LocalDate.parse(it.trim()) }.getOrNull() }
             .toSet(),
+        muteUntilUnlock = muteUntilUnlock,
+        repeatMode = repeatMode?.let { runCatching { RepeatMode.valueOf(it) }.getOrNull() },
+        repeatInterval = repeatInterval,
+        repeatAnchorMillis = repeatAnchorMillis,
     )
 
     private fun StandaloneAlarm.toEntity() = StandaloneAlarmEntity(
@@ -509,6 +579,10 @@ class AlarmRepository(
         soundUri = soundUri,
         snoozeMinutes = snoozeMinutes,
         exceptionsCsv = exceptions.joinToString(",") { it.toString() },
+        muteUntilUnlock = muteUntilUnlock,
+        repeatMode = repeatMode?.name,
+        repeatInterval = repeatInterval,
+        repeatAnchorMillis = repeatAnchorMillis,
     )
 
     companion object {

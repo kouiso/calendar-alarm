@@ -1,0 +1,84 @@
+# FAD (Firebase App Distribution) 配布用の署名・ビルドパイプライン。
+# equus-anatomy と同じ方式: match で ad-hoc 証明書/profile を
+# ritmo-inc/apple-certificate から取得し、gym で手動署名 IPA を作る。
+
+APP_IDENTIFIER = "com.calendaralarm.ios"
+WIDGET_IDENTIFIER = "com.calendaralarm.ios.widget"
+SHAREEXT_IDENTIFIER = "com.calendaralarm.ios.shareext"
+TEAM_ID = "ZZ4FA7NLUY"
+MATCH_GIT_URL = "git@github.com:ritmo-inc/apple-certificate.git"
+MATCH_GIT_BRANCH = "master"
+
+default_platform(:ios)
+
+platform :ios do
+  desc "AdHoc 署名で IPA をビルドする"
+  lane :fad do |options|
+    setup_ci
+
+    app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_P8"],
+      is_key_content_base64: false,
+    )
+
+    # 新規 App ID や新規 UDID があれば profile を作成/更新して storage に
+    # push する（readonly では初回配布が必ず失敗するため書き込みモード固定）。
+    # force_for_new_devices で登録済みデバイス差分も常に profile へ反映する。
+    match(
+      type: "adhoc",
+      app_identifier: [APP_IDENTIFIER, WIDGET_IDENTIFIER, SHAREEXT_IDENTIFIER],
+      git_url: MATCH_GIT_URL,
+      git_branch: MATCH_GIT_BRANCH,
+      git_private_key: "/tmp/match_deploy_key",
+      team_id: TEAM_ID,
+      readonly: false,
+      force_for_new_devices: true,
+    )
+
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "iosApp/CalendarAlarm.xcodeproj",
+      targets: ["iosApp"],
+      profile_name: "match AdHoc #{APP_IDENTIFIER}",
+      code_sign_identity: "Apple Distribution",
+      team_id: TEAM_ID,
+    )
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "iosApp/CalendarAlarm.xcodeproj",
+      targets: ["CalendarAlarmWidget"],
+      profile_name: "match AdHoc #{WIDGET_IDENTIFIER}",
+      code_sign_identity: "Apple Distribution",
+      team_id: TEAM_ID,
+    )
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "iosApp/CalendarAlarm.xcodeproj",
+      targets: ["MailShareExt"],
+      profile_name: "match AdHoc #{SHAREEXT_IDENTIFIER}",
+      code_sign_identity: "Apple Distribution",
+      team_id: TEAM_ID,
+    )
+
+    build_app(
+      project: "iosApp/CalendarAlarm.xcodeproj",
+      scheme: "iosApp",
+      configuration: "Release",
+      export_method: "ad-hoc",
+      output_directory: "build/ios",
+      output_name: "calendar-alarm.ipa",
+      xcargs: "CURRENT_PROJECT_VERSION=#{options[:build_number] || '1'}",
+      export_options: {
+        signingStyle: "manual",
+        teamID: TEAM_ID,
+        provisioningProfiles: {
+          APP_IDENTIFIER => "match AdHoc #{APP_IDENTIFIER}",
+          WIDGET_IDENTIFIER => "match AdHoc #{WIDGET_IDENTIFIER}",
+          SHAREEXT_IDENTIFIER => "match AdHoc #{SHAREEXT_IDENTIFIER}",
+        },
+      },
+    )
+  end
+end

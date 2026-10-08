@@ -17,9 +17,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.R
 
-// パレット方針: 夜の時計 = 深いインディゴを主色に、選択状態(チップ/ナビピル)は
-// 同系のくすみインディゴで揃える (secondaryContainer が M3 の標準選択色のため)。
-// ニュートラルは彩度を落としたブルーグレー系で、light/dark 両方で 4.5:1 を確保する。
+// Night UI デザインスペック準拠のニュートラル (doc/design: 濃紺ベース+琥珀アクセント)。
+// アクセント系は Palettes.kt の10色から themedScheme で上書きするため、ここは中立色のみ。
+// デザイン値: bg #0A0C11, card #12151C, raised #161A23, divider #1F2430,
+//           text #ECEEF3, muted #9AA3B2, border #262C38 (dark)。
 private val LightColors = lightColorScheme(
     primary = Color(0xFF4A46D4),
     onPrimary = Color(0xFFFFFFFF),
@@ -37,21 +38,21 @@ private val LightColors = lightColorScheme(
     onError = Color(0xFFFFFFFF),
     errorContainer = Color(0xFFFFDAD6),
     onErrorContainer = Color(0xFF410002),
-    background = Color(0xFFF6F6FA),
-    onBackground = Color(0xFF1B1B21),
-    surface = Color(0xFFF6F6FA),
-    onSurface = Color(0xFF1B1B21),
-    surfaceVariant = Color(0xFFE4E4EC),
-    onSurfaceVariant = Color(0xFF595963),
-    outline = Color(0xFF75757F),
-    outlineVariant = Color(0xFFCFCFD9),
-    surfaceDim = Color(0xFFD8D8DE),
-    surfaceBright = Color(0xFFF6F6FA),
+    background = Color(0xFFF4F5F8),
+    onBackground = Color(0xFF14171F),
+    surface = Color(0xFFF4F5F8),
+    onSurface = Color(0xFF14171F),
+    surfaceVariant = Color(0xFFE6E8EE),
+    onSurfaceVariant = Color(0xFF5B6372),
+    outline = Color(0xFFD7D8E3),
+    outlineVariant = Color(0xFFE6E8EE),
+    surfaceDim = Color(0xFFE6E8EE),
+    surfaceBright = Color(0xFFFFFFFF),
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF1F1F6),
-    surfaceContainer = Color(0xFFEBE9F0),
-    surfaceContainerHigh = Color(0xFFE6E4EA),
-    surfaceContainerHighest = Color(0xFFE0DEE4),
+    surfaceContainerLow = Color(0xFFFFFFFF),
+    surfaceContainer = Color(0xFFFFFFFF),
+    surfaceContainerHigh = Color(0xFFEDEFF4),
+    surfaceContainerHighest = Color(0xFFE6E8EE),
 )
 
 private val DarkColors = darkColorScheme(
@@ -71,21 +72,21 @@ private val DarkColors = darkColorScheme(
     onError = Color(0xFF690005),
     errorContainer = Color(0xFF93000A),
     onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF111118),
-    onBackground = Color(0xFFE5E5EC),
-    surface = Color(0xFF111118),
-    onSurface = Color(0xFFE5E5EC),
-    surfaceVariant = Color(0xFF45454F),
-    onSurfaceVariant = Color(0xFFB9B9C5),
-    outline = Color(0xFF82828E),
-    outlineVariant = Color(0xFF45454F),
-    surfaceDim = Color(0xFF111118),
-    surfaceBright = Color(0xFF37373F),
-    surfaceContainerLowest = Color(0xFF0B0B10),
-    surfaceContainerLow = Color(0xFF191920),
-    surfaceContainer = Color(0xFF1E1E26),
-    surfaceContainerHigh = Color(0xFF282830),
-    surfaceContainerHighest = Color(0xFF33333B),
+    background = Color(0xFF0A0C11),
+    onBackground = Color(0xFFECEEF3),
+    surface = Color(0xFF0A0C11),
+    onSurface = Color(0xFFECEEF3),
+    surfaceVariant = Color(0xFF262C38),
+    onSurfaceVariant = Color(0xFF9AA3B2),
+    outline = Color(0xFF262C38),
+    outlineVariant = Color(0xFF1F2430),
+    surfaceDim = Color(0xFF0A0C11),
+    surfaceBright = Color(0xFF1F2430),
+    surfaceContainerLowest = Color(0xFF0D0F15),
+    surfaceContainerLow = Color(0xFF12151C),
+    surfaceContainer = Color(0xFF161A23),
+    surfaceContainerHigh = Color(0xFF1A1F2A),
+    surfaceContainerHighest = Color(0xFF1F2430),
 )
 
 // アプリ共通書体: IBM Plex Sans JP (英字/和文が一体設計)。
@@ -97,6 +98,16 @@ val AppFontFamily = FontFamily(
     Font(R.font.plex_sans_jp_medium, FontWeight.Medium),
     Font(R.font.plex_sans_jp_semibold, FontWeight.SemiBold),
     Font(R.font.plex_sans_jp_semibold, FontWeight.Bold),
+)
+
+// 時刻・数字表示用書体: Outfit (Thin系幾何学サンセリフ、数字専用・OFL)。
+// Night UI 仕様では大きな時刻は ExtraLight/Light、並びの時刻は Medium。
+val OutfitFontFamily = FontFamily(
+    Font(R.font.outfit_extralight, FontWeight.ExtraLight),
+    Font(R.font.outfit_light, FontWeight.Light),
+    Font(R.font.outfit_regular, FontWeight.Normal),
+    Font(R.font.outfit_medium, FontWeight.Medium),
+    Font(R.font.outfit_semibold, FontWeight.SemiBold),
 )
 
 private val baseTypography = Typography()
@@ -147,11 +158,16 @@ private val AppShapes = Shapes(
 
 @Composable
 fun CalendarAlarmTheme(
+    themeId: String = "default",
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
+    val palette = AppPalette.byId(themeId.takeIf { it != "default" })
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = themedScheme(
+            if (darkTheme) DarkColors else LightColors,
+            if (darkTheme) palette.dark else palette.light,
+        ),
         typography = AppTypography,
         shapes = AppShapes,
         content = content,

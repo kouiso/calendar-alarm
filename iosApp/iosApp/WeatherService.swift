@@ -38,6 +38,59 @@ final class WeatherService {
         }
     }
 
+    /// ヘッダー/鳴動画面用の現在+時間別天気。
+    struct NowForecast {
+        struct Current {
+            var weatherCode: Int
+            var temperature: Double
+            var isDay: Bool
+        }
+        struct Hourly {
+            var time: String        // "YYYY-MM-DDTHH:mm" (地点ローカル)
+            var weatherCode: Int
+            var temperature: Double
+            var precipitationProbability: Int?
+        }
+        var current: Current
+        var hourly: [Hourly]
+    }
+
+    func now(for location: String, hours: Int = 12) async -> NowForecast? {
+        guard !location.isEmpty,
+              let point = await geocode(location) else { return nil }
+        var comps = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
+        comps.queryItems = [
+            .init(name: "latitude", value: "\(point.lat)"),
+            .init(name: "longitude", value: "\(point.lon)"),
+            .init(name: "current", value: "temperature_2m,weather_code,is_day"),
+            .init(name: "hourly", value: "temperature_2m,weather_code,precipitation_probability"),
+            .init(name: "timezone", value: "auto"),
+            .init(name: "forecast_hours", value: "\(hours)"),
+        ]
+        guard let url = comps.url,
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let res = try? JSONDecoder().decode(NowResponse.self, from: data),
+              let cur = res.current else { return nil }
+        let hourly: [NowForecast.Hourly] = res.hourly.map { h in
+            h.time.indices.map { i in
+                NowForecast.Hourly(
+                    time: h.time[i],
+                    weatherCode: h.weather_code[safe: i] ?? -1,
+                    temperature: h.temperature_2m[safe: i] ?? .nan,
+                    precipitationProbability: h.precipitation_probability?[safe: i] ?? nil
+                )
+            }
+        } ?? []
+        return NowForecast(
+            current: .init(
+                weatherCode: cur.weather_code,
+                temperature: cur.temperature_2m,
+                isDay: cur.is_day == 1
+            ),
+            hourly: hourly
+        )
+    }
+
     private func geocode(_ query: String) async -> (lat: Double, lon: Double)? {
         var comps = URLComponents(string: "https://geocoding-api.open-meteo.com/v1/search")!
         comps.queryItems = [
@@ -71,6 +124,22 @@ final class WeatherService {
     private struct GeoResponse: Codable {
         struct Hit: Codable { var latitude: Double; var longitude: Double }
         var results: [Hit]?
+    }
+
+    private struct NowResponse: Codable {
+        struct Current: Codable {
+            var temperature_2m: Double
+            var weather_code: Int
+            var is_day: Int
+        }
+        struct Hourly: Codable {
+            var time: [String]
+            var temperature_2m: [Double]
+            var weather_code: [Int]
+            var precipitation_probability: [Int?]?
+        }
+        var current: Current?
+        var hourly: Hourly?
     }
 
     private struct ForecastResponse: Codable {

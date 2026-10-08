@@ -15,6 +15,26 @@ struct AlarmsView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: 12) {
+                    // Night UI: H1 + 44px FAB
+                    HStack {
+                        Text("アラーム")
+                            .font(NightTheme.font(30, weight: .semibold))
+                        Spacer()
+                        Button {
+                            editing = StandaloneAlarmDTO(hour: 8, minute: 0)
+                            editingNew = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 44, height: 44)
+                                .background(Color.accentColor, in: Circle())
+                        }
+                    }
+                    .padding(.bottom, 4)
+                    if let next = nextAlarmInstance {
+                        NextAlarmBanner(instance: next, accent: accent)
+                    }
                     ForEach(store.state.standaloneAlarms.sorted { ($0.hour, $0.minute) < ($1.hour, $1.minute) }) { a in
                         alarmRow(a)
                     }
@@ -29,14 +49,6 @@ struct AlarmsView: View {
                 .padding()
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        editing = StandaloneAlarmDTO(hour: 8, minute: 0)
-                        editingNew = true
-                    } label: { Image(systemName: "plus") }
-                }
-            }
         }
         .sheet(item: $editing) { a in
             AlarmEditView(alarm: a, isNew: editingNew)
@@ -51,12 +63,21 @@ struct AlarmsView: View {
         }
     }
 
+    private var accent: Color { AppPalette.byId(store.state.themeId).accent }
+    /// 最も近い pending のスタンドアロンアラームインスタンス (次発バナー用)
+    private var nextAlarmInstance: AlarmInstanceDTO? {
+        store.state.scheduled.values
+            .filter { $0.instance.standaloneAlarmId != nil && $0.state == .pending }
+            .map { $0.instance }
+            .min { $0.triggerAtMillis < $1.triggerAtMillis }
+    }
+
     private func alarmRow(_ a: StandaloneAlarmDTO) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(String(format: "%02d:%02d", a.hour, a.minute))
-                        .font(NightTheme.font(42, weight: .light))
+                        .font(NightTheme.numFont(44, weight: .light))
                         .foregroundStyle(a.enabled ? .primary : .secondary)
                     Text(repeatLabel(a))
                         .font(NightTheme.font(13))
@@ -86,15 +107,24 @@ struct AlarmsView: View {
             }
         }
         .padding(16)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+        .background(NightTheme.nightSurface, in: RoundedRectangle(cornerRadius: 22))
         .onTapGesture { editing = a; editingNew = false }
     }
 
     private func repeatLabel(_ a: StandaloneAlarmDTO) -> String {
-        if a.daysOfWeek.isEmpty { return "1回のみ" }
-        if a.daysOfWeek.count == 7 { return "毎日" }
-        let order = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"]
-        return order.filter { a.daysOfWeek.contains($0) }.compactMap { Self.wdNames[$0] }.joined()
+        switch a.effectiveRepeatMode {
+        case "ONCE": return "1回のみ"
+        case "MONTHLY": return "毎月"
+        case "INTERVAL_DAYS": return "\(a.repeatInterval)日ごと"
+        case "INTERVAL_WEEKS": return "\(a.repeatInterval)週ごと"
+        case "INTERVAL_MONTHS": return "\(a.repeatInterval)ヶ月ごと"
+        default:
+            // 曜日空のWEEKLYはONCEとして鳴る (展開側と同じ意味)
+            if a.daysOfWeek.isEmpty { return "1回のみ" }
+            if a.daysOfWeek.count == 7 { return "毎日" }
+            let order = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"]
+            return order.filter { a.daysOfWeek.contains($0) }.compactMap { Self.wdNames[$0] }.joined()
+        }
     }
 
     private func nextInstance(_ a: StandaloneAlarmDTO) -> AlarmInstanceDTO? {
@@ -115,6 +145,7 @@ struct AlarmEditView: View {
     @State var alarm: StandaloneAlarmDTO
     let isNew: Bool
     @State private var newException = Date()
+    @State private var anchorDate = Date()
 
     private static let weekdays = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"]
     private static let wdNames = ["SUNDAY": "日", "MONDAY": "月", "TUESDAY": "火", "WEDNESDAY": "水",
@@ -133,18 +164,56 @@ struct AlarmEditView: View {
                 }
                 Section {
                     iconRow("repeat") {
-                        HStack(spacing: 6) {
-                            ForEach(Self.weekdays, id: \.self) { wd in
-                                let on = alarm.daysOfWeek.contains(wd)
-                                Button {
-                                    if on { alarm.daysOfWeek.remove(wd) } else { alarm.daysOfWeek.insert(wd) }
-                                } label: {
-                                    Text(Self.wdNames[wd] ?? "?")
-                                        .font(NightTheme.font(13, weight: .medium))
-                                        .frame(width: 32, height: 32)
-                                        .background(on ? NightTheme.indigo : Color(uiColor: .tertiarySystemGroupedBackground), in: Circle())
-                                        .foregroundStyle(on ? .white : .secondary)
-                                }.buttonStyle(.plain)
+                        VStack(alignment: .leading, spacing: 8) {
+                            // 繰返しモード (元アプリ: 1回のみ/曜日/毎月/x日ごと/x週ごと/xヶ月ごと)
+                            Picker("", selection: Binding(
+                                get: { alarm.effectiveRepeatMode },
+                                set: { alarm.repeatMode = $0 },
+                            )) {
+                                Text("1回").tag("ONCE")
+                                Text("曜日").tag("WEEKLY")
+                                Text("毎月").tag("MONTHLY")
+                                Text("日ごと").tag("INTERVAL_DAYS")
+                                Text("週ごと").tag("INTERVAL_WEEKS")
+                                Text("月ごと").tag("INTERVAL_MONTHS")
+                            }.pickerStyle(.menu).labelsHidden()
+                            if alarm.effectiveRepeatMode == "WEEKLY" {
+                                HStack(spacing: 6) {
+                                    ForEach(Self.weekdays, id: \.self) { wd in
+                                        let on = alarm.daysOfWeek.contains(wd)
+                                        Button {
+                                            if on { alarm.daysOfWeek.remove(wd) } else { alarm.daysOfWeek.insert(wd) }
+                                        } label: {
+                                            Text(Self.wdNames[wd] ?? "?")
+                                                .font(NightTheme.font(13, weight: .medium))
+                                                .frame(width: 32, height: 32)
+                                                .background(on ? NightTheme.indigo : Color(uiColor: .tertiarySystemGroupedBackground), in: Circle())
+                                                .foregroundStyle(on ? .white : .secondary)
+                                        }.buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                            // 起点日: 毎月=この「日」、周期=この日から数える
+                            if ["MONTHLY", "INTERVAL_DAYS", "INTERVAL_WEEKS", "INTERVAL_MONTHS"]
+                                .contains(alarm.effectiveRepeatMode) {
+                                DatePicker(alarm.effectiveRepeatMode == "MONTHLY" ? "毎月の日" : "起点日",
+                                           selection: $anchorDate, displayedComponents: .date)
+                                    .font(NightTheme.font(13))
+                            }
+                            if ["INTERVAL_DAYS", "INTERVAL_WEEKS", "INTERVAL_MONTHS"]
+                                .contains(alarm.effectiveRepeatMode) {
+                                HStack(spacing: 8) {
+                                    ForEach([1, 2, 3, 5, 7, 10, 14, 30], id: \.self) { n in
+                                        let on = alarm.repeatInterval == n
+                                        Button { alarm.repeatInterval = n } label: {
+                                            Text("\(n)")
+                                                .font(NightTheme.font(12, weight: .medium))
+                                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                                .background(on ? NightTheme.indigo.opacity(0.2) : Color(uiColor: .tertiarySystemGroupedBackground), in: Capsule())
+                                                .foregroundStyle(on ? NightTheme.indigo : .secondary)
+                                        }.buttonStyle(.plain)
+                                    }
+                                }
                             }
                         }
                     }
@@ -186,9 +255,11 @@ struct AlarmEditView: View {
             }
             .navigationTitle(isNew ? "アラーム" : "アラーム編集")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear(perform: loadAnchor)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
+                        applyAnchor()
                         _ = store.upsertAlarm(alarm)
                         dismiss()
                         Task { await engine.resync(reason: "alarm save") }
@@ -207,6 +278,30 @@ struct AlarmEditView: View {
             Image(systemName: icon).frame(width: 22).foregroundStyle(.secondary)
             content()
         }
+    }
+
+    /// 編集画面を開いた時点で起点日を復元する (UTC 日付 → ローカル Date)。
+    private func loadAnchor() {
+        if let m = alarm.repeatAnchorMillis {
+            anchorDate = Date(timeIntervalSince1970: TimeInterval(m) / 1000)
+        }
+    }
+
+    /// 選択されたローカル日付を「その日付の UTC 0時」millis として保存する。
+    /// 展開側 (Kotlin) は UTC の日として読むので、暦日単位で往復させる。
+    private func applyAnchor() {
+        guard ["MONTHLY", "INTERVAL_DAYS", "INTERVAL_WEEKS", "INTERVAL_MONTHS"]
+            .contains(alarm.effectiveRepeatMode) else {
+            alarm.repeatAnchorMillis = nil
+            return
+        }
+        let comps = Calendar.current.dateComponents([.year, .month, .day], from: anchorDate)
+        var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC")!
+        if let d = utc.date(from: comps) {
+            alarm.repeatAnchorMillis = Int64(d.timeIntervalSince1970 * 1000)
+        }
+        // 曜日モード以外では曜日指定は意味を持たないので空にする
+        if alarm.effectiveRepeatMode != "WEEKLY" { alarm.daysOfWeek = [] }
     }
 
     private func dateFrom(hour: Int, minute: Int) -> Date {

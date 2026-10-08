@@ -13,6 +13,26 @@ final class Store: ObservableObject {
         var defaultMinutesBefore: Int = 0
         var defaultSnoozeMinutes: Int = 10
         var weatherEnabled: Bool = true
+        var defaultStartAction: String = EventAction.alarm.rawValue
+        var defaultReminderAction: String = EventAction.alarm.rawValue
+        var titleCodes: TitleCodeSettings = TitleCodeSettings()
+        var inviteFilter: InviteFilter = InviteFilter()
+        var eventTypeFilter: EventTypeFilter = EventTypeFilter()
+        var importEventReminders: Bool = false
+        /// 全アラームの一括ミュート (通知・タイマーには効かない)
+        var muteAll: Bool = false
+        /// テーマ id ("default"=インディゴ)
+        var themeId: String = "default"
+        /// カスタム背景画像を設定済みか (実体は Application Support/background.jpg 固定)
+        var hasCustomBackground: Bool = false
+        /// 天気の地点 (空=天気UI非表示)
+        var weatherLocation: String = ""
+        var weatherHeaderEnabled: Bool = true
+        var weatherOnAlarmScreen: Bool = true
+        var timerPresets: [TimerPresetDTO] = TimerPresets.defaults
+        /// OpenRouter APIキー (AI機能用)
+        var openRouterApiKey: String? = nil
+        var openRouterModel: String = "openai/gpt-4.1-mini"
         // calendar_prefs: calendarId -> AlarmRuleDTO
         var calendarRules: [String: AlarmRuleDTO] = [:]
         // event_overrides: instanceKey -> EventOverrideDTO
@@ -79,6 +99,56 @@ final class Store: ObservableObject {
     func setDefaultMinutes(_ v: Int) { mutate { $0.defaultMinutesBefore = v } }
     func setDefaultSnooze(_ v: Int) { mutate { $0.defaultSnoozeMinutes = v } }
     func setWeatherEnabled(_ v: Bool) { mutate { $0.weatherEnabled = v } }
+    func setDefaultStartAction(_ a: EventAction) { mutate { $0.defaultStartAction = a.rawValue } }
+    func setDefaultReminderAction(_ a: EventAction) { mutate { $0.defaultReminderAction = a.rawValue } }
+    func setTitleCodes(_ v: TitleCodeSettings) { mutate { $0.titleCodes = v } }
+    func setEventTypeFilter(_ v: EventTypeFilter) { mutate { $0.eventTypeFilter = v } }
+    func toggleEventType(_ t: EventType) {
+        var g = state.eventTypeFilter
+        switch t {
+        case .birthday: g.birthday.toggle()
+        case .absence: g.absence.toggle()
+        case .workplace: g.workplace.toggle()
+        case .task: g.task.toggle()
+        case .event: g.event.toggle()
+        }
+        mutate { $0.eventTypeFilter = g }
+    }
+    func toggleInviteStatus(_ s: InviteStatus) {
+        mutate { f in
+            switch s {
+            case .accepted: f.inviteFilter.accepted.toggle()
+            case .tentative: f.inviteFilter.tentative.toggle()
+            case .needsAction: f.inviteFilter.needsAction.toggle()
+            case .declined: f.inviteFilter.declined.toggle()
+            }
+        }
+    }
+    func setImportEventReminders(_ v: Bool) { mutate { $0.importEventReminders = v } }
+    func setMuteAll(_ v: Bool) { mutate { $0.muteAll = v } }
+    func setThemeId(_ v: String) { mutate { $0.themeId = v } }
+    func setWeatherLocation(_ v: String) { mutate { $0.weatherLocation = v.trimmingCharacters(in: .whitespacesAndNewlines) } }
+    func setWeatherHeaderEnabled(_ v: Bool) { mutate { $0.weatherHeaderEnabled = v } }
+    func setWeatherOnAlarmScreen(_ v: Bool) { mutate { $0.weatherOnAlarmScreen = v } }
+    func setTimerPresets(_ v: [TimerPresetDTO]) { mutate { $0.timerPresets = v } }
+    func setOpenRouterApiKey(_ v: String?) { mutate { $0.openRouterApiKey = v?.isEmpty == false ? v : nil } }
+    func setOpenRouterModel(_ v: String) { mutate { $0.openRouterModel = v } }
+
+    /// カスタム背景画像の保存先 (固定パス)。
+    static var backgroundImageURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("CalendarAlarm/background.jpg")
+    }
+
+    /// 背景画像を固定パスに保存 (PhotosPicker からの Data をそのまま書く)。
+    func setCustomBackground(data: Data?) {
+        if let data {
+            try? data.write(to: Store.backgroundImageURL, options: .atomic)
+        } else {
+            try? FileManager.default.removeItem(at: Store.backgroundImageURL)
+        }
+        mutate { $0.hasCustomBackground = (data != nil) }
+    }
 
     // MARK: - calendar prefs
 
@@ -92,8 +162,8 @@ final class Store: ObservableObject {
 
     // MARK: - event overrides
 
-    func setOverride(instanceKey: String, muted: Bool, minutes: Int?, extras: [Int]?) {
-        mutate { $0.overrides[instanceKey] = EventOverrideDTO(muted: muted, minutesBefore: minutes, extraOffsets: extras) }
+    func setOverride(instanceKey: String, action: EventAction, minutes: Int?, extras: [Int]?) {
+        mutate { $0.overrides[instanceKey] = EventOverrideDTO(action: action.rawValue, minutesBefore: minutes, extraOffsets: extras) }
     }
     func removeOverride(instanceKey: String) { mutate { $0.overrides.removeValue(forKey: instanceKey) } }
 
@@ -121,7 +191,7 @@ final class Store: ObservableObject {
             s.standaloneAlarms.append(copy)
         }
         // 有効な単発の保存は消費のリセット (Android upsertStandaloneAlarm と同じ)。
-        if a.enabled && a.daysOfWeek.isEmpty { deleteTerminalByAlarmId(id) }
+        if a.enabled && a.effectiveRepeatMode == "ONCE" { deleteTerminalByAlarmId(id) }
         return id
     }
     func deleteAlarm(id: Int64) { mutate { $0.standaloneAlarms.removeAll { $0.id == id } } }
@@ -130,7 +200,7 @@ final class Store: ObservableObject {
         mutate { s in
             guard let i = s.standaloneAlarms.firstIndex(where: { $0.id == id }) else { return }
             s.standaloneAlarms[i].enabled = enabled
-            oneShot = s.standaloneAlarms[i].daysOfWeek.isEmpty
+            oneShot = s.standaloneAlarms[i].effectiveRepeatMode == "ONCE"
         }
         // 単発の再有効化は消費のリセット
         if enabled && oneShot { deleteTerminalByAlarmId(id) }
@@ -182,7 +252,7 @@ final class Store: ObservableObject {
 
     /// ウィジェットが読む「次のアラーム」スナップショットを共有コンテナに書く。
     func writeWidgetSnapshot() {
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.calendaralarm.app") else { return }
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.calendaralarm.ios") else { return }
         let next = state.scheduled.values
             .filter { $0.state == .pending && $0.instance.triggerAtMillis > Int64(Date().timeIntervalSince1970 * 1000) }
             .sorted { $0.instance.triggerAtMillis < $1.instance.triggerAtMillis }
@@ -192,5 +262,43 @@ final class Store: ObservableObject {
         } ?? [:]
         let url = container.appendingPathComponent("next_alarm.json")
         try? JSONSerialization.data(withJSONObject: payload).write(to: url, options: .atomic)
+    }
+}
+
+// MARK: - 後方互換デコード
+// フィールド追加時に旧 store.json の欠落キーで全体が初期化されるのを防ぐ。
+// extension 内 init なので memberwise init は残る。
+
+extension Store.Persisted {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        onboardingDone = try c.decodeIfPresent(Bool.self, forKey: .onboardingDone) ?? false
+        defaultMinutesBefore = try c.decodeIfPresent(Int.self, forKey: .defaultMinutesBefore) ?? 0
+        defaultSnoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .defaultSnoozeMinutes) ?? 10
+        weatherEnabled = try c.decodeIfPresent(Bool.self, forKey: .weatherEnabled) ?? true
+        defaultStartAction = try c.decodeIfPresent(String.self, forKey: .defaultStartAction) ?? EventAction.alarm.rawValue
+        defaultReminderAction = try c.decodeIfPresent(String.self, forKey: .defaultReminderAction) ?? EventAction.alarm.rawValue
+        titleCodes = try c.decodeIfPresent(TitleCodeSettings.self, forKey: .titleCodes) ?? TitleCodeSettings()
+        inviteFilter = try c.decodeIfPresent(InviteFilter.self, forKey: .inviteFilter) ?? InviteFilter()
+        eventTypeFilter = try c.decodeIfPresent(EventTypeFilter.self, forKey: .eventTypeFilter) ?? EventTypeFilter()
+        importEventReminders = try c.decodeIfPresent(Bool.self, forKey: .importEventReminders) ?? false
+        muteAll = try c.decodeIfPresent(Bool.self, forKey: .muteAll) ?? false
+        themeId = try c.decodeIfPresent(String.self, forKey: .themeId) ?? "default"
+        hasCustomBackground = try c.decodeIfPresent(Bool.self, forKey: .hasCustomBackground) ?? false
+        weatherLocation = try c.decodeIfPresent(String.self, forKey: .weatherLocation) ?? ""
+        weatherHeaderEnabled = try c.decodeIfPresent(Bool.self, forKey: .weatherHeaderEnabled) ?? true
+        weatherOnAlarmScreen = try c.decodeIfPresent(Bool.self, forKey: .weatherOnAlarmScreen) ?? true
+        timerPresets = try c.decodeIfPresent([TimerPresetDTO].self, forKey: .timerPresets) ?? TimerPresets.defaults
+        openRouterApiKey = try c.decodeIfPresent(String.self, forKey: .openRouterApiKey)
+        openRouterModel = try c.decodeIfPresent(String.self, forKey: .openRouterModel) ?? "openai/gpt-4.1-mini"
+        calendarRules = try c.decodeIfPresent([String: AlarmRuleDTO].self, forKey: .calendarRules) ?? [:]
+        overrides = try c.decodeIfPresent([String: EventOverrideDTO].self, forKey: .overrides) ?? [:]
+        standaloneAlarms = try c.decodeIfPresent([StandaloneAlarmDTO].self, forKey: .standaloneAlarms) ?? []
+        scheduled = try c.decodeIfPresent([String: ScheduledRecord].self, forKey: .scheduled) ?? [:]
+        audit = try c.decodeIfPresent([AuditEntry].self, forKey: .audit) ?? []
+        nextAlarmId = try c.decodeIfPresent(Int64.self, forKey: .nextAlarmId) ?? 1
+        nextAuditId = try c.decodeIfPresent(Int64.self, forKey: .nextAuditId) ?? 1
+        calendars = try c.decodeIfPresent([CalendarSource].self, forKey: .calendars) ?? []
+        lastEvents = try c.decodeIfPresent([CalendarEventDTO].self, forKey: .lastEvents) ?? []
     }
 }

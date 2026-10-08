@@ -135,6 +135,28 @@ class EngineTest {
     }
 
     @Test
+    fun `通知アラームの adhoc インスタンスは resync で消えない`() = runBlocking {
+        // NOTIFICATION は理想リストに無いが TIMER と同じく保持する。
+        // 消えると通知→アラームの発火直前に resync が走った時に無言で鳴らなくなる。
+        val inst = AlarmInstance(
+            id = "nf:${System.currentTimeMillis()}",
+            triggerAtMillis = System.currentTimeMillis() + 30_000,
+            title = "通知", kind = AlarmKind.NOTIFICATION,
+        )
+        repository.scheduleAdhoc(inst)
+        repository.resync("test")
+        val row = db.scheduledInstances().byId(inst.id)
+        assertEquals(AlarmState.PENDING.name, row!!.state)
+
+        // スヌーズ中の通知子も消えない
+        repository.onSnoozed(inst.id, 10)
+        repository.resync("test")
+        val child = db.scheduledInstances().all()
+            .firstOrNull { it.id.startsWith("${inst.id}:snz") }
+        assertEquals(AlarmState.PENDING.name, child!!.state)
+    }
+
+    @Test
     fun `スヌーズ中の子は親アラームが有効ならグレース窓外でも消えない`() = runBlocking {
         repository.upsertStandaloneAlarm(
             StandaloneAlarm(enabled = true, hour = 7, minute = 0, label = "a"),

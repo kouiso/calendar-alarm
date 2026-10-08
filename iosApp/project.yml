@@ -9,6 +9,8 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
+    # 自動署名の対象チーム（FAD の ad-hoc 配布は RITMO の ADP アカウントで行う）
+    DEVELOPMENT_TEAM: ZZ4FA7NLUY
 
 schemes:
   iosApp:
@@ -33,13 +35,17 @@ targets:
     dependencies:
       - target: CalendarAlarmWidget
         embed: true
+      - target: MailShareExt
+        embed: true
     entitlements:
       path: iosApp/CalendarAlarm.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.calendaralarm.ios]
     info:
       path: iosApp/Info.plist
       properties:
         CFBundleDisplayName: Calendar Alarm
-        CFBundleIdentifier: com.calendaralarm.app
+        CFBundleIdentifier: com.calendaralarm.ios
         UILaunchScreen_Generation: YES
         UIApplicationSceneManifest_Generation: YES
         UISupportedInterfaceOrientations:
@@ -47,15 +53,26 @@ targets:
         NSCalendarsFullAccessUsageDescription: カレンダーの予定をアラームで鳴らすために読み取ります
         NSAlarmKitUsageDescription: 予定の時刻にアラームを鳴らすために使います
         NSUserNotificationsUsageDescription: 通知によるアラームのために使います
+        # Xcode の Resources コピーは Fonts/ を展開してフラットに置くため
+        # UIAppFonts は裸ファイル名で書く（Fonts/... だと FontParser が読めず全フォントが死ぬ）
         UIAppFonts:
-          - Fonts/plex_sans_jp_regular.ttf
-          - Fonts/plex_sans_jp_medium.ttf
-          - Fonts/plex_sans_jp_semibold.ttf
-          - Fonts/plex_sans_jp_light.ttf
+          - plex_sans_jp_regular.ttf
+          - plex_sans_jp_medium.ttf
+          - plex_sans_jp_semibold.ttf
+          - plex_sans_jp_light.ttf
+          - outfit_extralight.ttf
+          - outfit_light.ttf
+          - outfit_regular.ttf
+          - outfit_medium.ttf
+          - outfit_semibold.ttf
         BGTaskSchedulerPermittedIdentifiers:
           - com.calendaralarm.resync
         UIBackgroundModes:
           - processing
+        # 共有拡張から本体アプリを開くカスタムスキーム (メール→予定の受け渡し)
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - calendaralarm-import
     preBuildScripts:
       - name: Build SharedKit (KMP)
         shell: /bin/sh
@@ -68,7 +85,7 @@ targets:
         FRAMEWORK_SEARCH_PATHS: $(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
         LD_RUNPATH_SEARCH_PATHS: $(inherited) @executable_path/Frameworks
         OTHER_LDFLAGS: $(inherited) -framework SharedKit
-        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.ios
         GENERATE_INFOPLIST_FILE: NO
 
   CalendarAlarmWidget:
@@ -81,14 +98,45 @@ targets:
           - Info.plist
     entitlements:
       path: Widget/CalendarAlarmWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.calendaralarm.ios]
     info:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: Calendar Alarm Widget
-        CFBundleIdentifier: com.calendaralarm.app.widget
+        CFBundleIdentifier: com.calendaralarm.ios.widget
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.app.widget
+        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.ios.widget
+        GENERATE_INFOPLIST_FILE: NO
+
+  MailShareExt:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: MailShareExt
+        excludes:
+          - Info.plist
+          - MailShareExt.entitlements
+    entitlements:
+      path: MailShareExt/MailShareExt.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.calendaralarm.ios]
+    info:
+      path: MailShareExt/Info.plist
+      properties:
+        CFBundleIdentifier: com.calendaralarm.ios.shareext
+        # appex は CFBundleDisplayName が無いと installd に拒否され install 失敗する
+        CFBundleDisplayName: 予定に変換
+        # 共有シートに出すために必須。テキスト/URL の共有を受け付ける
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionActivationRule: "SUBQUERY (extensionItems, $extensionItem, ANY $extensionItem.attachments.conformsToType UTI \"public.plain-text\" OR ANY $extensionItem.attachments.conformsToType UTI \"public.url\").@count > 0"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.ios.shareext
         GENERATE_INFOPLIST_FILE: NO

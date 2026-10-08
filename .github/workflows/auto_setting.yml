@@ -14,14 +14,20 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             console.log('Assigning PR...');
-            console.log('Context:', JSON.stringify(context, null, 2));
-            github.rest.issues.addAssignees({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              assignees: [context.payload.pull_request.user.login]
-            });
-            console.log('PR assigned to creator.');
+            const author = context.payload.pull_request.user;
+            // WHY: bot アカウント (devin-ai-integration[bot] 等) は assignee に
+            // できず API が 403 を返す。bot 起票の PR ではスキップする
+            if (author.type === 'Bot') {
+              console.log(`PR author ${author.login} is a bot; skipping assignee.`);
+            } else {
+              await github.rest.issues.addAssignees({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                assignees: [author.login]
+              });
+              console.log('PR assigned to creator.');
+            }
 
   auto-label:
     runs-on: ${{ vars.RUNNER_LINUX }}
@@ -164,9 +170,11 @@ jobs:
   check-base-branch:
     runs-on: ${{ vars.RUNNER_LINUX }}
     steps:
-      - name: Fail if base branch is not develop
+      # デフォルトブランチは master (develop は 2024 年の Flutter 版で放置中)。
+      # かつては develop 強制だったが全 PR が master 向けなので常に落ちていた (#28)
+      - name: Fail if base branch is not master
         run: |
-          if [[ "${{ github.base_ref }}" != "develop" ]]; then
-            echo "Error: Base branch is not 'develop'. Please change the base branch to 'develop'."
+          if [[ "${{ github.base_ref }}" != "master" ]]; then
+            echo "Error: Base branch is not 'master'. Please change the base branch to 'master'."
             exit 1
           fi

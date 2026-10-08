@@ -1,0 +1,177 @@
+name: FAD Distribution
+
+# Firebase App Distribution への配布。
+# Android は debug 署名 APK（署名鍵は ANDROID_DEBUG_KEYSTORE_B64 で固定 —
+# ランナーごとに鍵が変わると端末側で INSTALL_FAILED_UPDATE_INCOMPATIBLE になる）。
+# iOS は equus-anatomy と同じ match 方式: ritmo-inc/apple-certificate (master) から
+# ad-hoc 証明書/profile を取り込み、gym で手動署名 IPA を作る。
+# (新規 App ID/profile は match が ASC API 経由で作成・storage へ push する)
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 配布するプラットフォーム
+        required: true
+        default: both
+        type: choice
+        options:
+          - android
+          - ios
+          - both
+      release_notes:
+        description: テスターへ見せるリリースノート
+        required: false
+        default: ''
+        type: string
+
+env:
+  RELEASE_NOTES: ${{ inputs.release_notes || format('master {0}', github.sha) }}
+
+jobs:
+  android:
+    name: Android → FAD
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: inputs.platform != 'ios'
+    concurrency:
+      group: ${{ github.workflow }}-android
+      # 配布アップロード中に次の dispatch で殺されると中途半端な状態が残るので殺さない
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install fixed debug keystore
+        env:
+          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+        run: |
+          mkdir -p ~/.android
+          echo "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+          ls -la ~/.android/debug.keystore
+
+      - name: Build debug APK
+        run: ./gradlew :androidApp:assembleDebug --stacktrace
+
+      - name: Verify APK signature
+        run: |
+          APK=androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          [ -f "$APK" ] || { echo "APK が無い: $APK"; exit 1; }
+          APKSIGNERS=("$ANDROID_HOME"/build-tools/*/apksigner)
+          [ -x "${APKSIGNERS[-1]}" ] || { echo "apksigner が無い"; exit 1; }
+          "${APKSIGNERS[-1]}" verify --print-certs "$APK" | head -5
+
+      - name: Distribute to Firebase App Distribution
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+        run: |
+          # 配布先は kouiso@ritmo.co.jp 固定 (ユーザー指示: 他者は FAD に追加しない)。
+          # グループ経由にするとグループへの追加で他者へ届くため、テスター直指定にする
+          npx -y firebase-tools@14.16.0 appdistribution:distribute \
+            androidApp/build/outputs/apk/debug/androidApp-debug.apk \
+            --app "$FIREBASE_ANDROID_APP_ID" \
+            --token "$FIREBASE_TOKEN" \
+            --testers "kouiso@ritmo.co.jp" \
+            --release-notes "$RELEASE_NOTES"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calendar-alarm-android.apk
+          path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          retention-days: 14
+
+  ios:
+    name: iOS → FAD
+    runs-on: macos-latest
+    timeout-minutes: 60
+    if: inputs.platform != 'android'
+    concurrency:
+      group: ${{ github.workflow }}-ios
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Select Xcode 26 (AlarmKit は iOS 26 SDK が必要)
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          [ -n "$XCODE" ] || XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Using: $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd iosApp
+          xcodegen generate
+          ls CalendarAlarm.xcodeproj
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Install fastlane
+        run: gem install fastlane --no-document
+
+      - name: Write signing material
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          MATCH_DEPLOY_KEY_B64: ${{ secrets.MATCH_DEPLOY_KEY_B64 }}
+        run: |
+          set -e
+          mkdir -p ~/private_keys
+          printf '%s' "$ASC_KEY_P8" > "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          chmod 600 "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          # match が ritmo-inc/apple-certificate (master) を clone する用の
+          # deploy key。read_write 権限あり（新規 profile の push に必要）
+          echo "$MATCH_DEPLOY_KEY_B64" | base64 -d > /tmp/match_deploy_key
+          chmod 600 /tmp/match_deploy_key
+          # match の git clone がこの鍵を使うよう ssh config に固定
+          mkdir -p ~/.ssh
+          printf 'Host github.com\n  IdentityFile /tmp/match_deploy_key\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: Build IPA (match + gym, ad-hoc 手動署名)
+        env:
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set -e
+          # CFBundleVersion は run number で自動採番（FAD の新旧判別のため）
+          fastlane fad build_number:"${{ github.run_number }}"
+          ls -la build/ios/*.ipa
+
+      - name: Distribute to Firebase App Distribution
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
+        run: |
+          IPA=$(ls build/ios/*.ipa | head -1)
+          # 配布先は kouiso@ritmo.co.jp 固定 (ユーザー指示: 他者は FAD に追加しない)
+          npx -y firebase-tools@14.16.0 appdistribution:distribute \
+            "$IPA" \
+            --app "$FIREBASE_IOS_APP_ID" \
+            --token "$FIREBASE_TOKEN" \
+            --testers "kouiso@ritmo.co.jp" \
+            --release-notes "$RELEASE_NOTES"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calendar-alarm-ios-adhoc.ipa
+          path: build/ios/*.ipa
+          retention-days: 14

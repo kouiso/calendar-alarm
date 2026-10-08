@@ -58,8 +58,13 @@ class CalendarContractReader(private val context: Context) {
             CalendarContract.Instances.BEGIN,
             CalendarContract.Instances.END,
             CalendarContract.Instances.ALL_DAY,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS,
+            CalendarContract.Instances.ORGANIZER,
         )
         val out = mutableListOf<CalendarEvent>()
+        val baseEventIds = mutableSetOf<Long>()
+        // 招待判定にカレンダー所有者アカウントが要るので先に拾う
+        val accountByCal = calendars().associate { it.id to it.accountName }
         context.contentResolver.query(
             builder.build(), projection, null, null,
             "${CalendarContract.Instances.BEGIN} ASC",
@@ -68,6 +73,9 @@ class CalendarContractReader(private val context: Context) {
                 val eventId = c.getLong(0)
                 val calId = c.getLong(1).toString()
                 val begin = c.getLong(5)
+                val selfStatus = c.getInt(8)
+                val organizer = c.getString(9)
+                baseEventIds += eventId
                 out += CalendarEvent(
                     // 繰り返し回を区別するため instanceKey には開始時刻が入る
                     id = eventId.toString(),
@@ -78,9 +86,66 @@ class CalendarContractReader(private val context: Context) {
                     startMillis = begin,
                     endMillis = c.getLong(6),
                     allDay = c.getInt(7) == 1,
+                    inviteStatus = selfStatusToInvite(
+                        selfStatus, organizer, accountByCal[calId],
+                    ),
                 )
             }
         }
-        out
+        // カレンダー側リマインダーを基底イベントIDで一括取得し各回へ配る
+        val reminders = eventReminders(baseEventIds)
+        out.map { it.copy(calendarReminderMinutes = reminders[it.id.toLongOrNull()] ?: emptyList()) }
     }
+
+    /**
+     * 出席ステータス → InviteStatus。主催者=カレンダー所有者自身の予定は
+     * 「招待」ではないので null を返す (フィルタ対象外)。
+     */
+    private fun selfStatusToInvite(
+        status: Int,
+        organizer: String?,
+        calendarAccount: String?,
+    ): com.calendaralarm.shared.model.InviteStatus? {
+        if (status == CalendarContract.Attendees.ATTENDEE_STATUS_NONE) return null
+        if (organizer != null && calendarAccount != null &&
+            organizer.equals(calendarAccount, ignoreCase = true)
+        ) return null
+        return when (status) {
+            CalendarContract.Attendees.ATTENDEE_STATUS_ACCEPTED ->
+                com.calendaralarm.shared.model.InviteStatus.ACCEPTED
+            CalendarContract.Attendees.ATTENDEE_STATUS_TENTATIVE ->
+                com.calendaralarm.shared.model.InviteStatus.TENTATIVE
+            CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED ->
+                com.calendaralarm.shared.model.InviteStatus.DECLINED
+            CalendarContract.Attendees.ATTENDEE_STATUS_INVITED ->
+                com.calendaralarm.shared.model.InviteStatus.NEEDS_ACTION
+            else -> null
+        }
+    }
+
+    /** Reminders テーブルから基底イベントID群の通知分数を取得する。 */
+    private suspend fun eventReminders(eventIds: Set<Long>): Map<Long, List<Int>> =
+        withContext(Dispatchers.IO) {
+            if (eventIds.isEmpty()) return@withContext emptyMap()
+            val out = mutableMapOf<Long, MutableList<Int>>()
+            // EVENT_ID IN (...) のバッチ。ID が多いと URI 長制限に触れるため 200 件ずつ。
+            eventIds.chunked(200).forEach { chunk ->
+                val selection = "${CalendarContract.Reminders.EVENT_ID} IN (" +
+                    chunk.joinToString(",") + ")"
+                context.contentResolver.query(
+                    CalendarContract.Reminders.CONTENT_URI,
+                    arrayOf(
+                        CalendarContract.Reminders.EVENT_ID,
+                        CalendarContract.Reminders.MINUTES,
+                    ),
+                    selection, null, null,
+                )?.use { c ->
+                    while (c.moveToNext()) {
+                        val id = c.getLong(0)
+                        out.getOrPut(id) { mutableListOf() } += c.getInt(1)
+                    }
+                }
+            }
+            out
+        }
 }
