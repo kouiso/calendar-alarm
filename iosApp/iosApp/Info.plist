@@ -45,6 +45,11 @@
 		<string>plex_sans_jp_medium.ttf</string>
 		<string>plex_sans_jp_semibold.ttf</string>
 		<string>plex_sans_jp_light.ttf</string>
+		<string>outfit_extralight.ttf</string>
+		<string>outfit_light.ttf</string>
+		<string>outfit_regular.ttf</string>
+		<string>outfit_medium.ttf</string>
+		<string>outfit_semibold.ttf</string>
 	</array>
 	<key>UIApplicationSceneManifest_Generation</key>
 	<true/>

@@ -60,6 +60,11 @@ targets:
           - plex_sans_jp_medium.ttf
           - plex_sans_jp_semibold.ttf
           - plex_sans_jp_light.ttf
+          - outfit_extralight.ttf
+          - outfit_light.ttf
+          - outfit_regular.ttf
+          - outfit_medium.ttf
+          - outfit_semibold.ttf
         BGTaskSchedulerPermittedIdentifiers:
           - com.calendaralarm.resync
         UIBackgroundModes:

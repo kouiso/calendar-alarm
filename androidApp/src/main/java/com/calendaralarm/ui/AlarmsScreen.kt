@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
+import com.calendaralarm.ui.theme.OutfitFontFamily
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
@@ -149,8 +150,9 @@ private fun AlarmRow(
             Column(Modifier.weight(1f)) {
                 Text(
                     "%d:%02d".format(alarm.hour, alarm.minute),
-                    fontSize = 42.sp,
-                    fontWeight = if (alarm.enabled) FontWeight.Medium else FontWeight.Light,
+                    fontSize = 44.sp,
+                    fontFamily = OutfitFontFamily,
+                    fontWeight = if (alarm.enabled) FontWeight.Light else FontWeight.ExtraLight,
                     letterSpacing = (-1).sp,
                     color = if (alarm.enabled) {
                         MaterialTheme.colorScheme.onSurface

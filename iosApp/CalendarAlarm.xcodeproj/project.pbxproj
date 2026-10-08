@@ -9,7 +9,9 @@
 /* Begin PBXBuildFile section */
 		06DB54446C328E66FFD1A494 /* AlarmKitScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982C5C9DA1E0E6814EDAD684 /* AlarmKitScheduler.swift */; };
 		0EDE4CE8267312F25F224805 /* plex_sans_jp_regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D2AF8727D8A981996E1355D9 /* plex_sans_jp_regular.ttf */; };
+		12F8D12737B1B7401B66CA1E /* outfit_medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 64370CDCC54B81F0CD76CFAC /* outfit_medium.ttf */; };
 		1AC90D4E8D2703925A409766 /* EventKitReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */; };
+		29622F303C81E6C8561DA830 /* outfit_extralight.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CF4FE1923E95F87EA8A05028 /* outfit_extralight.ttf */; };
 		2DF8005728D2E0319C73F77B /* plex_sans_jp_medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */; };
 		2E6FBB230347EBF9423F1C52 /* RingingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8688F25F9579677C2080FB0E /* RingingView.swift */; };
 		40D1C13EB37C422D85A661DF /* plex_sans_jp_semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D2D9928A082C610D9B0A9D67 /* plex_sans_jp_semibold.ttf */; };
@@ -26,9 +28,12 @@
 		83DF4A4775FDA2DFD643DF85 /* MailShareExt.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 90ED19FA826B4A1503E171A1 /* MailShareExt.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		84CB7D0E16454D83E7DD74BE /* SharedKitBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5CB9C72F79CDC56058DD028 /* SharedKitBridge.swift */; };
 		88AD950DD0441ABF8DBADCAE /* AlarmsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4F003771A83A79DB1D7C14D /* AlarmsView.swift */; };
+		8DA98EC782D9732A40A26D31 /* outfit_regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9B5EFAB358775E656E932A66 /* outfit_regular.ttf */; };
 		8F780525F00F3096C5364349 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE03925928578DE0F3DE47BB /* ShareViewController.swift */; };
+		A18B776969A5B61C602C3D89 /* outfit_semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C694CCA1128C6527CB1476DC /* outfit_semibold.ttf */; };
 		A6D274A92BA0F9A706CB3085 /* CalendarAlarmWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */; };
 		A793851C3CD7E4B1FDBE5794 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F8642EDA4CA9194F126132 /* Store.swift */; };
+		AAFC4648F481E8E284EC4F80 /* outfit_light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8DD3A0F17E4F13654090ABE8 /* outfit_light.ttf */; };
 		B419682EEBC47B0FA0D3144C /* AgendaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66A4F7800854676434D761F4 /* AgendaView.swift */; };
 		BD5D619B846CB9BA9C171212 /* TitleCodesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3A04452A7A85976807934D /* TitleCodesSheet.swift */; };
 		C81DC1220A1AA99DF92EE408 /* TimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */; };
@@ -77,20 +82,25 @@
 		24F9472624F7ECEBFD26FF3E /* Engine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Engine.swift; sourceTree = "<group>"; };
 		2F0A11DC2B493DF079DC6BD6 /* CalendarAlarmWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CalendarAlarmWidget.entitlements; sourceTree = "<group>"; };
 		3C4B1C1CFBE436D31467257B /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		64370CDCC54B81F0CD76CFAC /* outfit_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_medium.ttf; sourceTree = "<group>"; };
 		66A4F7800854676434D761F4 /* AgendaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaView.swift; sourceTree = "<group>"; };
 		70278C1DA89E0C3594F39E2A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7384BC516B1FE4FB2F672E67 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
 		7A3A04452A7A85976807934D /* TitleCodesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleCodesSheet.swift; sourceTree = "<group>"; };
 		8688F25F9579677C2080FB0E /* RingingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingingView.swift; sourceTree = "<group>"; };
+		8DD3A0F17E4F13654090ABE8 /* outfit_light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_light.ttf; sourceTree = "<group>"; };
 		90ED19FA826B4A1503E171A1 /* MailShareExt.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MailShareExt.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		93E52D4230819F38EC3DE33A /* plex_sans_jp_light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_light.ttf; sourceTree = "<group>"; };
 		982C5C9DA1E0E6814EDAD684 /* AlarmKitScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmKitScheduler.swift; sourceTree = "<group>"; };
 		9A431831DE81C49A75897127 /* AgendaViewsIOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaViewsIOS.swift; sourceTree = "<group>"; };
+		9B5EFAB358775E656E932A66 /* outfit_regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_regular.ttf; sourceTree = "<group>"; };
 		9BC0FA0EA0069BF21E257989 /* iosApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = iosApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerView.swift; sourceTree = "<group>"; };
 		B399458D4913DD152149CADA /* MailImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailImportView.swift; sourceTree = "<group>"; };
 		C59894E1200D6FB530B33BED /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		C694CCA1128C6527CB1476DC /* outfit_semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_semibold.ttf; sourceTree = "<group>"; };
 		C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailSheet.swift; sourceTree = "<group>"; };
+		CF4FE1923E95F87EA8A05028 /* outfit_extralight.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_extralight.ttf; sourceTree = "<group>"; };
 		D2AF8727D8A981996E1355D9 /* plex_sans_jp_regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_regular.ttf; sourceTree = "<group>"; };
 		D2D9928A082C610D9B0A9D67 /* plex_sans_jp_semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_semibold.ttf; sourceTree = "<group>"; };
 		DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAlarmWidget.swift; sourceTree = "<group>"; };
@@ -108,6 +118,11 @@
 		292CEE1BCE2BA19DFEAD3CBA /* Fonts */ = {
 			isa = PBXGroup;
 			children = (
+				CF4FE1923E95F87EA8A05028 /* outfit_extralight.ttf */,
+				8DD3A0F17E4F13654090ABE8 /* outfit_light.ttf */,
+				64370CDCC54B81F0CD76CFAC /* outfit_medium.ttf */,
+				9B5EFAB358775E656E932A66 /* outfit_regular.ttf */,
+				C694CCA1128C6527CB1476DC /* outfit_semibold.ttf */,
 				93E52D4230819F38EC3DE33A /* plex_sans_jp_light.ttf */,
 				F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */,
 				D2AF8727D8A981996E1355D9 /* plex_sans_jp_regular.ttf */,
@@ -290,6 +305,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				29622F303C81E6C8561DA830 /* outfit_extralight.ttf in Resources */,
+				AAFC4648F481E8E284EC4F80 /* outfit_light.ttf in Resources */,
+				12F8D12737B1B7401B66CA1E /* outfit_medium.ttf in Resources */,
+				8DA98EC782D9732A40A26D31 /* outfit_regular.ttf in Resources */,
+				A18B776969A5B61C602C3D89 /* outfit_semibold.ttf in Resources */,
 				D5FE40480C851F233EFBA4B6 /* plex_sans_jp_light.ttf in Resources */,
 				2DF8005728D2E0319C73F77B /* plex_sans_jp_medium.ttf in Resources */,
 				0EDE4CE8267312F25F224805 /* plex_sans_jp_regular.ttf in Resources */,

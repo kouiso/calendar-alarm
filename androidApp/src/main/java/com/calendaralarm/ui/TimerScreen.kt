@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.shared.logic.AlarmExpander
+import com.calendaralarm.ui.theme.OutfitFontFamily
 import com.calendaralarm.shared.model.AlarmKind
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -154,7 +155,8 @@ private fun TimerPane(repository: AlarmRepository, settings: SettingsRepository)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         formatRemaining(remain),
-                        fontSize = 64.sp,
+                        fontSize = 48.sp,
+                        fontFamily = OutfitFontFamily,
                         fontWeight = FontWeight.Light,
                         letterSpacing = (-2).sp,
                     )
@@ -284,7 +286,8 @@ private fun StopwatchPane() {
         ClockRing {
             Text(
                 formatStopwatch(elapsed),
-                fontSize = 56.sp,
+                fontSize = 48.sp,
+                fontFamily = OutfitFontFamily,
                 fontWeight = FontWeight.Light,
                 letterSpacing = (-2).sp,
             )

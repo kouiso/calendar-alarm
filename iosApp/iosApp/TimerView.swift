@@ -48,7 +48,7 @@ struct TimerFace: View {
                 ClockRing()
                 if let r = running {
                     VStack {
-                        Text(Self.mmss(remaining)).font(NightTheme.font(44, weight: .light)).monospacedDigit()
+                        Text(Self.mmss(remaining)).font(NightTheme.numFont(48, weight: .light)).monospacedDigit()
                         Text(r.title).font(NightTheme.font(12)).foregroundStyle(.secondary)
                     }
                 } else {
@@ -183,7 +183,7 @@ struct StopwatchFace: View {
             ZStack {
                 ClockRing()
                 Text(Self.fmt(current))
-                    .font(NightTheme.font(44, weight: .light)).monospacedDigit()
+                    .font(NightTheme.numFont(48, weight: .light)).monospacedDigit()
             }
             .frame(width: 260, height: 260)
             .onReceive(ticker) { _ in }

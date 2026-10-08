@@ -226,7 +226,7 @@ struct NextAlarmBanner: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(Self.timeStr(instance.triggerAtMillis))
-                    .font(NightTheme.font(22, weight: .light))
+                    .font(NightTheme.numFont(22, weight: .light))
                 Text(instance.title)
                     .font(NightTheme.font(14))
                     .foregroundStyle(.secondary)

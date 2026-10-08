@@ -56,7 +56,7 @@ struct AlarmsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(String(format: "%02d:%02d", a.hour, a.minute))
-                        .font(NightTheme.font(42, weight: .light))
+                        .font(NightTheme.numFont(44, weight: .light))
                         .foregroundStyle(a.enabled ? .primary : .secondary)
                     Text(repeatLabel(a))
                         .font(NightTheme.font(13))

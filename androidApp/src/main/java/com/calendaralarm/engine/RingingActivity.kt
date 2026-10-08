@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
 import com.calendaralarm.shared.model.CurrentWeather
 import com.calendaralarm.ui.WeatherBackdrop
+import com.calendaralarm.ui.theme.OutfitFontFamily
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
 import kotlinx.coroutines.flow.map
 import java.text.SimpleDateFormat
@@ -209,8 +210,9 @@ private fun RingingScreen(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = time,
-                    fontSize = 96.sp,
-                    fontWeight = FontWeight.Light,
+                    fontSize = 112.sp,
+                    fontFamily = OutfitFontFamily,
+                    fontWeight = FontWeight.ExtraLight,
                     letterSpacing = (-4).sp,
                     color = Color.White,
                 )
