@@ -45,6 +45,7 @@ class AlarmService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var currentInstance: AlarmInstance? = null
     private var crescendoJob: kotlinx.coroutines.Job? = null
+    private var ringTimeoutJob: kotlinx.coroutines.Job? = null
 
     private val app get() = application as CalendarAlarmApp
 
@@ -144,6 +145,17 @@ class AlarmService : Service() {
         )
         if (ringSettings.vibrateWhileRinging) startVibration()
         acquireWakeLock()
+        // 最終防衛線: 通知権限なし + FSI拒否 だと停止UIが1つも存在せず
+        // 電源断まで鳴り続ける。上限に達したら自動停止して MISSED 扱いにする。
+        ringTimeoutJob?.cancel()
+        ringTimeoutJob = scope.launch {
+            kotlinx.coroutines.delay(RING_TIMEOUT_MS)
+            app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
+            app.container.repository.markMissed(instance.id, "鳴動が${RING_TIMEOUT_MS / 60_000}分続き自動停止")
+            MissedNotifier.post(this@AlarmService, instance.title)
+            stopRinging()
+            stopSelf()
+        }
     }
 
     /** FGS 前面化を試みる。OS に拒否された場合は false (例外は飲み込む)。 */
@@ -303,6 +315,7 @@ class AlarmService : Service() {
     }
 
     private fun stopRinging() {
+        ringTimeoutJob?.cancel(); ringTimeoutJob = null
         crescendoJob?.cancel(); crescendoJob = null
         runCatching { mediaPlayer?.stop() }
         mediaPlayer?.release(); mediaPlayer = null
@@ -330,6 +343,8 @@ class AlarmService : Service() {
     }
 
     companion object {
+        /** 鳴動の絶対上限 (停止UIが皆無でもこれ以上は鳴り続けない)。 */
+        private const val RING_TIMEOUT_MS = 10L * 60 * 1000
         const val ACTION_START = "com.calendaralarm.action.START"
         const val ACTION_DISMISS = "com.calendaralarm.action.DISMISS"
         const val ACTION_SNOOZE = "com.calendaralarm.action.SNOOZE"
