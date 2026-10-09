@@ -25,7 +25,6 @@ import com.calendaralarm.CalendarAlarmApp
 import com.calendaralarm.R
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.model.AlarmInstance
-import com.calendaralarm.shared.model.AlarmState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -320,25 +319,13 @@ class AlarmService : Service() {
         super.onDestroy()
     }
 
-    /** システムやユーザーにサービスを殺されても、鳴動を握り潰さない。 */
+    /** タスク除去時は再鳴動を仕掛けない。 */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        currentInstance?.let {
-            // AlarmManager の予約はプロセスをまたいで残るので、直近に再鳴動を仕掛け直す。
-            // DB も PENDING に戻して健全性チェックの差分と整合させる。
-            val rearmed = app.container.scheduler.schedule(
-                it.copy(triggerAtMillis = System.currentTimeMillis() + 15_000L),
-            )
-            scope.launch {
-                if (rearmed) {
-                    app.container.repository.audit("ERROR", "鳴動中にタスク除去: ${it.id} → 15秒後に再鳴動")
-                    app.container.repository.setState(it.id, AlarmState.PENDING)
-                } else {
-                    // 再武装そのものが拒否された場合も握り潰さず MISSED+通知に倒す
-                    app.container.repository.markMissed(it.id, "タスク除去後の再鳴動予約がOSに拒否")
-                    MissedNotifier.post(this@AlarmService, it.title)
-                }
-            }
-        }
+        // foreground の started service はタスク除去ではプロセスごと死なない。
+        // 以前ここで +15s の再鳴動を予約していたが、ユーザーが「アプリを全部
+        // 閉じて止めた」直後に再度鳴り出す「止まらない」ループの原因だった。
+        // プロセスを本当に殺された場合の復帰は START_STICKY の null-intent
+        // 再起動 + firedWithinGrace 経路に一本化する。
         super.onTaskRemoved(rootIntent)
     }
 

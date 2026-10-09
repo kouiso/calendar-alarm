@@ -3,6 +3,7 @@ package com.calendaralarm.ui
 import android.Manifest
 import android.app.Activity
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -81,6 +82,12 @@ fun OnboardingScreen(
         (activity.getSystemService(AlarmManager::class.java)
             ?.canScheduleExactAlarms() ?: true)
 
+    // フルスクリーン Intent は API 34+ でサイドロード版は既定拒否。
+    // 既定でOFFだと鳴動画面が出ず「止められない」状態になるので初期導線に入れる。
+    val fsiOk = Build.VERSION.SDK_INT < 34 ||
+        (activity.getSystemService(NotificationManager::class.java)
+            ?.canUseFullScreenIntent() ?: true)
+
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.SpaceBetween,
@@ -138,6 +145,19 @@ fun OnboardingScreen(
                 if (!exactOk) {
                     activity.startActivity(
                         Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                            data = Uri.parse("package:${activity.packageName}")
+                        },
+                    )
+                }
+            }
+            OnbCard(
+                title = "フルスクリーン通知",
+                desc = "鳴動時に停止画面を最前面に出すのに必要 (未許可だと通知だけになる)",
+                granted = fsiOk,
+            ) {
+                if (!fsiOk) {
+                    activity.startActivity(
+                        Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
                             data = Uri.parse("package:${activity.packageName}")
                         },
                     )
