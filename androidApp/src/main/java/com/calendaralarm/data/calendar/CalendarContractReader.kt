@@ -158,7 +158,13 @@ class CalendarContractReader(private val context: Context) {
         }
     }
 
-    /** Reminders テーブルから基底イベントID群の通知分数を取得する。 */
+    /**
+     * Reminders テーブルから基底イベントID群の通知分数を取得する。
+     * MINUTES=-1 (MINUTES_DEFAULT) は「システム既定」を意味し、実値は端末に
+     * 依存するためここでは解決せず -1 のまま返す (Repository 側でユーザー設定の
+     * 既定分数に置き換える)。METHOD が DEFAULT/ALERT 以外 (EMAIL/SMS) の行は
+     * 端末が通知を処理しないため取り込まない。-1 以外の負値は未定義として捨てる。
+     */
     private suspend fun eventReminders(eventIds: Set<Long>): Map<Long, List<Int>> =
         withContext(Dispatchers.IO) {
             if (eventIds.isEmpty()) return@withContext emptyMap()
@@ -172,15 +178,24 @@ class CalendarContractReader(private val context: Context) {
                     arrayOf(
                         CalendarContract.Reminders.EVENT_ID,
                         CalendarContract.Reminders.MINUTES,
+                        CalendarContract.Reminders.METHOD,
                     ),
                     selection, null, null,
                 )?.use { c ->
                     while (c.moveToNext()) {
+                        val method = c.getInt(2)
+                        if (method != CalendarContract.Reminders.METHOD_DEFAULT &&
+                            method != CalendarContract.Reminders.METHOD_ALERT
+                        ) continue
+                        val minutes = c.getInt(1)
+                        // -1 (MINUTES_DEFAULT) は意味のある値なので通す。それ以外の負値は捨てる
+                        if (minutes < 0 && minutes != CalendarContract.Reminders.MINUTES_DEFAULT) continue
                         val id = c.getLong(0)
-                        out.getOrPut(id) { mutableListOf() } += c.getInt(1)
+                        out.getOrPut(id) { mutableListOf() } += minutes
                     }
                 }
             }
             out
         }
+
 }

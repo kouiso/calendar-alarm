@@ -856,9 +856,20 @@ private fun EventRulesCard(
                     }) { Text("連携") }
                 }
             }
-            // 予定側リマインダーの取込
+            // 予定側リマインダーの取込 (既定ON: 元カレンダー通知の「何分前」で鳴らす)
             IconSettingRow(Icons.Default.Email) {
-                Spacer(Modifier.weight(1f))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "カレンダーの通知設定を使う",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        "開始時刻の鳴動に加えて、予定に設定された「○分前」通知の時刻でも鳴らします。" +
+                            "端末から実値を取得できない既定通知は設定の既定値（${prefs.defaultMinutesBefore}分前）として扱います",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Switch(
                     checked = prefs.importEventReminders,
                     onCheckedChange = {

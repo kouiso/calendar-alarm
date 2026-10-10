@@ -292,7 +292,7 @@ struct ExpandRequest: Codable {
     var titleCodes: TitleCodeSettings = TitleCodeSettings()
     var inviteFilter: InviteFilter = InviteFilter()
     var eventTypeFilter: EventTypeFilter = EventTypeFilter()
-    var importEventReminders: Bool = false
+    var importEventReminders: Bool = true
     /// 全アラームの一括ミュート (NOTIFY・タイマーには効かない)
     var muteAll: Bool = false
 }

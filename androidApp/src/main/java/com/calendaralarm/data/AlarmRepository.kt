@@ -325,7 +325,16 @@ class AlarmRepository(
                     calendarReader.events(
                         (now - 14.days).toEpochMilliseconds(),
                         horizon.toEpochMilliseconds(),
-                    ),
+                    ).map { ev ->
+                        // Reminders.MINUTES=-1 (MINUTES_DEFAULT) は「システム既定」。
+                        // 実値は端末依存で取得不能なため、ユーザーが設定画面で変えられる
+                        // 既存の既定分数 defaultMinutesBefore に解決する (代替値を隠さない)。
+                        ev.copy(
+                            calendarReminderMinutes = ev.calendarReminderMinutes.map {
+                                if (it < 0) appSettings.defaultMinutesBefore else it
+                            },
+                        )
+                    },
                     appSettings,
                     (now - 14.days).toEpochMilliseconds(),
                     horizon.toEpochMilliseconds(),
@@ -400,13 +409,14 @@ class AlarmRepository(
 
         val scheduled = pendingRows.associate { it.id to it.triggerAtMillis }
         val plan = AlarmPlanner.plan(scheduled, desired, now)
-        applyPlan(plan, desired, reason)
+        applyPlan(plan, desired, reason, scheduled.keys)
     }
 
     private suspend fun applyPlan(
         plan: AlarmPlanner.Plan,
         desired: List<AlarmInstance>,
         reason: String,
+        armedIds: Set<String>,
     ) {
         for (id in plan.toCancel) {
             scheduler.cancel(id)
@@ -431,6 +441,16 @@ class AlarmRepository(
         }
         // グレース幅内の過去分: PENDING に戻して即時トリガ (サービス経由で鳴らす)
         for (fire in plan.toFireNow) {
+            // 一度も予約していない ev: インスタンスの過去分 (リマインダー取込ONの
+            // 初回 resync 等) は「元カレンダー側が既に通知した時刻」。後追いで
+            // 不意に鳴らさず、次回展開からも外れるよう MISSED に倒す。
+            // setState は UPDATE WHERE id のみで行が無いと更新0になるため、
+            // 先に行を作ってから終端化する (残さないと次回 resync で再展開される)。
+            if (fire.id !in armedIds && fire.id.startsWith("ev:")) {
+                db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
+                markMissed(fire.id, "予約前に通知時刻が過ぎていた")
+                continue
+            }
             db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
             if (!scheduler.schedule(fire.copy(triggerAtMillis = Clock.System.now().toEpochMilliseconds()))) {
                 audit("EXACT_DENIED", fire.id)

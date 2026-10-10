@@ -18,7 +18,11 @@ final class Store: ObservableObject {
         var titleCodes: TitleCodeSettings = TitleCodeSettings()
         var inviteFilter: InviteFilter = InviteFilter()
         var eventTypeFilter: EventTypeFilter = EventTypeFilter()
-        var importEventReminders: Bool = false
+        /// 元カレンダー通知の「何分前」を正本として鳴らす仕様のため既定 ON。
+        /// 旧版は未操作でも false が store.json に書き込まれており、保存済み false には
+        /// 「明示OFF」と「旧版の未操作」の区別が付かない。識別不能なため既存値は
+        /// そのまま維持し (明示OFFの可能性を尊重)、取込ON化は新規のみに適用する。
+        var importEventReminders: Bool = true
         /// 全アラームの一括ミュート (通知・タイマーには効かない)
         var muteAll: Bool = false
         /// テーマ id ("default"=インディゴ)
@@ -281,7 +285,8 @@ extension Store.Persisted {
         titleCodes = try c.decodeIfPresent(TitleCodeSettings.self, forKey: .titleCodes) ?? TitleCodeSettings()
         inviteFilter = try c.decodeIfPresent(InviteFilter.self, forKey: .inviteFilter) ?? InviteFilter()
         eventTypeFilter = try c.decodeIfPresent(EventTypeFilter.self, forKey: .eventTypeFilter) ?? EventTypeFilter()
-        importEventReminders = try c.decodeIfPresent(Bool.self, forKey: .importEventReminders) ?? false
+        // キーが無い=新規のみ ON。旧データに保存済みの値は識別不能のため維持する
+        importEventReminders = try c.decodeIfPresent(Bool.self, forKey: .importEventReminders) ?? true
         muteAll = try c.decodeIfPresent(Bool.self, forKey: .muteAll) ?? false
         themeId = try c.decodeIfPresent(String.self, forKey: .themeId) ?? "default"
         hasCustomBackground = try c.decodeIfPresent(Bool.self, forKey: .hasCustomBackground) ?? false

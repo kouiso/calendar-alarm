@@ -233,8 +233,15 @@ struct SettingsView: View {
                                     onToggle: { t in store.toggleEventType(t); resync("event type filter") },
                                     label: { t in t.label })
                             }
-                            // 予定側リマインダー取込
+                            // 予定側リマインダー取込 (既定ON: 元カレンダー通知の「何分前」で鳴らす)
                             IconRow("bell.badge.fill") {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("カレンダーの通知設定を使う")
+                                        .font(NightTheme.font(13))
+                                    Text("開始時刻の鳴動に加えて、予定の「○分前」通知時刻でも鳴らします。取得できない既定通知は既定値（\(store.state.defaultMinutesBefore)分前）として扱います")
+                                        .font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                }
+                                Spacer()
                                 Toggle("", isOn: Binding(
                                     get: { store.state.importEventReminders },
                                     set: { store.setImportEventReminders($0); resync("import reminders") }
