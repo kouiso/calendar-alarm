@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +44,7 @@ import com.calendaralarm.ui.WeatherBackdrop
 import com.calendaralarm.ui.theme.OutfitFontFamily
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -137,15 +139,26 @@ class RingingActivity : ComponentActivity() {
     }
 
     private fun sendAction(action: String, snoozeMinutes: Int? = null) {
-        startService(
-            Intent(this, AlarmService::class.java).apply {
-                this.action = action
-                putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceIdState.value)
-                if (snoozeMinutes != null) {
-                    putExtra(AlarmService.EXTRA_SNOOZE_MINUTES, snoozeMinutes)
+        val delivered = runCatching {
+            startService(
+                Intent(this, AlarmService::class.java).apply {
+                    this.action = action
+                    putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceIdState.value)
+                    if (snoozeMinutes != null) {
+                        putExtra(AlarmService.EXTRA_SNOOZE_MINUTES, snoozeMinutes)
+                    }
+                },
+            )
+        }.isSuccess
+        if (!delivered) {
+            // サービスが既に死んでいる時でも停止が必ず効くよう直接終端化する
+            // (onDismissed は DB の終端化 + AlarmManager 予約の取消を含む冪等処理)
+            lifecycleScope.launch {
+                runCatching {
+                    app.container.repository.onDismissed(instanceIdState.value)
                 }
-            },
-        )
+            }
+        }
         finish()
     }
 
