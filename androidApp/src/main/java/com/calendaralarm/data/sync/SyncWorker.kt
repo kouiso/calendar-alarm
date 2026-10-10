@@ -1,14 +1,20 @@
 package com.calendaralarm.data.sync
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ForegroundInfo
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.calendaralarm.CalendarAlarmApp
+import com.calendaralarm.R
 
 /**
  * 定期健全性チェック + 手動同期。
@@ -35,10 +41,33 @@ class SyncWorker(
         }
     }
 
+    /**
+     * expedited work は Android 12 未満 (API<31) で FGS として動き、
+     * CoroutineWorker 既定の getForegroundInfo は未実装で落ちるため必須。
+     * API31+ では expedited job になるのでこの通知は表示されない。
+     */
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        if (Build.VERSION.SDK_INT >= 26) {
+            val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE)
+                as NotificationManager
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "同期", NotificationManager.IMPORTANCE_MIN),
+            )
+        }
+        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_alarm)
+            .setContentTitle("カレンダーを同期しています")
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .build()
+        return ForegroundInfo(NOTIFICATION_ID, notification)
+    }
+
     companion object {
         const val PERIODIC_NAME = "periodic-sync"
         private const val ONESHOT_NAME = "oneshot-sync"
         private const val KEY_REASON = "reason"
+        private const val CHANNEL_ID = "sync"
+        private const val NOTIFICATION_ID = 3001
 
         /**
          * UI・レシーバ・ContentObserver からの即時同期要求。
