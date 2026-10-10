@@ -69,6 +69,26 @@ class RingingActivity : ComponentActivity() {
         // サービスが overlay を出し直したケースで残存するのを防ぐ。
         RingingOverlay.hide(this)
 
+        // 通知アクション等の別経路で鳴動が止まった時、この画面を
+        // 無音のまま残さない。サービスの鳴動状態を監視し、
+        // 自分のインスタンスでなくなったら閉じる。
+        // (FSI はサービスの ringingInstanceId 設定より先に起き得るため
+        //  起動直後の null は猶予して扱い、鳴動未開始の可能性を残す)
+        lifecycleScope.launch {
+            var sawMine = AlarmService.ringingInstanceId.value == instanceIdState.value
+            val deadline = System.currentTimeMillis() + 3_000
+            AlarmService.ringingInstanceId.collect { id ->
+                val mine = instanceIdState.value
+                if (id != null && id == mine) sawMine = true
+                if ((sawMine && id != mine) ||
+                    (!sawMine && id != mine && System.currentTimeMillis() > deadline)
+                ) {
+                    finish()
+                    return@collect
+                }
+            }
+        }
+
         setContent {
             val settings by app.container.settings.flow.collectAsState(initial = null)
             CalendarAlarmTheme(themeId = settings?.themeId ?: "default") {

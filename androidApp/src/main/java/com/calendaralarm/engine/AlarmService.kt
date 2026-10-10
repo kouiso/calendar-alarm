@@ -220,6 +220,19 @@ class AlarmService : Service() {
         // 「停止」は放送経路で受ける (AlarmReceiver)。getService だとサービスが
         // 死んでいる時に OS 側で起動拒否され、押しても何も起きず残るゾンビ通知になる。
         // 放送は起動制限の適用外なので必ず届き、receiver が service 停止+終端化を行う。
+        // FSI が拒否/抑止されている環境 (Android 14+ の「アラームとリマインダー」
+        // 特別アクセス未許可、OEM 独自抑制など) ではこのアクション付き
+        // ヘッズアップ通知が唯一の停止導線になる。
+        if (Build.VERSION.SDK_INT >= 34 &&
+            !getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+        ) {
+            scope.launch {
+                app.container.repository.audit(
+                    "FSI_DENIED",
+                    "フルスクリーンIntent未許可のためヘッズアップ通知へフォールバック",
+                )
+            }
+        }
         val dismiss = PendingIntent.getBroadcast(
             this, 0,
             Intent(this, AlarmReceiver::class.java).apply {
@@ -251,7 +264,13 @@ class AlarmService : Service() {
         mgr.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "アラーム", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "アラーム鳴動時のフルスクリーン通知"
+                // 音は MediaPlayer が出すのでチャンネルは無音のまま。
+                // ただし無音+無振動だと FSI が抑止された端末でヘッズアップも出ず
+                // 「鳴るが停止UIが一切無い」状態になる。バイブだけ有効にして
+                // 通知を alert 扱いにし、FSI が効かなくても必ず停止ボタンが見える形にする。
                 setSound(null, null)
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 800, 400, 800, 400)
                 setBypassDnd(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             },
@@ -388,7 +407,7 @@ class AlarmService : Service() {
         const val ACTION_SNOOZE = "com.calendaralarm.action.SNOOZE"
         const val EXTRA_INSTANCE_ID = "instance_id"
         const val EXTRA_SNOOZE_MINUTES = "snooze_minutes"
-        private const val CHANNEL_ID = "alarm_v1"
+        private const val CHANNEL_ID = "alarm_v2"
         /** クレッシェンドの立ち上がり時間と開始音量。 */
         private const val CRESCENDO_MS = 30_000L
         private const val CRESCENDO_START = 0.05f
