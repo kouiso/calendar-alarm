@@ -122,8 +122,11 @@ object AlarmExpander {
             emit(minutesBefore, startAction)
             extras.sorted().forEach { emit(it, reminderAction) }
             // カレンダー側リマインダーの取り込み (アプリ追加分と同じ trigger は重複除外)
+            // MINUTES は「開始N分前」の生値。負値 (CalendarContract の METHOD_DEFAULT
+            // 行など) を通すと開始“後”に鳴るゴミ予約になるため >=0 のみ採用する。
             if (importEventReminders) {
-                event.calendarReminderMinutes.sorted().forEach { emit(it, reminderAction) }
+                event.calendarReminderMinutes.filter { it >= 0 }.sorted()
+                    .forEach { emit(it, reminderAction) }
             }
         }
         return result

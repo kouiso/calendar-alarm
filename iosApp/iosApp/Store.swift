@@ -18,7 +18,8 @@ final class Store: ObservableObject {
         var titleCodes: TitleCodeSettings = TitleCodeSettings()
         var inviteFilter: InviteFilter = InviteFilter()
         var eventTypeFilter: EventTypeFilter = EventTypeFilter()
-        var importEventReminders: Bool = false
+        /// 元カレンダー通知の「何分前」を正本として鳴らす仕様のため既定 ON。
+        var importEventReminders: Bool = true
         /// 全アラームの一括ミュート (通知・タイマーには効かない)
         var muteAll: Bool = false
         /// テーマ id ("default"=インディゴ)
@@ -281,7 +282,7 @@ extension Store.Persisted {
         titleCodes = try c.decodeIfPresent(TitleCodeSettings.self, forKey: .titleCodes) ?? TitleCodeSettings()
         inviteFilter = try c.decodeIfPresent(InviteFilter.self, forKey: .inviteFilter) ?? InviteFilter()
         eventTypeFilter = try c.decodeIfPresent(EventTypeFilter.self, forKey: .eventTypeFilter) ?? EventTypeFilter()
-        importEventReminders = try c.decodeIfPresent(Bool.self, forKey: .importEventReminders) ?? false
+        importEventReminders = try c.decodeIfPresent(Bool.self, forKey: .importEventReminders) ?? true
         muteAll = try c.decodeIfPresent(Bool.self, forKey: .muteAll) ?? false
         themeId = try c.decodeIfPresent(String.self, forKey: .themeId) ?? "default"
         hasCustomBackground = try c.decodeIfPresent(Bool.self, forKey: .hasCustomBackground) ?? false
