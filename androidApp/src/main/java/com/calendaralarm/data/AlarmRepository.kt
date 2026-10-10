@@ -193,6 +193,12 @@ class AlarmRepository(
         onScheduleChanged?.invoke()
     }
 
+    /** インスタンスの現在状態。行が無ければ null。 */
+    suspend fun instanceState(id: String): AlarmState? =
+        db.scheduledInstances().byId(id)?.state?.let {
+            runCatching { AlarmState.valueOf(it) }.getOrNull()
+        }
+
     suspend fun onDismissed(id: String?) {
         if (id == null) return
         setState(id, AlarmState.DISMISSED)

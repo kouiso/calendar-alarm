@@ -33,6 +33,14 @@ class AlarmReceiver : BroadcastReceiver() {
                                 .areNotificationsEnabled()
                         when {
                             instance == null -> Unit
+                            // 停止済み等の終端インスタンスへ届いた遅延/重複放送は
+                            // 鳴らさない (これを通すと「止めたのにまた鳴る」)
+                            repo.instanceState(instanceId) !=
+                                com.calendaralarm.shared.model.AlarmState.PENDING ->
+                                repo.audit(
+                                    "STALE_FIRE",
+                                    "$instanceId: 終端済みのため鳴動を抑止",
+                                )
                             instance.delivery ==
                                 com.calendaralarm.shared.model.EventAction.NOTIFY &&
                                 notificationsOk -> {
@@ -65,6 +73,24 @@ class AlarmReceiver : BroadcastReceiver() {
                 val pending = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
+                        runCatching {
+                            (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
+                                .container.repository.onDismissed(instanceId)
+                        }
+                    } finally {
+                        pending.finish()
+                    }
+                }
+            }
+            // 鳴動通知の「停止」/破棄アクション。getService 宛だとサービス不在時に
+            // OS 側で握り潰されて停止が届かないことがあるため、必ず届く放送経路で受けて
+            // サービス停止 + DB終端化を行う (生きていれば onDestroy→stopRinging が音を止める)
+            AlarmService.ACTION_DISMISS -> {
+                val instanceId = intent.getStringExtra(AlarmService.EXTRA_INSTANCE_ID)
+                val pending = goAsync()
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        context.stopService(Intent(context, AlarmService::class.java))
                         runCatching {
                             (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
                                 .container.repository.onDismissed(instanceId)

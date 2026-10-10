@@ -25,6 +25,7 @@ import com.calendaralarm.CalendarAlarmApp
 import com.calendaralarm.R
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.model.AlarmInstance
+import com.calendaralarm.shared.model.AlarmState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -60,7 +61,9 @@ class AlarmService : Service() {
                 stopRinging()
                 scope.launch {
                     runCatching { app.container.repository.onDismissed(targetId) }
-                    stopSelf(startId)
+                    // startId 指定だと過去の ACTION_START の startId が未消化で残り
+                    // サービスが終わらないことがある。引数なしで全て消化して確実に止める。
+                    stopSelf()
                 }
             }
             ACTION_SNOOZE -> {
@@ -70,7 +73,7 @@ class AlarmService : Service() {
                 stopRinging()
                 scope.launch {
                     runCatching { app.container.repository.onSnoozed(targetId, mins) }
-                    stopSelf(startId)
+                    stopSelf()
                 }
             }
             else -> {
@@ -106,6 +109,17 @@ class AlarmService : Service() {
         val instance = app.container.repository.instanceById(instanceId)
         if (instance == null) {
             app.container.repository.audit("ERROR", "鳴動要求されたがインスタンス不明: $instanceId")
+            stopRinging()
+            stopSelf()
+            return
+        }
+        // 停止済み/見逃し済みのインスタンスへの遅延・重複起動は鳴らさない。
+        // (receivers 側でも抑止するが、SNOOZE→DISMISS 直後の滞留放送等
+        //  こちら側で二度と鳴らないことが絶対条件なので二重化する)
+        val state = app.container.repository.instanceState(instanceId)
+        if (state != AlarmState.PENDING && state != AlarmState.FIRED) {
+            app.container.repository.audit(
+                "STALE_FIRE", "$instanceId: state=$state のため鳴動を抑止")
             stopRinging()
             stopSelf()
             return
@@ -185,9 +199,12 @@ class AlarmService : Service() {
             RingingActivity.intent(this, instanceId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val dismiss = PendingIntent.getService(
+        // 「停止」は放送経路で受ける (AlarmReceiver)。getService だとサービスが
+        // 死んでいる時に OS 側で起動拒否され、押しても何も起きず残るゾンビ通知になる。
+        // 放送は起動制限の適用外なので必ず届き、receiver が service 停止+終端化を行う。
+        val dismiss = PendingIntent.getBroadcast(
             this, 0,
-            Intent(this, AlarmService::class.java).apply {
+            Intent(this, AlarmReceiver::class.java).apply {
                 action = ACTION_DISMISS
                 putExtra(EXTRA_INSTANCE_ID, instanceId)
             },
@@ -322,6 +339,8 @@ class AlarmService : Service() {
         vibrator?.cancel(); vibrator = null
         runCatching { wakeLock?.release() }
         wakeLock = null
+        // FGS 状態も確実に抜く (通知だけ消すと前面化中サービスとして残り得る)
+        stopForeground(STOP_FOREGROUND_REMOVE)
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
         currentInstance = null
         ringingInstanceId.value = null
