@@ -238,7 +238,7 @@ struct SettingsView: View {
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text("カレンダーの通知設定を使う")
                                         .font(NightTheme.font(13))
-                                    Text("開始時刻の鳴動に加えて、予定の「○分前」通知時刻でも鳴らします")
+                                    Text("開始時刻の鳴動に加えて、予定の「○分前」通知時刻でも鳴らします。取得できない既定通知は既定値（\(store.state.defaultMinutesBefore)分前）として扱います")
                                         .font(NightTheme.font(11)).foregroundStyle(.secondary)
                                 }
                                 Spacer()

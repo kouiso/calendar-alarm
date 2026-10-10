@@ -444,7 +444,10 @@ class AlarmRepository(
             // 一度も予約していない ev: インスタンスの過去分 (リマインダー取込ONの
             // 初回 resync 等) は「元カレンダー側が既に通知した時刻」。後追いで
             // 不意に鳴らさず、次回展開からも外れるよう MISSED に倒す。
+            // setState は UPDATE WHERE id のみで行が無いと更新0になるため、
+            // 先に行を作ってから終端化する (残さないと次回 resync で再展開される)。
             if (fire.id !in armedIds && fire.id.startsWith("ev:")) {
+                db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
                 markMissed(fire.id, "予約前に通知時刻が過ぎていた")
                 continue
             }

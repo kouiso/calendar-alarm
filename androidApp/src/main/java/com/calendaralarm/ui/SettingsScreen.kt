@@ -864,7 +864,8 @@ private fun EventRulesCard(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        "開始時刻の鳴動に加えて、予定に設定された「○分前」通知の時刻でも鳴らします",
+                        "開始時刻の鳴動に加えて、予定に設定された「○分前」通知の時刻でも鳴らします。" +
+                            "端末から実値を取得できない既定通知は設定の既定値（${prefs.defaultMinutesBefore}分前）として扱います",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

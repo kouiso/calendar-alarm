@@ -83,6 +83,24 @@ class EngineTest {
     }
 
     @Test
+    fun `未予約の過去evインスタンスはMISSEDが保存され次回resyncで除外される`() = runBlocking {
+        // applyPlan の不意打ち防止と同じ手順: setState は行が無いと更新0なので
+        // 先に行を作ってから終端化する。保存されないと次回 resync で再展開される。
+        val inst = AlarmInstance(
+            "ev:c1:e1:1000:b30",
+            Clock.System.now().toEpochMilliseconds() - 30 * 60_000,
+            "予定", AlarmKind.EVENT,
+        )
+        db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(inst)))
+        repository.markMissed(inst.id)
+        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(inst.id)?.state)
+        // 終端行が残る限り同じ入力の次回 resync でも蘇生しない
+        repository.resync("test")
+        repository.resync("test")
+        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(inst.id)!!.state)
+    }
+
+    @Test
     fun `cancel はそのアラームだけを取り消す`() {
         val a = AlarmInstance("a", System.currentTimeMillis() + 60_000, "a", AlarmKind.TIMER)
         val b = AlarmInstance("b", System.currentTimeMillis() + 60_000, "b", AlarmKind.TIMER)
