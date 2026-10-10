@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.calendaralarm.CalendarAlarmApp
@@ -45,7 +46,13 @@ class SyncWorker(
          * 実行は最後の1回にデバウンスされる。
          */
         fun enqueueNow(context: Context, reason: String = "manual") {
+            // expedited 化: ブート/パッケージ更新/カレンダー変更の直後は
+            // AlarmManager 側の予約が無い空白になる。非 expedited だと
+            // スタンバイバケットや Doze で再同期が長時間遅延されて
+            // 「予約済みのはずのアラームが鳴らない」窓ができる。
+            // クォータ超過時は従来の遅延実行に静かにフォールバックする。
             val request = OneTimeWorkRequestBuilder<SyncWorker>()
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .setInputData(Data.Builder().putString(KEY_REASON, reason).build())
                 .build()
             WorkManager.getInstance(context)

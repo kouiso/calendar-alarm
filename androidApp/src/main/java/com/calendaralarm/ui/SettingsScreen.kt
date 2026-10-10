@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -471,7 +472,11 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
     } else true
     val batteryOk = context.getSystemService(PowerManager::class.java)
         ?.isIgnoringBatteryOptimizations(context.packageName) ?: true
-    val ngCount = listOf(notifOk, exactOk, fsiOk, batteryOk).count { !it }
+    // 「鳴ったはずだが無音」の最多因はアラーム音量0 (鳴動音は STREAM_ALARM)。
+    // 権限系と同じく事前検知して案内する。
+    val volumeOk = context.getSystemService(AudioManager::class.java)
+        ?.let { it.getStreamVolume(AudioManager.STREAM_ALARM) > 0 } ?: true
+    val ngCount = listOf(notifOk, exactOk, fsiOk, batteryOk, volumeOk).count { !it }
     var expanded by remember { mutableStateOf(ngCount > 0) }
 
     Card(
@@ -535,6 +540,9 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
                                 },
                             )
                         }
+                    }
+                    HealthRow("アラーム音量", volumeOk) {
+                        activity?.startActivity(Intent(Settings.ACTION_SOUND_SETTINGS))
                     }
                     HealthRow("電池最適化", batteryOk) {
                         activity?.startActivity(
