@@ -1,7 +1,13 @@
 package com.calendaralarm
 
 import android.app.AlarmManager
+import android.content.ContentProvider
+import android.content.ContentValues
 import android.content.Context
+import android.database.Cursor
+import android.database.MatrixCursor
+import android.net.Uri
+import android.provider.CalendarContract
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.AlarmRepository
@@ -32,6 +38,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -45,6 +52,9 @@ class EngineTest {
     private lateinit var scheduler: AlarmScheduler
     private lateinit var repository: AlarmRepository
     private lateinit var alarmManager: AlarmManager
+
+    /** カレンダー権限あり＋reader が実際に予定を返す repository (fixture 用に差し替え) */
+    private lateinit var repositoryWithCalendar: AlarmRepository
 
     @Before
     fun setup() {
@@ -60,6 +70,41 @@ class EngineTest {
             hasCalendarPermission = { false }, // 単発アラームのみ展開
             appScope = CoroutineScope(Dispatchers.IO),
         )
+        repositoryWithCalendar = AlarmRepository(
+            db = db,
+            scheduler = scheduler,
+            calendarReader = CalendarContractReader(context),
+            settings = SettingsRepository(context),
+            hasCalendarPermission = { true },
+            appScope = CoroutineScope(Dispatchers.IO),
+        )
+    }
+
+    /** CalendarContract の fake provider。URI path で Instances/Reminders/Events/Calendars を分岐。 */
+    private class FakeCalendarProvider : ContentProvider() {
+        companion object {
+            var instanceRows: List<Map<String, Any?>> = emptyList()
+            var reminderRows: List<Map<String, Any?>> = emptyList()
+        }
+        override fun onCreate() = true
+        override fun query(
+            uri: Uri, projection: Array<out String>?, selection: String?,
+            selectionArgs: Array<out String>?, sortOrder: String?,
+        ): Cursor {
+            val rows = when {
+                uri.path?.contains("instances") == true -> instanceRows
+                uri.path?.contains("reminders") == true -> reminderRows
+                else -> emptyList()
+            }
+            val cols = projection ?: emptyArray()
+            val c = MatrixCursor(cols as Array<String>)
+            rows.forEach { r -> c.addRow(cols.map { r[it] }.toTypedArray()) }
+            return c
+        }
+        override fun getType(uri: Uri): String? = null
+        override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?) = 0
+        override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?) = 0
     }
 
     @After
@@ -98,6 +143,49 @@ class EngineTest {
         repository.resync("test")
         repository.resync("test")
         assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(inst.id)!!.state)
+    }
+
+    @Test
+    fun `未予約の過去evインスタンスは実resyncでMISSED化され2回目で再処理されない`() = runBlocking {
+        // 本番の applyPlan 分岐を通す回帰: reader(fake provider) → expand → plan →
+        // applyPlan。production の upsert+MISSED 分岐が無いと、過去分は
+        // AlarmManager に予約され DB は PENDING のまま残るので RED になる。
+        val start = Clock.System.now().toEpochMilliseconds() + 30 * 60_000
+        val inst = mapOf(
+            CalendarContract.Instances.EVENT_ID to 1L,
+            CalendarContract.Instances.CALENDAR_ID to 1L,
+            CalendarContract.Instances.TITLE to "会議",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to start,
+            CalendarContract.Instances.END to start + 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        // 60分前リマインダー → triggerAt = start-60分 = now-30分 (グレース内の過去)
+        val rem = mapOf(
+            CalendarContract.Reminders.EVENT_ID to 1L,
+            CalendarContract.Reminders.MINUTES to 60,
+            CalendarContract.Reminders.METHOD to CalendarContract.Reminders.METHOD_ALERT,
+        )
+        FakeCalendarProvider.instanceRows = listOf(inst)
+        FakeCalendarProvider.reminderRows = listOf(rem)
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        repositoryWithCalendar.resync("test")
+        val pastId = "ev:1:1:$start:b60"
+        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(pastId)?.state)
+        // 開始分だけが予約され、過去の通知分は鳴動予約を持たない
+        val startId = "ev:1:1:$start:b0"
+        assertEquals(AlarmState.PENDING.name, db.scheduledInstances().byId(startId)?.state)
+        assertEquals(1, scheduledCount())
+        // 同じ入力で2回呼んでも終端行が残るため再処理されない
+        repositoryWithCalendar.resync("test")
+        repositoryWithCalendar.resync("test")
+        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(pastId)!!.state)
+        assertEquals(1, scheduledCount())
     }
 
     @Test
