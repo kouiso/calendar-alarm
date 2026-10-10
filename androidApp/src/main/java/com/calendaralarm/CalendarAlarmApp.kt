@@ -110,13 +110,18 @@ class CalendarAlarmApp : Application() {
             ) != PackageManager.PERMISSION_GRANTED
         ) return
         calendarObserverRegistered = runCatching {
+            val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    runCatching { SyncWorker.enqueueNow(this@CalendarAlarmApp, "calendar change") }
+                }
+            }
             contentResolver.registerContentObserver(
-                CalendarContract.Events.CONTENT_URI, true,
-                object : ContentObserver(Handler(Looper.getMainLooper())) {
-                    override fun onChange(selfChange: Boolean) {
-                        runCatching { SyncWorker.enqueueNow(this@CalendarAlarmApp, "calendar change") }
-                    }
-                },
+                CalendarContract.Events.CONTENT_URI, true, observer,
+            )
+            // リマインダー単独の変更が Events URI に通知されない端末でも
+            // 「○分前」の変更を拾って再予約する。
+            contentResolver.registerContentObserver(
+                CalendarContract.Reminders.CONTENT_URI, true, observer,
             )
             true
         }.getOrDefault(false)
