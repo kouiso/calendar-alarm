@@ -49,7 +49,10 @@ class SyncWorker(
                 .setInputData(Data.Builder().putString(KEY_REASON, reason).build())
                 .build()
             WorkManager.getInstance(context)
-                .enqueueUniqueWork(ONESHOT_NAME, ExistingWorkPolicy.REPLACE, request)
+                // REPLACE だと実行中の resync が新規要求で殺されて applyPlan が
+                // 中途で終わる (取消適用済み・予約未了) 窓ができる。APPEND_OR_REPLACE
+                // は走行中を完走させてから追加分を実行し、冪等な resync が必ず最後まで走る。
+                .enqueueUniqueWork(ONESHOT_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
         }
     }
 }

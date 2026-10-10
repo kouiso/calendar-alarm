@@ -174,6 +174,9 @@ final class Engine: ObservableObject {
         }
         // 終了済み状態 (鳴動/停止/スヌーズ/見逃し) の同 id は蘇生させない。
         // 展開が同 id を再発行しても、ユーザーが「止めた」「スヌーズした」意味を守る。
+        // ただし NOTIFY 配信の記録は予約時点で .fired 化されるため、展開が再発行
+        // した未配信分 (dropped 側) は後段の notify 照合で「残す予約」に含める必要がある。
+        let dropped = desired.filter { terminalIds.contains($0.id) }
         desired.removeAll { terminalIds.contains($0.id) }
 
         // スヌーズ中インスタンスの親がまだ「鳴らすべき」かの判定に使う。
@@ -211,7 +214,10 @@ final class Engine: ObservableObject {
 
         // NOTIFY 用 UN 通知の照合: desired に残らない予約 (ミュート/削除/時刻変更)
         // は取り消す。これをしないと鳴るべきでない通知が残って実際に鳴る
-        let notifyKeep = Set(desired.filter {
+        // dropped 側 (.fired 記録化で desired から落ちた未来の未配信 notify) も
+        // 残す対象に含める — 含めないと予約済み通知が次回 resync で必ず消され
+        // 「鳴るはずの通知が鳴らない」になる
+        let notifyKeep = Set((desired + dropped).filter {
             $0.delivery == EventAction.notify.rawValue
         }.map { "notify-\($0.id)" })
         let center = UNUserNotificationCenter.current()
@@ -406,9 +412,17 @@ final class Engine: ObservableObject {
         )
         store.markState(inst.id, .snoozed)
         Task {
-            let rid = try? await scheduler.schedule(next)
+            // 予約失敗 (権限剥奪等) でも記録は .pending で残す — 次回 resync の
+            // 温存経路で再予約され権限が戻れば自律回復する。ただし失敗は監査に残す
+            // (try? で握り潰すとゾンビ予約がサイレントのまま二度と鳴らない)。
+            var rid: String? = nil
+            do {
+                rid = try await scheduler.schedule(next)
+                store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m → \(next.id)")
+            } catch {
+                store.audit("SCHEDULE_ERR", "snooze \(next.id): \(error.localizedDescription)")
+            }
             store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: rid))
-            store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m → \(next.id)")
         }
     }
 
