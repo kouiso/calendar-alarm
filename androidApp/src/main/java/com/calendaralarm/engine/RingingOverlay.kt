@@ -89,9 +89,13 @@ object RingingOverlay {
         }
     }
 
-    /** 任意スレッドから呼んでよい。実際の removeView はメインへ投げる。 */
+    /**
+     * 任意スレッドから呼んでよい。実際の removeView はメインへ投げる。
+     * overlayView == null でも必ず投稿する: show() の投稿がまだ実行されていない
+     * 場合に hide を取りこぼすと、停止後も全画面UIが残る (投稿順に show → remove
+     * が走るので null チェックで早退しない)。
+     */
     fun hide(context: Context) {
-        if (overlayView == null) return
         Handler(Looper.getMainLooper()).post { removeNow(context.applicationContext) }
     }
 
