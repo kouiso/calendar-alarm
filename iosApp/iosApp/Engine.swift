@@ -388,9 +388,24 @@ final class Engine: ObservableObject {
             store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m (native)")
             return
         }
-        // countdown が投げた = 元アラームが alerting でない/居ない。
-        // まだ鳴り続けているのに UI だけ閉じると二重鳴動の元を残すので、
-        // 子予約の前に元を静かにしておく (止められないなら子も足さない)。
+        scheduleSnoozeChild(inst, minutes: inst.snoozeMinutes)
+    }
+
+    /// プリセット分数のスヌーズ (鳴動画面の「スヌーズ時間を選ぶ」チップ)。
+    /// AlarmKit の countdown は予約時の分数固定で上書きできないため、
+    /// 既定と異なる分数は常に子インスタンス予約で実現する (Android の
+    /// ACTION_SNOOZE + EXTRA_SNOOZE_MINUTES と同じく子の snoozeMinutes も上書きする)。
+    func snooze(_ inst: AlarmInstanceDTO, minutes: Int) {
+        if minutes == inst.snoozeMinutes {
+            snooze(inst)
+            return
+        }
+        scheduleSnoozeChild(inst, minutes: minutes)
+    }
+
+    /// 子インスタンス予約によるスヌーズ本体。まだ鳴り続けているのに UI だけ閉じると
+    /// 二重鳴動の元を残すので、子予約の前に元を静かにしておく (止められないなら子も足さない)。
+    private func scheduleSnoozeChild(_ inst: AlarmInstanceDTO, minutes: Int) {
         if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler,
            !ak.silence(uuid: AlarmKitScheduler.uuid(from: inst.id)) {
             store.audit("ERROR", "スヌーズ失敗(元アラーム鳴動継続): \(inst.id)")
@@ -399,12 +414,12 @@ final class Engine: ObservableObject {
         alertingIds.remove(inst.id)
         let next = AlarmInstanceDTO(
             id: "\(inst.id):snz\(inst.snoozeSeq + 1)",
-            triggerAtMillis: Self.nowMillis + Int64(inst.snoozeMinutes) * 60_000,
+            triggerAtMillis: Self.nowMillis + Int64(minutes) * 60_000,
             title: inst.title,
             kind: inst.kind,
             eventId: inst.eventId,
             standaloneAlarmId: inst.standaloneAlarmId,
-            snoozeMinutes: inst.snoozeMinutes,
+            snoozeMinutes: minutes,
             soundUri: inst.soundUri,
             minutesBefore: inst.minutesBefore,
             eventStartMillis: inst.eventStartMillis,
@@ -418,7 +433,7 @@ final class Engine: ObservableObject {
             var rid: String? = nil
             do {
                 rid = try await scheduler.schedule(next)
-                store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m → \(next.id)")
+                store.audit("SNOOZE", "\(inst.id) +\(minutes)m → \(next.id)")
             } catch {
                 store.audit("SCHEDULE_ERR", "snooze \(next.id): \(error.localizedDescription)")
             }

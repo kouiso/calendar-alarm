@@ -9,8 +9,10 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.text.SimpleDateFormat
@@ -188,20 +190,12 @@ object RingingOverlay {
             LinearLayout.LayoutParams.MATCH_PARENT, dp(72),
         ))
 
-        val dismiss = pill("停止", accent, Color.parseColor("#26247A"))
-        dismiss.setOnClickListener {
-            // 鳴動通知の「停止」と同じ放送経路: サービス不在でも AlarmReceiver が
-            // サービス停止 + DB終端化を行うので必ず届く
-            context.sendBroadcast(
-                Intent(context, AlarmReceiver::class.java).apply {
-                    action = AlarmService.ACTION_DISMISS
-                    putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
-                },
-            )
-        }
-        root.addView(dismiss, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(72),
-        ).apply { topMargin = dp(12) })
+        // 停止はスライド式: 誤タップで止まらないよう左端の丸を右へ80%ドラッグ。
+        // TalkBack はこのトラックへのダブルタップ (performClick) で停止できる。
+        root.addView(buildSlideToStop(context, instanceId, accent, fg),
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(72),
+            ).apply { topMargin = dp(12) })
 
         root.addView(TextView(context).apply {
             text = "Calendar Alarm"
@@ -214,5 +208,105 @@ object RingingOverlay {
         ).apply { topMargin = dp(10) })
 
         return root
+    }
+
+    /**
+     * 停止スライダー (View版)。ドラッグ量がトラック幅の80%を超えたら停止。
+     * 鳴動通知の「停止」と同じ放送経路で止めるので、サービス不在でも AlarmReceiver が
+     * サービス停止 + DB終端化を行い必ず届く。
+     * タップは OnTouchListener が消費してスナップバックするだけに留め、
+     * アクセシビリティの ACTION_CLICK → performClick のみ OnClickListener で停止する。
+     */
+    private fun buildSlideToStop(
+        context: Context,
+        instanceId: String,
+        accent: Int,
+        fg: Int,
+    ): View {
+        val dp = { v: Int -> (v * context.resources.displayMetrics.density).toInt() }
+        val thumbSize = dp(56)
+        val pad = dp(8)
+
+        fun dismiss() {
+            context.sendBroadcast(
+                Intent(context, AlarmReceiver::class.java).apply {
+                    action = AlarmService.ACTION_DISMISS
+                    putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
+                },
+            )
+        }
+
+        val slider = FrameLayout(context).apply {
+            contentDescription = "スライドして停止"
+            background = GradientDrawable().apply {
+                cornerRadius = dp(36).toFloat()
+                setColor(Color.parseColor("#14FFFFFF"))
+                // アクセントの35%枠: RingingActivity のスライダーと同じ視認性
+                setStroke(dp(1), Color.argb(89, Color.red(accent), Color.green(accent), Color.blue(accent)))
+            }
+        }
+
+        val label = TextView(context).apply {
+            text = "スライドして停止"
+            textSize = 20f
+            setTextColor(fg)
+            gravity = Gravity.CENTER
+        }
+        slider.addView(label, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT,
+        ))
+
+        val thumb = TextView(context).apply {
+            text = "→"
+            textSize = 24f
+            setTextColor(Color.parseColor("#26247A"))
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(accent)
+            }
+        }
+        slider.addView(thumb, FrameLayout.LayoutParams(thumbSize, thumbSize).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            leftMargin = pad
+        })
+
+        var downX = 0f
+        slider.setOnTouchListener { v, ev ->
+            val travel = (v.width - thumbSize - pad * 2).coerceAtLeast(1).toFloat()
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = ev.x
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (ev.x - downX).coerceIn(0f, travel)
+                    thumb.translationX = dx
+                    label.alpha = (1f - dx / travel).coerceIn(0f, 1f)
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if ((ev.x - downX) >= travel * 0.8f) {
+                        thumb.translationX = travel
+                        dismiss()
+                    } else {
+                        thumb.animate().translationX(0f).setDuration(120).start()
+                        label.animate().alpha(1f).setDuration(120).start()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    thumb.animate().translationX(0f).setDuration(120).start()
+                    label.animate().alpha(1f).setDuration(120).start()
+                    true
+                }
+                else -> true
+            }
+        }
+        // TalkBack ダブルタップ (performClick) で停止。通常タップは OnTouch が
+        // 消費するのでここには来ず、スナップバックだけになる。
+        slider.setOnClickListener { dismiss() }
+        return slider
     }
 }

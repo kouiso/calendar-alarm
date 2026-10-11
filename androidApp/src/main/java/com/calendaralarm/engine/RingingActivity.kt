@@ -9,7 +9,11 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.border
@@ -30,12 +35,23 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
@@ -71,7 +87,8 @@ class RingingActivity : ComponentActivity() {
 
         setContent {
             val settings by app.container.settings.flow.collectAsState(initial = null)
-            CalendarAlarmTheme(themeId = settings?.themeId ?: "default") {
+            // 鳴動画面は端末設定に依らず常時ダーク固定 (半睡状態で眩しくしないため)
+            CalendarAlarmTheme(themeId = settings?.themeId ?: "default", darkTheme = true) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val instance by app.container.repository
                         .instanceFlow(instanceIdState.value ?: "")
@@ -305,44 +322,51 @@ private fun RingingScreen(
                 }
             }
             Spacer(Modifier.weight(1f))
-            // スヌーズプリセット 6列チップ
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                snoozePresets.take(6).forEach { m ->
-                    Surface(
-                        onClick = { onSnoozeAt(m) },
-                        modifier = Modifier.weight(1f).height(40.dp),
-                        color = Color.White.copy(alpha = 0.08f),
-                        shape = RoundedCornerShape(14.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("+${m}分", fontSize = 14.sp, color = Color(0xFFECEEF3))
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            // スヌーズ pill → 停止 pill (72h, 半径=高さ/2)
+            // スヌーズは大きい1ボタンのみ: プリセット常時表示は押し間違いの元なので畳む
             Surface(
                 onClick = onSnooze,
-                modifier = Modifier.fillMaxWidth().height(72.dp),
+                modifier = Modifier.fillMaxWidth().height(80.dp),
                 color = Color.White.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(36.dp),
+                shape = RoundedCornerShape(40.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text("スヌーズ ${snoozeMinutes}分", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFECEEF3))
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開
+            var presetsOpen by remember { mutableStateOf(false) }
             Surface(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().height(72.dp),
-                color = accent,
-                shape = RoundedCornerShape(36.dp),
+                onClick = { presetsOpen = !presetsOpen },
+                color = Color.Transparent,
+                shape = RoundedCornerShape(14.dp),
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text("停止", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = onAccent)
+                Text(
+                    if (presetsOpen) "スヌーズ時間を選ぶ ▴" else "スヌーズ時間を選ぶ ▾",
+                    fontSize = 14.sp,
+                    color = Color(0xFFB7BECB),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+            if (presetsOpen) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    snoozePresets.take(6).forEach { m ->
+                        Surface(
+                            onClick = { onSnoozeAt(m) },
+                            modifier = Modifier.weight(1f).height(40.dp),
+                            color = Color.White.copy(alpha = 0.08f),
+                            shape = RoundedCornerShape(14.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("+${m}分", fontSize = 14.sp, color = Color(0xFFECEEF3))
+                            }
+                        }
+                    }
                 }
             }
+            Spacer(Modifier.height(12.dp))
+            // 停止はスライド式: 誤タップで止まらないよう左端の丸を右へドラッグ
+            SlideToStop(accent = accent, onAccent = onAccent, onStop = onDismiss)
             Spacer(Modifier.height(10.dp))
             Row(
                 horizontalArrangement = Arrangement.Center,
@@ -356,6 +380,80 @@ private fun RingingScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * 「スライドして停止」トラック。左端の丸を右へドラッグし、トラック幅の80%を
+ * 超えた時点で停止を実行する (誤タップ防止の閾値)。TalkBack ではトラックの
+ * ダブルタップ (semantics onClick) がそのまま停止になる。
+ */
+@Composable
+private fun SlideToStop(
+    accent: Color,
+    onAccent: Color,
+    onStop: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val progress = remember { Animatable(0f) }
+    var trackWidthPx by remember { mutableStateOf(0f) }
+    val density = LocalDensity.current
+    val thumbPx = with(density) { 64.dp.toPx() }
+    val padPx = with(density) { 8.dp.toPx() }
+    val travel = (trackWidthPx - thumbPx - padPx * 2).coerceAtLeast(1f)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(80.dp)
+            .clip(RoundedCornerShape(40.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(40.dp))
+            .onSizeChanged { trackWidthPx = it.width.toFloat() }
+            .semantics(mergeDescendants = true) {
+                contentDescription = "スライドして停止"
+                onClick(label = "停止", action = { onStop(); true })
+            }
+            .pointerInput(trackWidthPx) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        scope.launch {
+                            if (progress.value >= 0.8f) {
+                                progress.snapTo(1f)
+                                onStop()
+                            } else {
+                                progress.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                            }
+                        }
+                    },
+                    onDragCancel = {
+                        scope.launch { progress.animateTo(0f, spring(stiffness = Spring.StiffnessMedium)) }
+                    },
+                ) { _, dragAmount ->
+                    scope.launch {
+                        progress.snapTo((progress.value + dragAmount / travel).coerceIn(0f, 1f))
+                    }
+                }
+            },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                "スライドして停止",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFECEEF3).copy(alpha = (1f - progress.value).coerceIn(0f, 1f)),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .offset { IntOffset((padPx + progress.value * travel).toInt(), 0) }
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(accent),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("→", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = onAccent)
         }
     }
 }
