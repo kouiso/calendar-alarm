@@ -172,7 +172,7 @@ fun OnboardingScreen(
             Spacer(Modifier.height(8.dp))
             OnbCard(
                 title = "フルスクリーン通知",
-                desc = "鳴動時に停止画面を最前面に出す",
+                desc = "鳴動時に停止画面を最前面に出す (未許可だと通知から停止)",
                 granted = fsiOk,
                 compact = true,
             ) {
@@ -186,7 +186,7 @@ fun OnboardingScreen(
             }
             OnbCard(
                 title = "他アプリの上への表示",
-                desc = "FSIが効かない端末でも停止画面を必ず出す",
+                desc = "フルスクリーン通知が効かない端末でも停止画面を必ず出す",
                 granted = overlayOk,
                 compact = true,
             ) {
@@ -201,6 +201,7 @@ fun OnboardingScreen(
         }
 
         Column {
+            Spacer(Modifier.height(16.dp))
             Button(
                 onClick = {
                     scope.launch {
