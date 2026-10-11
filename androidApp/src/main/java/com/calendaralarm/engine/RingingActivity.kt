@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +44,7 @@ import com.calendaralarm.ui.WeatherBackdrop
 import com.calendaralarm.ui.theme.OutfitFontFamily
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -61,6 +63,11 @@ class RingingActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         applyLockscreenFlags()
         instanceIdState.value = intent.getStringExtra(EXTRA_INSTANCE_ID)
+        // FSI経由で本画面が出せたなら、フォールバックのオーバーレイ停止UIは畳む
+        // (オーバーレイは常に最前面に描画されるので共存すると二重UIになる)。
+        // onResume でも畳む: 既存 Activity への onNewIntent や、生成後に
+        // サービスが overlay を出し直したケースで残存するのを防ぐ。
+        RingingOverlay.hide(this)
 
         setContent {
             val settings by app.container.settings.flow.collectAsState(initial = null)
@@ -107,6 +114,13 @@ class RingingActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 生成後にサービスがオーバーレイを出し直した場合や、覆い被さっていた
+        // 状態から復帰した場合にもフォールバック停止UIが残らないように畳む
+        RingingOverlay.hide(this)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // 鳴動画面が出たまま次のアラームが発火した時、停止/スヌーズが
@@ -137,15 +151,26 @@ class RingingActivity : ComponentActivity() {
     }
 
     private fun sendAction(action: String, snoozeMinutes: Int? = null) {
-        startService(
-            Intent(this, AlarmService::class.java).apply {
-                this.action = action
-                putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceIdState.value)
-                if (snoozeMinutes != null) {
-                    putExtra(AlarmService.EXTRA_SNOOZE_MINUTES, snoozeMinutes)
+        val delivered = runCatching {
+            startService(
+                Intent(this, AlarmService::class.java).apply {
+                    this.action = action
+                    putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceIdState.value)
+                    if (snoozeMinutes != null) {
+                        putExtra(AlarmService.EXTRA_SNOOZE_MINUTES, snoozeMinutes)
+                    }
+                },
+            )
+        }.isSuccess
+        if (!delivered) {
+            // サービスが既に死んでいる時でも停止が必ず効くよう直接終端化する
+            // (onDismissed は DB の終端化 + AlarmManager 予約の取消を含む冪等処理)
+            lifecycleScope.launch {
+                runCatching {
+                    app.container.repository.onDismissed(instanceIdState.value)
                 }
-            },
-        )
+            }
+        }
         finish()
     }
 

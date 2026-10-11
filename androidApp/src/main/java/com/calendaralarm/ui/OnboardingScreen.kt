@@ -37,6 +37,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -87,12 +89,16 @@ fun OnboardingScreen(
     val fsiOk = Build.VERSION.SDK_INT < 34 ||
         (activity.getSystemService(NotificationManager::class.java)
             ?.canUseFullScreenIntent() ?: true)
+    // SYSTEM_ALERT_WINDOW は FSI が効かない環境でも鳴動停止UIを必ず出せる
+    // 保険。未許可だと停止経路が通知シェードだけの危険状態になり得る。
+    val overlayOk = Build.VERSION.SDK_INT < 23 ||
+        Settings.canDrawOverlays(activity)
 
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Spacer(Modifier.height(32.dp))
             // ブランドアイコン円
             androidx.compose.foundation.layout.Box(
@@ -121,6 +127,12 @@ fun OnboardingScreen(
             )
             Spacer(Modifier.height(24.dp))
 
+            Text(
+                "必要な権限",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.height(8.dp))
             OnbCard(
                 title = "カレンダーの読み取り",
                 desc = "予定とアラームを連動させるのに必須",
@@ -150,10 +162,19 @@ fun OnboardingScreen(
                     )
                 }
             }
+
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "おすすめ設定（停止ボタンを確実に出す保険）",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
             OnbCard(
                 title = "フルスクリーン通知",
-                desc = "鳴動時に停止画面を最前面に出すのに必要 (未許可だと通知だけになる)",
+                desc = "鳴動時に停止画面を最前面に出す (未許可だと通知から停止)",
                 granted = fsiOk,
+                compact = true,
             ) {
                 if (!fsiOk) {
                     activity.startActivity(
@@ -163,9 +184,24 @@ fun OnboardingScreen(
                     )
                 }
             }
+            OnbCard(
+                title = "他アプリの上への表示",
+                desc = "フルスクリーン通知が効かない端末でも停止画面を必ず出す",
+                granted = overlayOk,
+                compact = true,
+            ) {
+                if (!overlayOk) {
+                    activity.startActivity(
+                        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                            data = Uri.parse("package:${activity.packageName}")
+                        },
+                    )
+                }
+            }
         }
 
         Column {
+            Spacer(Modifier.height(16.dp))
             Button(
                 onClick = {
                     scope.launch {
@@ -189,10 +225,25 @@ fun OnboardingScreen(
 }
 
 @Composable
-private fun OnbCard(title: String, desc: String, granted: Boolean, onGrant: () -> Unit) {
-    Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+private fun OnbCard(
+    title: String,
+    desc: String,
+    granted: Boolean,
+    compact: Boolean = false,
+    onGrant: () -> Unit,
+) {
+    Card(
+        Modifier.fillMaxWidth().padding(vertical = if (compact) 3.dp else 6.dp),
+        colors = if (compact) {
+            androidx.compose.material3.CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            )
+        } else {
+            androidx.compose.material3.CardDefaults.cardColors()
+        },
+    ) {
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier.padding(horizontal = 16.dp, vertical = if (compact) 8.dp else 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {

@@ -25,6 +25,7 @@ import com.calendaralarm.CalendarAlarmApp
 import com.calendaralarm.R
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.model.AlarmInstance
+import com.calendaralarm.shared.model.AlarmState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -60,7 +61,9 @@ class AlarmService : Service() {
                 stopRinging()
                 scope.launch {
                     runCatching { app.container.repository.onDismissed(targetId) }
-                    stopSelf(startId)
+                    // startId 指定だと過去の ACTION_START の startId が未消化で残り
+                    // サービスが終わらないことがある。引数なしで全て消化して確実に止める。
+                    stopSelf()
                 }
             }
             ACTION_SNOOZE -> {
@@ -70,7 +73,7 @@ class AlarmService : Service() {
                 stopRinging()
                 scope.launch {
                     runCatching { app.container.repository.onSnoozed(targetId, mins) }
-                    stopSelf(startId)
+                    stopSelf()
                 }
             }
             else -> {
@@ -110,6 +113,17 @@ class AlarmService : Service() {
             stopSelf()
             return
         }
+        // 停止済み/見逃し済みのインスタンスへの遅延・重複起動は鳴らさない。
+        // (receivers 側でも抑止するが、SNOOZE→DISMISS 直後の滞留放送等
+        //  こちら側で二度と鳴らないことが絶対条件なので二重化する)
+        val state = app.container.repository.instanceState(instanceId)
+        if (state != AlarmState.PENDING && state != AlarmState.FIRED) {
+            app.container.repository.audit(
+                "STALE_FIRE", "$instanceId: state=$state のため鳴動を抑止")
+            stopRinging()
+            stopSelf()
+            return
+        }
         currentInstance = instance
         // グレース超過の過去分は鳴らさない。端末OFF中に過ぎたアラームを
         // 起動直後に延々鳴らし続けるより、見逃した事実を知らせる方が正しい。
@@ -145,6 +159,24 @@ class AlarmService : Service() {
         )
         if (ringSettings.vibrateWhileRinging) startVibration()
         acquireWakeLock()
+        // 停止UIの確保: フルスクリーン Intent は API34+ で権限拒否され得るし、
+        // 端末ロック解除済みだと heads-up が畳まれて画面上の停止手段が無くなる。
+        // SYSTEM_ALERT_WINDOW は BAL 対象外なので、許可済みなら必ず出せる
+        // 停止画面をオーバーレイでも出す (鳴動画面と共存しないよう後者が出れば畳む)。
+        val fsiOk = Build.VERSION.SDK_INT < 34 ||
+            (getSystemService(NotificationManager::class.java)
+                ?.canUseFullScreenIntent() ?: true)
+        if (RingingOverlay.canShow(this)) {
+            // 表示自体はメインスレッドで行い、成否はオーバーレイ側が鳴動ログへ記録する
+            RingingOverlay.show(
+                this, instance.id, instance.title,
+                instance.snoozeMinutes.takeIf { it > 0 } ?: ringSettings.defaultSnoozeMinutes,
+            )
+        } else if (!fsiOk) {
+            // オーバーレイ権限も FSI も無い: 通知シェード経路だけが残る危険状態を記録
+            app.container.repository.audit(
+                "WARN", "${instance.id}: FSI拒否+オーバーレイ未許可のため停止UIは通知のみ")
+        }
         // 最終防衛線: 通知権限なし + FSI拒否 だと停止UIが1つも存在せず
         // 電源断まで鳴り続ける。上限に達したら自動停止して MISSED 扱いにする。
         ringTimeoutJob?.cancel()
@@ -185,9 +217,12 @@ class AlarmService : Service() {
             RingingActivity.intent(this, instanceId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val dismiss = PendingIntent.getService(
+        // 「停止」は放送経路で受ける (AlarmReceiver)。getService だとサービスが
+        // 死んでいる時に OS 側で起動拒否され、押しても何も起きず残るゾンビ通知になる。
+        // 放送は起動制限の適用外なので必ず届き、receiver が service 停止+終端化を行う。
+        val dismiss = PendingIntent.getBroadcast(
             this, 0,
-            Intent(this, AlarmService::class.java).apply {
+            Intent(this, AlarmReceiver::class.java).apply {
                 action = ACTION_DISMISS
                 putExtra(EXTRA_INSTANCE_ID, instanceId)
             },
@@ -322,7 +357,10 @@ class AlarmService : Service() {
         vibrator?.cancel(); vibrator = null
         runCatching { wakeLock?.release() }
         wakeLock = null
+        // FGS 状態も確実に抜く (通知だけ消すと前面化中サービスとして残り得る)
+        stopForeground(STOP_FOREGROUND_REMOVE)
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+        RingingOverlay.hide(this)
         currentInstance = null
         ringingInstanceId.value = null
     }
@@ -354,7 +392,8 @@ class AlarmService : Service() {
         /** クレッシェンドの立ち上がり時間と開始音量。 */
         private const val CRESCENDO_MS = 30_000L
         private const val CRESCENDO_START = 0.05f
-        private const val NOTIFICATION_ID = 1
+        // AlarmReceiver が DISMISS 受信時に通知を直接畳むため公開
+        const val NOTIFICATION_ID = 1
 
         /**
          * 鳴動中インスタンス id。通知権限が無い等で鳴動画面が上がらない時の

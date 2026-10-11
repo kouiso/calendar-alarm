@@ -5,6 +5,15 @@ import UserNotifications
 import AlarmKit
 
 /// 鳴動予約の抽象。実体は AlarmKit (iOS26+) または UNUserNotificationCenter。
+
+/// 予約側が「未予約なのに成功扱い」になるのを防ぐ失敗理由。
+/// nil 返却だと呼び出し側が .pending 記録だけ残してゾンビ予約化するため
+/// 失敗は必ず throw で表す。
+enum SchedulerError: LocalizedError {
+    case notAuthorized
+    var errorDescription: String? { "アラーム権限がありません" }
+}
+
 protocol AlarmScheduler {
     /// true = AlarmKit の本物アラーム経路が使える
     var usesRealAlarms: Bool { get }
@@ -99,7 +108,11 @@ final class AlarmKitScheduler: AlarmScheduler {
         if manager.authorizationState != .authorized {
             _ = try? await manager.requestAuthorization()
         }
-        guard manager.authorizationState == .authorized else { return nil }
+        // 未認可で nil を返すと呼び出し側が「予約なしの .pending 記録」を残し
+        // 二度と鳴らないゾンビ化するため throw で失敗を明示する
+        guard manager.authorizationState == .authorized else {
+            throw SchedulerError.notAuthorized
+        }
         let uuid = Self.uuid(from: inst.id)
         if existingIds.contains(uuid) { try? manager.cancel(id: uuid) }
 

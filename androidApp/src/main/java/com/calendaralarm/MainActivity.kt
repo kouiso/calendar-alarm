@@ -100,6 +100,20 @@ class MainActivity : ComponentActivity() {
                     }
                     val onboarded by onboardedFlow.collectAsState(initial = true)
 
+                // 通知権限が無い等でフルスクリーン通知が出せない時でも、
+                // アプリを開けば鳴動画面へ辿り着けるようにする (止める手段の確保)。
+                // onboarded 分岐の外に置き、オンボーディング中でも救出できるようにする。
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    com.calendaralarm.engine.AlarmService.ringingInstanceId.collect { id ->
+                        id?.let {
+                            startActivity(
+                                com.calendaralarm.engine.RingingActivity.intent(
+                                    this@MainActivity, it,
+                                ),
+                            )
+                        }
+                    }
+                }
                 // カレンダー権限はメイン画面の条件にしない。
                 // 無くてもタイマー・単発アラームは動く (resync が部分動作する設計)、
                 // 不足分は権限ヘルスカードが誘導する。「権限なしで始める」の約束と一致。
@@ -114,19 +128,6 @@ class MainActivity : ComponentActivity() {
                     // メイン画面に入る度に予約を再主張する (冪等)。
                     androidx.compose.runtime.LaunchedEffect(Unit) {
                         app.container.repository.resync("app start")
-                    }
-                    // 通知権限が無い等でフルスクリーン通知が出せない時でも、
-                    // アプリを開けば鳴動画面へ辿り着けるようにする (止める手段の確保)。
-                    androidx.compose.runtime.LaunchedEffect(Unit) {
-                        com.calendaralarm.engine.AlarmService.ringingInstanceId.collect { id ->
-                            id?.let {
-                                startActivity(
-                                    com.calendaralarm.engine.RingingActivity.intent(
-                                        this@MainActivity, it,
-                                    ),
-                                )
-                            }
-                        }
                     }
                     MainScaffold(app.container.repository, app.container.settings)
                     // メール→予定: 抽出結果が届いていれば確認ダイアログを最前面に出す
