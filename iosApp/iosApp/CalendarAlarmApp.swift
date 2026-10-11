@@ -120,6 +120,9 @@ struct RootView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollContentBackground(.hidden)
+            // フローティングタブバー(高さ66+下マージン10)分の下端余白。
+            // safeAreaInset は内側の ScrollView へ伝播しないため明示的に引く
+            .padding(.bottom, 84)
             VStack {
                 Spacer()
                 HStack(spacing: 0) {
