@@ -166,7 +166,9 @@ class AlarmService : Service() {
         val fsiOk = Build.VERSION.SDK_INT < 34 ||
             (getSystemService(NotificationManager::class.java)
                 ?.canUseFullScreenIntent() ?: true)
-        if (RingingOverlay.canShow(this)) {
+        if (!fsiOk && RingingOverlay.canShow(this)) {
+            // FSI拒否時の代替停止UIとしてのみ出す。両方出すと停止UIが二重になり、
+            // overlay の停止ボタンを押しても裏の鳴動画面が残る (E2Eで再現確認)。
             // 表示自体はメインスレッドで行い、成否はオーバーレイ側が鳴動ログへ記録する
             RingingOverlay.show(
                 this, instance.id, instance.title,

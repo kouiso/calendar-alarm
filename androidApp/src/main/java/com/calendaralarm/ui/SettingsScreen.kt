@@ -121,8 +121,10 @@ fun SettingsScreen(
     val audit by repository.auditFlow(50).collectAsState(initial = emptyList())
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        calendars = repository.calendarSources()
-        calPrefs = repository.calendarPrefsFlowList().associateBy { it.calendarId }
+        // READ_CALENDAR 未許可だと calendarSources が SecurityException で死ぬ
+        calendars = runCatching { repository.calendarSources() }.getOrDefault(emptyList())
+        calPrefs = runCatching { repository.calendarPrefsFlowList() }
+            .getOrDefault(emptyList()).associateBy { it.calendarId }
     }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
