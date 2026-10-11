@@ -13,12 +13,14 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,8 +28,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -243,10 +247,24 @@ private fun RingingScreen(
         } else {
             Box(Modifier.fillMaxSize().background(Color(0xFF0A0C11)))
         }
+        // AlarmKit 同様、小画面でも停止操作が隠れないよう上部 (日付/時刻/件名) は
+        // スクロール領域、下部の操作群 (スヌーズ/スライド停止) はピン留めする構造。
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val viewportHeight = maxHeight
+                Column(
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    // 内容が窓より低い時は余白を両端の weight で埋めて見た目を維持し、
+                    // 高い時はスクロールに任せる (minHeight=viewport が境界条件)
+                    Column(
+                        modifier = Modifier.defaultMinSize(minHeight = viewportHeight),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
             // 日付チップ
             Surface(
                 color = Color.White.copy(alpha = 0.06f),
@@ -321,7 +339,9 @@ private fun RingingScreen(
                     )
                 }
             }
-            Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
             // スヌーズは大きい1ボタンのみ: プリセット常時表示は押し間違いの元なので畳む
             Surface(
                 onClick = onSnooze,
@@ -415,23 +435,36 @@ private fun SlideToStop(
                 onClick(label = "停止", action = { onStop(); true })
             }
             .pointerInput(trackWidthPx) {
-                detectHorizontalDragGestures(
+                // 掴み始めが丸の範囲内の時だけ受理: トラック右側からの横スワイプで
+                // 止まってしまうと誤停止になるため起点を縛る (iOS と同じ閾値式)
+                var grabbed = false
+                detectDragGestures(
+                    onDragStart = { start -> grabbed = start.x <= thumbPx + padPx * 2 },
                     onDragEnd = {
-                        scope.launch {
-                            if (progress.value >= 0.8f) {
-                                progress.snapTo(1f)
-                                onStop()
-                            } else {
-                                progress.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                        if (grabbed) {
+                            scope.launch {
+                                if (progress.value >= 0.8f) {
+                                    progress.snapTo(1f)
+                                    onStop()
+                                } else {
+                                    progress.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                }
                             }
                         }
+                        grabbed = false
                     },
                     onDragCancel = {
-                        scope.launch { progress.animateTo(0f, spring(stiffness = Spring.StiffnessMedium)) }
+                        if (grabbed) {
+                            scope.launch { progress.animateTo(0f, spring(stiffness = Spring.StiffnessMedium)) }
+                        }
+                        grabbed = false
                     },
-                ) { _, dragAmount ->
-                    scope.launch {
-                        progress.snapTo((progress.value + dragAmount / travel).coerceIn(0f, 1f))
+                ) { change, dragAmount ->
+                    if (grabbed) {
+                        change.consume()
+                        scope.launch {
+                            progress.snapTo((progress.value + dragAmount.x / travel).coerceIn(0f, 1f))
+                        }
                     }
                 }
             },

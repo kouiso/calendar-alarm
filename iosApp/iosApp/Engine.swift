@@ -66,7 +66,15 @@ final class Engine: ObservableObject {
                 // AlarmKit から消えた = ユーザーがアラートUIで完全に止めた
                 if rec.state == .fired || rec.state == .snoozed {
                     store.markState(id, .dismissed)
-                    if let aid = rec.instance.standaloneAlarmId { disableConsumedOneShots([aid]) }
+                    // スヌーズ子が pending で残っている限り単発は消費扱いにしない。
+                    // ここで親を OFF にすると子の温存条件 (sa: 親 enabled) を壊し、
+                    // 次回 resync で子が捨てられてスヌーズが鳴らなくなる。
+                    let snoozeChildPending = rec.state == .snoozed && store.state.scheduled.contains {
+                        $0.key.hasPrefix("\(id):snz") && $0.value.state == .pending
+                    }
+                    if let aid = rec.instance.standaloneAlarmId, !snoozeChildPending {
+                        disableConsumedOneShots([aid])
+                    }
                     alertingIds.remove(id)
                 }
                 continue
@@ -426,6 +434,10 @@ final class Engine: ObservableObject {
             snoozeSeq: inst.snoozeSeq + 1
         )
         store.markState(inst.id, .snoozed)
+        // 子レコードは await を挟まずここで先行登録する。親の AlarmKit 予約を
+        // 止めた直後に reconcile が走ると「snoozed + AlarmKit 消滅 + 子なし」と
+        // 誤判定されて単発親が消費OFFになり、登録済みなら温存条件を保てる。
+        store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: nil))
         Task {
             // 予約失敗 (権限剥奪等) でも記録は .pending で残す — 次回 resync の
             // 温存経路で再予約され権限が戻れば自律回復する。ただし失敗は監査に残す

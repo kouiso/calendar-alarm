@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// 鳴動画面 (Night UI スペック): 日付チップ + アクセントリング2重 + Outfit極細112pt時刻
-/// + 残りラベル + 天気チップ + スヌーズ/停止 pill (72h)。常時ダーク基調。
-/// AlarmKit 経路では OS がフルスクリーンアラートを出すので、これはアプリ前面時の補助表示。
+/// 鳴動画面 (Night UI スペック): 日付チップ + アクセントリング2重 + Outfit極細72pt時刻
+/// + 残りラベル + 天気チップ + スヌーズ大ボタン (80h) / 開閉式プリセットチップ / スライド停止 (80h)。常時ダーク基調。
+/// AlarmKit 経路では OS がカード窓アラートでこれを表示し、アプリ前面時の補助表示にもなる。
 struct RingingView: View {
     @EnvironmentObject var engine: Engine
     @EnvironmentObject var store: Store
@@ -164,6 +164,7 @@ private struct SlideToStop: View {
     let accent: Color
     let onStop: () -> Void
     @State private var progress: CGFloat = 0
+    @State private var grabbed = false
     private let thumbSize: CGFloat = 64
     private let pad: CGFloat = 8
 
@@ -195,9 +196,14 @@ private struct SlideToStop: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
+                        // 掴み始めが丸の外 (トラック右側等) なら無効: 画面のどこでも
+                        // 横スワイプが効くと意図しない停止につながるため起点を縛る
+                        guard grabbed || value.startLocation.x <= thumbSize + pad * 3 else { return }
+                        grabbed = true
                         progress = min(max(value.translation.width / travel, 0), 1)
                     }
                     .onEnded { _ in
+                        grabbed = false
                         if progress >= 0.8 {
                             progress = 1
                             onStop()

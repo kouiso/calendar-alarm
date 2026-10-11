@@ -273,20 +273,27 @@ object RingingOverlay {
         })
 
         var downX = 0f
+        // 掴み始めが丸の範囲内の時だけドラッグを受理: トラック上の任意スワイプで
+        // 止まってしまうと誤停止になるため起点を縛る (RingingActivity と同じ判定)
+        var grabbed = false
         slider.setOnTouchListener { v, ev ->
             val travel = (v.width - thumbSize - pad * 2).coerceAtLeast(1).toFloat()
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    grabbed = ev.x <= thumbSize + pad * 2
                     downX = ev.x
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
+                    if (!grabbed) return@setOnTouchListener true
                     val dx = (ev.x - downX).coerceIn(0f, travel)
                     thumb.translationX = dx
                     label.alpha = (1f - dx / travel).coerceIn(0f, 1f)
                     true
                 }
                 MotionEvent.ACTION_UP -> {
+                    if (!grabbed) return@setOnTouchListener true
+                    grabbed = false
                     if ((ev.x - downX) >= travel * 0.8f) {
                         thumb.translationX = travel
                         dismiss()
@@ -297,8 +304,11 @@ object RingingOverlay {
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    thumb.animate().translationX(0f).setDuration(120).start()
-                    label.animate().alpha(1f).setDuration(120).start()
+                    if (grabbed) {
+                        thumb.animate().translationX(0f).setDuration(120).start()
+                        label.animate().alpha(1f).setDuration(120).start()
+                    }
+                    grabbed = false
                     true
                 }
                 else -> true
