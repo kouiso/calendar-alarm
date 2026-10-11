@@ -5,6 +5,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
@@ -37,43 +39,69 @@ object RingingOverlay {
     fun canShow(context: Context): Boolean =
         Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(context)
 
-    /** 鳴動画面の代替として停止/スヌーズを全画面に表示する。既に出ていれば差し替える。 */
+    /**
+     * 鳴動画面の代替として停止/スヌーズを全画面に表示する。既に出ていれば差し替える。
+     * WindowManager 操作は呼び出し側のスレッドに関わらずメインで行う
+     * (beginRinging 等は IO 上で動いており、そこで addView すると Looper 不在で失敗する)。
+     * 成否は鳴動ログへ記録して次の障害の断線箇所を切り分けられるようにする。
+     */
     fun show(context: Context, instanceId: String, title: String, snoozeMinutes: Int) {
         if (!canShow(context)) return
-        hide(context)
-        val wm = context.getSystemService(WindowManager::class.java) ?: return
-
-        val view = buildView(context, instanceId, title, snoozeMinutes)
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            // タップを受けるため NOT_FOCUSABLE は付けない。
-            // ロック上にも出せる端末では出る (FSI が拾えない環境への保険)。
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-            android.graphics.PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.CENTER
-        }
-        try {
-            wm.addView(view, params)
-            overlayView = view
-        } catch (e: Exception) {
-            // オーバーレイ自体が拒否される環境では通知側だけが頼り。
-            // ここで落とすと鳴動停止経路ごと死ぬので見逃し化する。
+        val app = context.applicationContext
+        Handler(Looper.getMainLooper()).post {
+            removeNow(app)
+            val wm = app.getSystemService(WindowManager::class.java) ?: run {
+                audit(app, "OVERLAY_FAIL", "$instanceId: WindowManager取得不可")
+                return@post
+            }
+            val view = buildView(app, instanceId, title, snoozeMinutes)
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                // タップを受けるため NOT_FOCUSABLE は付けない。
+                // ロック上にも出せる端末では出る (FSI が拾えない環境への保険)。
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                android.graphics.PixelFormat.TRANSLUCENT,
+            ).apply {
+                gravity = Gravity.CENTER
+            }
+            try {
+                wm.addView(view, params)
+                overlayView = view
+                audit(app, "OVERLAY_SHOWN", "$instanceId: 停止UIをオーバーレイで表示")
+            } catch (e: Exception) {
+                // オーバーレイ自体が拒否される環境では通知側だけが頼り。
+                // ここで落とすと鳴動停止経路ごと死ぬので見逃し化する。
+                audit(app, "OVERLAY_FAIL", "$instanceId: ${e.javaClass.simpleName}: ${e.message}")
+            }
         }
     }
 
+    /** 任意スレッドから呼んでよい。実際の removeView はメインへ投げる。 */
     fun hide(context: Context) {
+        if (overlayView == null) return
+        Handler(Looper.getMainLooper()).post { removeNow(context.applicationContext) }
+    }
+
+    /** メインスレッド上でのみ呼ぶこと。参照を消すのは削除を試みた後。 */
+    private fun removeNow(context: Context) {
         val view = overlayView ?: return
-        overlayView = null
         runCatching {
             context.getSystemService(WindowManager::class.java)?.removeView(view)
+        }
+        overlayView = null
+    }
+
+    private fun audit(context: Context, action: String, detail: String) {
+        runCatching {
+            (context as com.calendaralarm.CalendarAlarmApp)
+                .container.repository.audit(action, detail)
         }
     }
 

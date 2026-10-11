@@ -64,7 +64,9 @@ class RingingActivity : ComponentActivity() {
         applyLockscreenFlags()
         instanceIdState.value = intent.getStringExtra(EXTRA_INSTANCE_ID)
         // FSI経由で本画面が出せたなら、フォールバックのオーバーレイ停止UIは畳む
-        // (オーバーレイは常に最前面に描画されるので共存すると二重UIになる)
+        // (オーバーレイは常に最前面に描画されるので共存すると二重UIになる)。
+        // onResume でも畳む: 既存 Activity への onNewIntent や、生成後に
+        // サービスが overlay を出し直したケースで残存するのを防ぐ。
         RingingOverlay.hide(this)
 
         setContent {
@@ -110,6 +112,13 @@ class RingingActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 生成後にサービスがオーバーレイを出し直した場合や、覆い被さっていた
+        // 状態から復帰した場合にもフォールバック停止UIが残らないように畳む
+        RingingOverlay.hide(this)
     }
 
     override fun onNewIntent(intent: Intent) {

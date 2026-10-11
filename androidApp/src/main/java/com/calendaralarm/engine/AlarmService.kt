@@ -167,12 +167,11 @@ class AlarmService : Service() {
             (getSystemService(NotificationManager::class.java)
                 ?.canUseFullScreenIntent() ?: true)
         if (RingingOverlay.canShow(this)) {
+            // 表示自体はメインスレッドで行い、成否はオーバーレイ側が鳴動ログへ記録する
             RingingOverlay.show(
                 this, instance.id, instance.title,
                 instance.snoozeMinutes.takeIf { it > 0 } ?: ringSettings.defaultSnoozeMinutes,
             )
-            app.container.repository.audit(
-                "RING_UI", "${instance.id}: overlay表示 (fsi=${if (fsiOk) "許可" else "拒否"})")
         } else if (!fsiOk) {
             // オーバーレイ権限も FSI も無い: 通知シェード経路だけが残る危険状態を記録
             app.container.repository.audit(
