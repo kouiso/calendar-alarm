@@ -48,8 +48,9 @@ class SettingsRepository(private val context: Context) {
         /** Googleカレンダー連携のアカウントメール。連携済みなら Calendar API の
          *  eventType を取りに行く。未連携は null (タイトル判定にフォールバック)。 */
         val googleAccountEmail: String? = null,
-        /** 予定側リマインダーを鳴動対象にするか。 */
-        val importEventReminders: Boolean = false,
+        /** 予定側リマインダーを鳴動対象にするか。既定は ON —
+         *  このアプリは元カレンダー通知の「何分前」を正本として鳴らす仕様。 */
+        val importEventReminders: Boolean = true,
         /** 鳴動画面のスヌーズプリセット (分)。 */
         val snoozePresets: List<Int> = listOf(5, 10, 15, 30, 45, 60),
         /** アラーム音量。0以下はシステムの音量に追従、1〜100はアプリ固定音量。 */
@@ -120,7 +121,7 @@ class SettingsRepository(private val context: Context) {
                 event = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 16 != 0,
             ),
             googleAccountEmail = p[KEY_GOOGLE_ACCOUNT],
-            importEventReminders = p[KEY_IMPORT_REMINDERS] ?: false,
+            importEventReminders = p[KEY_IMPORT_REMINDERS] ?: true,
             snoozePresets = (p[KEY_SNOOZE_PRESETS] ?: "5,10,15,30,45,60")
                 .toCsvList().mapNotNull { it.toIntOrNull() }.ifEmpty { listOf(10) },
             alarmVolumePercent = p[KEY_ALARM_VOLUME] ?: 0,

@@ -360,6 +360,39 @@ class AlarmExpanderTest {
     }
 
     @Test
+    fun `取込リマインダーの分数と実予約時刻が一致する`() {
+        // 受入条件: カレンダー通知の「何分前」→ minutesBefore → triggerAt = start - N分
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+            .copy(calendarReminderMinutes = listOf(45))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 0)),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            importEventReminders = true,
+        )
+        val imported = out.single { it.minutesBefore == 45 }
+        assertEquals(ldt("2026-10-05T09:15:00").toEpochMilliseconds(), imported.triggerAtMillis)
+        assertEquals("ev:c1:e1:${ev.startMillis}:b45", imported.id)
+    }
+
+    @Test
+    fun `負のリマインダー値は取り込まない`() {
+        // CalendarContract の METHOD_DEFAULT 行などで MINUTES=-1 が来ると
+        // そのままでは開始「後」に鳴るゴミ予約になるため >=0 のみ採用。
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+            .copy(calendarReminderMinutes = listOf(-1, 10))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 0)),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            importEventReminders = true,
+        )
+        assertEquals(listOf(0, 10), out.map { it.minutesBefore })
+    }
+
+    @Test
     fun `予定側リマインダー取込OFFでは出ない`() {
         val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
             .copy(calendarReminderMinutes = listOf(10))
