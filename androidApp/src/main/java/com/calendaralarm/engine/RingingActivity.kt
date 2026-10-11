@@ -63,6 +63,9 @@ class RingingActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         applyLockscreenFlags()
         instanceIdState.value = intent.getStringExtra(EXTRA_INSTANCE_ID)
+        // FSI経由で本画面が出せたなら、フォールバックのオーバーレイ停止UIは畳む
+        // (オーバーレイは常に最前面に描画されるので共存すると二重UIになる)
+        RingingOverlay.hide(this)
 
         setContent {
             val settings by app.container.settings.flow.collectAsState(initial = null)
