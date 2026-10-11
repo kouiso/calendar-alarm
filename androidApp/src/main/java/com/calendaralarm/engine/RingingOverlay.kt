@@ -16,6 +16,9 @@ import android.widget.TextView
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * 鳴動中の「停止UIが1つも画面に出ない」事故への最終防衛オーバーレイ。
@@ -103,8 +106,9 @@ object RingingOverlay {
 
     private fun audit(context: Context, action: String, detail: String) {
         runCatching {
-            (context as com.calendaralarm.CalendarAlarmApp)
-                .container.repository.audit(action, detail)
+            val repo = (context as com.calendaralarm.CalendarAlarmApp)
+                .container.repository
+            CoroutineScope(Dispatchers.IO).launch { repo.audit(action, detail) }
         }
     }
 
