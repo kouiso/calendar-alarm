@@ -32,6 +32,9 @@ import java.util.Locale
  */
 object RingingOverlay {
 
+    // メインスレッドで更新・任意スレッドで読む。stale read で hide が
+    // スキップされると全画面UIが残り得るため可視性を保証する
+    @Volatile
     private var overlayView: View? = null
 
     fun isShowing() = overlayView != null
