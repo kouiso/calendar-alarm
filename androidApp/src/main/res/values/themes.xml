@@ -2,6 +2,6 @@
 <resources>
     <style name="Theme.CalendarAlarm" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <!-- アイコンの明暗は MainActivity 側でテーマに合わせて切替えるため XML では固定しない -->
     </style>
 </resources>

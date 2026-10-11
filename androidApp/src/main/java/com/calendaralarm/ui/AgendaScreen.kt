@@ -107,10 +107,16 @@ internal enum class ViewMode {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AgendaScreen(repository: AlarmRepository) {
+fun AgendaScreen(
+    repository: AlarmRepository,
+    onAlarmArmed: (String?) -> Unit,
+    onShowRingSetup: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val app = context.applicationContext as CalendarAlarmApp
+    // カレンダー接続カード・権限警告カード用。ON_RESUME で再評価される。
+    val perms = rememberPermSnapshot(context)
 
     var items by remember { mutableStateOf<List<AlarmRepository.AgendaItem>?>(null) }
     var refreshKey by remember { mutableIntStateOf(0) }
@@ -140,6 +146,17 @@ fun AgendaScreen(repository: AlarmRepository) {
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = 20.dp, top = 58.dp),
         )
+        // 初回導線: カレンダー未接続なら一番上に接続カード、
+        // 鳴動系の許可が欠けていれば細い警告カードを重ねて出す
+        CalendarConnectCard(
+            perms = perms,
+            onConnected = {
+                app.ensureCalendarObserver()
+                scope.launch { repository.resync("calendar linked") }
+            },
+        )
+        PermissionNagCard(perms = perms.value, onFix = onShowRingSetup)
+
         // 次のアラーム帯: いつ鳴るか常時見せるのが信頼感の肝 (Night UI hero card)
         if (nextAlarm != null) {
             NextAlarmBanner(nextAlarm.title, nextAlarm.triggerAtMillis)
@@ -273,6 +290,7 @@ fun AgendaScreen(repository: AlarmRepository) {
                 item = item,
                 weatherEnabled = settings?.weatherEnabled ?: true,
                 onOverride = { action, minutes, extraOffsets ->
+                    if (action == EventAction.ALARM) onAlarmArmed(item.event.title)
                     scope.launch {
                         repository.setEventOverride(item.event.instanceKey, action, minutes, extraOffsets)
                         selected = null

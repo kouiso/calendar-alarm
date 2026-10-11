@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -45,11 +46,12 @@ import androidx.navigation.compose.rememberNavController
 import com.calendaralarm.ui.AgendaScreen
 import com.calendaralarm.ui.AlarmEditScreen
 import com.calendaralarm.ui.AlarmsScreen
-import com.calendaralarm.ui.OnboardingScreen
+import com.calendaralarm.ui.RingSetupSheet
 import com.calendaralarm.ui.SettingsScreen
 import com.calendaralarm.ui.TimerScreen
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -94,15 +96,17 @@ class MainActivity : ComponentActivity() {
                 val bgFlow = remember { app.container.settings.flow.map { it.backgroundImageUri } }
                 val bgUri by bgFlow.collectAsState(initial = null)
                 AppBackground(bgUri) {
-                    // onboarded で既に設定済みの場合も flow は remember 必須
-                    val onboardedFlow = remember {
-                        app.container.settings.flow.map { it.onboardingDone }
-                    }
-                    val onboarded by onboardedFlow.collectAsState(initial = true)
+                // XML テーマは Light 固定のため、ステータスバーアイコンの明暗は
+                // 実行時にこちらで切替える (ダーク時にアイコンが消える不具合の修正)。
+                val darkTheme = isSystemInDarkTheme()
+                androidx.compose.runtime.SideEffect {
+                    androidx.core.view.WindowCompat
+                        .getInsetsController(window, window.decorView)
+                        .isAppearanceLightStatusBars = !darkTheme
+                }
 
                 // 通知権限が無い等でフルスクリーン通知が出せない時でも、
                 // アプリを開けば鳴動画面へ辿り着けるようにする (止める手段の確保)。
-                // onboarded 分岐の外に置き、オンボーディング中でも救出できるようにする。
                 androidx.compose.runtime.LaunchedEffect(Unit) {
                     com.calendaralarm.engine.AlarmService.ringingInstanceId.collect { id ->
                         id?.let {
@@ -114,24 +118,16 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                // カレンダー権限はメイン画面の条件にしない。
-                // 無くてもタイマー・単発アラームは動く (resync が部分動作する設計)、
-                // 不足分は権限ヘルスカードが誘導する。「権限なしで始める」の約束と一致。
-                if (!onboarded) {
-                    OnboardingScreen(
-                        repository = app.container.repository,
-                        settings = app.container.settings,
-                        activity = this,
-                    )
-                } else {
-                    // 強制終了→手動再開で AlarmManager の予約が消えるケースに備え、
-                    // メイン画面に入る度に予約を再主張する (冪等)。
-                    androidx.compose.runtime.LaunchedEffect(Unit) {
-                        app.container.repository.resync("app start")
-                    }
-                    MainScaffold(app.container.repository, app.container.settings)
-                    // メール→予定: 抽出結果が届いていれば確認ダイアログを最前面に出す
-                    extractedJson.value?.let { json ->
+                // 初回起動はオンボーディング画面を挟まず予定画面へ直行する。
+                // 権限誘導は予定画面上のカードと初回アラームON時のシートが担う。
+                // 強制終了→手動再開で AlarmManager の予約が消えるケースに備え、
+                // メイン画面に入る度に予約を再主張する (冪等)。
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    app.container.repository.resync("app start")
+                }
+                MainScaffold(app.container.repository, app.container.settings)
+                // メール→予定: 抽出結果が届いていれば確認ダイアログを最前面に出す
+                extractedJson.value?.let { json ->
                         val ev = runCatching {
                             kotlinx.serialization.json.Json {
                                 ignoreUnknownKeys = true
@@ -151,7 +147,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
-                }
                 }
             }
         }
@@ -214,6 +209,9 @@ private val tabs = listOf(
     Tab("settings", "設定", { Icon(Icons.Default.Settings, contentDescription = "設定") }),
 )
 
+/** 権限シートの表示要求。auto=true は初回アラームONによる自動表示 (1回きり)。 */
+private data class RingSetupRequest(val subject: String?, val auto: Boolean)
+
 @Composable
 private fun MainScaffold(
     repository: com.calendaralarm.data.AlarmRepository,
@@ -222,6 +220,20 @@ private fun MainScaffold(
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val current = backStack?.destination?.route
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    var ringSetupRequest by remember {
+        androidx.compose.runtime.mutableStateOf<RingSetupRequest?>(null)
+    }
+    // 初めてアラームをオンにした時だけ権限シートを出す (「最初の1回だけ」)。
+    // 出し終えたら ringSetupDone を立てて以後は出さない。
+    val onAlarmArmed: (String?) -> Unit = { subject ->
+        scope.launch {
+            if (!settings.flow.first().ringSetupDone) {
+                ringSetupRequest = RingSetupRequest(subject, auto = true)
+            }
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -280,11 +292,20 @@ private fun MainScaffold(
             startDestination = "agenda",
             modifier = Modifier.padding(padding),
         ) {
-            composable("agenda") { AgendaScreen(repository) }
+            composable("agenda") {
+                AgendaScreen(
+                    repository = repository,
+                    onAlarmArmed = onAlarmArmed,
+                    onShowRingSetup = {
+                        ringSetupRequest = RingSetupRequest(null, auto = false)
+                    },
+                )
+            }
             composable("alarms") {
                 AlarmsScreen(
                     repository = repository,
                     onEdit = { id -> nav.navigate("alarm_edit?id=$id") },
+                    onAlarmArmed = onAlarmArmed,
                 )
             }
             composable("alarm_edit?id={id}") { entry ->
@@ -294,10 +315,22 @@ private fun MainScaffold(
                     settings = settings,
                     alarmId = id,
                     onDone = { nav.popBackStack() },
+                    onAlarmArmed = onAlarmArmed,
                 )
             }
             composable("timer") { TimerScreen(repository, settings) }
             composable("settings") { SettingsScreen(repository, settings) }
         }
+    }
+
+    ringSetupRequest?.let { req ->
+        RingSetupSheet(
+            repository = repository,
+            subject = req.subject,
+            onDismiss = {
+                ringSetupRequest = null
+                if (req.auto) scope.launch { settings.setRingSetupDone(true) }
+            },
+        )
     }
 }

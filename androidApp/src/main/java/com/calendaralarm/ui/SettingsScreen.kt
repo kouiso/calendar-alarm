@@ -86,7 +86,6 @@ import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.db.CalendarPrefEntity
 import com.calendaralarm.data.db.AuditLogEntity
-import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventType
@@ -96,7 +95,6 @@ import com.calendaralarm.ui.theme.AppPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -571,18 +569,12 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }
-                    // 鳴らない時の最終確認: 実際に10秒後に鳴らして経路全体を検証する
+                    // 鳴らない時の最終確認: 実際に10秒後に鳴らして経路全体を検証する。
+                    // 初回権限シートの完了段とも同じ共通関数を使う。
                     val testScope = rememberCoroutineScope()
                     TextButton(
                         onClick = {
-                            testScope.launch {
-                                repository.scheduleAdhoc(
-                                    AlarmExpander.timerInstance(
-                                        durationMillis = 10_000L,
-                                        now = Clock.System.now(),
-                                    ).copy(title = "テスト鳴動"),
-                                )
-                            }
+                            testScope.launch { scheduleRingTest(repository) }
                         },
                     ) {
                         Text("10秒後に鳴動テスト", color = MaterialTheme.colorScheme.primary)

@@ -57,6 +57,7 @@ import java.util.Locale
 fun AlarmsScreen(
     repository: AlarmRepository,
     onEdit: (Long) -> Unit,
+    onAlarmArmed: (String?) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val alarms by repository.standaloneAlarmsFlow().collectAsState(initial = emptyList())
@@ -149,6 +150,13 @@ fun AlarmsScreen(
                         alarm = alarm,
                         nextInstance = pending.firstOrNull { it.standaloneAlarmId == alarm.id },
                         onToggle = { on ->
+                            if (on) {
+                                onAlarmArmed(
+                                    alarm.label.ifBlank {
+                                        "%d:%02d".format(alarm.hour, alarm.minute)
+                                    },
+                                )
+                            }
                             scope.launch {
                                 repository.upsertStandaloneAlarm(alarm.copy(enabled = on))
                             }
