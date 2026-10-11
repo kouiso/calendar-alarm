@@ -120,8 +120,9 @@ struct RootView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollContentBackground(.hidden)
-            VStack {
-                Spacer()
+            // safeAreaInset に載せると各画面の ScrollView がバー分の下端余白を自動で取り、
+            // 末尾コンテンツがバー背面に隠れて到達不能になるのを防ぐ
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 HStack(spacing: 0) {
                     NightTab(icon: "calendar", label: "予定", sel: tab == 0) { tab = 0 }
                     NightTab(icon: "alarm", label: "アラーム", sel: tab == 1) { tab = 1 }
