@@ -6,9 +6,15 @@ on:
       - "**"
   workflow_dispatch:
 
+# push 直後の手動 dispatch で二重起動するのを防ぐ。同 ref の後続起動が先の実行を止める
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    runs-on: ${{ vars.RUNNER_LINUX }}
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
