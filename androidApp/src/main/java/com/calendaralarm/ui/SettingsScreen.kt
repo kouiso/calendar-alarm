@@ -469,9 +469,12 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
     val fsiOk = if (Build.VERSION.SDK_INT >= 34) {
         context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() ?: true
     } else true
+    // オーバーレイは FSI が効かない環境での鳴動停止UIフォールバック。
+    // 両方無いと鳴動中に画面上の停止手段が消えるためヘルス対象に数える。
+    val overlayOk = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(context)
     val batteryOk = context.getSystemService(PowerManager::class.java)
         ?.isIgnoringBatteryOptimizations(context.packageName) ?: true
-    val ngCount = listOf(notifOk, exactOk, fsiOk, batteryOk).count { !it }
+    val ngCount = listOf(notifOk, exactOk, fsiOk, overlayOk, batteryOk).count { !it }
     var expanded by remember { mutableStateOf(ngCount > 0) }
 
     Card(
@@ -531,6 +534,15 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
                         if (Build.VERSION.SDK_INT >= 34) {
                             activity?.startActivity(
                                 Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                },
+                            )
+                        }
+                    }
+                    HealthRow("上への表示", overlayOk) {
+                        if (Build.VERSION.SDK_INT >= 23) {
+                            activity?.startActivity(
+                                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
                                     data = Uri.parse("package:${context.packageName}")
                                 },
                             )

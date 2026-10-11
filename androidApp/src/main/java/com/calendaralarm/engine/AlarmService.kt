@@ -159,6 +159,24 @@ class AlarmService : Service() {
         )
         if (ringSettings.vibrateWhileRinging) startVibration()
         acquireWakeLock()
+        // 停止UIの確保: フルスクリーン Intent は API34+ で権限拒否され得るし、
+        // 端末ロック解除済みだと heads-up が畳まれて画面上の停止手段が無くなる。
+        // SYSTEM_ALERT_WINDOW は BAL 対象外なので、許可済みなら必ず出せる
+        // 停止画面をオーバーレイでも出す (鳴動画面と共存しないよう後者が出れば畳む)。
+        val fsiOk = Build.VERSION.SDK_INT < 34 ||
+            (getSystemService(NotificationManager::class.java)
+                ?.canUseFullScreenIntent() ?: true)
+        if (RingingOverlay.canShow(this)) {
+            // 表示自体はメインスレッドで行い、成否はオーバーレイ側が鳴動ログへ記録する
+            RingingOverlay.show(
+                this, instance.id, instance.title,
+                instance.snoozeMinutes.takeIf { it > 0 } ?: ringSettings.defaultSnoozeMinutes,
+            )
+        } else if (!fsiOk) {
+            // オーバーレイ権限も FSI も無い: 通知シェード経路だけが残る危険状態を記録
+            app.container.repository.audit(
+                "WARN", "${instance.id}: FSI拒否+オーバーレイ未許可のため停止UIは通知のみ")
+        }
         // 最終防衛線: 通知権限なし + FSI拒否 だと停止UIが1つも存在せず
         // 電源断まで鳴り続ける。上限に達したら自動停止して MISSED 扱いにする。
         ringTimeoutJob?.cancel()
@@ -342,6 +360,7 @@ class AlarmService : Service() {
         // FGS 状態も確実に抜く (通知だけ消すと前面化中サービスとして残り得る)
         stopForeground(STOP_FOREGROUND_REMOVE)
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+        RingingOverlay.hide(this)
         currentInstance = null
         ringingInstanceId.value = null
     }
@@ -373,7 +392,8 @@ class AlarmService : Service() {
         /** クレッシェンドの立ち上がり時間と開始音量。 */
         private const val CRESCENDO_MS = 30_000L
         private const val CRESCENDO_START = 0.05f
-        private const val NOTIFICATION_ID = 1
+        // AlarmReceiver が DISMISS 受信時に通知を直接畳むため公開
+        const val NOTIFICATION_ID = 1
 
         /**
          * 鳴動中インスタンス id。通知権限が無い等で鳴動画面が上がらない時の
