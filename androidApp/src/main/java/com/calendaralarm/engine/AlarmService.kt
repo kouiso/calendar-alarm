@@ -210,10 +210,24 @@ class AlarmService : Service() {
     }
 
     private suspend fun beginRinging(instanceId: String) {
-        // 墓標済みなら他の鳴動へ一切触れず終端のみ返す。後続の stopRinging は
-        // 現行鳴動を殺すので、墓標確認は必ずそれより先に行う (A鳴動中に
-        // DISMISS済みのBが起動処理へ来てもAを殺さない: BUG_0001 round6)
-        if (isDismissed(instanceId)) {
+        // 墓標確認・自世代確定・現行鳴動の停止・鳴動要求公開をひとつの
+        // クリティカルセクションで行う。分割すると、その間に届く DISMISS が
+        // 「確認〜停止」の窓で墓標済み要求を殺せずに現行鳴動が犠牲になるか、
+        // 「確認〜公開」の窓で鳴動ゼロ(IDLE)判定のまま素通りして墓標済み
+        // 要求が鳴る、という同族レースが残る。先に自世代を確定してから先代を
+        // 畳むので、公開直後に届く DISMISS も PENDING 判定でこの要求だけ潰せる
+        val gen = synchronized(ringLock) {
+            if (destroyed || isDismissed(instanceId)) {
+                null
+            } else {
+                ringGen++
+                teardownRing()
+                pendingStartId = instanceId
+                ringGen
+            }
+        }
+        if (gen == null) {
+            // 墓標済みか破棄済み: 他の鳴動へ一切触れず終端のみ記録して抜ける
             app.container.repository.audit("STALE_FIRE", "$instanceId: DISMISS済みのため鳴動を抑止")
             val nothingAlive = synchronized(ringLock) {
                 if (pendingStartId == instanceId) pendingStartId = null
@@ -222,28 +236,7 @@ class AlarmService : Service() {
             if (nothingAlive) stopSelf()
             return
         }
-        // 同時刻に複数鳴った場合は新しい方へ張り替える（MediaPlayer のリークと多重発声を防ぐ）
-        stopRinging()
-        val gen = ringGen
         if (destroyed) return
-        // 墓標再確認と鳴動要求の公開を同じロック内で行う。分けると、墓標確認〜
-        // 要求公開の間に届いた DISMISS が「鳴動ゼロ」(IDLE) 判定で素通りして
-        // 墓標済みの要求がそのまま鳴る。ここを抜けた後の DISMISS は
-        // pendingStartId 一致 (PENDING) として世代奪取で潰される
-        val tombstoned = synchronized(ringLock) {
-            if (destroyed || ringGen != gen) null
-            else if (isDismissed(instanceId)) true
-            else { pendingStartId = instanceId; false }
-        }
-        when (tombstoned) {
-            null -> return // 世代が進んだか破棄済み。現行世代の仕事に触れず抜ける
-            true -> {
-                app.container.repository.audit("STALE_FIRE", "$instanceId: DISMISS済みのため鳴動を抑止")
-                finishIfCurrent(gen)
-                return
-            }
-            false -> Unit // 鳴動要求として公開済み。鳴動中IDは開始確定時に繰り上げる
-        }
         val instance = app.container.repository.instanceById(instanceId)
         if (instance == null) {
             app.container.repository.audit("ERROR", "鳴動要求されたがインスタンス不明: $instanceId")
@@ -596,7 +589,17 @@ class AlarmService : Service() {
 
     private fun stopRinging() {
         // 世代前進も同じロック下で行い、adopt/claim の世代検査と順序を一意にする
-        synchronized(ringLock) { ringGen++ }
+        // (滞留中の鳴動要求は世代が進んだ時点で全て死ぬのでマーカーも消す)
+        synchronized(ringLock) { ringGen++; pendingStartId = null }
+        teardownRing()
+    }
+
+    /**
+     * 現行の鳴動資源を畳む本体。外部停止 (stopRinging) と beginRinging の
+     * 座席確定 (墓標確認・世代・公開と同じロック内) の両方から呼ぶ。
+     * 世代奪取は呼び出し側が先に済ませる前提
+     */
+    private fun teardownRing() {
         ringTimeoutJob?.cancel(); ringTimeoutJob = null
         crescendoJob?.cancel(); crescendoJob = null
         runCatching { mediaPlayer?.stop() }
