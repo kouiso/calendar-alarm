@@ -128,24 +128,23 @@ class MainActivity : ComponentActivity() {
                 MainScaffold(app.container.repository, app.container.settings)
                 // メール→予定: 抽出結果が届いていれば確認ダイアログを最前面に出す
                 extractedJson.value?.let { json ->
-                        val ev = runCatching {
-                            kotlinx.serialization.json.Json {
-                                ignoreUnknownKeys = true
-                            }.decodeFromString<com.calendaralarm.shared.model.ExtractedEvent>(json)
-                        }.getOrNull()
-                        if (ev != null) {
-                            com.calendaralarm.ui.ExtractedEventDialog(
-                                event = ev,
-                                onDismiss = { extractedJson.value = null },
-                                onSaved = {
-                                    extractedJson.value = null
-                                    // 新しい予定を即時取り込んでアラーム化する
-                                    lifecycleScope.launch {
-                                        app.container.repository.resync("event inserted")
-                                    }
-                                },
-                            )
-                        }
+                    val ev = runCatching {
+                        kotlinx.serialization.json.Json {
+                            ignoreUnknownKeys = true
+                        }.decodeFromString<com.calendaralarm.shared.model.ExtractedEvent>(json)
+                    }.getOrNull()
+                    if (ev != null) {
+                        com.calendaralarm.ui.ExtractedEventDialog(
+                            event = ev,
+                            onDismiss = { extractedJson.value = null },
+                            onSaved = {
+                                extractedJson.value = null
+                                // 新しい予定を即時取り込んでアラーム化する
+                                lifecycleScope.launch {
+                                    app.container.repository.resync("event inserted")
+                                }
+                            },
+                        )
                     }
                 }
             }
@@ -210,7 +209,7 @@ private val tabs = listOf(
 )
 
 /** 権限シートの表示要求。auto=true は初回アラームONによる自動表示 (1回きり)。 */
-private data class RingSetupRequest(val subject: String?, val auto: Boolean)
+private data class RingSetupRequest(val subject: String?, val minutesBefore: Int?, val auto: Boolean)
 
 @Composable
 private fun MainScaffold(
@@ -227,10 +226,10 @@ private fun MainScaffold(
     }
     // 初めてアラームをオンにした時だけ権限シートを出す (「最初の1回だけ」)。
     // 出し終えたら ringSetupDone を立てて以後は出さない。
-    val onAlarmArmed: (String?) -> Unit = { subject ->
+    val onAlarmArmed: (String?, Int?) -> Unit = { subject, minutesBefore ->
         scope.launch {
             if (!settings.flow.first().ringSetupDone) {
-                ringSetupRequest = RingSetupRequest(subject, auto = true)
+                ringSetupRequest = RingSetupRequest(subject, minutesBefore, auto = true)
             }
         }
     }
@@ -327,6 +326,7 @@ private fun MainScaffold(
         RingSetupSheet(
             repository = repository,
             subject = req.subject,
+            minutesBefore = req.minutesBefore,
             onDismiss = {
                 ringSetupRequest = null
                 if (req.auto) scope.launch { settings.setRingSetupDone(true) }
