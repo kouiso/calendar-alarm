@@ -14,6 +14,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -159,7 +160,15 @@ object RingingOverlay {
             setPadding(pad, dp(48), pad, dp(40))
         }
 
-        root.addView(TextView(context).apply {
+        // 時刻・タイトルは ScrollView (fillViewport) 内に配置し、低い画面や
+        // プリセット展開時に溢れてもスクロールで到達できるようにする。
+        // 下部の操作群は root 直下で固定。
+        val top = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+
+        top.addView(TextView(context).apply {
             text = SimpleDateFormat("H:mm", Locale.getDefault()).format(Date())
             textSize = 96f
             setTextColor(fg)
@@ -168,7 +177,7 @@ object RingingOverlay {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 2.2f,
         ).apply { gravity = Gravity.CENTER })
 
-        root.addView(TextView(context).apply {
+        top.addView(TextView(context).apply {
             text = title.ifBlank { "アラーム" }
             textSize = 30f
             setTextColor(fg)
@@ -180,8 +189,16 @@ object RingingOverlay {
         ))
 
         val spacer = View(context)
-        root.addView(spacer, LinearLayout.LayoutParams(
+        top.addView(spacer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 3f,
+        ))
+
+        val scroll = ScrollView(context).apply {
+            isFillViewport = true
+            addView(top)
+        }
+        root.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f,
         ))
 
         val snooze = pill("スヌーズ ${snoozeMinutes}分", Color.parseColor("#14FFFFFF"), fg)
@@ -219,7 +236,8 @@ object RingingOverlay {
                     )
                 }
             }
-            for (m in snoozePresets) {
+            // 鳴動画面と同じく最大6個: それ以上は1行に詰まり分数が読めない。
+            for (m in snoozePresets.take(6)) {
                 val chip = TextView(context).apply {
                     text = "+${m}分"
                     textSize = 14f

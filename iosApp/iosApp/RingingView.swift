@@ -2,7 +2,8 @@ import SwiftUI
 
 /// 鳴動画面 (Night UI スペック): 日付チップ + アクセントリング2重 + Outfit極細112pt時刻
 /// + 残りラベル + 天気チップ + スヌーズ大ボタン (80h) / 開閉式プリセットチップ / スライド停止 (80h)。常時ダーク基調。
-/// AlarmKit 経路では OS がカード窓アラートでこれを表示し、アプリ前面時の補助表示にもなる。
+/// RootView からアプリ内の全面オーバーレイとして表示する。AlarmKit のカード窓
+/// アラートは OS 自身の UI で描かれ、このビューは使われない。
 struct RingingView: View {
     @EnvironmentObject var engine: Engine
     @EnvironmentObject var store: Store
