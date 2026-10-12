@@ -22,6 +22,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+/** スライド停止の閾値 (RingingActivity/iOS の3実装で同じ値に揃える) */
+internal const val SLIDE_STOP_THRESHOLD = 0.8f
+
 /**
  * 鳴動中の「停止UIが1つも画面に出ない」事故への最終防衛オーバーレイ。
  *
@@ -53,7 +56,13 @@ object RingingOverlay {
      * (beginRinging 等は IO 上で動いており、そこで addView すると Looper 不在で失敗する)。
      * 成否は鳴動ログへ記録して次の障害の断線箇所を切り分けられるようにする。
      */
-    fun show(context: Context, instanceId: String, title: String, snoozeMinutes: Int) {
+    fun show(
+        context: Context,
+        instanceId: String,
+        title: String,
+        snoozeMinutes: Int,
+        snoozePresets: List<Int> = emptyList(),
+    ) {
         if (!canShow(context)) return
         val app = context.applicationContext
         Handler(Looper.getMainLooper()).post {
@@ -62,7 +71,7 @@ object RingingOverlay {
                 audit(app, "OVERLAY_FAIL", "$instanceId: WindowManager取得不可")
                 return@post
             }
-            val view = buildView(app, instanceId, title, snoozeMinutes)
+            val view = buildView(app, instanceId, title, snoozeMinutes, snoozePresets)
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -123,6 +132,7 @@ object RingingOverlay {
         instanceId: String,
         title: String,
         snoozeMinutes: Int,
+        snoozePresets: List<Int>,
     ): View {
         val accent = Color.parseColor("#BDBDFF")
         val fg = Color.parseColor("#F4F5F8")
@@ -190,6 +200,63 @@ object RingingOverlay {
             LinearLayout.LayoutParams.MATCH_PARENT, dp(72),
         ))
 
+        // 別分数スヌーズは開閉式: 鳴動画面 (RingingActivity) と同じく
+        // 「スヌーズ時間を選ぶ ▾」を押した時だけプリセットチップを出す。
+        // サービスへの ACTION_SNOOZE は EXTRA_SNOOZE_MINUTES で分数を渡す。
+        if (snoozePresets.isNotEmpty()) {
+            val chipRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                visibility = View.GONE
+            }
+            fun sendSnooze(minutes: Int) {
+                runCatching {
+                    context.startService(
+                        Intent(context, AlarmService::class.java).apply {
+                            action = AlarmService.ACTION_SNOOZE
+                            putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
+                            putExtra(AlarmService.EXTRA_SNOOZE_MINUTES, minutes)
+                        },
+                    )
+                }
+            }
+            for (m in snoozePresets) {
+                val chip = TextView(context).apply {
+                    text = "+${m}分"
+                    textSize = 14f
+                    setTextColor(fg)
+                    gravity = Gravity.CENTER
+                    background = GradientDrawable().apply {
+                        cornerRadius = dp(14).toFloat()
+                        setColor(Color.parseColor("#14FFFFFF"))
+                    }
+                    setOnClickListener { sendSnooze(m) }
+                }
+                chipRow.addView(chip, LinearLayout.LayoutParams(
+                    0, dp(40), 1f,
+                ).apply { marginStart = dp(4); marginEnd = dp(4) })
+            }
+            val toggle = TextView(context).apply {
+                text = "スヌーズ時間を選ぶ ▾"
+                textSize = 14f
+                setTextColor(sub)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(8), 0, dp(8))
+                setOnClickListener {
+                    val open = chipRow.visibility != View.VISIBLE
+                    chipRow.visibility = if (open) View.VISIBLE else View.GONE
+                    text = if (open) "スヌーズ時間を選ぶ ▴" else "スヌーズ時間を選ぶ ▾"
+                }
+            }
+            root.addView(toggle, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(4) })
+            root.addView(chipRow, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ))
+        }
+
         // 停止はスライド式: 誤タップで止まらないよう左端の丸を右へ80%ドラッグ。
         // TalkBack はこのトラックへのダブルタップ (performClick) で停止できる。
         root.addView(buildSlideToStop(context, instanceId, accent, fg),
@@ -247,7 +314,7 @@ object RingingOverlay {
         }
 
         val label = TextView(context).apply {
-            text = "スライドして停止"
+            text = "スライドして停止 ›"
             textSize = 20f
             setTextColor(fg)
             gravity = Gravity.CENTER
@@ -257,16 +324,21 @@ object RingingOverlay {
             FrameLayout.LayoutParams.MATCH_PARENT,
         ))
 
-        val thumb = TextView(context).apply {
-            text = "→"
-            textSize = 24f
-            setTextColor(Color.parseColor("#26247A"))
-            gravity = Gravity.CENTER
+        // 丸の中は停止の■ (デザイン正本: 矢印ではなく停止アイコン)
+        val thumb = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(accent)
             }
         }
+        thumb.addView(View(context).apply {
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#26247A"))
+                cornerRadius = dp(3).toFloat()
+            }
+        }, FrameLayout.LayoutParams(dp(22), dp(22)).apply {
+            gravity = Gravity.CENTER
+        })
         slider.addView(thumb, FrameLayout.LayoutParams(thumbSize, thumbSize).apply {
             gravity = Gravity.CENTER_VERTICAL
             leftMargin = pad
@@ -280,7 +352,7 @@ object RingingOverlay {
             val travel = (v.width - thumbSize - pad * 2).coerceAtLeast(1).toFloat()
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    grabbed = ev.x <= thumbSize + pad * 2
+                    grabbed = ev.x <= thumbSize + pad * 3
                     downX = ev.x
                     true
                 }
@@ -294,7 +366,7 @@ object RingingOverlay {
                 MotionEvent.ACTION_UP -> {
                     if (!grabbed) return@setOnTouchListener true
                     grabbed = false
-                    if ((ev.x - downX) >= travel * 0.8f) {
+                    if ((ev.x - downX) >= travel * SLIDE_STOP_THRESHOLD) {
                         thumb.translationX = travel
                         dismiss()
                     } else {

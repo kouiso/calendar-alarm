@@ -439,11 +439,11 @@ private fun SlideToStop(
                 // 止まってしまうと誤停止になるため起点を縛る (iOS と同じ閾値式)
                 var grabbed = false
                 detectDragGestures(
-                    onDragStart = { start -> grabbed = start.x <= thumbPx + padPx * 2 },
+                    onDragStart = { start -> grabbed = start.x <= thumbPx + padPx * 3 },
                     onDragEnd = {
                         if (grabbed) {
                             scope.launch {
-                                if (progress.value >= 0.8f) {
+                                if (progress.value >= SLIDE_STOP_THRESHOLD) {
                                     progress.snapTo(1f)
                                     onStop()
                                 } else {
@@ -472,7 +472,7 @@ private fun SlideToStop(
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
-                "スライドして停止",
+                "スライドして停止 ›",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFFECEEF3).copy(alpha = (1f - progress.value).coerceIn(0f, 1f)),
@@ -486,7 +486,8 @@ private fun SlideToStop(
                 .background(accent),
             contentAlignment = Alignment.Center,
         ) {
-            Text("→", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = onAccent)
+            // 丸の中は停止の■ (デザイン正本: 矢印ではなく停止アイコン)
+            Box(Modifier.size(24.dp).clip(RoundedCornerShape(4.dp)).background(onAccent))
         }
     }
 }

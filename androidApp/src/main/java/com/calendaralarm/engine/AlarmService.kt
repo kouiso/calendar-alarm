@@ -171,6 +171,7 @@ class AlarmService : Service() {
             RingingOverlay.show(
                 this, instance.id, instance.title,
                 instance.snoozeMinutes.takeIf { it > 0 } ?: ringSettings.defaultSnoozeMinutes,
+                ringSettings.snoozePresets,
             )
         } else if (!fsiOk) {
             // オーバーレイ権限も FSI も無い: 通知シェード経路だけが残る危険状態を記録

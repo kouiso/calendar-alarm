@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 鳴動画面 (Night UI スペック): 日付チップ + アクセントリング2重 + Outfit極細72pt時刻
+/// 鳴動画面 (Night UI スペック): 日付チップ + アクセントリング2重 + Outfit極細112pt時刻
 /// + 残りラベル + 天気チップ + スヌーズ大ボタン (80h) / 開閉式プリセットチップ / スライド停止 (80h)。常時ダーク基調。
 /// AlarmKit 経路では OS がカード窓アラートでこれを表示し、アプリ前面時の補助表示にもなる。
 struct RingingView: View {
@@ -47,18 +47,21 @@ struct RingingView: View {
                             )
                             .padding(.top, 12)
                         Spacer(minLength: 8)
-                        // アクセントリング + 大時刻 (カード窓に収めるため従来より縮小)
+                        // アクセントリング + 大時刻 (デザイン正本: 112pt / リング 224・196)
+                        // 本 View はアプリ内全画面オーバーレイでしか出ない (AlarmKit カード窓には
+                        // 描かれない) ので原寸が基本。窓が小さい時だけ高さに応じて縮める。
                         ZStack {
-                            Circle().stroke(accent.opacity(0.25), lineWidth: 1.5).frame(width: 170, height: 170)
-                            Circle().stroke(accent.opacity(0.15), lineWidth: 1).frame(width: 136, height: 136)
+                            Circle().stroke(accent.opacity(0.25), lineWidth: 1.5).frame(width: 224, height: 224)
+                            Circle().stroke(accent.opacity(0.15), lineWidth: 1).frame(width: 196, height: 196)
                             Text(now, format: .dateTime.hour().minute())
-                                .font(NightTheme.numFont(72, weight: .ultraLight))
+                                .font(NightTheme.numFont(112, weight: .ultraLight))
                                 .foregroundStyle(NightTheme.onNight)
-                                // "1:09 AM" がカード窓内で2行に折れて下端のボタン群を押し出すので1行に収める
+                                // "1:09 AM" 12h 表記でも1行に収める
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.45)
                                 .onReceive(ticker) { now = $0 }
                         }
+                        .scaleEffect(min(1, max(0.55, (geo.size.height - 320) / 420)))
                         .padding(.bottom, 10)
                         if let inst = current {
                             // 開始までの残り (eventStartMillis は DTO の eventStartMillis 想定)
@@ -128,8 +131,13 @@ struct RingingView: View {
                         .padding(.horizontal, 24).padding(.top, 4)
                     }
                     // 停止はスライド式: 誤タップで止まらないよう左端の丸を右へドラッグ
-                    SlideToStop(accent: accent) { engine.dismiss(inst) }
-                        .padding(.top, 8).padding(.bottom, 8)
+                    SlideToStop(accent: accent) {
+                        engine.dismiss(inst)
+                        // dismiss 失敗時 (silence 拒否) は id が alertingIds に残る。
+                        // 画面が残る以上、スライダーの丸を戻して再操作させるため成否を返す
+                        return !engine.alertingIds.contains(inst.id)
+                    }
+                    .padding(.top, 8).padding(.bottom, 8)
                     Text("Calendar Alarm")
                         .font(NightTheme.font(12))
                         .foregroundStyle(NightTheme.onNight.opacity(0.4))
@@ -162,11 +170,13 @@ struct RingingView: View {
 /// accessibilityRepresentation で「停止」ボタンとして公開し、ダブルタップで止まる。
 private struct SlideToStop: View {
     let accent: Color
-    let onStop: () -> Void
+    /// 停止実行。true=停止成功 (画面が閉じる) / false=失敗で鳴動継続 (丸を戻して再操作させる)
+    let onStop: () -> Bool
     @State private var progress: CGFloat = 0
     @State private var grabbed = false
     private let thumbSize: CGFloat = 64
     private let pad: CGFloat = 8
+    private let stopThreshold: CGFloat = 0.8
 
     var body: some View {
         GeometryReader { geo in
@@ -176,7 +186,7 @@ private struct SlideToStop: View {
                     .fill(Color.white.opacity(0.08))
                 RoundedRectangle(cornerRadius: 40)
                     .stroke(accent.opacity(0.35), lineWidth: 1)
-                Text("スライドして停止")
+                Text("スライドして停止 ›")
                     .font(NightTheme.font(20, weight: .semibold))
                     .foregroundStyle(NightTheme.onNight)
                     .frame(maxWidth: .infinity)
@@ -184,10 +194,11 @@ private struct SlideToStop: View {
                 Circle()
                     .fill(accent)
                     .frame(width: thumbSize, height: thumbSize)
+                    // 丸の中は停止の■ (デザイン正本: 矢印ではなく停止アイコン)
                     .overlay(
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundStyle(.black.opacity(0.75))
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.black.opacity(0.75))
+                            .frame(width: 22, height: 22)
                     )
                     .padding(.leading, pad)
                     .offset(x: progress * travel)
@@ -204,9 +215,13 @@ private struct SlideToStop: View {
                     }
                     .onEnded { _ in
                         grabbed = false
-                        if progress >= 0.8 {
+                        if progress >= stopThreshold {
                             progress = 1
-                            onStop()
+                            if !onStop() {
+                                // 停止失敗: 丸が右端に残ると手がかりが消える (掴み判定は
+                                // 左端基準) ので左へ戻し、もう一度スライドで止められるようにする
+                                withAnimation(.easeOut(duration: 0.15)) { progress = 0 }
+                            }
                         } else {
                             withAnimation(.easeOut(duration: 0.15)) { progress = 0 }
                         }
@@ -216,7 +231,7 @@ private struct SlideToStop: View {
         .frame(height: 80)
         .padding(.horizontal, 24)
         .accessibilityRepresentation {
-            Button("停止") { onStop() }
+            Button("停止") { _ = onStop() }
         }
     }
 }
