@@ -74,20 +74,7 @@ class RingingActivity : ComponentActivity() {
         // 自分のインスタンスでなくなったら閉じる。
         // (FSI はサービスの ringingInstanceId 設定より先に起き得るため
         //  起動直後の null は猶予して扱い、鳴動未開始の可能性を残す)
-        lifecycleScope.launch {
-            var sawMine = AlarmService.ringingInstanceId.value == instanceIdState.value
-            val deadline = System.currentTimeMillis() + 3_000
-            AlarmService.ringingInstanceId.collect { id ->
-                val mine = instanceIdState.value
-                if (id != null && id == mine) sawMine = true
-                if ((sawMine && id != mine) ||
-                    (!sawMine && id != mine && System.currentTimeMillis() > deadline)
-                ) {
-                    finish()
-                    return@collect
-                }
-            }
-        }
+        watchRinging()
 
         setContent {
             val settings by app.container.settings.flow.collectAsState(initial = null)
@@ -141,11 +128,45 @@ class RingingActivity : ComponentActivity() {
         RingingOverlay.hide(this)
     }
 
+    private var watchJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * ringingInstanceId を監視し、自分のインスタンスでなくなった時点で finish する。
+     * 起動直後の null は猶予する (FSI が ringingInstanceId 設定より先に来るため)。
+     * 猶予は elapsedRealtime で3秒: 端末時計変更に左右されず、emit が無くても
+     * withTimeoutOrNull 側が発火して閉じられる (旧来の collect 内締切判定は
+     * emit なしでは永遠に評価されなかった)。
+     */
+    private fun watchRinging() {
+        watchJob?.cancel()
+        watchJob = lifecycleScope.launch {
+            val mine = instanceIdState.value
+            var sawMine = AlarmService.ringingInstanceId.value == mine
+            if (!sawMine) {
+                val grace = kotlinx.coroutines.withTimeoutOrNull(GRACE_MS) {
+                    AlarmService.ringingInstanceId.first { id -> id == mine }
+                    true
+                }
+                sawMine = grace == true
+                if (!sawMine) {
+                    finish()
+                    return@launch
+                }
+            }
+            AlarmService.ringingInstanceId.first { id -> id != mine }
+            finish()
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // 鳴動画面が出たまま次のアラームが発火した時、停止/スヌーズが
         // 旧インスタンスへ飛ばないよう差し替える
         instanceIdState.value = intent.getStringExtra(EXTRA_INSTANCE_ID)
+        // 差し替えたら監視も新しいインスタンスへ張り直す。
+        // 張り直さないと、古い監視が「自分でなくなった」と検出して stop 画面を
+        // 畳んでしまう (B2)。
+        watchRinging()
     }
 
     /**
@@ -212,6 +233,7 @@ class RingingActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_INSTANCE_ID = "instance_id"
+        private const val GRACE_MS = 3_000L
 
         fun intent(context: Context, instanceId: String): Intent =
             Intent(context, RingingActivity::class.java).apply {

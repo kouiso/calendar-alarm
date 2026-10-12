@@ -157,7 +157,8 @@ class AlarmService : Service() {
             volumePercent = ringSettings.alarmVolumePercent,
             crescendo = ringSettings.volumeCrescendo,
         )
-        if (ringSettings.vibrateWhileRinging) startVibration()
+        vibrateForRing = ringSettings.vibrateWhileRinging
+        if (vibrateForRing) startVibration()
         acquireWakeLock()
         // 停止UIの確保: フルスクリーン Intent は API34+ で権限拒否され得るし、
         // 端末ロック解除済みだと heads-up が畳まれて画面上の停止手段が無くなる。
@@ -241,7 +242,7 @@ class AlarmService : Service() {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, ringChannelId())
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle(currentInstance?.title ?: "アラーム")
             .setContentText("止めるには開いてください")
@@ -259,21 +260,35 @@ class AlarmService : Service() {
             .build()
     }
 
+    // 鳴動中バイブ設定は鳴動開始時に鳴動設定から採る (チャンネル選択と MediaPlayer 側を一致させる)
+    private var vibrateForRing = true
+
+    private fun ringChannelId(): String = if (vibrateForRing) CHANNEL_ID else CHANNEL_ID_NOVIB
+
     private fun createChannel() {
         val mgr = getSystemService(NotificationManager::class.java)
-        mgr.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "アラーム", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "アラーム鳴動時のフルスクリーン通知"
-                // 音は MediaPlayer が出すのでチャンネルは無音のまま。
-                // ただし無音+無振動だと FSI が抑止された端末でヘッズアップも出ず
-                // 「鳴るが停止UIが一切無い」状態になる。バイブだけ有効にして
-                // 通知を alert 扱いにし、FSI が効かなくても必ず停止ボタンが見える形にする。
-                setSound(null, null)
-                enableVibration(true)
-                vibrationPattern = longArrayOf(0, 800, 400, 800, 400)
-                setBypassDnd(true)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            },
+        // 旧チャンネルを掃除 (振動設定が1チャンネル固定だった頃の残り)
+        mgr?.deleteNotificationChannel("alarm_v1")
+        mgr?.deleteNotificationChannel("alarm_v2")
+        fun channel(id: String, label: String, vibrate: Boolean) = NotificationChannel(
+            id, label, NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "アラーム鳴動時のフルスクリーン通知"
+            // 音は MediaPlayer が出すのでチャンネルは無音のまま。
+            // バイブだけ有効にして通知を alert 扱いにし、FSI が効かなくても
+            // 必ず停止ボタンが見える形にする。バイブOFF設定の鳴動では
+            // 無振動チャンネル (alarm_novib) を使い vibrateWhileRinging を尊重する。
+            setSound(null, null)
+            enableVibration(vibrate)
+            if (vibrate) vibrationPattern = longArrayOf(0, 800, 400, 800, 400)
+            setBypassDnd(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+        mgr?.createNotificationChannels(
+            listOf(
+                channel(CHANNEL_ID, "アラーム", vibrate = true),
+                channel(CHANNEL_ID_NOVIB, "アラーム（バイブなし）", vibrate = false),
+            ),
         )
     }
 
@@ -407,7 +422,12 @@ class AlarmService : Service() {
         const val ACTION_SNOOZE = "com.calendaralarm.action.SNOOZE"
         const val EXTRA_INSTANCE_ID = "instance_id"
         const val EXTRA_SNOOZE_MINUTES = "snooze_minutes"
-        private const val CHANNEL_ID = "alarm_v2"
+        // バイブ設定はチャンネル属性のため、鳴動中バイブ ON/OFF で分ける。
+        // (チャンネルの振動設定は作成後はユーザー/アプリいずれも変更効かず、
+        //  1チャンネルだと vibrateWhileRinging=OFF でも通知が振動した)
+        private const val CHANNEL_ID = "alarm_vib"
+        private const val CHANNEL_ID_NOVIB = "alarm_novib"
+        // 旧チャンネル (alarm_v1, alarm_v2) は createChannel 内で削除する
         /** クレッシェンドの立ち上がり時間と開始音量。 */
         private const val CRESCENDO_MS = 30_000L
         private const val CRESCENDO_START = 0.05f
