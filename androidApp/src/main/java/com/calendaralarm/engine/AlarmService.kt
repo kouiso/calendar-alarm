@@ -65,6 +65,12 @@ class AlarmService : Service() {
     // 読んで空振りする残存窓を volatile で埋める。
     @Volatile private var mediaPlayer: MediaPlayer? = null
 
+    // 世代検査と共有状態への代入を同じクリティカルセクションで行うための
+    // ロック。検査〜代入を分けると旧世代の代入が新世代の参照を上書きして
+    // その鳴動を停止不能にする (Devin Review BUG 指摘)。teardown 側の
+    // ringGen++ も同じロック下で行い、adopt/claim との順序を一意にする
+    private val ringLock = Any()
+
     private val app get() = application as CalendarAlarmApp
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -171,8 +177,10 @@ class AlarmService : Service() {
         if (destroyed || ringGen != gen) return
         // 世代確定後にだけ自分のインスタンスを共有状態へ書く (stale 世代が
         // 書き残すと DISMISS の id フォールバックや救出経路が古い id を見る)
-        currentInstance = instance
-        ringingInstanceId.value = instanceId
+        if (!adoptIfCurrent(gen) {
+            currentInstance = instance
+            ringingInstanceId.value = instanceId
+        }) return
         // タイトルが取れたので通知を張り替える
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification(instanceId))
@@ -185,16 +193,17 @@ class AlarmService : Service() {
         // startAudio 内で自分のプレイヤーは世代検査つきで畳まれているので、
         // 世代が進んでいたら新鳴動のリソースに触れないよう静かに抜ける
         if (destroyed || ringGen != gen) return
+        // リソースは局所参照で生成し、世代がまだ現行の時だけ共有フィールド
+        // へ adopt する。採用されなかったものは局所参照で畳み (新世代のもの
+        // は止めない)、採用後に世代が進んだ分は新世代側の stopRinging が畳く
         val myVibrator = if (ringSettings.vibrateWhileRinging) startVibration() else null
+        if (myVibrator != null && !adoptIfCurrent(gen) { vibrator = myVibrator }) {
+            runCatching { myVibrator.cancel() }
+            return
+        }
         val myWakeLock = acquireWakeLock()
-        if (destroyed || ringGen != gen) {
-            // 生成直後に世代が進んだ場合: 全体停止は新鳴動を殺すので呼ばず、
-            // 自分が生成したものだけ局所参照で畳む (フィールドが他世代の
-            // ものに上書き済みなら参照は外さない)
-            runCatching { myVibrator?.cancel() }
-            if (vibrator === myVibrator) vibrator = null
+        if (!adoptIfCurrent(gen) { wakeLock = myWakeLock }) {
             runCatching { myWakeLock?.let { if (it.isHeld) it.release() } }
-            if (wakeLock === myWakeLock) wakeLock = null
             return
         }
         // 停止UIの確保: フルスクリーン Intent は API34+ で権限拒否され得るし、
@@ -211,7 +220,7 @@ class AlarmService : Service() {
             RingingOverlay.show(
                 this, instance.id, instance.title,
                 instance.snoozeMinutes.takeIf { it > 0 } ?: ringSettings.defaultSnoozeMinutes,
-                stillValid = { !destroyed && ringGen == gen },
+                stillValid = { synchronized(ringLock) { !destroyed && ringGen == gen } },
             )
         } else if (!fsiOk) {
             // オーバーレイ権限も FSI も無い: 通知シェード経路だけが残る危険状態を記録
@@ -220,14 +229,21 @@ class AlarmService : Service() {
         }
         // 最終防衛線: 通知権限なし + FSI拒否 だと停止UIが1つも存在せず
         // 電源断まで鳴り続ける。上限に達したら自動停止して MISSED 扱いにする。
-        ringTimeoutJob?.cancel()
-        ringTimeoutJob = scope.launch {
-            kotlinx.coroutines.delay(RING_TIMEOUT_MS)
-            app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
-            app.container.repository.markMissed(instance.id, "鳴動が${RING_TIMEOUT_MS / 60_000}分続き自動停止")
-            MissedNotifier.post(this@AlarmService, instance.title)
-            stopRinging()
-            stopSelf()
+        // 上限タイマーの差し替えも世代ゲートの内側で行う。ゲート外で
+        // cancel/assign すると新世代のタイマーを殺したり、stale 世代の
+        // タイマーが残って後から現行世代の鳴動を止め得る
+        adoptIfCurrent(gen) {
+            ringTimeoutJob?.cancel()
+            ringTimeoutJob = scope.launch {
+                kotlinx.coroutines.delay(RING_TIMEOUT_MS)
+                // 発火時点で後始末権を奪取できた場合だけ自分の鳴動を畳む
+                if (!claimTeardown(gen)) return@launch
+                app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
+                app.container.repository.markMissed(instance.id, "鳴動が${RING_TIMEOUT_MS / 60_000}分続き自動停止")
+                MissedNotifier.post(this@AlarmService, instance.title)
+                stopRinging()
+                stopSelf()
+            }
         }
     }
 
@@ -329,16 +345,15 @@ class AlarmService : Service() {
                 player.start()
             }.isSuccess
             if (ok) {
-                // 先に代入してから世代を再検査する。代入前検査だと
-                // 「検査〜代入」の間に世代が進む窓が残る
-                mediaPlayer = player
-                if (destroyed || ringGen != gen) {
-                    // start() 直後か代入直後に停止/新鳴動が来た場合。
-                    // 全体停止は新鳴動を殺すので、自分のプレイヤーだけ畳む
-                    // (他世代が上書き済みなら参照は外さない)
+                // 共有フィールドへの代入は世代検査と同じクリティカル
+                // セクションで行う。先に代入して再検査すると、旧世代の
+                // 代入が新世代の mediaPlayer 参照を上書きして新しい音を
+                // 停止不能にする
+                if (!adoptIfCurrent(gen) { mediaPlayer = player }) {
+                    // 世代が進んだ/破棄済み: 全体停止は新鳴動を殺すので
+                    // 呼ばず、自分のプレイヤーだけ局所参照で畳む
                     runCatching { player.stop() }
                     player.release()
-                    if (mediaPlayer === player) mediaPlayer = null
                     return
                 }
                 if (crescendo && target >= 0f) startCrescendo(player, target)
@@ -370,9 +385,12 @@ class AlarmService : Service() {
         }
     }
 
+    // 共有フィールド vibrator/wakeLock へは触れず、生成したものを局所
+    // 参照で返す。共有フィールドへの adopt は呼び出し側が世代ゲートの
+    // 内側で行う (旧世代の代入が新世代の参照を上書きしないように)
     private fun startVibration(): Vibrator? {
-        try {
-            vibrator = if (Build.VERSION.SDK_INT >= 31) {
+        return try {
+            val v = if (Build.VERSION.SDK_INT >= 31) {
                 getSystemService(VibratorManager::class.java)?.defaultVibrator
             } else {
                 @Suppress("DEPRECATION")
@@ -380,7 +398,7 @@ class AlarmService : Service() {
             }
             val pattern = longArrayOf(0, 800, 400, 800, 400)
             if (Build.VERSION.SDK_INT >= 33) {
-                vibrator?.vibrate(
+                v?.vibrate(
                     VibrationEffect.createWaveform(pattern, 0),
                     VibrationAttributes.Builder()
                         .setUsage(VibrationAttributes.USAGE_ALARM)
@@ -388,20 +406,20 @@ class AlarmService : Service() {
                 )
             } else {
                 @Suppress("DEPRECATION")
-                vibrator?.vibrate(pattern, 0)
+                v?.vibrate(pattern, 0)
             }
+            v
         } catch (e: Exception) {
             scope.launch { app.container.repository.audit("ERROR", "バイブ開始失敗: ${e.message}") }
+            null
         }
-        return vibrator
     }
 
     private fun acquireWakeLock(): PowerManager.WakeLock? {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         // 安全側に10分で自動リリース。鳴動継続の上限でもある
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "calendaralarm:ringing")
+        return pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "calendaralarm:ringing")
             .apply { acquire(10 * 60 * 1000L) }
-        return wakeLock
     }
 
     /**
@@ -412,15 +430,28 @@ class AlarmService : Service() {
      *  経由で新鳴動まで消える)。
      */
     private fun finishIfCurrent(gen: Int) {
-        if (destroyed) return
-        if (ringGen == gen) {
-            stopRinging()
-            stopSelf()
-        }
+        // 後始末権を世代単位で atomic に奪取する。確認と世代前進を分けると、
+        // 確認〜停止の間に新世代がリソースを得てそれを畳んでしまう
+        if (!claimTeardown(gen)) return
+        stopRinging()
+        stopSelf()
     }
 
+    /** gen が現行かつ未破棄なら assign を実行して true。共有フィールドへの代入は必ずこれを通す。 */
+    private fun adoptIfCurrent(gen: Int, assign: () -> Unit): Boolean =
+        synchronized(ringLock) {
+            if (!destroyed && ringGen == gen) { assign(); true } else false
+        }
+
+    /** 後始末権を世代単位で atomic に奪取する。奪取できた世代だけが全体停止へ進める。 */
+    private fun claimTeardown(gen: Int): Boolean =
+        synchronized(ringLock) {
+            if (!destroyed && ringGen == gen) { ringGen++; true } else false
+        }
+
     private fun stopRinging() {
-        ringGen++
+        // 世代前進も同じロック下で行い、adopt/claim の世代検査と順序を一意にする
+        synchronized(ringLock) { ringGen++ }
         ringTimeoutJob?.cancel(); ringTimeoutJob = null
         crescendoJob?.cancel(); crescendoJob = null
         runCatching { mediaPlayer?.stop() }
