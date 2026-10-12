@@ -210,21 +210,40 @@ class AlarmService : Service() {
     }
 
     private suspend fun beginRinging(instanceId: String) {
+        // 墓標済みなら他の鳴動へ一切触れず終端のみ返す。後続の stopRinging は
+        // 現行鳴動を殺すので、墓標確認は必ずそれより先に行う (A鳴動中に
+        // DISMISS済みのBが起動処理へ来てもAを殺さない: BUG_0001 round6)
+        if (isDismissed(instanceId)) {
+            app.container.repository.audit("STALE_FIRE", "$instanceId: DISMISS済みのため鳴動を抑止")
+            val nothingAlive = synchronized(ringLock) {
+                if (pendingStartId == instanceId) pendingStartId = null
+                ringingInstanceId.value == null && pendingStartId == null
+            }
+            if (nothingAlive) stopSelf()
+            return
+        }
         // 同時刻に複数鳴った場合は新しい方へ張り替える（MediaPlayer のリークと多重発声を防ぐ）
         stopRinging()
         val gen = ringGen
         if (destroyed) return
-        // DISMISS の終端化はインメモリ墓標へ即書きされるので、ここで引く
-        // (DISMISS の DB 書込みは非同期で、これがないと「停止→DB終端化前に
-        //  鳴動処理が状態を読んで通過」の窓で終端済みが鳴る: BUG_0001)
-        if (isDismissed(instanceId)) {
-            app.container.repository.audit("STALE_FIRE", "$instanceId: DISMISS済みのため鳴動を抑止")
-            finishIfCurrent(gen)
-            return
+        // 墓標再確認と鳴動要求の公開を同じロック内で行う。分けると、墓標確認〜
+        // 要求公開の間に届いた DISMISS が「鳴動ゼロ」(IDLE) 判定で素通りして
+        // 墓標済みの要求がそのまま鳴る。ここを抜けた後の DISMISS は
+        // pendingStartId 一致 (PENDING) として世代奪取で潰される
+        val tombstoned = synchronized(ringLock) {
+            if (destroyed || ringGen != gen) null
+            else if (isDismissed(instanceId)) true
+            else { pendingStartId = instanceId; false }
         }
-        // 鳴動要求の対象 id を公開する。「鳴動中」ではなく「要求中」として
-        // 持ち、実際に鳴動を開始し得た時点で ringingInstanceId へ繰り上げる
-        adoptIfCurrent(gen) { pendingStartId = instanceId }
+        when (tombstoned) {
+            null -> return // 世代が進んだか破棄済み。現行世代の仕事に触れず抜ける
+            true -> {
+                app.container.repository.audit("STALE_FIRE", "$instanceId: DISMISS済みのため鳴動を抑止")
+                finishIfCurrent(gen)
+                return
+            }
+            false -> Unit // 鳴動要求として公開済み。鳴動中IDは開始確定時に繰り上げる
+        }
         val instance = app.container.repository.instanceById(instanceId)
         if (instance == null) {
             app.container.repository.audit("ERROR", "鳴動要求されたがインスタンス不明: $instanceId")
