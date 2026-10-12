@@ -80,31 +80,81 @@ class AlarmService : Service() {
             ACTION_DISMISS -> {
                 // 物理停止を最優先に潰す。DB記録が例外/遅延しても
                 // 「UIは閉じたのに音だけ鳴り続ける」事故にしないため。
-                val targetId = intent.getStringExtra(EXTRA_INSTANCE_ID) ?: currentInstance?.id
-                stopRinging()
-                scope.launch {
-                    runCatching { app.container.repository.onDismissed(targetId) }
-                    // startId 指定だと過去の ACTION_START の startId が未消化で残り
-                    // サービスが終わらないことがある。引数なしで全て消化して確実に止める。
-                    stopSelf()
+                // 畳むかどうかの判定は対象一致と世代奪取を不可分に行う:
+                // 別インスタンス宛の遅延 DISMISS が現行鳴動を殺したり、
+                // 確認〜畳みの間に後発鳴動が生まれてそれを殺さないようにする
+                val targetId = intent.getStringExtra(EXTRA_INSTANCE_ID) ?: ringingInstanceId.value
+                when (claimTeardownFor(targetId)) {
+                    TeardownClaim.MATCHED -> {
+                        stopRinging()
+                        scope.launch {
+                            runCatching { app.container.repository.onDismissed(targetId) }
+                            // startId 指定だと過去の ACTION_START の startId が未消化で残り
+                            // サービスが終わらないことがある。引数なしで全て消化して確実に止める。
+                            stopSelf()
+                        }
+                    }
+                    TeardownClaim.BUSY -> {
+                        // 別の鳴動が資源を持っている。それを殺さず対象の終端だけ記録する
+                        scope.launch {
+                            runCatching { app.container.repository.onDismissed(targetId) }
+                            app.container.repository.audit(
+                                "DISMISS_LATE", "${targetId ?: "(id不明)"}: 現行鳴動と不一致のため記録のみ")
+                        }
+                    }
+                    TeardownClaim.IDLE -> {
+                        // 鳴動中/要求中のものが無い: 滞留する通知・オーバーレイは
+                        // ゾンビなので畳む (サービス死後の残滓もここで消せる)
+                        scope.launch {
+                            runCatching { app.container.repository.onDismissed(targetId) }
+                            stopForeground(STOP_FOREGROUND_REMOVE)
+                            getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+                            RingingOverlay.hide(this@AlarmService)
+                            stopSelf()
+                        }
+                    }
                 }
             }
             ACTION_SNOOZE -> {
-                val targetId = intent.getStringExtra(EXTRA_INSTANCE_ID) ?: currentInstance?.id
+                val targetId = intent.getStringExtra(EXTRA_INSTANCE_ID) ?: ringingInstanceId.value
                 // 鳴動画面のプリセットからの分数指定 (未指定=インスタンス既定)
                 val mins = intent.getIntExtra(EXTRA_SNOOZE_MINUTES, 0).takeIf { it > 0 }
-                stopRinging()
-                scope.launch {
-                    runCatching { app.container.repository.onSnoozed(targetId, mins) }
-                    stopSelf()
+                when (claimTeardownFor(targetId)) {
+                    TeardownClaim.MATCHED -> {
+                        stopRinging()
+                        scope.launch {
+                            runCatching { app.container.repository.onSnoozed(targetId, mins) }
+                            stopSelf()
+                        }
+                    }
+                    TeardownClaim.BUSY -> scope.launch {
+                        runCatching { app.container.repository.onSnoozed(targetId, mins) }
+                        app.container.repository.audit(
+                            "SNOOZE_LATE", "${targetId ?: "(id不明)"}: 現行鳴動と不一致のため記録のみ")
+                    }
+                    TeardownClaim.IDLE -> scope.launch {
+                        runCatching { app.container.repository.onSnoozed(targetId, mins) }
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+                        RingingOverlay.hide(this@AlarmService)
+                        stopSelf()
+                    }
                 }
             }
             else -> {
                 // ACTION_START、または鳴動中にプロセスが殺された後の
                 // START_STICKY null-intent 再起動。後者は明示 id が無いので
                 // 鳴動猶予内の FIRED 行をDBから拾って鳴動を再開する。
+                val explicitId = intent?.getStringExtra(EXTRA_INSTANCE_ID)
+                if (explicitId != null) {
+                    // コルーチン起動前に鳴動対象 id を同期公開する。通知表示から
+                    // beginRinging 完了までの窓に届く DISMISS も対象一致で畳め、
+                    // 「鳴動中 id が未登録で素通り→DBだけ終端化して鳴り続ける」
+                    // 受信経路のゾンビ窓を塞ぐ
+                    ringingInstanceId.value = explicitId
+                }
                 scope.launch {
-                    val id = intent?.getStringExtra(EXTRA_INSTANCE_ID)
+                    val id = explicitId
                         ?: app.container.repository.firedWithinGrace()?.id
                     if (id == null) {
                         stopSelf(startId)
@@ -131,6 +181,9 @@ class AlarmService : Service() {
         stopRinging()
         val gen = ringGen
         if (destroyed) return
+        // 鳴動対象 id を世代ゲート経由で即座に公開する (通知表示〜各 adopt
+        // までの窓に届く DISMISS が対象不明で素通りしないように)
+        adoptIfCurrent(gen) { ringingInstanceId.value = instanceId }
         val instance = app.container.repository.instanceById(instanceId)
         if (instance == null) {
             app.container.repository.audit("ERROR", "鳴動要求されたがインスタンス不明: $instanceId")
@@ -447,6 +500,26 @@ class AlarmService : Service() {
     private fun claimTeardown(gen: Int): Boolean =
         synchronized(ringLock) {
             if (!destroyed && ringGen == gen) { ringGen++; true } else false
+        }
+
+    private enum class TeardownClaim { MATCHED, BUSY, IDLE }
+
+    /**
+     * DISMISS/SNOOZE が指す対象の後始末権を奪取する。対象が現行の鳴動
+     * (公開済みの鳴動要求を含む) と一致するときだけ世代を進めて MATCHED。
+     * 別の鳴動が所有していれば BUSY (その鳴動は殺さない)、鳴動ゼロなら IDLE
+     * (滞留UIの後始末だけ許す)。確認と世代前進は同じロック内で不可分に行う
+     */
+    private fun claimTeardownFor(targetId: String?): TeardownClaim =
+        synchronized(ringLock) {
+            if (destroyed) return@synchronized TeardownClaim.IDLE
+            val cur = ringingInstanceId.value
+            when {
+                cur == null -> TeardownClaim.IDLE
+                // id 不明の停止はフェイルセーフで現行鳴動宛とみなす
+                targetId == null || targetId == cur -> { ringGen++; TeardownClaim.MATCHED }
+                else -> TeardownClaim.BUSY
+            }
         }
 
     private fun stopRinging() {

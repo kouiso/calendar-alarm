@@ -90,20 +90,6 @@ class AlarmReceiver : BroadcastReceiver() {
                 val pending = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        // 現在鳴っているインスタンス宛の DISMISS だけ物理停止する。
-                        // サービス/通知/オーバーレイはシングルトンなので、旧インスタンス宛の
-                        // 遅延・重複 DISMISS が無条件に畳むと、引き継いだ後発の鳴動まで殺して
-                        // 「FIRED のまま二度と鳴らない」消失アラームになる (実機再現)。
-                        // id 不明はフェイルセーフで従来通り全畳みにする
-                        val ringingId = AlarmService.ringingInstanceId.value
-                        if (instanceId == null || ringingId == instanceId) {
-                            context.stopService(Intent(context, AlarmService::class.java))
-                            // サービスが既に死んでいると通知だけ残って「押しても止まらない」
-                            // ゾンビ状態になるので、受信側でも通知とオーバーレイを直接畳む
-                            context.getSystemService(android.app.NotificationManager::class.java)
-                                ?.cancel(AlarmService.NOTIFICATION_ID)
-                            RingingOverlay.hide(context)
-                        }
                         // 「届いた」事実を鳴動ログに残す。次の障害時に
                         // ボタン未到達か終端化失敗かをここで切り分けられる
                         runCatching {
@@ -112,9 +98,29 @@ class AlarmReceiver : BroadcastReceiver() {
                                     "DISMISS_RECV", instanceId ?: "(id不明)",
                                 )
                         }
+                        // 物理停止の判断はサービス側の世代機構に委譲する。受信側で
+                        // シングルトン資源を直接畳むと、(a) 鳴動 id 登録前の窓で
+                        // DISMISS が素通りして鳴り続け、(b) 確認〜畳みの間に後発
+                        // 鳴動が生まれてそれを殺す (実機再現の同族レース)。
+                        // サービス側は対象一致+世代奪取を不可分に判定し、別鳴動なら
+                        // 終端記録のみ、鳴動ゼロなら滞留UIだけ畳む
                         runCatching {
-                            (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
-                                .container.repository.onDismissed(instanceId)
+                            context.startService(Intent(context, AlarmService::class.java).apply {
+                                action = AlarmService.ACTION_DISMISS
+                                if (instanceId != null) {
+                                    putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
+                                }
+                            })
+                        }.onFailure {
+                            // サービスへ届けられない=未起動/起動不可。鳴動資源は
+                            // 存在しないので滞留通知・オーバーレイだけ畳み、DB終端もここで済ませる
+                            context.getSystemService(android.app.NotificationManager::class.java)
+                                ?.cancel(AlarmService.NOTIFICATION_ID)
+                            RingingOverlay.hide(context)
+                            runCatching {
+                                (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
+                                    .container.repository.onDismissed(instanceId)
+                            }
                         }
                     } finally {
                         pending.finish()
