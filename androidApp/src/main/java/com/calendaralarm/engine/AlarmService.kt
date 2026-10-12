@@ -70,10 +70,16 @@ class AlarmService : Service() {
     // その鳴動を停止不能にする (Devin Review BUG 指摘)。teardown 側の
     // ringGen++ も同じロック下で行い、adopt/claim との順序を一意にする
     private val ringLock = Any()
-    // 「鳴動要求」として受理済みだが鳴動開始に至っていない対象の id。
+    // 鳴動座席を確保済み (先代を畳んだ) だが鳴動開始に至っていない対象の id。
     // 実際に鳴動を開始し得た時点で ringingInstanceId へ繰り上げられる。
     // 全アクセスは ringLock 内のみ (claim の対象判定に使う)
     private var pendingStartId: String? = null
+    // ACTION_START を受理したがまだ座席を確保していない id 群。座席確保前の
+    // 要求への停止は墓標だけで潰せるので、世代を進めて現行鳴動の上限タイマー等を
+    // 巻き添えにしない。全アクセスは ringLock 内のみ
+    private val requestedIds = mutableSetOf<String>()
+    // 鳴動通知のチャンネル選択に使う。前面化前に鳴動設定から確定させる
+    @Volatile private var vibrateForRing = true
 
     private val app get() = application as CalendarAlarmApp
 
@@ -87,15 +93,15 @@ class AlarmService : Service() {
                 // 畳むかどうかの判定は対象一致と世代奪取を不可分に行う:
                 // 別インスタンス宛の遅延 DISMISS が現行鳴動を殺したり、
                 // 確認〜畳みの間に後発鳴動が生まれてそれを殺さないようにする
-                val targetId = intent.getStringExtra(EXTRA_INSTANCE_ID) ?: ringingInstanceId.value
-                when (claimTeardownFor(targetId) {
+                val (claim, targetId) = claimTeardownFor(intent.getStringExtra(EXTRA_INSTANCE_ID)) {
                     // IDLE確定時に同じロック内で実行される。判定〜畳みの間に
                     // 新鳴動が始まってもその adopt はロック待ちになるので、
                     // ここで畳むUIは必ず滞留分 (BUG_0003)
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
                     RingingOverlay.hide(this@AlarmService)
-                }) {
+                }
+                when (claim) {
                     TeardownClaim.MATCHED -> {
                         stopRinging()
                         scope.launch {
@@ -109,15 +115,12 @@ class AlarmService : Service() {
                         // 潰したのは未開始の鳴動要求。それが通知を出し替え済みなら
                         // 現行鳴動の停止UIを貼り直す。現行鳴動が無ければ滞留UIを畳んで終了
                         runCatching { app.container.repository.onDismissed(targetId) }
-                        val cur = ringingInstanceId.value
-                        if (cur != null) {
-                            getSystemService(NotificationManager::class.java)
-                                .notify(NOTIFICATION_ID, buildNotification(cur))
-                        } else {
-                            getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
-                            RingingOverlay.hide(this@AlarmService)
-                            stopSelf()
-                        }
+                        restoreOrFinish()
+                    }
+                    TeardownClaim.REQUESTED -> scope.launch {
+                        // 座席確保前の要求は墓標で抑止済み。現行鳴動には触れない
+                        // (後続の beginRinging が STALE_FIRE で通知を現行へ戻す)
+                        runCatching { app.container.repository.onDismissed(targetId) }
                     }
                     TeardownClaim.BUSY -> {
                         // 別の鳴動が資源を持っている。それを殺さず対象の終端だけ記録する
@@ -135,14 +138,14 @@ class AlarmService : Service() {
                 }
             }
             ACTION_SNOOZE -> {
-                val targetId = intent.getStringExtra(EXTRA_INSTANCE_ID) ?: ringingInstanceId.value
                 // 鳴動画面のプリセットからの分数指定 (未指定=インスタンス既定)
                 val mins = intent.getIntExtra(EXTRA_SNOOZE_MINUTES, 0).takeIf { it > 0 }
-                when (claimTeardownFor(targetId) {
+                val (claim, targetId) = claimTeardownFor(intent.getStringExtra(EXTRA_INSTANCE_ID)) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
                     RingingOverlay.hide(this@AlarmService)
-                }) {
+                }
+                when (claim) {
                     TeardownClaim.MATCHED -> {
                         stopRinging()
                         scope.launch {
@@ -152,15 +155,10 @@ class AlarmService : Service() {
                     }
                     TeardownClaim.PENDING -> scope.launch {
                         runCatching { app.container.repository.onSnoozed(targetId, mins) }
-                        val cur = ringingInstanceId.value
-                        if (cur != null) {
-                            getSystemService(NotificationManager::class.java)
-                                .notify(NOTIFICATION_ID, buildNotification(cur))
-                        } else {
-                            getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
-                            RingingOverlay.hide(this@AlarmService)
-                            stopSelf()
-                        }
+                        restoreOrFinish()
+                    }
+                    TeardownClaim.REQUESTED -> scope.launch {
+                        runCatching { app.container.repository.onSnoozed(targetId, mins) }
                     }
                     TeardownClaim.BUSY -> scope.launch {
                         runCatching { app.container.repository.onSnoozed(targetId, mins) }
@@ -184,7 +182,7 @@ class AlarmService : Service() {
                     // ようになる。鳴動中ID (ringingInstanceId) はここでは上書き
                     // しない: 要求時点で上書きすると A鳴動中にBが要求されただけで
                     // Aへの停止がBUSY化してAが殺せなくなる (BUG_0002)
-                    synchronized(ringLock) { pendingStartId = explicitId }
+                    synchronized(ringLock) { requestedIds += explicitId }
                 }
                 scope.launch {
                     val id = explicitId
@@ -193,10 +191,15 @@ class AlarmService : Service() {
                         stopSelf(startId)
                         return@launch
                     }
+                    // チャンネル (バイブ有無) は前面化の通知で決まるので先に設定を読む
+                    vibrateForRing = runCatching {
+                        app.container.settings.flow.first().vibrateWhileRinging
+                    }.getOrDefault(true)
                     if (!startForegroundWithNotification(id)) {
                         // BOOT_COMPLETED 処理中など、mediaPlayback FGS の起動が
                         // 禁止されているコンテキスト。ここで例外を上げると
                         // クラッシュループになるので見逃し扱いにして静かに畳む。
+                        synchronized(ringLock) { requestedIds -= id }
                         app.container.repository.markMissed(id, "鳴動サービスの前面化がOSに拒否")
                         MissedNotifier.post(this@AlarmService, null)
                         stopSelf(startId)
@@ -217,23 +220,26 @@ class AlarmService : Service() {
         // 要求が鳴る、という同族レースが残る。先に自世代を確定してから先代を
         // 畳むので、公開直後に届く DISMISS も PENDING 判定でこの要求だけ潰せる
         val gen = synchronized(ringLock) {
+            requestedIds -= instanceId
             if (destroyed || isDismissed(instanceId)) {
                 null
             } else {
                 ringGen++
-                teardownRing()
+                // 前面化は維持する: 直前に自分の startForeground で出した通知を
+                // ここで外すと、以後の鳴動は前面サービスでなくなり OS に畳まれ得る
+                teardownRing(keepForeground = true)
                 pendingStartId = instanceId
                 ringGen
             }
         }
         if (gen == null) {
             // 墓標済みか破棄済み: 他の鳴動へ一切触れず終端のみ記録して抜ける
-            app.container.repository.audit("STALE_FIRE", "$instanceId: DISMISS済みのため鳴動を抑止")
-            val nothingAlive = synchronized(ringLock) {
-                if (pendingStartId == instanceId) pendingStartId = null
-                ringingInstanceId.value == null && pendingStartId == null
+            runCatching {
+                app.container.repository.audit("STALE_FIRE", "$instanceId: DISMISS済みのため鳴動を抑止")
             }
-            if (nothingAlive) stopSelf()
+            // 自分の前面化で通知 (停止の宛先を含む) を差し替えているので、
+            // 現行鳴動があればその停止UIへ戻す。無ければ滞留通知ごと畳む
+            restoreOrFinish()
             return
         }
         if (destroyed) return
@@ -318,13 +324,11 @@ class AlarmService : Service() {
             return
         }
         // 停止UIの確保: フルスクリーン Intent は API34+ で権限拒否され得るし、
-        // 端末ロック解除済みだと heads-up が畳まれて画面上の停止手段が無くなる。
-        // SYSTEM_ALERT_WINDOW は BAL 対象外なので、許可済みなら必ず出せる
+        // 端末ロック解除中に他アプリが前面だと heads-up が畳まれて画面上の停止手段が無くなる。
+        // SYSTEM_ALERT_WINDOW は BAL 対象外なので、許可済みなら FSI の可否に関係なく
         // 停止画面をオーバーレイでも出す (鳴動画面と共存しないよう後者が出れば畳む)。
-        val fsiOk = Build.VERSION.SDK_INT < 34 ||
-            (getSystemService(NotificationManager::class.java)
-                ?.canUseFullScreenIntent() ?: true)
-        if (RingingOverlay.canShow(this)) {
+        val plan = StopUiPlan.of(StopUiPermissions.probe(this))
+        if (plan.showOverlay) {
             // 表示自体はメインスレッドで行い、成否はオーバーレイ側が鳴動ログへ記録する。
             // stillValid は addView 直前にメインスレッド上で評価される: 停止の hide が
             // 先に走っていたら attach を抑止し、ゾンビオーバーレイを防ぐ
@@ -333,10 +337,11 @@ class AlarmService : Service() {
                 instance.snoozeMinutes.takeIf { it > 0 } ?: ringSettings.defaultSnoozeMinutes,
                 stillValid = { synchronized(ringLock) { !destroyed && ringGen == gen } },
             )
-        } else if (!fsiOk) {
-            // オーバーレイ権限も FSI も無い: 通知シェード経路だけが残る危険状態を記録
-            app.container.repository.audit(
-                "WARN", "${instance.id}: FSI拒否+オーバーレイ未許可のため停止UIは通知のみ")
+        }
+        // 停止経路が欠けた状態を鳴動ログに残し、次の「止まらない」報告をログだけで切り分ける。
+        // 監査の失敗で鳴動処理ごと落とさない
+        plan.warnings.forEach { w ->
+            runCatching { app.container.repository.audit("WARN", "${instance.id}: $w") }
         }
         // 最終防衛線: 通知権限なし + FSI拒否 だと停止UIが1つも存在せず
         // 電源断まで鳴り続ける。上限に達したら自動停止して MISSED 扱いにする。
@@ -396,13 +401,16 @@ class AlarmService : Service() {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, if (vibrateForRing) CHANNEL_ID else CHANNEL_ID_NOVIB)
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle(currentInstance?.title ?: "アラーム")
             .setContentText("「停止」でそのまま止められます")
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)
+            // 前面化→タイトル張替えで同じ通知を2回 post するため、2回目で再アラート
+            // (heads-up の出し直し・チャンネル振動の重複) させない
+            .setOnlyAlertOnce(true)
             // setSilent(true) は入れない: Android 15 で「抑制グループ」扱いされ
             // フルスクリーン Intent が自動起動しない (E2E 実測)。無音化は
             // チャンネル側の setSound(null) に一本化し、音は MediaPlayer が出す。
@@ -415,14 +423,25 @@ class AlarmService : Service() {
     }
 
     private fun createChannel() {
-        val mgr = getSystemService(NotificationManager::class.java)
-        mgr.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "アラーム", NotificationManager.IMPORTANCE_HIGH).apply {
+        val mgr = getSystemService(NotificationManager::class.java) ?: return
+        // チャンネルの振動属性は作成後に変更できないため、鳴動中バイブの ON/OFF で
+        // チャンネルを分ける。旧 1 チャンネル (alarm_v1) は設定画面に残らないよう消す
+        mgr.deleteNotificationChannel(LEGACY_CHANNEL_ID)
+        fun channel(id: String, label: String, vibrate: Boolean) =
+            NotificationChannel(id, label, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "アラーム鳴動時のフルスクリーン通知"
+                // 音は MediaPlayer が出すのでチャンネルは無音
                 setSound(null, null)
+                enableVibration(vibrate)
+                if (vibrate) vibrationPattern = VIBRATION_PATTERN
                 setBypassDnd(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            },
+            }
+        mgr.createNotificationChannels(
+            listOf(
+                channel(CHANNEL_ID, "アラーム", vibrate = true),
+                channel(CHANNEL_ID_NOVIB, "アラーム（バイブなし）", vibrate = false),
+            ),
         )
     }
 
@@ -507,7 +526,7 @@ class AlarmService : Service() {
                 @Suppress("DEPRECATION")
                 getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
             }
-            val pattern = longArrayOf(0, 800, 400, 800, 400)
+            val pattern = VIBRATION_PATTERN
             if (Build.VERSION.SDK_INT >= 33) {
                 v?.vibrate(
                     VibrationEffect.createWaveform(pattern, 0),
@@ -560,32 +579,65 @@ class AlarmService : Service() {
             if (!destroyed && ringGen == gen) { ringGen++; true } else false
         }
 
-    private enum class TeardownClaim { MATCHED, PENDING, BUSY, IDLE }
+    private enum class TeardownClaim { MATCHED, PENDING, REQUESTED, BUSY, IDLE }
 
     /**
      * DISMISS/SNOOZE が指す対象の後始末権を、対象判定と世代前進を同じ
      * ロック内で不可分に奪取する。
-     * - MATCHED: 対象が現行の鳴動 → 畳んでよい
-     * - PENDING: 対象が未開始の鳴動要求 → その要求だけを潰す
-     * - BUSY:    別の鳴動が資源を持つ → 殺さず終端記録のみ
-     * - IDLE:    鳴動中・要求中ともに無し → onIdle (滞留UIの後始末) を
-     *            同じロック内で実行してから返す。判定〜畳みの間に新鳴動が
-     *            生まれてもその adopt はロック待ちなので畳んでよい
-     * 対象 id は判定と同時に墓標へも書く (終端化を DB 書込みに先行させる)
+     * - MATCHED:   対象が現行の鳴動 → 畳んでよい
+     * - PENDING:   対象が座席確保済みの未開始鳴動 → その要求だけを潰す
+     * - REQUESTED: 対象が座席確保前の要求 → 墓標だけで抑止し、現行鳴動の世代は進めない
+     * - BUSY:      別の鳴動が資源を持つ → 殺さず終端記録のみ
+     * - IDLE:      鳴動中・要求中ともに無し → onIdle (滞留UIの後始末) を
+     *              同じロック内で実行してから返す。判定〜畳みの間に新鳴動が
+     *              生まれてもその adopt はロック待ちなので畳んでよい
+     * 対象 id は判定と同時に墓標へも書く (終端化を DB 書込みに先行させる)。
+     * id 不明の停止はフェイルセーフで「今鳴っている → 座席確保済み → 最新の要求」の順に
+     * 宛先を解決し、その id を墓標に書く (書かないと座席確保前の要求がそのまま鳴り出す)。
+     * 戻り値の second は解決後の宛先 id (DB 終端化に使う)
      */
-    private fun claimTeardownFor(targetId: String?, onIdle: () -> Unit = {}): TeardownClaim =
+    private fun claimTeardownFor(
+        targetId: String?,
+        onIdle: () -> Unit = {},
+    ): Pair<TeardownClaim, String?> =
         synchronized(ringLock) {
-            if (destroyed) { onIdle(); return@synchronized TeardownClaim.IDLE }
-            markDismissed(targetId)
+            if (destroyed) { onIdle(); return@synchronized TeardownClaim.IDLE to targetId }
             val cur = ringingInstanceId.value
-            when {
+            val target = targetId ?: cur ?: pendingStartId ?: requestedIds.lastOrNull()
+            markDismissed(target)
+            val wasRequested = target != null && requestedIds.remove(target)
+            val claim = when {
+                cur != null && target == cur -> { ringGen++; TeardownClaim.MATCHED }
+                pendingStartId != null && target == pendingStartId -> {
+                    pendingStartId = null; ringGen++; TeardownClaim.PENDING
+                }
+                wasRequested -> TeardownClaim.REQUESTED
                 cur == null && pendingStartId == null -> { onIdle(); TeardownClaim.IDLE }
-                // id 不明の停止はフェイルセーフで現行鳴動宛とみなす
-                targetId == null || targetId == cur -> { ringGen++; TeardownClaim.MATCHED }
-                targetId == pendingStartId -> { pendingStartId = null; ringGen++; TeardownClaim.PENDING }
                 else -> TeardownClaim.BUSY
             }
+            claim to target
         }
+
+    /**
+     * 潰した要求が差し替えた通知を現行鳴動の停止UIへ戻す。現行鳴動も
+     * 未開始の要求も無ければ滞留通知・オーバーレイを畳んで終了する。
+     */
+    private fun restoreOrFinish() {
+        val (cur, nothingAlive) = synchronized(ringLock) {
+            val c = ringingInstanceId.value
+            c to (c == null && pendingStartId == null && requestedIds.isEmpty())
+        }
+        val nm = getSystemService(NotificationManager::class.java)
+        when {
+            cur != null -> nm.notify(NOTIFICATION_ID, buildNotification(cur))
+            nothingAlive -> {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                nm.cancel(NOTIFICATION_ID)
+                RingingOverlay.hide(this)
+                stopSelf()
+            }
+        }
+    }
 
     private fun stopRinging() {
         // 世代前進も同じロック下で行い、adopt/claim の世代検査と順序を一意にする
@@ -597,9 +649,10 @@ class AlarmService : Service() {
     /**
      * 現行の鳴動資源を畳む本体。外部停止 (stopRinging) と beginRinging の
      * 座席確定 (墓標確認・世代・公開と同じロック内) の両方から呼ぶ。
-     * 世代奪取は呼び出し側が先に済ませる前提
+     * 世代奪取は呼び出し側が先に済ませる前提。
+     * keepForeground: 座席確定時は自分の前面化通知を残し、前面サービスのまま鳴動へ進む
      */
-    private fun teardownRing() {
+    private fun teardownRing(keepForeground: Boolean = false) {
         ringTimeoutJob?.cancel(); ringTimeoutJob = null
         crescendoJob?.cancel(); crescendoJob = null
         runCatching { mediaPlayer?.stop() }
@@ -607,9 +660,11 @@ class AlarmService : Service() {
         vibrator?.cancel(); vibrator = null
         runCatching { wakeLock?.release() }
         wakeLock = null
-        // FGS 状態も確実に抜く (通知だけ消すと前面化中サービスとして残り得る)
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+        if (!keepForeground) {
+            // FGS 状態も確実に抜く (通知だけ消すと前面化中サービスとして残り得る)
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+        }
         RingingOverlay.hide(this)
         currentInstance = null
         ringingInstanceId.value = null
@@ -640,7 +695,10 @@ class AlarmService : Service() {
         const val ACTION_SNOOZE = "com.calendaralarm.action.SNOOZE"
         const val EXTRA_INSTANCE_ID = "instance_id"
         const val EXTRA_SNOOZE_MINUTES = "snooze_minutes"
-        private const val CHANNEL_ID = "alarm_v1"
+        private const val CHANNEL_ID = "alarm_vib"
+        private const val CHANNEL_ID_NOVIB = "alarm_novib"
+        private const val LEGACY_CHANNEL_ID = "alarm_v1"
+        private val VIBRATION_PATTERN = longArrayOf(0, 800, 400, 800, 400)
         /** クレッシェンドの立ち上がり時間と開始音量。 */
         private const val CRESCENDO_MS = 30_000L
         private const val CRESCENDO_START = 0.05f

@@ -20,6 +20,10 @@ interface ScheduledInstanceDao {
     @Query("SELECT * FROM scheduled_instances WHERE id = :id")
     suspend fun byId(id: String): ScheduledInstanceEntity?
 
+    /** 1行だけの監視。鳴動画面が全件取得せずに自分の状態変化を追うのに使う。 */
+    @Query("SELECT * FROM scheduled_instances WHERE id = :id")
+    fun byIdFlow(id: String): Flow<ScheduledInstanceEntity?>
+
     @Query("SELECT * FROM scheduled_instances")
     suspend fun all(): List<ScheduledInstanceEntity>
 

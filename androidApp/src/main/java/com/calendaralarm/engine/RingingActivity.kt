@@ -73,16 +73,16 @@ class RingingActivity : ComponentActivity() {
             val settings by app.container.settings.flow.collectAsState(initial = null)
             CalendarAlarmTheme(themeId = settings?.themeId ?: "default") {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    val instance by app.container.repository
-                        .instanceFlow(instanceIdState.value ?: "")
-                        .map { it }
-                        .collectAsState(initial = null)
+                    val watchedId = instanceIdState.value ?: ""
+                    val rowFlow = androidx.compose.runtime.remember(watchedId) {
+                        app.container.repository.instanceWithStateFlow(watchedId)
+                    }
+                    val row by rowFlow.collectAsState(initial = null)
+                    val instance = row?.first
                     // 通知の「停止」放送など画面外経路で終端化された時、本画面が
                     // 残り続けると無音の鳴動画面になる (早期停止の実機報告)。
                     // サービスが死んでいても DB の状態監視だけで確実に畳める。
-                    val instState by app.container.repository
-                        .instanceStateFlow(instanceIdState.value ?: "")
-                        .collectAsState(initial = null)
+                    val instState = row?.second
                     androidx.compose.runtime.LaunchedEffect(instState) {
                         if (instState != null &&
                             instState != com.calendaralarm.shared.model.AlarmState.PENDING &&
