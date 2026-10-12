@@ -42,7 +42,6 @@ class AlarmService : Service() {
 
     // MediaPlayer#prepare 等のブロッキングが鳴動開始を遅らせないよう IO で回す
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var mediaPlayer: MediaPlayer? = null
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var currentInstance: AlarmInstance? = null
@@ -59,6 +58,10 @@ class AlarmService : Service() {
     // 途中で世代が進んでいたら鳴動を開始しない。DISMISS/SNOOZE の
     // stopRinging 直後に滞留コルーチンが start() へ滑り込む窓を塞ぐ
     @Volatile private var ringGen = 0
+    // mediaPlayer への書き込みは IO コルーチン、stop() の読み出しは別スレッド。
+    // 世代ガードで大抵は塞がるが、代入直後の stopRinging が stale null を
+    // 読んで空振りする残存窓を volatile で埋める。
+    @Volatile private var mediaPlayer: MediaPlayer? = null
 
     private val app get() = application as CalendarAlarmApp
 
@@ -163,6 +166,10 @@ class AlarmService : Service() {
         val ringSettings = app.container.settings.flow.first()
         ringingInstanceId.value = instanceId
         app.container.repository.onFired(instanceId)
+        // 停止が先に届いていたら通知を出し直さない。
+        // 放送経路の DISMISS は NotificationManager.cancel を先に実行済みなので、
+        // ここで notify してしまうと取消後に通知だけが残るゾンビになる。
+        if (destroyed || ringGen != gen) { stopRinging(); return }
         // タイトルが取れたので通知を張り替える
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification(instanceId))
@@ -183,10 +190,13 @@ class AlarmService : Service() {
             (getSystemService(NotificationManager::class.java)
                 ?.canUseFullScreenIntent() ?: true)
         if (RingingOverlay.canShow(this)) {
-            // 表示自体はメインスレッドで行い、成否はオーバーレイ側が鳴動ログへ記録する
+            // 表示自体はメインスレッドで行い、成否はオーバーレイ側が鳴動ログへ記録する。
+            // stillValid は addView 直前にメインスレッド上で評価される: 停止の hide が
+            // 先に走っていたら attach を抑止し、ゾンビオーバーレイを防ぐ
             RingingOverlay.show(
                 this, instance.id, instance.title,
                 instance.snoozeMinutes.takeIf { it > 0 } ?: ringSettings.defaultSnoozeMinutes,
+                stillValid = { !destroyed && ringGen == gen },
             )
         } else if (!fsiOk) {
             // オーバーレイ権限も FSI も無い: 通知シェード経路だけが残る危険状態を記録

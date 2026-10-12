@@ -51,10 +51,19 @@ object RingingOverlay {
      * (beginRinging 等は IO 上で動いており、そこで addView すると Looper 不在で失敗する)。
      * 成否は鳴動ログへ記録して次の障害の断線箇所を切り分けられるようにする。
      */
-    fun show(context: Context, instanceId: String, title: String, snoozeMinutes: Int) {
+    fun show(
+        context: Context,
+        instanceId: String,
+        title: String,
+        snoozeMinutes: Int,
+        stillValid: () -> Boolean = { true },
+    ) {
         if (!canShow(context)) return
         val app = context.applicationContext
         Handler(Looper.getMainLooper()).post {
+            // 投稿から実行までの間に停止が走った場合は表示しない。
+            // hide() の投稿が先に処理されていてもここで止められる
+            if (!stillValid()) return@post
             removeNow(app)
             val wm = app.getSystemService(WindowManager::class.java) ?: run {
                 audit(app, "OVERLAY_FAIL", "$instanceId: WindowManager取得不可")

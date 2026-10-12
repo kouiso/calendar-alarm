@@ -77,6 +77,20 @@ class RingingActivity : ComponentActivity() {
                         .instanceFlow(instanceIdState.value ?: "")
                         .map { it }
                         .collectAsState(initial = null)
+                    // 通知の「停止」放送など画面外経路で終端化された時、本画面が
+                    // 残り続けると無音の鳴動画面になる (早期停止の実機報告)。
+                    // サービスが死んでいても DB の状態監視だけで確実に畳める。
+                    val instState by app.container.repository
+                        .instanceStateFlow(instanceIdState.value ?: "")
+                        .collectAsState(initial = null)
+                    androidx.compose.runtime.LaunchedEffect(instState) {
+                        if (instState != null &&
+                            instState != com.calendaralarm.shared.model.AlarmState.PENDING &&
+                            instState != com.calendaralarm.shared.model.AlarmState.FIRED
+                        ) {
+                            finish()
+                        }
+                    }
                     val presets by app.container.settings.flow
                         .map { it.snoozePresets }
                         .collectAsState(initial = listOf(instance?.snoozeMinutes ?: 10))

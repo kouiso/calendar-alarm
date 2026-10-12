@@ -89,6 +89,14 @@ class AlarmRepository(
             rows.firstOrNull { it.id == id }?.toInstance()
         }
 
+    /** インスタンス状態の監視用フロー。鳴動画面が外部経路の終端化を検知するのに使う。 */
+    fun instanceStateFlow(id: String): Flow<AlarmState?> =
+        db.scheduledInstances().allFlow().map { rows ->
+            rows.firstOrNull { it.id == id }?.state?.let {
+                runCatching { AlarmState.valueOf(it) }.getOrNull()
+            }
+        }
+
     suspend fun instanceById(id: String): AlarmInstance? =
         db.scheduledInstances().byId(id)?.toInstance()
 
