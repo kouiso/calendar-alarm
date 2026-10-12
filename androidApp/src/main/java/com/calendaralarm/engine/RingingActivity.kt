@@ -43,6 +43,7 @@ import com.calendaralarm.shared.model.CurrentWeather
 import com.calendaralarm.ui.WeatherBackdrop
 import com.calendaralarm.ui.theme.OutfitFontFamily
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
