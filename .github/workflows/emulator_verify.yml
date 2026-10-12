@@ -4,7 +4,7 @@ name: (verify) alarm stop E2E (emulator)
 # 公開リポジトリなので GitHub-hosted ubuntu-latest (KVM 有り) は無料。
 #
 # PR / emu-verify/** への push では 2 レーンを並べる:
-#   fix              : 対象コミット。unlocked / race / locked の全シナリオ PASS が期待値
+#   fix              : 対象コミット。unlocked / race / locked / locked_screen_on の全シナリオ PASS が期待値
 #   control-3d106817 : FAD 配布版 (オーバーレイ抑止ゲート入り) を陰性対照に同じシナリオを流し、
 #                      停止UI欠落 (STOP_UI_MISSING) を再現できること = テストがバグを検出できることを確かめる
 # workflow_dispatch では任意の ref を 1 レーンで検証する。
@@ -27,9 +27,9 @@ on:
           - pass
           - stop-ui-missing
       scenarios:
-        description: 実行するシナリオ (空白区切り, unlocked race locked)
+        description: 実行するシナリオ (空白区切り, unlocked race locked locked_screen_on)
         required: true
-        default: unlocked race locked
+        default: unlocked race locked locked_screen_on
         type: string
   pull_request:
     paths:
@@ -66,14 +66,14 @@ jobs:
           INPUT_SCENARIOS: ${{ inputs.scenarios }}
         run: |
           if [ "$EVENT" = workflow_dispatch ]; then
-            if ! printf '%s' "$INPUT_SCENARIOS" | grep -Eq '^(unlocked|race|locked)( (unlocked|race|locked))*$'; then
+            if ! printf '%s' "$INPUT_SCENARIOS" | grep -Eq '^(unlocked|race|locked|locked_screen_on)( (unlocked|race|locked|locked_screen_on))*$'; then
               echo "invalid scenarios: $INPUT_SCENARIOS" >&2; exit 1
             fi
             lanes=$(jq -cn --arg ref "${INPUT_APP_REF:-$HEAD_SHA}" --arg exp "$INPUT_EXPECT" --arg sc "$INPUT_SCENARIOS" \
               '[{name: "dispatch", app_ref: $ref, expect: $exp, scenarios: $sc}]')
           else
             lanes=$(jq -cn --arg head "$HEAD_SHA" --arg ctl "$CONTROL_SHA" \
-              '[{name: "fix", app_ref: $head, expect: "pass", scenarios: "unlocked race locked"},
+              '[{name: "fix", app_ref: $head, expect: "pass", scenarios: "unlocked race locked locked_screen_on"},
                 {name: "control-3d106817", app_ref: $ctl, expect: "stop-ui-missing", scenarios: "unlocked"}]')
           fi
           echo "lanes=$lanes" >> "$GITHUB_OUTPUT"

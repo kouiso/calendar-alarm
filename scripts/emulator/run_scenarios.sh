@@ -6,6 +6,7 @@
 #                音 (USAGE_ALARM)・鳴動サービス・鳴動通知が3秒以内に消えるか
 #     race     : 鳴動サービス起動を検知した直後に停止 (鳴り始めの一瞬の停止) → 10秒間ゾンビ鳴動が無いか
 #     locked   : PIN ロック + 画面OFF で鳴動 → 鳴動画面とオーバーレイが重なっていないか → 停止できるか
+#     locked_screen_on : 同上をロック画面点灯中に鳴動させる
 #
 # 結果: <out_dir>/results.tsv (scenario<TAB>PASS|FAIL<TAB>理由コード<TAB>詳細), summary.md, 採取物一式。
 # 1 つでも FAIL なら exit 1。
@@ -15,7 +16,7 @@ APK=${1:?apk}
 OUT=${2:?out dir}
 shift 2
 SCENARIOS=("$@")
-[ ${#SCENARIOS[@]} -gt 0 ] || SCENARIOS=(unlocked race locked)
+[ ${#SCENARIOS[@]} -gt 0 ] || SCENARIOS=(unlocked race locked locked_screen_on)
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 CHECK=(python3 "$HERE/emu_check.py")
@@ -138,10 +139,52 @@ unlock_screen() {
   adb shell input keyevent KEYCODE_MENU >/dev/null 2>&1
 }
 
+# 「YouTube 視聴中」の代替となる他アプリ候補 (エミュレータ画像に YouTube は無いことが多い)。
+# 設定アプリは不可: HIDE_NON_SYSTEM_OVERLAY_WINDOWS で他アプリのオーバーレイを強制的に隠すため、
+# YouTube と違う条件になる。候補は前面化でき、かつオーバーレイを隠さないものだけ採用する
+FG_CANDIDATES=(
+  com.google.android.youtube
+  com.android.chrome
+  com.google.android.apps.photos
+  com.google.android.deskclock com.android.deskclock
+  com.google.android.contacts com.android.contacts
+  com.google.android.dialer com.android.dialer
+  com.google.android.documentsui com.android.documentsui
+)
+FG_PKG=
+
 launch_foreground_app() {
-  # 「YouTube 視聴中」の代替: 不透明な他アプリ Activity を前面に出す
-  # (前景アプリの種類は heads-up 化・BAL の挙動に関係しない)
-  sh_ am start -W -n com.android.settings/.Settings > "$1" 2>&1
+  local log=$1 pkg
+  for pkg in ${FG_PKG:-} "${FG_CANDIDATES[@]}"; do
+    sh_ pm path "$pkg" | grep -q '^package:' || continue
+    sh_ monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >> "$log" 2>&1
+    sleep 4
+    sh_ dumpsys activity activities > "$log.activities.txt"
+    if ! grep -Em1 "topResumedActivity" "$log.activities.txt" | grep -q " $pkg/"; then
+      echo "$pkg: not resumed ($(top_activity "$log.activities.txt"))" >> "$log"
+      continue
+    fi
+    sh_ dumpsys window windows > "$log.window.txt"
+    if grep -q "HIDE_NON_SYSTEM_OVERLAY_WINDOWS" "$log.window.txt"; then
+      echo "$pkg: hides non-system overlays; skipped" >> "$log"
+      adb shell input keyevent KEYCODE_HOME
+      continue
+    fi
+    FG_PKG=$pkg
+    echo "foreground=$pkg" >> "$log"
+    log "foreground app: $pkg"
+    return 0
+  done
+  log "no usable foreground app"
+  return 1
+}
+
+# 自分のオーバーレイ窓が他の窓の HIDE_NON_SYSTEM_OVERLAY_WINDOWS で強制的に隠されているか
+overlay_force_hidden() {
+  awk -v pkg="$PKG" '
+    /^ *Window #[0-9]+ Window\{/ { mine = ($0 ~ (" u0 " pkg "}:")) }
+    mine && /mForceHideNonSystemOverlayWindow=true/ { found = 1 }
+    END { exit !found }' "$1"
 }
 
 # 停止後 3 秒以内に 音/サービス/通知 が全て消えるか。消えたら経過 ms を STOPPED_AFTER_MS に入れる
@@ -185,7 +228,10 @@ scenario_unlocked() {
   start_recording "$name"
   id=$(schedule 45 EmuStopUnlocked)
   [ -n "$id" ] || { stop_recording "$name"; record "$name" FAIL SCHEDULE_FAILED "harness broadcast failed"; return; }
-  launch_foreground_app "$p.am_start.txt"
+  if ! launch_foreground_app "$p.foreground.txt"; then
+    wait_fire 120; cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL NO_FOREGROUND_APP "no foreground app that keeps third-party overlays visible"; return
+  fi
   if ! wait_fire 120; then
     stop_recording "$name"; record "$name" FAIL NO_FIRE "AlarmService did not start within 120s ($id)"; return
   fi
@@ -205,9 +251,15 @@ scenario_unlocked() {
     echo "overlay_windows=$ov"
     echo "ringing_activity_resumed=$(ringing_resumed "$p.t12.activities.txt" && echo yes || echo no)"
     echo "systemui_headsup_stop_visible=$hun"
+    echo "overlay_force_hidden=$(overlay_force_hidden "$p.t12.window.txt" && echo yes || echo no)"
     echo "pre_stop alarm_players=$a service=$s notification=$n"
   } > "$p.facts.txt"
   cat "$p.facts.txt" >&2
+  if overlay_force_hidden "$p.t12.window.txt"; then
+    cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL OVERLAY_FORCE_HIDDEN "overlay window exists but another window hides non-system overlays (invalid foreground app)"
+    return
+  fi
   if ! xy=$("${CHECK[@]}" stop-node "$p.t12.ui.xml" "$PKG" "$STOP_TEXT"); then
     cleanup_ring "$id"
     stop_recording "$name"
@@ -240,7 +292,7 @@ scenario_race() {
   start_recording "$name"
   id=$(schedule 45 EmuStopRace)
   [ -n "$id" ] || { stop_recording "$name"; record "$name" FAIL SCHEDULE_FAILED "harness broadcast failed"; return; }
-  launch_foreground_app "$p.am_start.txt"
+  launch_foreground_app "$p.foreground.txt" || log "$name: no foreground app (continuing; stop path does not depend on it)"
   # 端末内ループで鳴動サービスの出現を検知し、直ちに通知「停止」と同じ放送を送る
   out=$(sh_ "end=\$((\$(date +%s)+120)); while [ \$(date +%s) -lt \$end ]; do if dumpsys activity services $PKG | grep -q engine.AlarmService; then am broadcast --include-stopped-packages -n $HARNESS -a com.calendaralarm.emu.DISMISS --es id $id >/dev/null; echo DISMISSED; exit 0; fi; done; echo TIMEOUT")
   t_dismiss=$(now_ms)
@@ -276,20 +328,29 @@ scenario_race() {
   fi
 }
 
-scenario_locked() {
-  local name=locked p="$OUT/locked" id t_tap xy ov rr st a s n
+scenario_locked() { locked_case locked off; }
+scenario_locked_screen_on() { locked_case locked_screen_on on; }
+
+# PIN ロック中に鳴動。screen=off は消灯中 (机に置いた端末)、on はロック画面が点灯中
+locked_case() {
+  local name=$1 screen=$2 p="$OUT/$1" id t_tap xy ov rr st a s n
   unlock_screen
   sh_ locksettings set-pin "$PIN" > "$p.locksettings.txt" 2>&1
   adb shell svc power stayon false
   start_recording "$name"
-  id=$(schedule 45 EmuStopLocked)
-  [ -n "$id" ] || { stop_recording "$name"; record "$name" FAIL SCHEDULE_FAILED "harness broadcast failed"; return; }
+  id=$(schedule 45 "EmuStop_$name")
+  [ -n "$id" ] || { stop_recording "$name"; record "$name" FAIL SCHEDULE_FAILED "harness broadcast failed"; locked_restore "$name"; return; }
   adb shell input keyevent KEYCODE_SLEEP
   sleep 3
+  if [ "$screen" = on ]; then
+    adb shell input keyevent KEYCODE_WAKEUP
+    adb shell svc power stayon true
+    sleep 2
+  fi
   sh_ dumpsys window | grep -Ei "keyguard|showing_lockscreen|mDreaming" > "$p.keyguard_before.txt" 2>&1
   if ! wait_fire 120; then
     stop_recording "$name"; record "$name" FAIL NO_FIRE "AlarmService did not start within 120s ($id)"
-    locked_restore; return
+    locked_restore "$name"; return
   fi
   log "$name: fired ($id); waiting 12s"
   sleep 12
@@ -300,6 +361,7 @@ scenario_locked() {
   if ringing_resumed "$p.t12.activities.txt"; then rr=yes; else rr=no; fi
   {
     echo "instance=$id"
+    echo "screen_before_fire=$screen"
     echo "top=$(top_activity "$p.t12.activities.txt")"
     echo "ringing_activity_resumed=$rr"
     echo "overlay_windows=$ov"
@@ -311,12 +373,12 @@ scenario_locked() {
     [ -n "$xy" ] && adb shell input tap $xy
     sleep 3; cleanup_ring "$id"; stop_recording "$name"
     record "$name" FAIL STACKED_UI "RingingActivity resumed AND overlay window on screen at the same time"
-    locked_restore; return
+    locked_restore "$name"; return
   fi
   if ! xy=$("${CHECK[@]}" stop-node "$p.t12.ui.xml" "$PKG" "$STOP_TEXT"); then
     cleanup_ring "$id"; stop_recording "$name"
     record "$name" FAIL STOP_UI_MISSING "no $PKG '$STOP_TEXT' node while locked (ringing_activity=$rr overlay=$ov)"
-    locked_restore; return
+    locked_restore "$name"; return
   fi
   t_tap=$(now_ms)
   # shellcheck disable=SC2086
@@ -328,12 +390,12 @@ scenario_locked() {
     capture "$p.after"; cleanup_ring "$id"; stop_recording "$name"
     record "$name" FAIL NOT_STOPPED "state after tap=${LAST_STATE}"
   fi
-  locked_restore
+  locked_restore "$name"
 }
 
 locked_restore() {
   adb shell input keyevent KEYCODE_WAKEUP
-  sh_ locksettings clear --old "$PIN" >> "$OUT/locked.locksettings.txt" 2>&1
+  sh_ locksettings clear --old "$PIN" >> "$OUT/$1.locksettings.txt" 2>&1
   adb shell svc power stayon true
   unlock_screen
 }
@@ -368,6 +430,7 @@ sh_ appops set "$PKG" SCHEDULE_EXACT_ALARM allow >/dev/null 2>&1
 sh_ settings put system screen_off_timeout 1800000
 adb shell svc power stayon true
 sh_ settings put global heads_up_notifications_enabled 1
+sh_ pm list packages > "$OUT/packages.txt" 2>&1
 
 for sc in "${SCENARIOS[@]}"; do
   log "=== scenario: $sc ==="
