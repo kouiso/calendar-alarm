@@ -109,7 +109,7 @@ internal enum class ViewMode {
 @Composable
 fun AgendaScreen(
     repository: AlarmRepository,
-    onAlarmArmed: (String?, Int?) -> Unit,
+    onAlarmArmed: (String?) -> Unit,
     onShowRingSetup: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -290,7 +290,7 @@ fun AgendaScreen(
                 item = item,
                 weatherEnabled = settings?.weatherEnabled ?: true,
                 onOverride = { action, minutes, extraOffsets ->
-                    if (action == EventAction.ALARM) onAlarmArmed(item.event.title, item.minutesBefore)
+                    if (action == EventAction.ALARM) onAlarmArmed(item.event.title)
                     scope.launch {
                         repository.setEventOverride(item.event.instanceKey, action, minutes, extraOffsets)
                         selected = null

@@ -55,7 +55,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.shared.logic.AlarmExpander
 import kotlinx.coroutines.launch
@@ -78,12 +77,10 @@ internal data class PermSnapshot(
 
     /** 止める側の許可 (全画面通知 + 他アプリの上に表示)。FSI だけでは
      *  停止UI が出ない端末があるため両方を要求する。 */
-    // 停止UIはオーバーレイ(FSI拒否・ロック解除時でも出せる)を主、FSIをフォールバックとする。
-    // どちらか一方が使えれば鳴動を画面から止められる。
-    val stopOk get() = fsiOk || overlayOk
+    val stopOk get() = fsiOk && overlayOk
     val allOk get() = ringOk && stopOk
     val missingRingCount get() = listOf(notifOk, exactOk).count { !it }
-    val missingStopCount get() = if (stopOk) 0 else 2
+    val missingStopCount get() = listOf(fsiOk, overlayOk).count { !it }
 }
 
 internal fun computePermSnapshot(context: Context): PermSnapshot {
@@ -111,7 +108,7 @@ internal fun computePermSnapshot(context: Context): PermSnapshot {
 @Composable
 internal fun rememberResumeTick(): Int {
     var tick by remember { mutableIntStateOf(0) }
-    val owner = LocalLifecycleOwner.current
+    val owner = LocalContext.current as? LifecycleOwner
     DisposableEffect(owner) {
         val obs = LifecycleEventObserver { _, ev ->
             if (ev == Lifecycle.Event.ON_RESUME) tick++
@@ -269,7 +266,6 @@ internal fun PermissionNagCard(
 internal fun RingSetupSheet(
     repository: AlarmRepository,
     subject: String?,
-    minutesBefore: Int?,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -319,7 +315,7 @@ internal fun RingSetupSheet(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "${subject ?: "予定"}の${minutesBefore ?: 30}分前に、きちんと鳴らすために",
+                        "${subject ?: "予定"}の30分前に、きちんと鳴らすために",
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Spacer(Modifier.height(4.dp))

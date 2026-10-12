@@ -460,13 +460,19 @@ internal fun IconSettingRow(icon: ImageVector, content: @Composable () -> Unit) 
 private fun PermissionHealthCard(context: Context, repository: AlarmRepository) {
     val activity = context as? Activity
 
-    // 権限スナップショットは Onboarding.kt の computePermSnapshot に一本化
-    // (判定ロジックの重複を避ける)。設定画面側が必要な追加項目のみここで見る。
-    val snap = computePermSnapshot(context)
-    val notifOk = snap.notifOk
-    val exactOk = snap.exactOk
-    val fsiOk = snap.fsiOk
-    val overlayOk = snap.overlayOk
+    val notifOk = Build.VERSION.SDK_INT < 33 ||
+        ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+    // canScheduleExactAlarms() は API 31+。それ未満は正確アラームが常時許可なので true。
+    val exactOk = Build.VERSION.SDK_INT < 31 ||
+        (context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() ?: true)
+    val fsiOk = if (Build.VERSION.SDK_INT >= 34) {
+        context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() ?: true
+    } else true
+    // オーバーレイは FSI が効かない環境での鳴動停止UIフォールバック。
+    // 両方無いと鳴動中に画面上の停止手段が消えるためヘルス対象に数える。
+    val overlayOk = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(context)
     val batteryOk = context.getSystemService(PowerManager::class.java)
         ?.isIgnoringBatteryOptimizations(context.packageName) ?: true
     // 「鳴ったはずだが無音」の最多因はアラーム音量0 (鳴動音は STREAM_ALARM)。

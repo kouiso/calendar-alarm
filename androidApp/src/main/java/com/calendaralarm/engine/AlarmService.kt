@@ -162,13 +162,13 @@ class AlarmService : Service() {
         // 停止UIの確保: フルスクリーン Intent は API34+ で権限拒否され得るし、
         // 端末ロック解除済みだと heads-up が畳まれて画面上の停止手段が無くなる。
         // SYSTEM_ALERT_WINDOW は BAL 対象外なので、許可済みなら必ず出せる
-        // 停止画面をオーバーレイでも出す。鳴動画面が FSI 経由で出てきた時は
-        // RingingActivity 側が RingingOverlay.hide するため停止UIは二重にならない。
+        // 停止画面をオーバーレイでも出す (鳴動画面と共存しないよう後者が出れば畳む)。
         val fsiOk = Build.VERSION.SDK_INT < 34 ||
             (getSystemService(NotificationManager::class.java)
                 ?.canUseFullScreenIntent() ?: true)
-        if (RingingOverlay.canShow(this)) {
-            // FSI の成否・画面のロック状態に関わらず、画面上に必ず止められる UI を置く。
+        if (!fsiOk && RingingOverlay.canShow(this)) {
+            // FSI拒否時の代替停止UIとしてのみ出す。両方出すと停止UIが二重になり、
+            // overlay の停止ボタンを押しても裏の鳴動画面が残る (E2Eで再現確認)。
             // 表示自体はメインスレッドで行い、成否はオーバーレイ側が鳴動ログへ記録する
             RingingOverlay.show(
                 this, instance.id, instance.title,
@@ -240,14 +240,7 @@ class AlarmService : Service() {
             // setSilent(true) は入れない: Android 15 で「抑制グループ」扱いされ
             // フルスクリーン Intent が自動起動しない (E2E 実測)。無音化は
             // チャンネル側の setSound(null) に一本化し、音は MediaPlayer が出す。
-            // オーバーレイで停止UIが出せる時は FSI を付けない。付けると鳴動画面も
-            // 立ち上がり停止UIが二重になる (overlay の停止で裏の鳴動画面が残る)。
-            // オーバーレイ未許可の時だけ、ロック画面越しの停止UIとして FSI に委ねる。
-            .apply {
-                if (!RingingOverlay.canShow(this@AlarmService)) {
-                    setFullScreenIntent(fullScreen, true)
-                }
-            }
+            .setFullScreenIntent(fullScreen, true)
             .setContentIntent(fullScreen)
             .setDeleteIntent(dismiss)
             // 鳴動画面に辿り着けなくても通知シェードから必ず止められる退路
