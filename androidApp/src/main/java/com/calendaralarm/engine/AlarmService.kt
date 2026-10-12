@@ -42,8 +42,10 @@ class AlarmService : Service() {
 
     // MediaPlayer#prepare 等のブロッキングが鳴動開始を遅らせないよう IO で回す
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var vibrator: Vibrator? = null
-    private var wakeLock: PowerManager.WakeLock? = null
+    // mediaPlayer と同じく、生成スレッドと停止スレッドが異なるため
+    // 世代撤退時の同一性判定 (===) が正しく見えるよう volatile にする
+    @Volatile private var vibrator: Vibrator? = null
+    @Volatile private var wakeLock: PowerManager.WakeLock? = null
     private var currentInstance: AlarmInstance? = null
     private var crescendoJob: kotlinx.coroutines.Job? = null
     private var ringTimeoutJob: kotlinx.coroutines.Job? = null
@@ -126,8 +128,7 @@ class AlarmService : Service() {
         val instance = app.container.repository.instanceById(instanceId)
         if (instance == null) {
             app.container.repository.audit("ERROR", "鳴動要求されたがインスタンス不明: $instanceId")
-            stopRinging()
-            stopSelf()
+            finishIfCurrent(gen)
             return
         }
         // 停止済み/見逃し済みのインスタンスへの遅延・重複起動は鳴らさない。
@@ -137,19 +138,16 @@ class AlarmService : Service() {
         if (state != AlarmState.PENDING && state != AlarmState.FIRED) {
             app.container.repository.audit(
                 "STALE_FIRE", "$instanceId: state=$state のため鳴動を抑止")
-            stopRinging()
-            stopSelf()
+            finishIfCurrent(gen)
             return
         }
-        currentInstance = instance
         // グレース超過の過去分は鳴らさない。端末OFF中に過ぎたアラームを
         // 起動直後に延々鳴らし続けるより、見逃した事実を知らせる方が正しい。
         val overdueBy = System.currentTimeMillis() - instance.triggerAtMillis
         if (overdueBy > AlarmExpander.FIRE_GRACE.inWholeMilliseconds) {
             app.container.repository.markMissed(id = instanceId, detail = "鳴動時刻から${overdueBy / 60_000}分経過")
             MissedNotifier.post(this, instance.title)
-            stopRinging()
-            stopSelf()
+            finishIfCurrent(gen)
             return
         }
         // 「ロック解除までミュート」: 端末がロック中なら鳴らさず留保し、
@@ -159,17 +157,22 @@ class AlarmService : Service() {
         ) {
             UnlockRingReceiver.defer(this, instance.id)
             app.container.repository.audit("DEFER", "${instance.id}: ロック解除まで鳴動を遅延")
-            stopRinging()
-            stopSelf()
+            finishIfCurrent(gen)
             return
         }
         val ringSettings = app.container.settings.flow.first()
-        ringingInstanceId.value = instanceId
+        // PENDING→FIRED のみ遷移 (DISMISSED を FIRED に戻さない atomic 制限)
         app.container.repository.onFired(instanceId)
         // 停止が先に届いていたら通知を出し直さない。
         // 放送経路の DISMISS は NotificationManager.cancel を先に実行済みなので、
         // ここで notify してしまうと取消後に通知だけが残るゾンビになる。
-        if (destroyed || ringGen != gen) { stopRinging(); return }
+        // 世代が進んでいても全体停止は呼ばない (新しい鳴動を殺すので BUG_0001)。
+        // この時点ではリソースを何も生成していないので、そのまま抜ければよい
+        if (destroyed || ringGen != gen) return
+        // 世代確定後にだけ自分のインスタンスを共有状態へ書く (stale 世代が
+        // 書き残すと DISMISS の id フォールバックや救出経路が古い id を見る)
+        currentInstance = instance
+        ringingInstanceId.value = instanceId
         // タイトルが取れたので通知を張り替える
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification(instanceId))
@@ -179,9 +182,21 @@ class AlarmService : Service() {
             crescendo = ringSettings.volumeCrescendo,
             gen = gen,
         )
-        if (ringSettings.vibrateWhileRinging) startVibration()
-        acquireWakeLock()
-        if (destroyed || ringGen != gen) { stopRinging(); return }
+        // startAudio 内で自分のプレイヤーは世代検査つきで畳まれているので、
+        // 世代が進んでいたら新鳴動のリソースに触れないよう静かに抜ける
+        if (destroyed || ringGen != gen) return
+        val myVibrator = if (ringSettings.vibrateWhileRinging) startVibration() else null
+        val myWakeLock = acquireWakeLock()
+        if (destroyed || ringGen != gen) {
+            // 生成直後に世代が進んだ場合: 全体停止は新鳴動を殺すので呼ばず、
+            // 自分が生成したものだけ局所参照で畳む (フィールドが他世代の
+            // ものに上書き済みなら参照は外さない)
+            runCatching { myVibrator?.cancel() }
+            if (vibrator === myVibrator) vibrator = null
+            runCatching { myWakeLock?.let { if (it.isHeld) it.release() } }
+            if (wakeLock === myWakeLock) wakeLock = null
+            return
+        }
         // 停止UIの確保: フルスクリーン Intent は API34+ で権限拒否され得るし、
         // 端末ロック解除済みだと heads-up が畳まれて画面上の停止手段が無くなる。
         // SYSTEM_ALERT_WINDOW は BAL 対象外なので、許可済みなら必ず出せる
@@ -313,14 +328,19 @@ class AlarmService : Service() {
                 player.prepare()
                 player.start()
             }.isSuccess
-            if (ok && (destroyed || ringGen != gen)) {
-                // start() 直後に停止が来た場合。release しないとゾンビ鳴動になる
-                runCatching { player.stop() }
-                player.release()
-                return
-            }
             if (ok) {
+                // 先に代入してから世代を再検査する。代入前検査だと
+                // 「検査〜代入」の間に世代が進む窓が残る
                 mediaPlayer = player
+                if (destroyed || ringGen != gen) {
+                    // start() 直後か代入直後に停止/新鳴動が来た場合。
+                    // 全体停止は新鳴動を殺すので、自分のプレイヤーだけ畳む
+                    // (他世代が上書き済みなら参照は外さない)
+                    runCatching { player.stop() }
+                    player.release()
+                    if (mediaPlayer === player) mediaPlayer = null
+                    return
+                }
                 if (crescendo && target >= 0f) startCrescendo(player, target)
                 if (uri != candidates.firstOrNull()) {
                     scope.launch {
@@ -350,7 +370,7 @@ class AlarmService : Service() {
         }
     }
 
-    private fun startVibration() {
+    private fun startVibration(): Vibrator? {
         try {
             vibrator = if (Build.VERSION.SDK_INT >= 31) {
                 getSystemService(VibratorManager::class.java)?.defaultVibrator
@@ -373,13 +393,30 @@ class AlarmService : Service() {
         } catch (e: Exception) {
             scope.launch { app.container.repository.audit("ERROR", "バイブ開始失敗: ${e.message}") }
         }
+        return vibrator
     }
 
-    private fun acquireWakeLock() {
+    private fun acquireWakeLock(): PowerManager.WakeLock? {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         // 安全側に10分で自動リリース。鳴動継続の上限でもある
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "calendaralarm:ringing")
             .apply { acquire(10 * 60 * 1000L) }
+        return wakeLock
+    }
+
+    /**
+     * 鳴動しない判断が出た後の後始末。世代が進んでいなければ従来通り
+     * 全体停止してサービスを畳む。世代が進んでいる=新しい鳴動が共有
+     * リソースを所有しているので、それを殺さないよう何もせず抜ける
+     * (gen 不一致で stopRinging/stopSelf を呼ぶと onDestroy→stopRinging
+     *  経由で新鳴動まで消える)。
+     */
+    private fun finishIfCurrent(gen: Int) {
+        if (destroyed) return
+        if (ringGen == gen) {
+            stopRinging()
+            stopSelf()
+        }
     }
 
     private fun stopRinging() {

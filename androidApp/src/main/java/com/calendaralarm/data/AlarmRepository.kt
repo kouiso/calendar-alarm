@@ -196,8 +196,14 @@ class AlarmRepository(
     // ---- 鳴動イベント ----
 
     suspend fun onFired(id: String) {
-        setState(id, AlarmState.FIRED)
-        audit("FIRE", id)
+        // 停止が先に届いたレースで DISMISSED 等の終端を FIRED で上書き
+        // しないよう、遷移元を UPDATE の WHERE で atomic に制限する。
+        // 終端行が FIRED に戻ると kill 復活や再鳴動の対象に残ってしまう
+        val rows = db.scheduledInstances().setFiredIfPending(id)
+        audit(
+            if (rows > 0) "FIRE" else "STALE_FIRE",
+            if (rows > 0) id else "$id: 終端状態のため FIRED 化を抑止",
+        )
         onScheduleChanged?.invoke()
     }
 
