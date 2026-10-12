@@ -28,6 +28,7 @@ import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -47,6 +48,17 @@ class AlarmService : Service() {
     private var currentInstance: AlarmInstance? = null
     private var crescendoJob: kotlinx.coroutines.Job? = null
     private var ringTimeoutJob: kotlinx.coroutines.Job? = null
+
+    // サービス死滅後に滞留中の beginRinging コルーチンが MediaPlayer を
+    // 開始するのを防ぐフラグ。鳴り始めの一瞬に停止が押されると onDestroy→
+    // stopRinging は mediaPlayer=null で空振りし、その後 start() が走って
+    // サービス不在のまま音だけ鳴り続けるゾンビ状態になる (実機報告)。
+    // IO ディスパッチャ上で開始されるので volatile で可視性を確保する。
+    @Volatile private var destroyed = false
+    // stopRinging が走るたびに進む世代番号。beginRinging/startAudio は
+    // 途中で世代が進んでいたら鳴動を開始しない。DISMISS/SNOOZE の
+    // stopRinging 直後に滞留コルーチンが start() へ滑り込む窓を塞ぐ
+    @Volatile private var ringGen = 0
 
     private val app get() = application as CalendarAlarmApp
 
@@ -106,6 +118,8 @@ class AlarmService : Service() {
     private suspend fun beginRinging(instanceId: String) {
         // 同時刻に複数鳴った場合は新しい方へ張り替える（MediaPlayer のリークと多重発声を防ぐ）
         stopRinging()
+        val gen = ringGen
+        if (destroyed) return
         val instance = app.container.repository.instanceById(instanceId)
         if (instance == null) {
             app.container.repository.audit("ERROR", "鳴動要求されたがインスタンス不明: $instanceId")
@@ -156,9 +170,11 @@ class AlarmService : Service() {
             instance.soundUri ?: ringSettings.defaultSoundUri,
             volumePercent = ringSettings.alarmVolumePercent,
             crescendo = ringSettings.volumeCrescendo,
+            gen = gen,
         )
         if (ringSettings.vibrateWhileRinging) startVibration()
         acquireWakeLock()
+        if (destroyed || ringGen != gen) { stopRinging(); return }
         // 停止UIの確保: フルスクリーン Intent は API34+ で権限拒否され得るし、
         // 端末ロック解除済みだと heads-up が畳まれて画面上の停止手段が無くなる。
         // SYSTEM_ALERT_WINDOW は BAL 対象外なので、許可済みなら必ず出せる
@@ -231,7 +247,7 @@ class AlarmService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle(currentInstance?.title ?: "アラーム")
-            .setContentText("止めるには開いてください")
+            .setContentText("「停止」でそのまま止められます")
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)
@@ -258,7 +274,7 @@ class AlarmService : Service() {
         )
     }
 
-    private fun startAudio(soundUri: String?, volumePercent: Int, crescendo: Boolean) {
+    private fun startAudio(soundUri: String?, volumePercent: Int, crescendo: Boolean, gen: Int) {
         // カスタム音が失効していても無音にはしない。候補を順に試す。
         val candidates = listOfNotNull(
             soundUri?.let(Uri::parse),
@@ -270,6 +286,7 @@ class AlarmService : Service() {
         val target = if (volumePercent > 0) volumePercent / 100f else -1f
         for (uri in candidates) {
             val player = MediaPlayer()
+            if (destroyed || ringGen != gen) { player.release(); return }
             val ok = runCatching {
                 player.setAudioAttributes(
                     AudioAttributes.Builder()
@@ -286,6 +303,12 @@ class AlarmService : Service() {
                 player.prepare()
                 player.start()
             }.isSuccess
+            if (ok && (destroyed || ringGen != gen)) {
+                // start() 直後に停止が来た場合。release しないとゾンビ鳴動になる
+                runCatching { player.stop() }
+                player.release()
+                return
+            }
             if (ok) {
                 mediaPlayer = player
                 if (crescendo && target >= 0f) startCrescendo(player, target)
@@ -350,6 +373,7 @@ class AlarmService : Service() {
     }
 
     private fun stopRinging() {
+        ringGen++
         ringTimeoutJob?.cancel(); ringTimeoutJob = null
         crescendoJob?.cancel(); crescendoJob = null
         runCatching { mediaPlayer?.stop() }
@@ -366,7 +390,9 @@ class AlarmService : Service() {
     }
 
     override fun onDestroy() {
+        destroyed = true
         stopRinging()
+        scope.cancel()
         super.onDestroy()
     }
 
