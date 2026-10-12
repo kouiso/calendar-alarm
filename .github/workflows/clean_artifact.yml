@@ -6,6 +6,7 @@ on:
 jobs:
   delete-artifacts:
     runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    # 実測 cleanup は約13秒。ハング時の上限として 15 分を置く
     timeout-minutes: 15
     steps:
       - uses: kolpav/purge-artifacts-action@v1

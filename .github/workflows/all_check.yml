@@ -6,14 +6,16 @@ on:
       - "**"
   workflow_dispatch:
 
-# push 直後の手動 dispatch で二重起動するのを防ぐ。同 ref の後続起動が先の実行を止める
+# push 直後の手動 dispatch で二重起動するのを防ぐ。同 ref の後続起動が先の実行を止める。
+# ただし master への push は取り消さない（main/master は1回1回が正史のビルド）。
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   build:
     runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    # 実測 build は約2分。ハング時の上限として 30 分を置く
     timeout-minutes: 30
 
     steps:
