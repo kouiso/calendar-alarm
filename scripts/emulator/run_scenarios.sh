@@ -1,0 +1,393 @@
+#!/usr/bin/env bash
+# アラーム停止 E2E (エミュレータ)。emulator_verify.yml から呼ばれる。
+#
+#   run_scenarios.sh <apk> <out_dir> <scenario>...
+#     unlocked : ロック解除 + 他アプリ (設定) 前面で鳴動 → 発火12秒後に停止UIがあるか → 「停止」で
+#                音 (USAGE_ALARM)・鳴動サービス・鳴動通知が3秒以内に消えるか
+#     race     : 鳴動サービス起動を検知した直後に停止 (鳴り始めの一瞬の停止) → 10秒間ゾンビ鳴動が無いか
+#     locked   : PIN ロック + 画面OFF で鳴動 → 鳴動画面とオーバーレイが重なっていないか → 停止できるか
+#
+# 結果: <out_dir>/results.tsv (scenario<TAB>PASS|FAIL<TAB>理由コード<TAB>詳細), summary.md, 採取物一式。
+# 1 つでも FAIL なら exit 1。
+set -uo pipefail
+
+APK=${1:?apk}
+OUT=${2:?out dir}
+shift 2
+SCENARIOS=("$@")
+[ ${#SCENARIOS[@]} -gt 0 ] || SCENARIOS=(unlocked race locked)
+
+HERE=$(cd "$(dirname "$0")" && pwd)
+CHECK=(python3 "$HERE/emu_check.py")
+PKG=com.calendaralarm
+HARNESS="$PKG/.emu.EmuHarnessReceiver"
+STOP_TEXT="停止"
+NOTIF_ID=1
+PIN=1111
+
+mkdir -p "$OUT"
+: > "$OUT/results.tsv"
+
+log() { echo "[$(date -u +%H:%M:%S)] $*" | tee -a "$OUT/run.log" >&2; }
+sh_() { adb shell "$@" | tr -d '\r'; }
+now_ms() { date +%s%3N; }
+
+# ---------- 採取 ----------
+
+ui_dump() {
+  local dst=$1 _
+  for _ in 1 2 3; do
+    adb shell rm -f /sdcard/ui.xml >/dev/null 2>&1
+    # --windows は全窓 (オーバーレイ・SystemUI を含む) を出す。非対応版なら単一窓で取り直す
+    if sh_ uiautomator dump --windows /sdcard/ui.xml 2>&1 | grep -q "dumped to" ||
+       sh_ uiautomator dump /sdcard/ui.xml 2>&1 | grep -q "dumped to"; then
+      adb pull /sdcard/ui.xml "$dst" >/dev/null 2>&1 && return 0
+    fi
+    sleep 1
+  done
+  log "uiautomator dump failed: $dst"
+  echo '<hierarchy/>' > "$dst"
+  return 1
+}
+
+capture() {
+  local p=$1
+  sh_ dumpsys window windows > "$p.window.txt" 2>&1
+  sh_ dumpsys activity activities > "$p.activities.txt" 2>&1
+  sh_ dumpsys activity services "$PKG" > "$p.services.txt" 2>&1
+  sh_ dumpsys notification --noredact > "$p.notification.txt" 2>&1
+  sh_ dumpsys audio > "$p.audio.txt" 2>&1
+  sh_ dumpsys media_session > "$p.media_session.txt" 2>&1
+  ui_dump "$p.ui.xml"
+  adb exec-out screencap -p > "$p.png" 2>/dev/null
+}
+
+start_recording() {
+  local name=$1
+  adb shell rm -f "/sdcard/rec_$name.mp4" >/dev/null 2>&1
+  adb shell screenrecord --time-limit 175 --bit-rate 4000000 "/sdcard/rec_$name.mp4" >/dev/null 2>&1 &
+  REC_PID=$!
+}
+
+stop_recording() {
+  local name=$1
+  adb shell pkill -INT screenrecord >/dev/null 2>&1
+  wait "$REC_PID" 2>/dev/null
+  sleep 2
+  adb pull "/sdcard/rec_$name.mp4" "$OUT/$name.mp4" >/dev/null 2>&1 || log "recording pull failed: $name"
+}
+
+# ---------- 状態 ----------
+
+service_alive() { sh_ dumpsys activity services "$PKG" | grep -q "engine.AlarmService"; }
+
+# 1 回の adb 往復で 音・サービス・通知 を同時に見る。"<alarm_players> <service> <notif>" を出す
+stop_state() {
+  local tmp
+  tmp=$(mktemp -d)
+  adb shell "dumpsys audio > /data/local/tmp/s_audio.txt; dumpsys activity services $PKG > /data/local/tmp/s_svc.txt; dumpsys notification --noredact > /data/local/tmp/s_notif.txt" >/dev/null 2>&1
+  adb pull /data/local/tmp/s_audio.txt "$tmp/audio" >/dev/null 2>&1
+  adb pull /data/local/tmp/s_svc.txt "$tmp/svc" >/dev/null 2>&1
+  adb pull /data/local/tmp/s_notif.txt "$tmp/notif" >/dev/null 2>&1
+  local a s n
+  a=$("${CHECK[@]}" alarm-players "$tmp/audio" "$APP_UID")
+  if grep -q "engine.AlarmService" "$tmp/svc"; then s=1; else s=0; fi
+  n=$("${CHECK[@]}" notif "$tmp/notif" "$PKG" "$NOTIF_ID")
+  if [ -n "${STATE_KEEP:-}" ]; then
+    cp "$tmp/audio" "$STATE_KEEP.audio.txt"
+    cp "$tmp/svc" "$STATE_KEEP.services.txt"
+    cp "$tmp/notif" "$STATE_KEEP.notification.txt"
+  fi
+  rm -rf "$tmp"
+  echo "$a $s $n"
+}
+
+ringing_resumed() { grep -Eq "(topResumedActivity|ResumedActivity).*engine\.RingingActivity" "$1"; }
+
+top_activity() { grep -Em1 "topResumedActivity|mResumedActivity" "$1" | sed 's/^ *//'; }
+
+# ---------- 操作 ----------
+
+schedule() {
+  local secs=$1 label=$2 out
+  out=$(sh_ am broadcast --include-stopped-packages -n "$HARNESS" \
+    -a com.calendaralarm.emu.SCHEDULE --ei seconds "$secs" --es label "$label")
+  log "schedule: $out"
+  echo "$out" | sed -n 's/.*result=1, data="\([^"]*\)".*/\1/p'
+}
+
+harness_dismiss() {
+  sh_ am broadcast --include-stopped-packages -n "$HARNESS" \
+    -a com.calendaralarm.emu.DISMISS ${1:+--es id "$1"} >/dev/null
+}
+
+wait_fire() {
+  local deadline=$(( $(date +%s) + $1 ))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    service_alive && return 0
+    sleep 0.5
+  done
+  return 1
+}
+
+unlock_screen() {
+  adb shell input keyevent KEYCODE_WAKEUP
+  sleep 1
+  adb shell wm dismiss-keyguard >/dev/null 2>&1
+  sleep 1
+  adb shell input keyevent KEYCODE_MENU >/dev/null 2>&1
+}
+
+launch_foreground_app() {
+  # 「YouTube 視聴中」の代替: 不透明な他アプリ Activity を前面に出す
+  # (前景アプリの種類は heads-up 化・BAL の挙動に関係しない)
+  sh_ am start -W -n com.android.settings/.Settings > "$1" 2>&1
+}
+
+# 停止後 3 秒以内に 音/サービス/通知 が全て消えるか。消えたら経過 ms を STOPPED_AFTER_MS に入れる
+wait_stopped() {
+  local t0=$1 limit_ms=$2 st a s n start
+  STOPPED_AFTER_MS=
+  LAST_STATE=
+  while :; do
+    start=$(now_ms)
+    st=$(stop_state)
+    LAST_STATE=$st
+    read -r a s n <<<"$st"
+    if [ "$a" = 0 ] && [ "$s" = 0 ] && [ "$n" = 0 ]; then
+      STOPPED_AFTER_MS=$(( start - t0 ))
+      [ "$STOPPED_AFTER_MS" -le "$limit_ms" ] && return 0
+      return 1
+    fi
+    [ $(( start - t0 )) -gt "$limit_ms" ] && return 1
+    sleep 0.2
+  done
+}
+
+record() {
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >> "$OUT/results.tsv"
+  log "RESULT $1: $2 $3 $4"
+}
+
+cleanup_ring() {
+  # 失敗時でも後続シナリオへ鳴動を持ち越さない
+  if service_alive; then
+    harness_dismiss "${1:-}"
+    sleep 3
+  fi
+}
+
+# ---------- シナリオ ----------
+
+scenario_unlocked() {
+  local name=unlocked p="$OUT/unlocked" id t_fire t_tap xy st a s n hun ov
+  unlock_screen
+  start_recording "$name"
+  id=$(schedule 45 EmuStopUnlocked)
+  [ -n "$id" ] || { stop_recording "$name"; record "$name" FAIL SCHEDULE_FAILED "harness broadcast failed"; return; }
+  launch_foreground_app "$p.am_start.txt"
+  if ! wait_fire 120; then
+    stop_recording "$name"; record "$name" FAIL NO_FIRE "AlarmService did not start within 120s ($id)"; return
+  fi
+  t_fire=$(now_ms)
+  log "$name: fired ($id); waiting 12s for heads-up to settle"
+  sleep 12
+  capture "$p.t12"
+  st=$(STATE_KEEP="$p.t12.pre" stop_state)
+  read -r a s n <<<"$st"
+  ov=$("${CHECK[@]}" overlay "$p.t12.window.txt" "$PKG")
+  if "${CHECK[@]}" stop-node "$p.t12.ui.xml" com.android.systemui "$STOP_TEXT" >/dev/null; then hun=yes; else hun=no; fi
+  {
+    echo "instance=$id"
+    echo "fired_at_ms=$t_fire"
+    echo "captured_after_fire_ms=$(( $(now_ms) - t_fire ))"
+    echo "foreground=$(top_activity "$p.t12.activities.txt")"
+    echo "overlay_windows=$ov"
+    echo "ringing_activity_resumed=$(ringing_resumed "$p.t12.activities.txt" && echo yes || echo no)"
+    echo "systemui_headsup_stop_visible=$hun"
+    echo "pre_stop alarm_players=$a service=$s notification=$n"
+  } > "$p.facts.txt"
+  cat "$p.facts.txt" >&2
+  if ! xy=$("${CHECK[@]}" stop-node "$p.t12.ui.xml" "$PKG" "$STOP_TEXT"); then
+    cleanup_ring "$id"
+    stop_recording "$name"
+    record "$name" FAIL STOP_UI_MISSING "no $PKG '$STOP_TEXT' node on screen 12s after fire (overlay_windows=$ov, headsup_stop=$hun)"
+    return
+  fi
+  if [ "$a" = 0 ]; then
+    cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL AUDIO_PRECONDITION "no started USAGE_ALARM player before stop"; return
+  fi
+  t_tap=$(now_ms)
+  # shellcheck disable=SC2086
+  adb shell input tap $xy
+  log "$name: tapped $STOP_TEXT at $xy"
+  if wait_stopped "$t_tap" 3000; then
+    sleep 2
+    capture "$p.after"
+    stop_recording "$name"
+    record "$name" PASS OK "stop UI at +12s; stopped ${STOPPED_AFTER_MS}ms after tap (audio/service/notification)"
+  else
+    capture "$p.after"
+    cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL NOT_STOPPED "state after tap (players service notif)=${LAST_STATE} after ${STOPPED_AFTER_MS:-?}ms"
+  fi
+}
+
+scenario_race() {
+  local name=race p="$OUT/race" id out t_dismiss i st a s n bad=
+  unlock_screen
+  start_recording "$name"
+  id=$(schedule 45 EmuStopRace)
+  [ -n "$id" ] || { stop_recording "$name"; record "$name" FAIL SCHEDULE_FAILED "harness broadcast failed"; return; }
+  launch_foreground_app "$p.am_start.txt"
+  # 端末内ループで鳴動サービスの出現を検知し、直ちに通知「停止」と同じ放送を送る
+  out=$(sh_ "end=\$((\$(date +%s)+120)); while [ \$(date +%s) -lt \$end ]; do if dumpsys activity services $PKG | grep -q engine.AlarmService; then am broadcast --include-stopped-packages -n $HARNESS -a com.calendaralarm.emu.DISMISS --es id $id >/dev/null; echo DISMISSED; exit 0; fi; done; echo TIMEOUT")
+  t_dismiss=$(now_ms)
+  log "$name: $out"
+  if [ "$out" != DISMISSED ]; then
+    stop_recording "$name"; record "$name" FAIL NO_FIRE "AlarmService did not start within 120s ($id)"; return
+  fi
+  # 3 秒以内に止まり、その後 10 秒間 音・サービス・通知・オーバーレイが復活しないこと
+  if ! wait_stopped "$t_dismiss" 3000; then
+    capture "$p.after"; cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL NOT_STOPPED "state after early stop=${LAST_STATE}"
+    return
+  fi
+  local stopped_ms=$STOPPED_AFTER_MS
+  for i in $(seq 1 10); do
+    sleep 1
+    st=$(stop_state)
+    echo "t+${i}s players/service/notif=$st" >> "$p.watch.txt"
+    read -r a s n <<<"$st"
+    if [ "$a" != 0 ] || [ "$s" != 0 ] || [ "$n" != 0 ]; then bad="t+${i}s $st"; break; fi
+  done
+  capture "$p.after"
+  local ov
+  ov=$("${CHECK[@]}" overlay "$p.after.window.txt" "$PKG")
+  stop_recording "$name"
+  if [ -n "$bad" ]; then
+    cleanup_ring "$id"
+    record "$name" FAIL ZOMBIE "alarm came back after early stop: $bad"
+  elif [ "$ov" != 0 ]; then
+    record "$name" FAIL ZOMBIE_OVERLAY "overlay still on screen after early stop"
+  else
+    record "$name" PASS OK "early stop stopped in ${stopped_ms}ms; no audio/service/notification/overlay for 10s"
+  fi
+}
+
+scenario_locked() {
+  local name=locked p="$OUT/locked" id t_tap xy ov rr st a s n
+  unlock_screen
+  sh_ locksettings set-pin "$PIN" > "$p.locksettings.txt" 2>&1
+  adb shell svc power stayon false
+  start_recording "$name"
+  id=$(schedule 45 EmuStopLocked)
+  [ -n "$id" ] || { stop_recording "$name"; record "$name" FAIL SCHEDULE_FAILED "harness broadcast failed"; return; }
+  adb shell input keyevent KEYCODE_SLEEP
+  sleep 3
+  sh_ dumpsys window | grep -Ei "keyguard|showing_lockscreen|mDreaming" > "$p.keyguard_before.txt" 2>&1
+  if ! wait_fire 120; then
+    stop_recording "$name"; record "$name" FAIL NO_FIRE "AlarmService did not start within 120s ($id)"
+    locked_restore; return
+  fi
+  log "$name: fired ($id); waiting 12s"
+  sleep 12
+  capture "$p.t12"
+  st=$(STATE_KEEP="$p.t12.pre" stop_state)
+  read -r a s n <<<"$st"
+  ov=$("${CHECK[@]}" overlay "$p.t12.window.txt" "$PKG")
+  if ringing_resumed "$p.t12.activities.txt"; then rr=yes; else rr=no; fi
+  {
+    echo "instance=$id"
+    echo "top=$(top_activity "$p.t12.activities.txt")"
+    echo "ringing_activity_resumed=$rr"
+    echo "overlay_windows=$ov"
+    echo "pre_stop alarm_players=$a service=$s notification=$n"
+  } > "$p.facts.txt"
+  cat "$p.facts.txt" >&2
+  if [ "$rr" = yes ] && [ "$ov" != 0 ]; then
+    xy=$("${CHECK[@]}" stop-node "$p.t12.ui.xml" "$PKG" "$STOP_TEXT") || xy=
+    [ -n "$xy" ] && adb shell input tap $xy
+    sleep 3; cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL STACKED_UI "RingingActivity resumed AND overlay window on screen at the same time"
+    locked_restore; return
+  fi
+  if ! xy=$("${CHECK[@]}" stop-node "$p.t12.ui.xml" "$PKG" "$STOP_TEXT"); then
+    cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL STOP_UI_MISSING "no $PKG '$STOP_TEXT' node while locked (ringing_activity=$rr overlay=$ov)"
+    locked_restore; return
+  fi
+  t_tap=$(now_ms)
+  # shellcheck disable=SC2086
+  adb shell input tap $xy
+  if wait_stopped "$t_tap" 3000; then
+    sleep 2; capture "$p.after"; stop_recording "$name"
+    record "$name" PASS OK "single stop UI (ringing_activity=$rr overlay=$ov); stopped ${STOPPED_AFTER_MS}ms after tap"
+  else
+    capture "$p.after"; cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL NOT_STOPPED "state after tap=${LAST_STATE}"
+  fi
+  locked_restore
+}
+
+locked_restore() {
+  adb shell input keyevent KEYCODE_WAKEUP
+  sh_ locksettings clear --old "$PIN" >> "$OUT/locked.locksettings.txt" 2>&1
+  adb shell svc power stayon true
+  unlock_screen
+}
+
+export_audit() {
+  local d="$OUT/db"
+  mkdir -p "$d"
+  for f in calendar-alarm.db calendar-alarm.db-wal calendar-alarm.db-shm; do
+    adb exec-out run-as "$PKG" cat "databases/$f" > "$d/$f" 2>/dev/null || rm -f "$d/$f"
+  done
+  if [ -s "$d/calendar-alarm.db" ]; then
+    "${CHECK[@]}" audit "$d/calendar-alarm.db" > "$OUT/audit_log.tsv" 2>&1 || true
+  else
+    echo "audit DB export failed" > "$OUT/audit_log.tsv"
+  fi
+}
+
+# ---------- 本体 ----------
+
+log "booted: $(sh_ getprop ro.build.fingerprint)"
+adb install -r -g "$APK" > "$OUT/install.txt" 2>&1 || { cat "$OUT/install.txt"; exit 1; }
+APP_UID=$(sh_ pm list packages -U "$PKG" | sed -n "s/^package:$PKG uid:\([0-9]*\).*/\1/p" | head -1)
+log "app uid=$APP_UID"
+sh_ pm grant "$PKG" android.permission.POST_NOTIFICATIONS
+sh_ appops set "$PKG" SYSTEM_ALERT_WINDOW allow
+sh_ appops set "$PKG" USE_FULL_SCREEN_INTENT allow
+sh_ appops set "$PKG" SCHEDULE_EXACT_ALARM allow >/dev/null 2>&1
+{
+  echo "--- appops"; sh_ appops get "$PKG"
+  echo "--- permissions"; sh_ dumpsys package "$PKG" | grep -E "granted=|USE_FULL_SCREEN_INTENT|SYSTEM_ALERT_WINDOW"
+} > "$OUT/permissions.txt" 2>&1
+sh_ settings put system screen_off_timeout 1800000
+adb shell svc power stayon true
+sh_ settings put global heads_up_notifications_enabled 1
+
+for sc in "${SCENARIOS[@]}"; do
+  log "=== scenario: $sc ==="
+  "scenario_$sc"
+done
+
+export_audit
+sh_ logcat -d -v threadtime > "$OUT/logcat.txt" 2>&1
+
+{
+  echo "## alarm stop E2E (emulator)"
+  echo
+  echo "- device: $(sh_ getprop ro.build.fingerprint)"
+  echo "- apk: $APK"
+  echo
+  echo "| scenario | result | code | detail |"
+  echo "|---|---|---|---|"
+  awk -F'\t' '{printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4}' "$OUT/results.tsv"
+} > "$OUT/summary.md"
+cat "$OUT/summary.md"
+
+if grep -q $'\tFAIL\t' "$OUT/results.tsv"; then exit 1; fi
+exit 0
