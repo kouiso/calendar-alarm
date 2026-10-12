@@ -73,11 +73,21 @@ class RingingActivity : ComponentActivity() {
             val settings by app.container.settings.flow.collectAsState(initial = null)
             CalendarAlarmTheme(themeId = settings?.themeId ?: "default") {
                 Surface(modifier = Modifier.fillMaxSize()) {
+                    // 鳴動中に別アラームが座席を奪った時、通知は張替え (FSI が再起動
+                    // されないことがある) なので onNewIntent が来ない場合がある。
+                    // 鳴動中 id が別の id に変わったら追従し、停止が旧インスタンスへ飛ばないようにする
+                    androidx.compose.runtime.LaunchedEffect(Unit) {
+                        AlarmService.ringingInstanceId.collect { id ->
+                            if (id != null && id != instanceIdState.value) instanceIdState.value = id
+                        }
+                    }
                     val watchedId = instanceIdState.value ?: ""
                     val rowFlow = androidx.compose.runtime.remember(watchedId) {
                         app.container.repository.instanceWithStateFlow(watchedId)
                     }
-                    val row by rowFlow.collectAsState(initial = null)
+                    // id 切替直後は直前の id の行が残るので、監視中の id の行だけを使う
+                    val row = rowFlow.collectAsState(initial = null).value
+                        ?.takeIf { it.first.id == watchedId }
                     val instance = row?.first
                     // 通知の「停止」放送など画面外経路で終端化された時、本画面が
                     // 残り続けると無音の鳴動画面になる (早期停止の実機報告)。

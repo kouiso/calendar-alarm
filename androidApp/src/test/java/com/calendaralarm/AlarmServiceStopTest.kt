@@ -58,6 +58,7 @@ class AlarmServiceStopTest {
         idleMain()
         StopUiPermissions.probeOverride = null
         AlarmService.ringingInstanceId.value = null
+        runBlocking { app.container.settings.setVibrateWhileRinging(true) }
     }
 
     // ---- helpers ----
@@ -101,6 +102,21 @@ class AlarmServiceStopTest {
 
     private fun AlarmService.isPlaying(): Boolean =
         runCatching { player()?.isPlaying == true }.getOrDefault(false)
+
+    private fun AlarmService.ringLock(): Any =
+        AlarmService::class.java.getDeclaredField("ringLock")
+            .apply { isAccessible = true }.get(this)!!
+
+    private fun AlarmService.ringTimeoutJob(): kotlinx.coroutines.Job? =
+        AlarmService::class.java.getDeclaredField("ringTimeoutJob")
+            .apply { isAccessible = true }.get(this) as kotlinx.coroutines.Job?
+
+    /**
+     * 鳴動開始コルーチンを座席確保 (ringLock) の手前で止めたまま [block] を実行する。
+     * onStartCommand はメインスレッドで走るのでロックを再入できる
+     */
+    private fun <T> holdingSeat(c: ServiceController<AlarmService>, block: () -> T): T =
+        synchronized(c.get().ringLock()) { block() }
 
     private fun idleMain() = shadowOf(Looper.getMainLooper()).idle()
 
@@ -154,9 +170,13 @@ class AlarmServiceStopTest {
     @Test
     fun `鳴動開始処理中にid無しDISMISSが届いても音が残らずサービスが止まる`() {
         seed("zr-noid")
-        val c = startService("zr-noid")
-        // 鳴動開始コルーチンが MediaPlayer.start() に達する前に停止を届ける
-        c.withIntent(dismissIntent(null)).startCommand(0, 2)
+        val c = Robolectric.buildService(AlarmService::class.java, startIntent("zr-noid")).create()
+        controllers += c
+        // 鳴動開始コルーチンが座席確保 (= MediaPlayer.start() より前) に達する前に停止を届ける
+        holdingSeat(c) {
+            c.startCommand(0, 1)
+            c.withIntent(dismissIntent(null)).startCommand(0, 2)
+        }
         settle()
         assertFalse("停止後に音が鳴り続けないこと", c.get().isPlaying())
         assertNull(c.get().player())
@@ -168,8 +188,12 @@ class AlarmServiceStopTest {
     @Test
     fun `鳴動開始処理中に対象指定DISMISSが届いても音が残らずサービスが止まる`() {
         seed("zr-id")
-        val c = startService("zr-id")
-        c.withIntent(dismissIntent("zr-id")).startCommand(0, 2)
+        val c = Robolectric.buildService(AlarmService::class.java, startIntent("zr-id")).create()
+        controllers += c
+        holdingSeat(c) {
+            c.startCommand(0, 1)
+            c.withIntent(dismissIntent("zr-id")).startCommand(0, 2)
+        }
         settle()
         assertFalse(c.get().isPlaying())
         assertNull(c.get().player())
@@ -185,17 +209,18 @@ class AlarmServiceStopTest {
         val c = startService("multi-a")
         assertTrue(waitUntil { c.get().isPlaying() && AlarmService.ringingInstanceId.value == "multi-a" })
         val playerA = c.get().player()
-        // B の開始コルーチンを座席確保 (ringLock) の手前で止めた状態で、B への停止を届ける。
-        // onStartCommand は同じ (メイン) スレッドで走るので再入できる
-        val ringLock = AlarmService::class.java.getDeclaredField("ringLock")
-            .apply { isAccessible = true }.get(c.get())!!
-        synchronized(ringLock) {
+        assertTrue(waitUntil { c.get().ringTimeoutJob()?.isActive == true })
+        val timeoutA = c.get().ringTimeoutJob()
+        // B の開始コルーチンを座席確保の手前で止めた状態で、B への停止を届ける
+        holdingSeat(c) {
             c.withIntent(startIntent("multi-b")).startCommand(0, 2)
             c.withIntent(dismissIntent("multi-b")).startCommand(0, 3)
         }
         settle()
         assertTrue("A の鳴動が止められていないこと", c.get().isPlaying())
         assertTrue(c.get().player() === playerA)
+        assertTrue("A の鳴動上限タイマーが巻き添えで止まらないこと", timeoutA === c.get().ringTimeoutJob() && timeoutA!!.isActive)
+        assertTrue(AlarmService.isDismissed("multi-b"))
         assertEquals("multi-a", AlarmService.ringingInstanceId.value)
         assertFalse("前面サービスのまま鳴動を続けること", shadowOf(c.get()).isForegroundStopped)
         val n = ringingNotification()
@@ -204,6 +229,57 @@ class AlarmServiceStopTest {
         // 実際に A を止められる
         c.withIntent(dismissIntent("multi-a")).startCommand(0, 4)
         assertTrue(waitUntil { !c.get().isPlaying() && shadowOf(c.get()).isStoppedBySelf })
+    }
+
+    @Test
+    fun `id無し停止は最新の未開始要求を潰し先の要求は鳴る`() {
+        seed("nw-a", "A")
+        seed("nw-b", "B")
+        val c = Robolectric.buildService(AlarmService::class.java, startIntent("nw-a")).create()
+        controllers += c
+        holdingSeat(c) {
+            c.startCommand(0, 1)
+            c.withIntent(startIntent("nw-b")).startCommand(0, 2)
+            c.withIntent(dismissIntent(null)).startCommand(0, 3)
+        }
+        assertTrue(waitUntil { c.get().isPlaying() && AlarmService.ringingInstanceId.value == "nw-a" })
+        settle()
+        assertEquals("nw-a", AlarmService.ringingInstanceId.value)
+        assertTrue(AlarmService.isDismissed("nw-b"))
+        assertFalse(AlarmService.isDismissed("nw-a"))
+        assertFalse(shadowOf(c.get()).isForegroundStopped)
+        assertEquals("nw-a", stopActionTarget(ringingNotification()!!))
+    }
+
+    @Test
+    fun `未開始の要求がある間の無関係な停止は前面化と要求を潰さない`() {
+        seed("busy-a")
+        val c = Robolectric.buildService(AlarmService::class.java, startIntent("busy-a")).create()
+        controllers += c
+        holdingSeat(c) {
+            c.startCommand(0, 1)
+            c.withIntent(dismissIntent("busy-x")).startCommand(0, 2)
+        }
+        assertTrue(waitUntil { c.get().isPlaying() && AlarmService.ringingInstanceId.value == "busy-a" })
+        settle()
+        assertFalse("前面サービスのまま鳴動すること", shadowOf(c.get()).isForegroundStopped)
+        assertFalse(shadowOf(c.get()).isStoppedBySelf)
+        assertNotNull(ringingNotification())
+        assertTrue(waitUntil { audits().any { it.first == "DISMISS_LATE" && it.second.startsWith("busy-x") } })
+    }
+
+    @Test
+    fun `座席確保済みで未開始の鳴動へのid無し停止はその要求を潰してサービスを止める`() {
+        val c = Robolectric.buildService(AlarmService::class.java).create()
+        controllers += c
+        AlarmService::class.java.getDeclaredField("pendingStartId")
+            .apply { isAccessible = true }.set(c.get(), "pd-a")
+        c.withIntent(dismissIntent(null)).startCommand(0, 1)
+        assertTrue(waitUntil { shadowOf(c.get()).isStoppedBySelf })
+        assertTrue(AlarmService.isDismissed("pd-a"))
+        assertNull(AlarmService::class.java.getDeclaredField("pendingStartId")
+            .apply { isAccessible = true }.get(c.get()))
+        assertNull(ringingNotification())
     }
 
     // ---- notification 停止 action ----

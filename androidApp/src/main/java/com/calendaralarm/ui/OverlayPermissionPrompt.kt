@@ -53,11 +53,14 @@ fun OverlayPermissionPrompt(settings: SettingsRepository, activity: Activity) {
         confirmButton = {
             TextButton(onClick = {
                 markShown()
-                activity.startActivity(
-                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                        data = Uri.parse("package:${activity.packageName}")
-                    },
-                )
+                // 一部端末 (Android Go 等) はこの設定画面を持たない
+                runCatching {
+                    activity.startActivity(
+                        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                            data = Uri.parse("package:${activity.packageName}")
+                        },
+                    )
+                }
             }) { Text("許可する") }
         },
         dismissButton = {
