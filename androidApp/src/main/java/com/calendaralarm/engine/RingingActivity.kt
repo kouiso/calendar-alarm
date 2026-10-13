@@ -153,8 +153,10 @@ class RingingActivity : ComponentActivity() {
                         val pinned = { action: String, minutes: Int? ->
                             sendAction(
                                 action, minutes,
-                                targetId = watchedId,
-                                finishScreen = watchedId == instanceIdState.value,
+                                // id 不明 (null) の時は従来どおり null を送り、サービス側で
+                                // 「今鳴っている鳴動」に解決させる (空文字だと解決されず止まらない)
+                                targetId = watchedId.ifEmpty { null },
+                                finishScreen = watchedId == (instanceIdState.value ?: ""),
                             )
                         }
                         RingingScreen(

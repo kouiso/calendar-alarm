@@ -1,6 +1,7 @@
 package com.calendaralarm
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -100,6 +101,12 @@ class RingingScreenLayoutTest {
         launch("tm:open", "EmuStop_presets_open")
         compose.onNodeWithText("スヌーズ時間を選ぶ ▾").performClick()
         compose.waitForIdle()
+        // 展開できていなければ閉じた状態と同じ配置で緑になってしまうので、開いたこととチップの存在を確かめる
+        compose.onNodeWithText("スヌーズ時間を選ぶ ▴").assertExists()
+        assertTrue(
+            "プリセットのチップが1つ以上出ること",
+            compose.onAllNodesWithText("+", substring = true).fetchSemanticsNodes().isNotEmpty(),
+        )
         assertStopFullyOnScreen()
     }
 
