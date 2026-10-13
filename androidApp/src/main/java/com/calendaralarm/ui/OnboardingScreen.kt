@@ -205,6 +205,8 @@ fun OnboardingScreen(
             Button(
                 onClick = {
                     scope.launch {
+                        // オンボーディングで上への表示カードを見ているので更新ユーザー向け案内は不要
+                        settings.setOverlayPromptShown(true)
                         settings.setOnboardingDone(true)
                         repository.resync("onboarding")
                     }
@@ -214,7 +216,10 @@ fun OnboardingScreen(
             ) { Text("はじめる") }
             TextButton(
                 onClick = {
-                    scope.launch { settings.setOnboardingDone(true) }
+                    scope.launch {
+                        settings.setOverlayPromptShown(true)
+                        settings.setOnboardingDone(true)
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
