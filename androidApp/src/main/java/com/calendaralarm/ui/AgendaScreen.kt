@@ -154,7 +154,13 @@ fun AgendaScreen(
                 app.ensureCalendarObserver()
                 // 既定の開始/リマインダーはどちらもアラームなので、接続した時点で予定の
                 // 鳴動が入る。これが新規ユーザー最初の「アラームON」になる
-                onAlarmArmed("予定", null)
+                // 既定が「通知のみ/鳴らさない」なら接続しても鳴動は入らないので出さない
+                val s = settings
+                if (s == null || s.defaultStartAction == EventAction.ALARM ||
+                    s.defaultReminderAction == EventAction.ALARM
+                ) {
+                    onAlarmArmed("予定", s?.defaultMinutesBefore)
+                }
                 scope.launch { repository.resync("calendar linked") }
             },
         )

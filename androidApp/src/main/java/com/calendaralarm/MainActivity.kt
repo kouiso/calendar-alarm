@@ -341,6 +341,12 @@ private fun MainScaffold(
             subject = req.subject,
             leadMinutes = req.leadMinutes,
             firstTime = req.auto,
+            onRingTest = {
+                // シートを閉じても予約が打ち切られないよう、シートより長く生きる scope で行う
+                scope.launch { runCatching { com.calendaralarm.ui.scheduleRingTest(repository) } }
+                ringSetupRequest = null
+                if (req.auto) scope.launch { settings.setRingSetupDone(true) }
+            },
             onDismiss = {
                 ringSetupRequest = null
                 if (req.auto) scope.launch { settings.setRingSetupDone(true) }

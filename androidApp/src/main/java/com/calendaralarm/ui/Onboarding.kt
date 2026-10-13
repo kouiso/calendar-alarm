@@ -301,6 +301,7 @@ internal fun RingSetupSheet(
     subject: String?,
     leadMinutes: Int?,
     firstTime: Boolean,
+    onRingTest: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -424,6 +425,11 @@ internal fun RingSetupSheet(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    // 端末側にこの設定が無い (Android Go 等) と段2を抜けられないため出口を置く
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("あとで") }
                 }
                 else -> {
                     Text(
@@ -433,15 +439,9 @@ internal fun RingSetupSheet(
                     Spacer(Modifier.height(18.dp))
                     Button(
                         onClick = {
-                            // onDismiss でシートが外れると scope ごとキャンセルされ、予約が
-                            // 完了前に打ち切られる。予約を終えてから閉じる
-                            scope.launch {
-                                try {
-                                    scheduleRingTest(repository)
-                                } finally {
-                                    onDismiss()
-                                }
-                            }
+                            // 予約はシートより長く生きる scope (MainScaffold) で行う。
+                            // シート側の scope だと閉じた瞬間にキャンセルされ、連打で二重にも鳴る
+                            onRingTest()
                         },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(16.dp),
