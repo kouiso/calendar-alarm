@@ -130,26 +130,26 @@ class MainActivity : ComponentActivity() {
                 com.calendaralarm.ui.OverlayPermissionPrompt(app.container.settings, this@MainActivity)
                 // メール→予定: 抽出結果が届いていれば確認ダイアログを最前面に出す
                 extractedJson.value?.let { json ->
-                        val ev = runCatching {
-                            kotlinx.serialization.json.Json {
-                                ignoreUnknownKeys = true
-                            }.decodeFromString<com.calendaralarm.shared.model.ExtractedEvent>(json)
-                        }.getOrNull()
-                        if (ev != null) {
-                            com.calendaralarm.ui.ExtractedEventDialog(
-                                event = ev,
-                                onDismiss = { extractedJson.value = null },
-                                onSaved = {
-                                    extractedJson.value = null
-                                    // 新しい予定を即時取り込んでアラーム化する
-                                    lifecycleScope.launch {
-                                        app.container.repository.resync("event inserted")
-                                    }
-                                },
-                            )
-                        }
+                    val ev = runCatching {
+                        kotlinx.serialization.json.Json {
+                            ignoreUnknownKeys = true
+                        }.decodeFromString<com.calendaralarm.shared.model.ExtractedEvent>(json)
+                    }.getOrNull()
+                    if (ev != null) {
+                        com.calendaralarm.ui.ExtractedEventDialog(
+                            event = ev,
+                            onDismiss = { extractedJson.value = null },
+                            onSaved = {
+                                extractedJson.value = null
+                                // 新しい予定を即時取り込んでアラーム化する
+                                lifecycleScope.launch {
+                                    app.container.repository.resync("event inserted")
+                                }
+                            },
+                        )
                     }
                 }
+            }
             }
         }
     }

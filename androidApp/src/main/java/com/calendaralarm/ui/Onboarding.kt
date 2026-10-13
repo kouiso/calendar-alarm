@@ -53,7 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.shared.logic.AlarmExpander
 import kotlinx.datetime.Clock
@@ -106,13 +106,14 @@ internal fun computePermSnapshot(context: Context): PermSnapshot {
 @Composable
 internal fun rememberResumeTick(): Int {
     var tick by remember { mutableIntStateOf(0) }
-    val owner = LocalContext.current as? LifecycleOwner
+    // Context がラッパーでも ON_RESUME を取りこぼさないよう LocalLifecycleOwner を使う
+    val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
         val obs = LifecycleEventObserver { _, ev ->
             if (ev == Lifecycle.Event.ON_RESUME) tick++
         }
-        owner?.lifecycle?.addObserver(obs)
-        onDispose { owner?.lifecycle?.removeObserver(obs) }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
     }
     return tick
 }
