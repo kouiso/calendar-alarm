@@ -214,6 +214,14 @@ private val tabs = listOf(
 /** 権限シートの表示要求。auto=true は初回アラームONによる自動表示 (1回きり)。 */
 private data class RingSetupRequest(val subject: String?, val leadMinutes: Int?, val auto: Boolean)
 
+/** 回転や設定アプリ往復中のプロセス再生成でもシートが消えないよう、表示要求を保存する。 */
+private val RingSetupRequestSaver = androidx.compose.runtime.saveable.Saver<RingSetupRequest?, ArrayList<Any?>>(
+    save = { r -> r?.let { arrayListOf<Any?>(it.subject, it.leadMinutes, it.auto) } ?: arrayListOf() },
+    restore = { l ->
+        if (l.isEmpty()) null else RingSetupRequest(l[0] as String?, l[1] as Int?, l[2] as Boolean)
+    },
+)
+
 @Composable
 private fun MainScaffold(
     repository: com.calendaralarm.data.AlarmRepository,
@@ -224,7 +232,9 @@ private fun MainScaffold(
     val current = backStack?.destination?.route
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-    var ringSetupRequest by remember {
+    var ringSetupRequest by androidx.compose.runtime.saveable.rememberSaveable(
+        stateSaver = RingSetupRequestSaver,
+    ) {
         androidx.compose.runtime.mutableStateOf<RingSetupRequest?>(null)
     }
     // 初めてアラームをオンにした時だけ権限シートを出す (「最初の1回だけ」)。
