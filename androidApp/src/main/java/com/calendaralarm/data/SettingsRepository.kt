@@ -103,7 +103,7 @@ class SettingsRepository(private val context: Context) {
             weatherEnabled = p[KEY_WEATHER] ?: true,
             // 旧オンボーディングを済ませた更新ユーザーは初回扱いにしない
             // (起動時の一度きり案内と警告カードが担う)
-            ringSetupDone = p[KEY_RING_SETUP_DONE] ?: (p[KEY_ONBOARDED] ?: false),
+            ringSetupDone = resolveRingSetupDone(p[KEY_RING_SETUP_DONE], p[KEY_ONBOARDED]),
             onboardingDone = p[KEY_ONBOARDED] ?: false,
             overlayPromptShown = p[KEY_OVERLAY_PROMPTED] ?: false,
             defaultStartAction = p[KEY_DEF_START_ACTION]
@@ -324,3 +324,10 @@ class SettingsRepository(private val context: Context) {
             this?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
     }
 }
+
+/**
+ * 初回アラームON時の権限シートを出し終えたか。明示的に保存された値を優先し、未保存なら
+ * 旧オンボーディングを済ませた更新ユーザーは「済み」として扱う。
+ */
+internal fun resolveRingSetupDone(stored: Boolean?, onboarded: Boolean?): Boolean =
+    stored ?: (onboarded ?: false)

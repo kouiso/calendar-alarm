@@ -1,12 +1,9 @@
 package com.calendaralarm
 
-import androidx.test.core.app.ApplicationProvider
-import com.calendaralarm.data.SettingsRepository
+import com.calendaralarm.data.resolveRingSetupDone
 import com.calendaralarm.ui.PermSnapshot
 import com.calendaralarm.ui.ringSetupStage
 import com.calendaralarm.ui.ringSetupTitle
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -46,21 +43,16 @@ class RingSetupTitleTest {
     }
 
     @Test
-    fun `旧オンボーディング済みの更新ユーザーは初回シートを出さない`() = runBlocking {
-        val settings = SettingsRepository(ApplicationProvider.getApplicationContext())
-        assertFalse(settings.flow.first().ringSetupDone)
-        settings.setOnboardingDone(true)
-        assertTrue(settings.flow.first().ringSetupDone)
+    fun `旧オンボーディング済みの更新ユーザーは初回シートを出さない`() {
+        assertFalse(resolveRingSetupDone(stored = null, onboarded = null))
+        assertFalse(resolveRingSetupDone(stored = null, onboarded = false))
+        assertTrue(resolveRingSetupDone(stored = null, onboarded = true))
     }
 
     @Test
-    fun `ringSetupDone を明示的に書いた値は移行の既定値より優先される`() = runBlocking {
-        val settings = SettingsRepository(ApplicationProvider.getApplicationContext())
-        settings.setOnboardingDone(true)
-        settings.setRingSetupDone(false)
-        assertFalse(settings.flow.first().ringSetupDone)
-        settings.setRingSetupDone(true)
-        assertTrue(settings.flow.first().ringSetupDone)
+    fun `明示的に保存した値は移行の既定値より優先される`() {
+        assertFalse(resolveRingSetupDone(stored = false, onboarded = true))
+        assertTrue(resolveRingSetupDone(stored = true, onboarded = false))
     }
 
     @Test
