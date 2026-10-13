@@ -305,12 +305,19 @@ class AlarmServiceStopTest {
 
     private fun MediaPlayer.playing(): Boolean = runCatching { isPlaying }.getOrDefault(false)
 
+    /** 鳴動開始コルーチンが座席確保 (ringLock) の取得待ちでブロックしているか。 */
+    private fun successorBlockedAtSeat(): Boolean =
+        Thread.getAllStackTraces().any { (t, frames) ->
+            t.state == Thread.State.BLOCKED &&
+                frames.any { it.className == AlarmService::class.java.name && it.methodName == "beginRinging" }
+        }
+
     /**
-     * A の鳴動中に B の鳴動要求を受理させ、B の開始コルーチンを座席確保の手前
-     * (前面化の notificationLock) で止めておく。A への停止の後始末が A のプレイヤーへ
-     * 触れた瞬間 (stop か release) に B を解放し、B が自分のプレイヤーを採用するまで
-     * (または猶予切れまで) 停止側を待たせる。後始末が開始と不可分でなければ、
-     * B はその隙に座席確保・プレイヤー採用まで進む。
+     * A の鳴動中に B の鳴動要求を受理させ、B の開始コルーチンが座席確保より先へ
+     * 進めないよう前面化の notificationLock を塞いでおく。A への停止の後始末が A の
+     * プレイヤーへ触れた瞬間 (stop か release) に B を解放し、B が自分のプレイヤーを
+     * 採用するか、座席確保のロック待ちでブロックするまで停止側を待たせる。
+     * 後始末が開始と不可分でなければ、B はその隙に座席確保・プレイヤー採用まで進む。
      * 戻り値は「後始末の途中で採用された B のプレイヤー」(不可分なら null)
      */
     private fun dismissWhileSuccessorStarts(
@@ -336,13 +343,15 @@ class AlarmServiceStopTest {
         assertTrue(held.await(5, TimeUnit.SECONDS))
 
         var adoptedDuringTeardown: MediaPlayer? = null
+        var successorSettled = false
         lateinit var hookA: HookPlayer
         val hook = {
             releaseB.countDown()
             val end = System.currentTimeMillis() + SUCCESSOR_WAIT_MS
             while (System.currentTimeMillis() < end) {
                 val p = svc.player()
-                if (p != null && p !== hookA) { adoptedDuringTeardown = p; break }
+                if (p != null && p !== hookA) { adoptedDuringTeardown = p; successorSettled = true; break }
+                if (successorBlockedAtSeat()) { successorSettled = true; break }
                 Thread.sleep(10)
             }
         }
@@ -359,6 +368,7 @@ class AlarmServiceStopTest {
         c.withIntent(dismissIntent(a)).startCommand(0, 3)
         releaseB.countDown()
         gate.join(5_000)
+        assertTrue("後始末の途中で後続が採用まで進むか座席待ちに入ること (交錯が成立したこと)", successorSettled)
         assertFalse("A の音が止まっていること", hookA.playing())
         return adoptedDuringTeardown
     }
@@ -386,7 +396,7 @@ class AlarmServiceStopTest {
     }
 
     @Test
-    fun `停止の後始末がプレイヤーへ触れる前に後続が採用されても後続を殺さない`() {
+    fun `停止の後始末がプレイヤーを止めている最中に後続が採用されても後続を殺さない`() {
         seed("race-stop-a", "A")
         seed("race-stop-b", "B")
         val c = startService("race-stop-a")
@@ -543,7 +553,7 @@ class AlarmServiceStopTest {
     }
 
     private companion object {
-        /** 後始末の途中で後続の採用を待つ上限。不可分なら採用は起きないのでこの時間で諦める */
-        const val SUCCESSOR_WAIT_MS = 1_500L
+        /** 後始末の途中で後続が採用か座席待ちに至るまでを待つ上限 (遅い CI でも交錯を取り逃がさない長さ) */
+        const val SUCCESSOR_WAIT_MS = 10_000L
     }
 }

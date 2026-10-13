@@ -85,7 +85,7 @@ class AlarmReceiver : BroadcastReceiver() {
             }
             // 鳴動通知の「停止」/破棄アクション。getService 宛だとサービス不在時に
             // OS 側で握り潰されて停止が届かないことがあるため、必ず届く放送経路で受けて
-            // サービス停止 + DB終端化を行う (生きていれば onDestroy の全体停止が音を止める)
+            // サービス停止 + DB終端化を行う (生きていれば転送した DISMISS の claimTeardownFor が音を止める)
             AlarmService.ACTION_DISMISS -> {
                 val instanceId = intent.getStringExtra(AlarmService.EXTRA_INSTANCE_ID)
                 val pending = goAsync()

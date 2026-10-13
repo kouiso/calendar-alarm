@@ -56,8 +56,8 @@ class AlarmService : Service() {
     private var ringTimeoutJob: kotlinx.coroutines.Job? = null
 
     // サービス死滅後に滞留中の beginRinging コルーチンが MediaPlayer を
-    // 開始するのを防ぐフラグ。鳴り始めの一瞬に停止が押されると onDestroy→
-    // stopRinging は mediaPlayer=null で空振りし、その後 start() が走って
+    // 開始するのを防ぐフラグ。鳴り始めの一瞬に停止が押されると onDestroy の
+    // 全体停止は mediaPlayer=null で空振りし、その後 start() が走って
     // サービス不在のまま音だけ鳴り続けるゾンビ状態になる (実機報告)。
     // IO ディスパッチャ上で開始されるので volatile で可視性を確保する。
     @Volatile private var destroyed = false
@@ -65,9 +65,8 @@ class AlarmService : Service() {
     // 途中で世代が進んでいたら鳴動を開始しない。DISMISS/SNOOZE の
     // 停止直後に滞留コルーチンが start() へ滑り込む窓を塞ぐ
     @Volatile private var ringGen = 0
-    // mediaPlayer への書き込みは IO コルーチン、stop() の読み出しは別スレッド。
-    // 世代ガードで大抵は塞がるが、代入直後の stopRinging が stale null を
-    // 読んで空振りする残存窓を volatile で埋める。
+    // 書き込みと停止時の読み出しは ringLock 内だが、クレッシェンドの同一性判定
+    // (mediaPlayer !== player) はロック外の別スレッドから読むので volatile にする。
     @Volatile private var mediaPlayer: MediaPlayer? = null
 
     // 世代検査と共有状態への代入を同じクリティカルセクションで行うための
@@ -350,14 +349,18 @@ class AlarmService : Service() {
             ringTimeoutJob = scope.launch {
                 kotlinx.coroutines.delay(RING_TIMEOUT_MS)
                 // 発火時点で後始末権を奪取できた場合だけ、同じロック内で自分の鳴動を畳む。
-                // 畳みの中でこのジョブ自身もキャンセルされるので、記録は NonCancellable で行う
+                // 畳みの中でこのジョブ自身もキャンセルされるので、以降は NonCancellable で行う
                 if (!stopIfCurrent(gen)) return@launch
                 withContext(NonCancellable) {
-                    app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
-                    app.container.repository.markMissed(instance.id, "鳴動が${RING_TIMEOUT_MS / 60_000}分続き自動停止")
+                    runCatching {
+                        app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
+                    }
+                    runCatching {
+                        app.container.repository.markMissed(instance.id, "鳴動が${RING_TIMEOUT_MS / 60_000}分続き自動停止")
+                    }
+                    MissedNotifier.post(this@AlarmService, instance.title)
+                    finishIfIdle()
                 }
-                MissedNotifier.post(this@AlarmService, instance.title)
-                finishIfIdle()
             }
         }
     }
