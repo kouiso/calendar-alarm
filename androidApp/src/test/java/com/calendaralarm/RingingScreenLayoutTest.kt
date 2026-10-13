@@ -1,5 +1,6 @@
 package com.calendaralarm
 
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -13,6 +14,7 @@ import com.calendaralarm.engine.RingingActivity
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -32,8 +34,13 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], qualifiers = "w320dp-h640dp-mdpi")
 class RingingScreenLayoutTest {
 
+    // 既定の UnconfinedTestDispatcher だと、Room/DataStore のスレッドから emit された
+    // collectAsState の再開と Recomposer がそのスレッド上で走り、メインスレッドの初回合成と
+    // 競合して CompositionImpl.addPendingInvalidationsLocked で NPE になることがある。
+    // StandardTestDispatcher に積めば mainClock のフレーム進行時にメインスレッドで実行される。
+    @OptIn(ExperimentalTestApi::class)
     @get:Rule
-    val compose = createEmptyComposeRule()
+    val compose = createEmptyComposeRule(effectContext = StandardTestDispatcher())
 
     private lateinit var app: CalendarAlarmApp
     private var scenario: ActivityScenario<RingingActivity>? = null
