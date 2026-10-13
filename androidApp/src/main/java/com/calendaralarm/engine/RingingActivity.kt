@@ -163,7 +163,10 @@ class RingingActivity : ComponentActivity() {
      * API34+ は BAL hardening で裸の send() がブロックされるため、
      * SystemUI と同じ MODE_BACKGROUND_ACTIVITY_START_ALLOWED をオプションで渡す。
      */
-    private fun openSourcePendingIntent() {
+    @androidx.annotation.VisibleForTesting
+    internal fun openSourcePendingIntent() {
+        // 解除待ちの間に別の鳴動が座席を奪うと instanceIdState が差し替わるので、押した時点の対象で処理する
+        val id = instanceIdState.value
         // 鳴動画面はキーガード解除を要求しないので、ロック中に送ると元アプリはキーガードの裏で開き
         // 何も起きないように見える。この操作に限り解除を求め、解除できてから開いて止める
         // (止めると鳴動画面が畳まれ解除要求も取り消されるので、停止は解除後に行う)
@@ -172,17 +175,16 @@ class RingingActivity : ComponentActivity() {
             km.requestDismissKeyguard(
                 this,
                 object : android.app.KeyguardManager.KeyguardDismissCallback() {
-                    override fun onDismissSucceeded() = sendSourceAndDismiss()
+                    override fun onDismissSucceeded() = sendSourceAndDismiss(id)
                 },
             )
             return
         }
-        sendSourceAndDismiss()
+        sendSourceAndDismiss(id)
     }
 
-    private fun sendSourceAndDismiss() {
-        val pi = instanceIdState.value
-            ?.let { NotificationAlarmService.pendingOpens.remove(it) }
+    private fun sendSourceAndDismiss(id: String?) {
+        val pi = id?.let { NotificationAlarmService.pendingOpens.remove(it) }
         if (pi != null) {
             val options = if (Build.VERSION.SDK_INT >= 34) {
                 android.app.ActivityOptions.makeBasic()
@@ -194,15 +196,21 @@ class RingingActivity : ComponentActivity() {
             }
             runCatching { pi.send(this, 0, null, null, null, null, options) }
         }
-        sendAction(AlarmService.ACTION_DISMISS)
+        // 対象が既に別の鳴動へ差し替わっていたら、その鳴動の画面は閉じない
+        sendAction(AlarmService.ACTION_DISMISS, targetId = id, finishScreen = id == instanceIdState.value)
     }
 
-    private fun sendAction(action: String, snoozeMinutes: Int? = null) {
+    private fun sendAction(
+        action: String,
+        snoozeMinutes: Int? = null,
+        targetId: String? = instanceIdState.value,
+        finishScreen: Boolean = true,
+    ) {
         val delivered = runCatching {
             startService(
                 Intent(this, AlarmService::class.java).apply {
                     this.action = action
-                    putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceIdState.value)
+                    putExtra(AlarmService.EXTRA_INSTANCE_ID, targetId)
                     if (snoozeMinutes != null) {
                         putExtra(AlarmService.EXTRA_SNOOZE_MINUTES, snoozeMinutes)
                     }
@@ -214,11 +222,11 @@ class RingingActivity : ComponentActivity() {
             // (onDismissed は DB の終端化 + AlarmManager 予約の取消を含む冪等処理)
             lifecycleScope.launch {
                 runCatching {
-                    app.container.repository.onDismissed(instanceIdState.value)
+                    app.container.repository.onDismissed(targetId)
                 }
             }
         }
-        finish()
+        if (finishScreen) finish()
     }
 
     /**

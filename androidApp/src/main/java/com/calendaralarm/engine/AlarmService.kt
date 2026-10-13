@@ -369,7 +369,6 @@ class AlarmService : Service() {
         val notification = buildNotification(instanceId)
         return try {
             synchronized(notificationLock) {
-                notificationEpoch++
                 if (Build.VERSION.SDK_INT >= 34) {
                     startForeground(
                         NOTIFICATION_ID, notification,
@@ -378,6 +377,8 @@ class AlarmService : Service() {
                 } else {
                     startForeground(NOTIFICATION_ID, notification)
                 }
+                // 前面化を拒否された時は何も投稿していないので、先代の遅延掃除を止めない
+                notificationEpoch++
             }
             true
         } catch (e: Exception) {

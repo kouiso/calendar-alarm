@@ -229,6 +229,10 @@ probes_ringing() { [ "$1" != 0 ] && [ "$2" != 0 ] && [ "$3" != 0 ]; }
 # 停止後の採取物 <prefix> に鳴動画面やオーバーレイが残っていれば内容を出して成功する
 stop_ui_left() {
   local p=$1 left=
+  # 採取に失敗した空ファイルを「何も残っていない」と読まない
+  if [ ! -s "$p.activities.txt" ] || [ ! -s "$p.window.txt" ]; then
+    echo "after-stop dumpsys capture failed"; return 0
+  fi
   ringing_resumed "$p.activities.txt" && left="RingingActivity resumed;"
   [ "$("${CHECK[@]}" overlay "$p.window.txt" "$PKG")" != 0 ] && left="$left overlay window;"
   [ -n "$left" ] && { echo "$left"; return 0; }

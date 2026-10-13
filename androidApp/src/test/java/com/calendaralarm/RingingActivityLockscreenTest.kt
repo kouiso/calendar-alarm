@@ -105,8 +105,7 @@ class RingingActivityLockscreenTest {
         ).setup()
         shadowOf(Looper.getMainLooper()).idle()
         val activity = controller.get()
-        RingingActivity::class.java.getDeclaredMethod("openSourcePendingIntent")
-            .apply { isAccessible = true }.invoke(activity)
+        activity.openSourcePendingIntent()
 
         assertEquals("通知元を開く操作に限りキーガード解除を求めること", 1, CountingKeyguardManager.dismissRequests)
         assertFalse("解除前に鳴動画面を閉じないこと (閉じると解除要求が取り消される)", activity.isFinishing)
@@ -128,5 +127,34 @@ class RingingActivityLockscreenTest {
         val shadowApp = shadowOf(app)
         return generateSequence { shadowApp.nextStartedService }
             .firstOrNull { it.action == AlarmService.ACTION_DISMISS }
+    }
+
+    @Test
+    fun `解除待ちの間に別の鳴動へ差し替わったら押した時点の対象だけを止め新しい鳴動の画面は残す`() {
+        val source = PendingIntent.getActivity(
+            app, 0, Intent("com.example.OPEN_SOURCE"), PendingIntent.FLAG_IMMUTABLE,
+        )
+        NotificationAlarmService.pendingOpens["nt:old"] = source
+        val controller = Robolectric.buildActivity(
+            RingingActivity::class.java,
+            RingingActivity.intent(app, "nt:old"),
+        ).setup()
+        shadowOf(Looper.getMainLooper()).idle()
+        val activity = controller.get()
+        activity.openSourcePendingIntent()
+        assertEquals(1, CountingKeyguardManager.dismissRequests)
+
+        // PIN 入力中に別のアラームが鳴動画面を引き継ぐ
+        controller.newIntent(RingingActivity.intent(app, "tm:new"))
+        shadowOf(Looper.getMainLooper()).idle()
+        CountingKeyguardManager.lastCallback!!.onDismissSucceeded()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        val dismiss = startedDismiss()
+        assertNotNull(dismiss)
+        assertEquals("押した時点の鳴動を止めること", "nt:old", dismiss!!.getStringExtra(AlarmService.EXTRA_INSTANCE_ID))
+        assertEquals("com.example.OPEN_SOURCE", shadowOf(app).nextStartedActivity?.action)
+        assertFalse("引き継いだ鳴動の画面は閉じないこと", activity.isFinishing)
+        controller.pause().stop().destroy()
     }
 }
