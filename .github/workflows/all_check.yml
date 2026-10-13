@@ -1,14 +1,33 @@
 name: Android CI
 
+# push は master のみ、作業ブランチは PR 経由で走らせる。全ブランチ push + PR の二重起動と、
+# draft の途中コミット毎の実行を避けるため。
+# 手動 dispatch で APK を取る運用はやめる (APK 配布は fad.yml が自前で再ビルドするので二重になる)。
+# dispatch は CI の再実行用に残すだけ。
 on:
   push:
     branches:
-      - "**"
+      - master
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: ${{ vars.RUNNER_LINUX }}
+    # push / dispatch では pull_request.draft が null なので != true で通す
+    if: github.event.pull_request.draft != true
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
