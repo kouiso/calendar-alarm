@@ -37,7 +37,9 @@ else
       fi
       ;;
     stop-ui-missing)
-      if awk -F'\t' '$1 == "unlocked" && $2 == "FAIL" && $3 == "STOP_UI_MISSING" { found = 1 } END { exit !found }' "$RESULTS"; then
+      if [ -n "$SCENARIOS" ] && [ "$SCENARIOS" != unlocked ]; then
+        note="陰性対照は unlocked 単独で実行すること (指定: $SCENARIOS)"
+      elif awk -F'\t' '$1 == "unlocked" && $2 == "FAIL" && $3 == "STOP_UI_MISSING" { found = 1 } END { exit !found }' "$RESULTS"; then
         verdict=PASS; note="陰性対照: 停止UI欠落を再現 (unlocked が STOP_UI_MISSING で失敗) = テストはバグを検出できる"
       else
         note="陰性対照なのに停止UI欠落を再現できなかった (テストがバグを検出できていない)"

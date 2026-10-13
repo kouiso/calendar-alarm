@@ -74,6 +74,9 @@ jobs:
             if ! [[ $INPUT_SCENARIOS =~ $re ]]; then
               echo "invalid scenarios: $INPUT_SCENARIOS" >&2; exit 1
             fi
+            if [ "$INPUT_EXPECT" = stop-ui-missing ] && [ "$INPUT_SCENARIOS" != unlocked ]; then
+              echo "stop-ui-missing (negative control) runs the unlocked scenario only" >&2; exit 1
+            fi
             lanes=$(jq -cn --arg ref "${INPUT_APP_REF:-$HEAD_SHA}" --arg exp "$INPUT_EXPECT" --arg sc "$INPUT_SCENARIOS" \
               '[{name: "dispatch", app_ref: $ref, expect: $exp, scenarios: $sc}]')
           else

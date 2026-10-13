@@ -86,14 +86,21 @@ stop_recording() {
 
 service_alive() { sh_ dumpsys activity services "$PKG" | grep -q "engine.AlarmService"; }
 
-# 1 回の adb 往復で 音・サービス・通知 を同時に見る。"<alarm_players> <service> <notif>" を出す
+# 1 回の adb 往復で 音・サービス・通知 を同時に見る。"<alarm_players> <service> <notif>" を出す。
+# 採取に失敗したら "err err err" を出す (欠損を「全部 0 = 停止済み」と読ませない)
 stop_state() {
-  local tmp
+  local tmp ok=1 f
   tmp=$(mktemp -d)
-  adb shell "dumpsys audio > /data/local/tmp/s_audio.txt; dumpsys activity services $PKG > /data/local/tmp/s_svc.txt; dumpsys notification --noredact > /data/local/tmp/s_notif.txt" >/dev/null 2>&1
-  adb pull /data/local/tmp/s_audio.txt "$tmp/audio" >/dev/null 2>&1
-  adb pull /data/local/tmp/s_svc.txt "$tmp/svc" >/dev/null 2>&1
-  adb pull /data/local/tmp/s_notif.txt "$tmp/notif" >/dev/null 2>&1
+  adb shell "dumpsys audio > /data/local/tmp/s_audio.txt && dumpsys activity services $PKG > /data/local/tmp/s_svc.txt && dumpsys notification --noredact > /data/local/tmp/s_notif.txt" >/dev/null 2>&1 || ok=0
+  adb pull /data/local/tmp/s_audio.txt "$tmp/audio" >/dev/null 2>&1 || ok=0
+  adb pull /data/local/tmp/s_svc.txt "$tmp/svc" >/dev/null 2>&1 || ok=0
+  adb pull /data/local/tmp/s_notif.txt "$tmp/notif" >/dev/null 2>&1 || ok=0
+  for f in audio svc notif; do [ -s "$tmp/$f" ] || ok=0; done
+  if [ "$ok" != 1 ]; then
+    rm -rf "$tmp"
+    echo "err err err"
+    return
+  fi
   local a s n
   a=$("${CHECK[@]}" alarm-players "$tmp/audio" "$APP_UID")
   if grep -q "engine.AlarmService" "$tmp/svc"; then s=1; else s=0; fi
@@ -224,7 +231,7 @@ record() {
 
 # 停止前に 音/サービス/通知 の全検出器が鳴動を捉えていること。
 # 捉えていない検出器があると停止後の「0 0 0」が素通りで成立してしまう
-probes_ringing() { [ "$1" != 0 ] && [ "$2" != 0 ] && [ "$3" != 0 ]; }
+probes_ringing() { [ "$1" -ge 1 ] 2>/dev/null && [ "$2" -ge 1 ] 2>/dev/null && [ "$3" -ge 1 ] 2>/dev/null; }
 
 # 停止後の採取物 <prefix> に鳴動画面やオーバーレイが残っていれば内容を出して成功する
 stop_ui_left() {
@@ -294,6 +301,12 @@ scenario_unlocked() {
     echo "pre_stop alarm_players=$a service=$s notification=$n"
   } > "$p.facts.txt"
   cat "$p.facts.txt" >&2
+  # 鳴動が続いていることを停止UIの判定より先に確かめる。鳴動が途中で死んだだけの
+  # 「停止UI無し」を陰性対照の STOP_UI_MISSING として成立させないため
+  if ! probes_ringing "$a" "$s" "$n"; then
+    cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL PROBE_PRECONDITION "before stop (players service notif)=$st; every probe must see the ring before stop"; return
+  fi
   if overlay_force_hidden "$p.t12.window.txt"; then
     cleanup_ring "$id"; stop_recording "$name"
     record "$name" FAIL OVERLAY_FORCE_HIDDEN "overlay window exists but another window hides non-system overlays (invalid foreground app)"
@@ -309,10 +322,6 @@ scenario_unlocked() {
     stop_recording "$name"
     record "$name" FAIL STOP_UI_MISSING "no $PKG '$STOP_TEXT' node on screen 12s after fire (overlay_windows=$ov, headsup_stop=$hun)"
     return
-  fi
-  if ! probes_ringing "$a" "$s" "$n"; then
-    cleanup_ring "$id"; stop_recording "$name"
-    record "$name" FAIL PROBE_PRECONDITION "before stop (players service notif)=$st; every probe must see the ring before stop"; return
   fi
   t_tap=$(now_ms)
   # shellcheck disable=SC2086
@@ -354,13 +363,16 @@ scenario_race() {
     record "$name" FAIL NOT_STOPPED "state after early stop=${LAST_STATE}"
     return
   fi
-  local stopped_ms=$STOPPED_AFTER_MS
+  local stopped_ms=$STOPPED_AFTER_MS wov
   for i in $(seq 1 10); do
     sleep 1
     st=$(stop_state)
-    echo "t+${i}s players/service/notif=$st" >> "$p.watch.txt"
+    # オーバーレイも毎秒見る (途中で出て消えた復活を終点の採取だけでは見逃す)
+    sh_ dumpsys window windows > "$p.watch.window.txt" 2>&1
+    if [ -s "$p.watch.window.txt" ]; then wov=$("${CHECK[@]}" overlay "$p.watch.window.txt" "$PKG"); else wov=err; fi
+    echo "t+${i}s players/service/notif=$st overlay=$wov" >> "$p.watch.txt"
     read -r a s n <<<"$st"
-    if [ "$a" != 0 ] || [ "$s" != 0 ] || [ "$n" != 0 ]; then bad="t+${i}s $st"; break; fi
+    if [ "$a" != 0 ] || [ "$s" != 0 ] || [ "$n" != 0 ] || [ "$wov" != 0 ]; then bad="t+${i}s $st overlay=$wov"; break; fi
   done
   capture "$p.after"
   local ov
@@ -368,7 +380,7 @@ scenario_race() {
   stop_recording "$name"
   if [ -n "$bad" ]; then
     cleanup_ring "$id"
-    record "$name" FAIL ZOMBIE "alarm came back after early stop: $bad"
+    record "$name" FAIL ZOMBIE "alarm or stop UI came back after early stop (players service notif overlay): $bad"
   elif [ "$ov" != 0 ]; then
     record "$name" FAIL ZOMBIE_OVERLAY "overlay still on screen after early stop"
   else
@@ -495,6 +507,8 @@ log "booted: $(sh_ getprop ro.build.fingerprint)"
 adb install -r -g "$APK" > "$OUT/install.txt" 2>&1 || { cat "$OUT/install.txt"; exit 1; }
 APP_UID=$(sh_ pm list packages -U "$PKG" | sed -n "s/^package:$PKG uid:\([0-9]*\).*/\1/p" | head -1)
 log "app uid=$APP_UID"
+# uid が取れないと音の検出器が常に 0 を返し、停止の判定が素通りになる
+[ -n "$APP_UID" ] || { log "could not resolve app uid; audio probe would be blind"; exit 1; }
 sh_ pm grant "$PKG" android.permission.POST_NOTIFICATIONS
 sh_ appops set "$PKG" SYSTEM_ALERT_WINDOW allow
 sh_ appops set "$PKG" USE_FULL_SCREEN_INTENT allow

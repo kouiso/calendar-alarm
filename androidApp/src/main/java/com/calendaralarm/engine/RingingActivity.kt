@@ -171,7 +171,7 @@ class RingingActivity : ComponentActivity() {
         // 何も起きないように見える。この操作に限り解除を求め、解除できてから開いて止める
         // (止めると鳴動画面が畳まれ解除要求も取り消されるので、停止は解除後に行う)
         val km = getSystemService(android.app.KeyguardManager::class.java)
-        if (Build.VERSION.SDK_INT >= 27 && km?.isKeyguardLocked == true) {
+        if (km?.isKeyguardLocked == true) {
             km.requestDismissKeyguard(
                 this,
                 object : android.app.KeyguardManager.KeyguardDismissCallback() {
