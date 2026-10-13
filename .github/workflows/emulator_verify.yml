@@ -32,6 +32,7 @@ on:
         default: unlocked race locked locked_screen_on
         type: string
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - androidApp/src/main/**
       - androidApp/build.gradle.kts
@@ -56,7 +57,11 @@ env:
 
 jobs:
   plan:
+    # draft の途中コミット毎に 45 分 x 2 レーンのエミュレータを回さない。
+    # push / dispatch では pull_request.draft が null なので != true で通す
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       lanes: ${{ steps.plan.outputs.lanes }}
     steps:
