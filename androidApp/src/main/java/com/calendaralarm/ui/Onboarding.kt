@@ -297,7 +297,6 @@ internal fun openSettingsOrAppDetails(activity: Activity, action: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RingSetupSheet(
-    repository: AlarmRepository,
     subject: String?,
     leadMinutes: Int?,
     firstTime: Boolean,
@@ -306,7 +305,6 @@ internal fun RingSetupSheet(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
-    val scope = rememberCoroutineScope()
     val perms = rememberPermSnapshot(context)
     val p = perms.value
     val stage = ringSetupStage(p)

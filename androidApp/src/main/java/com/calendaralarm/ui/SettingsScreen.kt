@@ -1,11 +1,8 @@
 package com.calendaralarm.ui
 
 import android.app.Activity
-import android.app.AlarmManager
-import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
@@ -81,7 +78,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.db.CalendarPrefEntity

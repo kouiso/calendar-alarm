@@ -239,6 +239,11 @@ class AlarmRepository(
         onScheduleChanged?.invoke()
     }
 
+    /** Activity や画面の寿命に縛られない処理を、アプリ寿命の scope で起動する。失敗は握りつぶす。 */
+    fun launchInApp(block: suspend () -> Unit) {
+        appScope.launch { runCatching { block() } }
+    }
+
     /** タイマーなど単発インスタンスを即座に予約する。 */
     suspend fun scheduleAdhoc(instance: AlarmInstance) = withContext(Dispatchers.IO) {
         // タイマー自体はスヌーズ分数を持たないので、設定の既定を載せる

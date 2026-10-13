@@ -337,13 +337,13 @@ private fun MainScaffold(
 
     ringSetupRequest?.let { req ->
         RingSetupSheet(
-            repository = repository,
             subject = req.subject,
             leadMinutes = req.leadMinutes,
             firstTime = req.auto,
             onRingTest = {
                 // シートを閉じても予約が打ち切られないよう、シートより長く生きる scope で行う
-                scope.launch { runCatching { com.calendaralarm.ui.scheduleRingTest(repository) } }
+                // アプリ寿命の scope で実行する (回転や Activity 終了でも予約が打ち切られない)
+                repository.launchInApp { com.calendaralarm.ui.scheduleRingTest(repository) }
                 ringSetupRequest = null
                 if (req.auto) scope.launch { settings.setRingSetupDone(true) }
             },
