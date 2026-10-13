@@ -395,6 +395,19 @@ class AlarmService : Service() {
         // 「停止」は放送経路で受ける (AlarmReceiver)。getService だとサービスが
         // 死んでいる時に OS 側で起動拒否され、押しても何も起きず残るゾンビ通知になる。
         // 放送は起動制限の適用外なので必ず届き、receiver が service 停止+終端化を行う。
+        // FSI が拒否/抑止されている環境 (Android 14+ の「アラームとリマインダー」
+        // 特別アクセス未許可、OEM 独自抑制など) ではこのアクション付き
+        // ヘッズアップ通知が唯一の停止導線になる。障害調査で判別できるよう記録する
+        if (Build.VERSION.SDK_INT >= 34 &&
+            !getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+        ) {
+            scope.launch {
+                app.container.repository.audit(
+                    "FSI_DENIED",
+                    "フルスクリーンIntent未許可のためヘッズアップ通知へフォールバック",
+                )
+            }
+        }
         val dismiss = PendingIntent.getBroadcast(
             this, 0,
             Intent(this, AlarmReceiver::class.java).apply {
