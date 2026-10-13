@@ -222,12 +222,36 @@ record() {
   log "RESULT $1: $2 $3 $4"
 }
 
+# 停止前に 音/サービス/通知 の全検出器が鳴動を捉えていること。
+# 捉えていない検出器があると停止後の「0 0 0」が素通りで成立してしまう
+probes_ringing() { [ "$1" != 0 ] && [ "$2" != 0 ] && [ "$3" != 0 ]; }
+
+# 停止後の採取物 <prefix> に鳴動画面やオーバーレイが残っていれば内容を出して成功する
+stop_ui_left() {
+  local p=$1 left=
+  ringing_resumed "$p.activities.txt" && left="RingingActivity resumed;"
+  [ "$("${CHECK[@]}" overlay "$p.window.txt" "$PKG")" != 0 ] && left="$left overlay window;"
+  [ -n "$left" ] && { echo "$left"; return 0; }
+  return 1
+}
+
 cleanup_ring() {
   # 失敗時でも後続シナリオへ鳴動を持ち越さない
   if service_alive; then
     harness_dismiss "${1:-}"
     sleep 3
   fi
+}
+
+# シナリオ開始前に前のシナリオの鳴動・通知が残っていないこと。
+# 残った鳴動通知は次の鳴動の投稿を「更新」にして FSI を出させず、次のシナリオの結果を歪める
+ensure_clean_start() {
+  local sc=$1 st
+  st=$(stop_state)
+  [ "$st" = "0 0 0" ] && return 0
+  record "$sc" FAIL DIRTY_START "leftover from previous scenario (players service notif)=$st; force-stopped before running"
+  adb shell am force-stop "$PKG"
+  sleep 2
 }
 
 # ---------- シナリオ ----------
@@ -282,9 +306,9 @@ scenario_unlocked() {
     record "$name" FAIL STOP_UI_MISSING "no $PKG '$STOP_TEXT' node on screen 12s after fire (overlay_windows=$ov, headsup_stop=$hun)"
     return
   fi
-  if [ "$a" = 0 ]; then
+  if ! probes_ringing "$a" "$s" "$n"; then
     cleanup_ring "$id"; stop_recording "$name"
-    record "$name" FAIL AUDIO_PRECONDITION "no started USAGE_ALARM player before stop"; return
+    record "$name" FAIL PROBE_PRECONDITION "before stop (players service notif)=$st; every probe must see the ring before stop"; return
   fi
   t_tap=$(now_ms)
   # shellcheck disable=SC2086
@@ -294,7 +318,11 @@ scenario_unlocked() {
     sleep 2
     capture "$p.after"
     stop_recording "$name"
-    record "$name" PASS OK "stop UI at +12s; stopped ${STOPPED_AFTER_MS}ms after tap (audio/service/notification)"
+    if left=$(stop_ui_left "$p.after"); then
+      record "$name" FAIL UI_REMAINS "stopped ${STOPPED_AFTER_MS}ms after tap but stop UI remains: $left"
+      return
+    fi
+    record "$name" PASS OK "stop UI at +12s; stopped ${STOPPED_AFTER_MS}ms after tap (audio/service/notification); stop UI gone"
   else
     capture "$p.after"
     cleanup_ring "$id"; stop_recording "$name"
@@ -411,12 +439,25 @@ locked_case() {
     record "$name" FAIL STOP_UI_MISSING "no $PKG '$STOP_TEXT' node while locked (ringing_activity=$rr overlay=$ov)"
     locked_restore "$name"; return
   fi
+  if ! probes_ringing "$a" "$s" "$n"; then
+    cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL PROBE_PRECONDITION "before stop (players service notif)=$st; every probe must see the ring before stop"
+    locked_restore "$name"; return
+  fi
   t_tap=$(now_ms)
   # shellcheck disable=SC2086
   adb shell input tap $xy
   if wait_stopped "$t_tap" 3000; then
     sleep 2; capture "$p.after"; stop_recording "$name"
-    record "$name" PASS OK "single stop UI (ringing_activity=$rr overlay=$ov); stopped ${STOPPED_AFTER_MS}ms after tap"
+    sh_ dumpsys window | grep -Ei "keyguard|showing_lockscreen|mDreaming" > "$p.keyguard_after.txt" 2>&1
+    if left=$(stop_ui_left "$p.after"); then
+      record "$name" FAIL UI_REMAINS "stopped ${STOPPED_AFTER_MS}ms after tap but stop UI remains: $left"
+    elif ! grep -q "isKeyguardShowing=true" "$p.keyguard_after.txt"; then
+      # 停止でロックが外れてはいけない (鳴動画面はキーガード解除を要求しない)
+      record "$name" FAIL UNLOCKED_BY_STOP "keyguard not showing after stop (see $name.keyguard_after.txt)"
+    else
+      record "$name" PASS OK "single stop UI (ringing_activity=$rr overlay=$ov); stopped ${STOPPED_AFTER_MS}ms after tap; keyguard kept"
+    fi
   else
     capture "$p.after"; cleanup_ring "$id"; stop_recording "$name"
     record "$name" FAIL NOT_STOPPED "state after tap=${LAST_STATE}"
@@ -465,6 +506,7 @@ sh_ pm list packages > "$OUT/packages.txt" 2>&1
 
 for sc in "${SCENARIOS[@]}"; do
   log "=== scenario: $sc ==="
+  ensure_clean_start "$sc"
   "scenario_$sc"
 done
 

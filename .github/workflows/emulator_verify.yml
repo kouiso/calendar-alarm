@@ -34,6 +34,9 @@ on:
   pull_request:
     paths:
       - androidApp/src/main/**
+      - androidApp/build.gradle.kts
+      - shared/src/**
+      - gradle/**
       - scripts/emulator/**
       - .github/workflows/emulator_verify.yml
   push:
@@ -66,7 +69,9 @@ jobs:
           INPUT_SCENARIOS: ${{ inputs.scenarios }}
         run: |
           if [ "$EVENT" = workflow_dispatch ]; then
-            if ! printf '%s' "$INPUT_SCENARIOS" | grep -Eq '^(unlocked|race|locked|locked_screen_on)( (unlocked|race|locked|locked_screen_on))*$'; then
+            # grep は行単位で照合し改行入りの値を通すので、値全体を bash の正規表現で照合する
+            re='^(unlocked|race|locked|locked_screen_on)( (unlocked|race|locked|locked_screen_on))*$'
+            if ! [[ $INPUT_SCENARIOS =~ $re ]]; then
               echo "invalid scenarios: $INPUT_SCENARIOS" >&2; exit 1
             fi
             lanes=$(jq -cn --arg ref "${INPUT_APP_REF:-$HEAD_SHA}" --arg exp "$INPUT_EXPECT" --arg sc "$INPUT_SCENARIOS" \
@@ -126,6 +131,8 @@ jobs:
         id: scenario
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SCENARIOS: ${{ matrix.lane.scenarios }}
         with:
           api-level: 35
           target: google_apis
@@ -133,7 +140,7 @@ jobs:
           disable-animations: true
           # -noaudio は付けない (USAGE_ALARM プレイヤーの再生状態を検証するため)
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -camera-back none -camera-front none
-          script: bash verifier/scripts/emulator/run_scenarios.sh app/androidApp/build/outputs/apk/debug/androidApp-debug.apk out ${{ matrix.lane.scenarios }}
+          script: bash verifier/scripts/emulator/run_scenarios.sh app/androidApp/build/outputs/apk/debug/androidApp-debug.apk out $SCENARIOS
 
       - name: Evaluate against lane expectation
         if: always()

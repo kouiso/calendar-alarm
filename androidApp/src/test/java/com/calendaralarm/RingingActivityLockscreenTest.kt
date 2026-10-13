@@ -2,11 +2,17 @@ package com.calendaralarm
 
 import android.app.Activity
 import android.app.KeyguardManager
+import android.app.PendingIntent
+import android.content.Intent
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
+import com.calendaralarm.engine.AlarmService
+import com.calendaralarm.engine.NotificationAlarmService
 import com.calendaralarm.engine.RingingActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -38,10 +44,12 @@ class RingingActivityLockscreenTest {
             callback: KeyguardManager.KeyguardDismissCallback?,
         ) {
             dismissRequests++
+            lastCallback = callback
         }
 
         companion object {
             var dismissRequests = 0
+            var lastCallback: KeyguardManager.KeyguardDismissCallback? = null
         }
     }
 
@@ -51,6 +59,7 @@ class RingingActivityLockscreenTest {
     fun setup() {
         app = ApplicationProvider.getApplicationContext()
         CountingKeyguardManager.dismissRequests = 0
+        CountingKeyguardManager.lastCallback = null
         val km = app.getSystemService(KeyguardManager::class.java)
         Shadow.extract<CountingKeyguardManager>(km).apply {
             setKeyguardLocked(true)
@@ -62,6 +71,7 @@ class RingingActivityLockscreenTest {
     @After
     fun tearDown() {
         ShadowKeyguardManager.reset()
+        NotificationAlarmService.pendingOpens.clear()
     }
 
     @Test
@@ -81,5 +91,42 @@ class RingingActivityLockscreenTest {
             CountingKeyguardManager.dismissRequests,
         )
         controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun `ロック中に通知元を開くとキーガード解除を求め解除後に元アプリを開いて止める`() {
+        val source = PendingIntent.getActivity(
+            app, 0, Intent("com.example.OPEN_SOURCE"), PendingIntent.FLAG_IMMUTABLE,
+        )
+        NotificationAlarmService.pendingOpens["nt:lock"] = source
+        val controller = Robolectric.buildActivity(
+            RingingActivity::class.java,
+            RingingActivity.intent(app, "nt:lock"),
+        ).setup()
+        shadowOf(Looper.getMainLooper()).idle()
+        val activity = controller.get()
+        RingingActivity::class.java.getDeclaredMethod("openSourcePendingIntent")
+            .apply { isAccessible = true }.invoke(activity)
+
+        assertEquals("通知元を開く操作に限りキーガード解除を求めること", 1, CountingKeyguardManager.dismissRequests)
+        assertFalse("解除前に鳴動画面を閉じないこと (閉じると解除要求が取り消される)", activity.isFinishing)
+        assertEquals(null, startedDismiss())
+
+        CountingKeyguardManager.lastCallback!!.onDismissSucceeded()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(
+            "解除後に元アプリを開くこと",
+            "com.example.OPEN_SOURCE",
+            shadowOf(app).nextStartedActivity?.action,
+        )
+        assertNotNull("解除後に鳴動を止めること", startedDismiss())
+        assertTrue(activity.isFinishing)
+        controller.pause().stop().destroy()
+    }
+
+    private fun startedDismiss(): Intent? {
+        val shadowApp = shadowOf(app)
+        return generateSequence { shadowApp.nextStartedService }
+            .firstOrNull { it.action == AlarmService.ACTION_DISMISS }
     }
 }

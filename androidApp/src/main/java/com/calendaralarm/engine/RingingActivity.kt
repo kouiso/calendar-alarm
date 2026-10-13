@@ -164,6 +164,23 @@ class RingingActivity : ComponentActivity() {
      * SystemUI と同じ MODE_BACKGROUND_ACTIVITY_START_ALLOWED をオプションで渡す。
      */
     private fun openSourcePendingIntent() {
+        // 鳴動画面はキーガード解除を要求しないので、ロック中に送ると元アプリはキーガードの裏で開き
+        // 何も起きないように見える。この操作に限り解除を求め、解除できてから開いて止める
+        // (止めると鳴動画面が畳まれ解除要求も取り消されるので、停止は解除後に行う)
+        val km = getSystemService(android.app.KeyguardManager::class.java)
+        if (Build.VERSION.SDK_INT >= 27 && km?.isKeyguardLocked == true) {
+            km.requestDismissKeyguard(
+                this,
+                object : android.app.KeyguardManager.KeyguardDismissCallback() {
+                    override fun onDismissSucceeded() = sendSourceAndDismiss()
+                },
+            )
+            return
+        }
+        sendSourceAndDismiss()
+    }
+
+    private fun sendSourceAndDismiss() {
         val pi = instanceIdState.value
             ?.let { NotificationAlarmService.pendingOpens.remove(it) }
         if (pi != null) {
