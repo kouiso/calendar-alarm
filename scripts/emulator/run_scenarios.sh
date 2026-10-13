@@ -46,10 +46,14 @@ ui_dump() {
     fi
     sleep 1
   done
+  # 空の階層で代用すると「停止UIが無い」と区別できず、陰性対照が誤って成功するため残さない
   log "uiautomator dump failed: $dst"
-  echo '<hierarchy/>' > "$dst"
+  rm -f "$dst"
   return 1
 }
+
+# capture 後に UI ダンプが取れていなければ UI_DUMP_FAILED で落とす (STOP_UI_MISSING と区別する)
+ui_dump_ok() { [ -s "$1" ]; }
 
 capture() {
   local p=$1
@@ -192,22 +196,23 @@ overlay_force_hidden() {
     END { exit !found }' "$1"
 }
 
-# 停止後 3 秒以内に 音/サービス/通知 が全て消えるか。消えたら経過 ms を STOPPED_AFTER_MS に入れる
+# 停止後 3 秒以内に 音/サービス/通知 が全て消えるか。消えたら経過 ms を STOPPED_AFTER_MS に入れる。
+# 経過は採取完了時刻で測る (採取が遅いと開始時刻基準では期限超過を見逃すため、上限側で判定する)
 wait_stopped() {
-  local t0=$1 limit_ms=$2 st a s n start
+  local t0=$1 limit_ms=$2 st a s n done_at
   STOPPED_AFTER_MS=
   LAST_STATE=
   while :; do
-    start=$(now_ms)
     st=$(stop_state)
+    done_at=$(now_ms)
     LAST_STATE=$st
     read -r a s n <<<"$st"
     if [ "$a" = 0 ] && [ "$s" = 0 ] && [ "$n" = 0 ]; then
-      STOPPED_AFTER_MS=$(( start - t0 ))
+      STOPPED_AFTER_MS=$(( done_at - t0 ))
       [ "$STOPPED_AFTER_MS" -le "$limit_ms" ] && return 0
       return 1
     fi
-    [ $(( start - t0 )) -gt "$limit_ms" ] && return 1
+    [ $(( done_at - t0 )) -gt "$limit_ms" ] && return 1
     sleep 0.2
   done
 }
@@ -264,6 +269,11 @@ scenario_unlocked() {
   if overlay_force_hidden "$p.t12.window.txt"; then
     cleanup_ring "$id"; stop_recording "$name"
     record "$name" FAIL OVERLAY_FORCE_HIDDEN "overlay window exists but another window hides non-system overlays (invalid foreground app)"
+    return
+  fi
+  if ! ui_dump_ok "$p.t12.ui.xml"; then
+    cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL UI_DUMP_FAILED "uiautomator dump failed 12s after fire; stop UI presence unknown"
     return
   fi
   if ! xy=$("${CHECK[@]}" stop-node "$p.t12.ui.xml" "$PKG" "$STOP_TEXT"); then
@@ -342,6 +352,11 @@ locked_case() {
   local name=$1 screen=$2 p="$OUT/$1" id t_tap xy ov rr st a s n
   unlock_screen
   sh_ locksettings set-pin "$PIN" > "$p.locksettings.txt" 2>&1
+  # PIN が設定できないとロック無しで流れて PASS してしまい、PIN 入力画面の退行を検出できない
+  if ! grep -q "Pin set to" "$p.locksettings.txt"; then
+    record "$name" FAIL LOCK_SETUP_FAILED "locksettings set-pin failed: $(tr '\n' ' ' < "$p.locksettings.txt")"
+    locked_restore "$name"; return
+  fi
   adb shell svc power stayon false
   start_recording "$name"
   id=$(schedule 45 "EmuStop_$name")
@@ -354,6 +369,11 @@ locked_case() {
     sleep 2
   fi
   sh_ dumpsys window | grep -Ei "keyguard|showing_lockscreen|mDreaming" > "$p.keyguard_before.txt" 2>&1
+  if ! grep -q "isKeyguardShowing=true" "$p.keyguard_before.txt"; then
+    wait_fire 120; cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL LOCK_NOT_ACTIVE "keyguard not showing before fire (see $name.keyguard_before.txt)"
+    locked_restore "$name"; return
+  fi
   if ! wait_fire 120; then
     stop_recording "$name"; record "$name" FAIL NO_FIRE "AlarmService did not start within 120s ($id)"
     locked_restore "$name"; return
@@ -379,6 +399,11 @@ locked_case() {
     [ -n "$xy" ] && adb shell input tap $xy
     sleep 3; cleanup_ring "$id"; stop_recording "$name"
     record "$name" FAIL STACKED_UI "RingingActivity resumed AND overlay window on screen at the same time"
+    locked_restore "$name"; return
+  fi
+  if ! ui_dump_ok "$p.t12.ui.xml"; then
+    cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL UI_DUMP_FAILED "uiautomator dump failed 12s after fire while locked"
     locked_restore "$name"; return
   fi
   if ! xy=$("${CHECK[@]}" stop-node "$p.t12.ui.xml" "$PKG" "$STOP_TEXT"); then

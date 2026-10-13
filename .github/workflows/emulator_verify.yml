@@ -140,10 +140,11 @@ jobs:
         env:
           EXPECT: ${{ matrix.lane.expect }}
           LANE: ${{ matrix.lane.name }}
+          SCENARIOS: ${{ matrix.lane.scenarios }}
           SCENARIO_OUTCOME: ${{ steps.scenario.outcome }}
         run: |
           echo "scenario step outcome: $SCENARIO_OUTCOME"
-          bash verifier/scripts/emulator/evaluate.sh out "$EXPECT" "$LANE"
+          bash verifier/scripts/emulator/evaluate.sh out "$EXPECT" "$LANE" "$SCENARIOS"
 
       - name: Upload evidence
         if: always()
