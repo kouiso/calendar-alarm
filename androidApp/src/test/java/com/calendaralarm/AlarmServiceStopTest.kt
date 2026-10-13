@@ -282,6 +282,41 @@ class AlarmServiceStopTest {
         assertNull(ringingNotification())
     }
 
+    // ---- 停止後に遅れて着弾する鳴動通知 ----
+
+    @Test
+    fun `停止直後に鳴動通知が遅れて着弾しても後から掃除され残らない`() {
+        seed("late-post")
+        val c = startService("late-post")
+        assertTrue(waitUntil { c.get().isPlaying() })
+        val posted = ringingNotification()!!
+        c.withIntent(dismissIntent("late-post")).startCommand(0, 2)
+        assertTrue(waitUntil { !c.get().isPlaying() && shadowOf(c.get()).isStoppedBySelf })
+        assertNull(ringingNotification())
+        // NMS は投稿を遅延処理するため、鳴り始め直後の停止では cancel の後に前面化通知が着弾し得る
+        nm.notify(AlarmService.NOTIFICATION_ID, posted)
+        assertNotNull(ringingNotification())
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(3))
+        assertNull("遅れて着弾した鳴動通知が掃除されること (次の鳴動の FSI を潰さない)", ringingNotification())
+    }
+
+    @Test
+    fun `停止後の遅延掃除は直後に始まった次の鳴動の通知を消さない`() {
+        seed("sweep-a", "A")
+        seed("sweep-b", "B")
+        val a = startService("sweep-a")
+        assertTrue(waitUntil { a.get().isPlaying() })
+        a.withIntent(dismissIntent("sweep-a")).startCommand(0, 2)
+        assertTrue(waitUntil { !a.get().isPlaying() && shadowOf(a.get()).isStoppedBySelf })
+        a.destroy()
+        val b = startService("sweep-b")
+        assertTrue(waitUntil { b.get().isPlaying() && AlarmService.ringingInstanceId.value == "sweep-b" })
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(3))
+        val n = ringingNotification()
+        assertNotNull("次の鳴動の通知が残っていること", n)
+        assertEquals("sweep-b", stopActionTarget(n!!))
+    }
+
     // ---- notification 停止 action ----
 
     @Test

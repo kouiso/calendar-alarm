@@ -14,7 +14,9 @@ import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.os.VibrationAttributes
 import android.os.VibrationEffect
@@ -106,8 +108,7 @@ class AlarmService : Service() {
                     // IDLE確定時に同じロック内で実行される。判定〜畳みの間に
                     // 新鳴動が始まってもその adopt はロック待ちになるので、
                     // ここで畳むUIは必ず滞留分 (BUG_0003)
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+                    removeRingNotification()
                     RingingOverlay.hide(this@AlarmService)
                 }
                 when (claim) {
@@ -144,8 +145,7 @@ class AlarmService : Service() {
                 // 鳴動画面のプリセットからの分数指定 (未指定=インスタンス既定)
                 val mins = intent.getIntExtra(EXTRA_SNOOZE_MINUTES, 0).takeIf { it > 0 }
                 val (claim, targetId) = claimTeardownFor(intent.getStringExtra(EXTRA_INSTANCE_ID)) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+                    removeRingNotification()
                     RingingOverlay.hide(this@AlarmService)
                 }
                 when (claim) {
@@ -291,10 +291,10 @@ class AlarmService : Service() {
         // 書き残すと DISMISS の id フォールバックや救出経路が古い id を見る)
         if (!adoptIfCurrent(gen) {
             currentInstance = instance
+            // タイトルが取れたので通知を張り替える。停止の世代前進と同じロック下で行う:
+            // ロック外だと停止が通知を消した直後に張り替えが出し直し、通知だけ残る
+            postRingNotification(instanceId)
         }) return
-        // タイトルが取れたので通知を張り替える
-        getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, buildNotification(instanceId))
         startAudio(
             instance.soundUri ?: ringSettings.defaultSoundUri,
             volumePercent = ringSettings.alarmVolumePercent,
@@ -368,13 +368,17 @@ class AlarmService : Service() {
         createChannel()
         val notification = buildNotification(instanceId)
         return try {
-            if (Build.VERSION.SDK_INT >= 34) {
-                startForeground(
-                    NOTIFICATION_ID, notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-                )
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
+            synchronized(notificationLock) {
+                if (Build.VERSION.SDK_INT >= 34) {
+                    startForeground(
+                        NOTIFICATION_ID, notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+                    )
+                } else {
+                    startForeground(NOTIFICATION_ID, notification)
+                }
+                // 前面化を拒否された時は何も投稿していないので、先代の遅延掃除を止めない
+                notificationEpoch++
             }
             true
         } catch (e: Exception) {
@@ -382,6 +386,34 @@ class AlarmService : Service() {
             // 落とすとクラッシュループになるので、呼び出し側で見逃し化する。
             false
         }
+    }
+
+    private fun postRingNotification(instanceId: String) {
+        val notification = buildNotification(instanceId)
+        synchronized(notificationLock) {
+            notificationEpoch++
+            getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
+        }
+    }
+
+    /**
+     * 前面化を解いて鳴動通知を消す。NotificationManagerService は投稿を遅延処理するため、
+     * 鳴り始め直後の停止では cancel の後に前面化通知が着弾して残ることがある (エミュレータ E2E で再現)。
+     * 残った通知は次の鳴動の投稿を「更新」扱いにして FSI (ロック中の鳴動画面) を出させないので、
+     * 少し後にもう一度消す。その間に次の鳴動通知が出ていれば (世代が進んでいれば) 触らない
+     */
+    private fun removeRingNotification() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        val nm = applicationContext.getSystemService(NotificationManager::class.java)
+        val epoch = synchronized(notificationLock) {
+            nm.cancel(NOTIFICATION_ID)
+            notificationEpoch
+        }
+        Handler(Looper.getMainLooper()).postDelayed({
+            synchronized(notificationLock) {
+                if (notificationEpoch == epoch) nm.cancel(NOTIFICATION_ID)
+            }
+        }, LATE_POST_SWEEP_MS)
     }
 
     private fun buildNotification(instanceId: String): Notification {
@@ -643,19 +675,18 @@ class AlarmService : Service() {
      * 載ってから自分で前面化するので、その通知を消してしまうことがない
      */
     private fun restoreOrFinish() {
-        val nm = getSystemService(NotificationManager::class.java)
-        var live: String? = null
         var finishId: Int? = null
         synchronized(ringLock) {
-            live = ringingInstanceId.value ?: pendingStartId
-            if (live == null && requestedIds.isEmpty()) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                nm.cancel(NOTIFICATION_ID)
+            val live = ringingInstanceId.value ?: pendingStartId
+            if (live != null) {
+                // 判定と同じロック下で張り替える (判定後に現行鳴動が止まると通知だけ残るため)
+                postRingNotification(live)
+            } else if (requestedIds.isEmpty()) {
+                removeRingNotification()
                 RingingOverlay.hide(this)
                 finishId = latestStartId
             }
         }
-        live?.let { nm.notify(NOTIFICATION_ID, buildNotification(it)) }
         finishId?.let { stopSelfResult(it) }
     }
 
@@ -708,8 +739,7 @@ class AlarmService : Service() {
         wakeLock = null
         if (!keepForeground) {
             // FGS 状態も確実に抜く (通知だけ消すと前面化中サービスとして残り得る)
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+            removeRingNotification()
         }
         RingingOverlay.hide(this)
         currentInstance = null
@@ -752,6 +782,13 @@ class AlarmService : Service() {
         private const val CRESCENDO_START = 0.05f
         // AlarmReceiver が DISMISS 受信時に通知を直接畳むため公開
         const val NOTIFICATION_ID = 1
+        /** 停止後に遅れて着弾した鳴動通知を掃除するまでの待ち。NMS の投稿遅延 (~200ms) より十分長く。 */
+        private const val LATE_POST_SWEEP_MS = 1_500L
+
+        // 鳴動通知の投稿世代。サービス個体をまたいで共有し、停止後の遅延掃除が
+        // 次の鳴動 (新しいサービス個体) の通知を消さないようにする
+        private val notificationLock = Any()
+        private var notificationEpoch = 0
 
         /**
          * 鳴動中インスタンス id。通知権限が無い等で鳴動画面が上がらない時の

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- エミュレータ E2E 専用。inject_harness.sh が CI 上でのみ androidApp/src/debug へ差し込む -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver
+            android:name="com.calendaralarm.emu.EmuHarnessReceiver"
+            android:exported="true" />
+    </application>
+</manifest>
