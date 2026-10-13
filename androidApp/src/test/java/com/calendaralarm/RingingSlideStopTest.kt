@@ -2,6 +2,7 @@ package com.calendaralarm
 
 import android.content.Intent
 import androidx.compose.ui.geometry.Offset
+import androidx.lifecycle.Lifecycle
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -22,7 +23,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -80,12 +82,30 @@ class RingingSlideStopTest {
         AlarmService.ringingInstanceId.value = null
     }
 
-    private fun dismissIntent(): Intent? = shadowOf(app).nextStartedService
-        ?.takeIf { it.action == AlarmService.ACTION_DISMISS }
+    /** 起動されたサービスを全部走査し、DISMISS だけを返す (他の起動が先にあっても見逃さない)。 */
+    private fun dismissIntents(): List<Intent> {
+        val all = mutableListOf<Intent>()
+        while (true) {
+            all += shadowOf(app).nextStartedService ?: break
+        }
+        return all.filter { it.action == AlarmService.ACTION_DISMISS }
+    }
 
-    private fun slide(toFraction: Float, fromX: Float = 40f) {
+    private fun assertNotStopped() {
+        assertTrue("DISMISS が送られている", dismissIntents().isEmpty())
+        assertNotEquals(Lifecycle.State.DESTROYED, scenario?.state)
+    }
+
+    /** 丸を [progress] (0..1、トラックの移動量に対する割合) まで引いて離す。 */
+    private fun slideTo(progress: Float, fromX: Float = 40f) {
         compose.onNodeWithContentDescription(SLIDER).performTouchInput {
-            swipe(Offset(fromX, centerY), Offset(width * toFraction, centerY), durationMillis = 300)
+            // 丸の移動量は トラック幅 - 丸64dp - 余白8dp*2。タッチスロップ (8) 分は動き出しに消費される
+            val travel = width - 80f
+            swipe(
+                Offset(fromX, centerY),
+                Offset(fromX + 8f + progress * travel, centerY),
+                durationMillis = 300,
+            )
         }
         compose.mainClock.advanceTimeBy(600)
         compose.waitForIdle()
@@ -95,33 +115,45 @@ class RingingSlideStopTest {
     fun `タップでは止まらない`() {
         compose.onNodeWithContentDescription(SLIDER).performClick()
         compose.waitForIdle()
-        assertNull(dismissIntent())
+        assertNotStopped()
     }
 
     @Test
     fun `80パーセント未満のドラッグでは止まらない`() {
-        slide(toFraction = 0.5f)
-        assertNull(dismissIntent())
+        slideTo(progress = 0.5f)
+        assertNotStopped()
+    }
+
+    @Test
+    fun `閾値の手前の70パーセントでは止まらない`() {
+        slideTo(progress = 0.7f)
+        assertNotStopped()
     }
 
     @Test
     fun `丸の外から始めたスワイプでは止まらない`() {
-        slide(toFraction = 0.97f, fromX = 200f)
-        assertNull(dismissIntent())
+        slideTo(progress = 0.97f, fromX = 200f)
+        assertNotStopped()
     }
 
     @Test
     fun `80パーセントを超えるドラッグで停止を送る`() {
-        slide(toFraction = 0.97f)
-        val sent = dismissIntent()
-        assertEquals(AlarmService.ACTION_DISMISS, sent?.action)
-        assertEquals(ID, sent?.getStringExtra(AlarmService.EXTRA_INSTANCE_ID))
+        slideTo(progress = 0.97f)
+        val sent = dismissIntents()
+        assertEquals(1, sent.size)
+        assertEquals(ID, sent.single().getStringExtra(AlarmService.EXTRA_INSTANCE_ID))
+    }
+
+    @Test
+    fun `閾値を超えた90パーセントのドラッグで停止を送る`() {
+        slideTo(progress = 0.9f)
+        assertEquals(1, dismissIntents().size)
     }
 
     @Test
     fun `アクセシビリティの click で停止を送る`() {
         compose.onNodeWithContentDescription(SLIDER).performSemanticsAction(SemanticsActions.OnClick)
         compose.waitForIdle()
-        assertEquals(AlarmService.ACTION_DISMISS, dismissIntent()?.action)
+        assertEquals(1, dismissIntents().size)
     }
 }

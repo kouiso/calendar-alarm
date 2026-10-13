@@ -148,6 +148,15 @@ class RingingActivity : ComponentActivity() {
                     // 鳴動ごとに画面の状態 (スライダーの丸の位置を含む) を分ける。ドラッグ中に
                     // 別の鳴動へ切り替わった時、離した指で見ていない方を止めてしまわないため
                     androidx.compose.runtime.key(watchedId) {
+                        // 操作は「この画面が表示している鳴動」に固定する。離した瞬間に
+                        // instanceIdState が差し替わっていても別の鳴動を止めない
+                        val pinned = { action: String, minutes: Int? ->
+                            sendAction(
+                                action, minutes,
+                                targetId = watchedId,
+                                finishScreen = watchedId == instanceIdState.value,
+                            )
+                        }
                         RingingScreen(
                             weather = weather,
                             title = instance?.title ?: "アラーム",
@@ -157,9 +166,9 @@ class RingingActivity : ComponentActivity() {
                             snoozePresets = presets,
                             canOpenSource = canOpenSource,
                             onOpenSource = { openSourcePendingIntent() },
-                            onDismiss = { sendAction(AlarmService.ACTION_DISMISS) },
-                            onSnooze = { sendAction(AlarmService.ACTION_SNOOZE) },
-                            onSnoozeAt = { m -> sendAction(AlarmService.ACTION_SNOOZE, m) },
+                            onDismiss = { pinned(AlarmService.ACTION_DISMISS, null) },
+                            onSnooze = { pinned(AlarmService.ACTION_SNOOZE, null) },
+                            onSnoozeAt = { m -> pinned(AlarmService.ACTION_SNOOZE, m) },
                         )
                     }
                 }

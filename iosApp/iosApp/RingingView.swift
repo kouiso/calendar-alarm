@@ -18,8 +18,11 @@ struct RingingView: View {
         AppPalette.byId(store.state.themeId).accent
     }
 
+    /// 表示する鳴動。Set の順序は不定なので、最も古い発火 (同時刻なら id 順) に固定し、
+    /// 別の鳴動が加わっても表示中の鳴動が勝手に入れ替わらないようにする
     private var current: AlarmInstanceDTO? {
-        engine.alertingIds.compactMap { store.state.scheduled[$0]?.instance }.first
+        engine.alertingIds.compactMap { store.state.scheduled[$0]?.instance }
+            .min { ($0.triggerAtMillis, $0.id) < ($1.triggerAtMillis, $1.id) }
     }
 
     var body: some View {
@@ -215,7 +218,12 @@ private struct SlideToStop: View {
                         guard value.startLocation.x <= thumbSize + pad * 3 else { return }
                         progress = min(max(value.translation.width / travel, 0), 1)
                     }
-                    .onEnded { _ in
+                    .onEnded { value in
+                        // 掴み始めが丸の外のジェスチャー (取り消しで残った progress を含む) では停止しない
+                        guard value.startLocation.x <= thumbSize + pad * 3 else {
+                            withAnimation(.easeOut(duration: 0.15)) { progress = 0 }
+                            return
+                        }
                         if progress >= stopThreshold {
                             progress = 1
                             if !onStop() {

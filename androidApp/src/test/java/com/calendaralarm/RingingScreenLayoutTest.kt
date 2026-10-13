@@ -5,6 +5,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onRoot
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -90,6 +92,14 @@ class RingingScreenLayoutTest {
     @Test
     fun `小さい画面でも停止ボタンが画面内に収まる`() {
         launch("tm:small", "EmuStop_locked_screen_on")
+        assertStopFullyOnScreen()
+    }
+
+    @Test
+    fun `スヌーズ時間を開いた状態でも停止ボタンが画面内に収まる`() {
+        launch("tm:open", "EmuStop_presets_open")
+        compose.onNodeWithText("スヌーズ時間を選ぶ ▾").performClick()
+        compose.waitForIdle()
         assertStopFullyOnScreen()
     }
 
