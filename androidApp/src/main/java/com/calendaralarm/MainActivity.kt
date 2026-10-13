@@ -330,6 +330,7 @@ private fun MainScaffold(
             repository = repository,
             subject = req.subject,
             leadMinutes = req.leadMinutes,
+            firstTime = req.auto,
             onDismiss = {
                 ringSetupRequest = null
                 if (req.auto) scope.launch { settings.setRingSetupDone(true) }

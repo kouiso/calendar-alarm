@@ -260,12 +260,34 @@ internal fun PermissionNagCard(
  * 権限シートの見出し。リード分が分かる時 (予定の鳴動) だけ「N分前」を出し、
  * 単発アラームのように開始時刻ちょうどで鳴るものには分数を付けない。
  */
-internal fun ringSetupTitle(subject: String?, leadMinutes: Int?): String =
-    if (leadMinutes != null && leadMinutes > 0) {
-        "${subject ?: "予定"}の${leadMinutes}分前に、きちんと鳴らすために"
+internal fun ringSetupTitle(subject: String?, leadMinutes: Int?): String {
+    val name = subject?.takeIf { it.isNotBlank() }
+    return if (leadMinutes != null && leadMinutes > 0) {
+        "${name ?: "予定"}の${leadMinutes}分前に、きちんと鳴らすために"
     } else {
-        "${subject ?: "アラーム"}を、きちんと鳴らすために"
+        "${name ?: "アラーム"}を、きちんと鳴らすために"
     }
+}
+
+/** 権限シートの段。鳴らす側が欠けていれば1、止める側が欠けていれば2、全部揃えば3。 */
+internal fun ringSetupStage(p: PermSnapshot): Int = when {
+    !p.ringOk -> 1
+    !p.stopOk -> 2
+    else -> 3
+}
+
+/**
+ * 設定画面を開く。端末に該当画面が無い (Android Go はオーバーレイ設定を持たない等) と
+ * ActivityNotFoundException になるため、開けなければアプリ詳細設定に落とす。
+ */
+internal fun openSettingsOrAppDetails(activity: Activity, action: String) {
+    val opened = runCatching {
+        activity.startActivity(
+            Intent(action).apply { data = Uri.parse("package:${activity.packageName}") },
+        )
+    }.isSuccess
+    if (!opened) openAppDetails(activity)
+}
 
 /**
  * 初めてアラームをオンにした時の権限シート。段階は権限状態から導出するため、
@@ -278,6 +300,7 @@ internal fun RingSetupSheet(
     repository: AlarmRepository,
     subject: String?,
     leadMinutes: Int?,
+    firstTime: Boolean,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -285,11 +308,7 @@ internal fun RingSetupSheet(
     val scope = rememberCoroutineScope()
     val perms = rememberPermSnapshot(context)
     val p = perms.value
-    val stage = when {
-        !p.ringOk -> 1
-        !p.stopOk -> 2
-        else -> 3
-    }
+    val stage = ringSetupStage(p)
 
     val notifLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -305,11 +324,7 @@ internal fun RingSetupSheet(
             }
             perms.value.notifOk && !perms.value.exactOk && activity != null -> {
                 // 通知が通ったら「正確な時刻」も同じ流れで続けて取る
-                activity.startActivity(
-                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                        data = Uri.parse("package:${activity.packageName}")
-                    },
-                )
+                openSettingsOrAppDetails(activity, Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
             }
         }
     }
@@ -320,12 +335,14 @@ internal fun RingSetupSheet(
         ) {
             when (stage) {
                 1 -> {
-                    Text(
-                        "最初の1回だけ",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(Modifier.height(8.dp))
+                    if (firstTime) {
+                        Text(
+                            "最初の1回だけ",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
                     Text(
                         ringSetupTitle(subject, leadMinutes),
                         style = MaterialTheme.typography.titleLarge,
@@ -346,10 +363,8 @@ internal fun RingSetupSheet(
                                 activity == null -> Unit
                                 !p.notifOk ->
                                     notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                !p.exactOk -> activity.startActivity(
-                                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                                        data = Uri.parse("package:${activity.packageName}")
-                                    },
+                                !p.exactOk -> openSettingsOrAppDetails(
+                                    activity, Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
                                 )
                             }
                         },
@@ -390,17 +405,11 @@ internal fun RingSetupSheet(
                         onClick = {
                             when {
                                 activity == null -> Unit
-                                !p.fsiOk -> activity.startActivity(
-                                    Intent(
-                                        Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
-                                    ).apply {
-                                        data = Uri.parse("package:${activity.packageName}")
-                                    },
+                                !p.fsiOk -> openSettingsOrAppDetails(
+                                    activity, Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
                                 )
-                                !p.overlayOk -> activity.startActivity(
-                                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                                        data = Uri.parse("package:${activity.packageName}")
-                                    },
+                                !p.overlayOk -> openSettingsOrAppDetails(
+                                    activity, Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                 )
                             }
                         },
@@ -424,8 +433,15 @@ internal fun RingSetupSheet(
                     Spacer(Modifier.height(18.dp))
                     Button(
                         onClick = {
-                            scope.launch { scheduleRingTest(repository) }
-                            onDismiss()
+                            // onDismiss でシートが外れると scope ごとキャンセルされ、予約が
+                            // 完了前に打ち切られる。予約を終えてから閉じる
+                            scope.launch {
+                                try {
+                                    scheduleRingTest(repository)
+                                } finally {
+                                    onDismiss()
+                                }
+                            }
                         },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(16.dp),

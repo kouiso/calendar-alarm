@@ -37,6 +37,7 @@ class SettingsRepository(private val context: Context) {
         val weatherEnabled: Boolean = true,
         /** 初回アラームON時の権限シートを出し終えたか (「最初の1回だけ」用)。 */
         val ringSetupDone: Boolean = false,
+        /** 旧オンボーディング画面を済ませたか。画面廃止後は書き込まれず、更新ユーザーの印として読むだけ。 */
         val onboardingDone: Boolean = false,
         /** 「他のアプリの上に表示」許可の一度きり案内を出したか (更新ユーザー向け)。 */
         val overlayPromptShown: Boolean = false,
@@ -100,7 +101,9 @@ class SettingsRepository(private val context: Context) {
             defaultMinutesBefore = p[KEY_MINUTES] ?: 0,
             defaultSnoozeMinutes = p[KEY_SNOOZE] ?: 10,
             weatherEnabled = p[KEY_WEATHER] ?: true,
-            ringSetupDone = p[KEY_RING_SETUP_DONE] ?: false,
+            // 旧オンボーディングを済ませた更新ユーザーは初回扱いにしない
+            // (起動時の一度きり案内と警告カードが担う)
+            ringSetupDone = p[KEY_RING_SETUP_DONE] ?: (p[KEY_ONBOARDED] ?: false),
             onboardingDone = p[KEY_ONBOARDED] ?: false,
             overlayPromptShown = p[KEY_OVERLAY_PROMPTED] ?: false,
             defaultStartAction = p[KEY_DEF_START_ACTION]

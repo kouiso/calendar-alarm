@@ -152,6 +152,9 @@ fun AgendaScreen(
             perms = perms,
             onConnected = {
                 app.ensureCalendarObserver()
+                // 既定の開始/リマインダーはどちらもアラームなので、接続した時点で予定の
+                // 鳴動が入る。これが新規ユーザー最初の「アラームON」になる
+                onAlarmArmed("予定", null)
                 scope.launch { repository.resync("calendar linked") }
             },
         )
