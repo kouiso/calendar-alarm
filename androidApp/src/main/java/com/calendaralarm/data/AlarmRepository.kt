@@ -21,6 +21,7 @@ import com.calendaralarm.shared.model.StandaloneAlarm
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -84,10 +85,16 @@ class AlarmRepository(
     fun pendingFlow(): Flow<List<AlarmInstance>> =
         db.scheduledInstances().pendingFlow().map { rows -> rows.map { it.toInstance() } }
 
-    fun instanceFlow(id: String): Flow<AlarmInstance?> =
-        db.scheduledInstances().allFlow().map { rows ->
-            rows.firstOrNull { it.id == id }?.toInstance()
-        }
+    /**
+     * 鳴動画面用: インスタンスと状態を1行クエリで同時に監視する。
+     * 状態は通知の「停止」放送など画面外経路の終端化を検知するのに使う。
+     */
+    fun instanceWithStateFlow(id: String): Flow<Pair<AlarmInstance, AlarmState?>?> =
+        db.scheduledInstances().byIdFlow(id).map { row ->
+            row?.let {
+                it.toInstance() to runCatching { AlarmState.valueOf(it.state) }.getOrNull()
+            }
+        }.distinctUntilChanged()
 
     suspend fun instanceById(id: String): AlarmInstance? =
         db.scheduledInstances().byId(id)?.toInstance()
@@ -188,8 +195,14 @@ class AlarmRepository(
     // ---- 鳴動イベント ----
 
     suspend fun onFired(id: String) {
-        setState(id, AlarmState.FIRED)
-        audit("FIRE", id)
+        // 停止が先に届いたレースで DISMISSED 等の終端を FIRED で上書き
+        // しないよう、遷移元を UPDATE の WHERE で atomic に制限する。
+        // 終端行が FIRED に戻ると kill 復活や再鳴動の対象に残ってしまう
+        val rows = db.scheduledInstances().setFiredIfPending(id)
+        audit(
+            if (rows > 0) "FIRE" else "STALE_FIRE",
+            if (rows > 0) id else "$id: 終端状態のため FIRED 化を抑止",
+        )
         onScheduleChanged?.invoke()
     }
 

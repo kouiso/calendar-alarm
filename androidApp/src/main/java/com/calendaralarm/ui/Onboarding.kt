@@ -266,6 +266,7 @@ internal fun PermissionNagCard(
 internal fun RingSetupSheet(
     repository: AlarmRepository,
     subject: String?,
+    leadMinutes: Int?,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -315,7 +316,11 @@ internal fun RingSetupSheet(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "${subject ?: "予定"}の30分前に、きちんと鳴らすために",
+                        if (leadMinutes != null && leadMinutes > 0) {
+                            "${subject ?: "予定"}の${leadMinutes}分前に、きちんと鳴らすために"
+                        } else {
+                            "${subject ?: "アラーム"}を、きちんと鳴らすために"
+                        },
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Spacer(Modifier.height(4.dp))

@@ -1,6 +1,5 @@
 package com.calendaralarm.engine
 
-import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -12,14 +11,18 @@ import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,9 +36,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
@@ -73,10 +79,34 @@ class RingingActivity : ComponentActivity() {
             val settings by app.container.settings.flow.collectAsState(initial = null)
             CalendarAlarmTheme(themeId = settings?.themeId ?: "default") {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    val instance by app.container.repository
-                        .instanceFlow(instanceIdState.value ?: "")
-                        .map { it }
-                        .collectAsState(initial = null)
+                    // 鳴動中に別アラームが座席を奪った時、通知は張替え (FSI が再起動
+                    // されないことがある) なので onNewIntent が来ない場合がある。
+                    // 鳴動中 id が別の id に変わったら追従し、停止が旧インスタンスへ飛ばないようにする
+                    androidx.compose.runtime.LaunchedEffect(Unit) {
+                        AlarmService.ringingInstanceId.collect { id ->
+                            if (id != null && id != instanceIdState.value) instanceIdState.value = id
+                        }
+                    }
+                    val watchedId = instanceIdState.value ?: ""
+                    val rowFlow = androidx.compose.runtime.remember(watchedId) {
+                        app.container.repository.instanceWithStateFlow(watchedId)
+                    }
+                    // id 切替直後は直前の id の行が残るので、監視中の id の行だけを使う
+                    val row = rowFlow.collectAsState(initial = null).value
+                        ?.takeIf { it.first.id == watchedId }
+                    val instance = row?.first
+                    // 通知の「停止」放送など画面外経路で終端化された時、本画面が
+                    // 残り続けると無音の鳴動画面になる (早期停止の実機報告)。
+                    // サービスが死んでいても DB の状態監視だけで確実に畳める。
+                    val instState = row?.second
+                    androidx.compose.runtime.LaunchedEffect(instState) {
+                        if (instState != null &&
+                            instState != com.calendaralarm.shared.model.AlarmState.PENDING &&
+                            instState != com.calendaralarm.shared.model.AlarmState.FIRED
+                        ) {
+                            finish()
+                        }
+                    }
                     val presets by app.container.settings.flow
                         .map { it.snoozePresets }
                         .collectAsState(initial = listOf(instance?.snoozeMinutes ?: 10))
@@ -133,9 +163,28 @@ class RingingActivity : ComponentActivity() {
      * API34+ は BAL hardening で裸の send() がブロックされるため、
      * SystemUI と同じ MODE_BACKGROUND_ACTIVITY_START_ALLOWED をオプションで渡す。
      */
-    private fun openSourcePendingIntent() {
-        val pi = instanceIdState.value
-            ?.let { NotificationAlarmService.pendingOpens.remove(it) }
+    @androidx.annotation.VisibleForTesting
+    internal fun openSourcePendingIntent() {
+        // 解除待ちの間に別の鳴動が座席を奪うと instanceIdState が差し替わるので、押した時点の対象で処理する
+        val id = instanceIdState.value
+        // 鳴動画面はキーガード解除を要求しないので、ロック中に送ると元アプリはキーガードの裏で開き
+        // 何も起きないように見える。この操作に限り解除を求め、解除できてから開いて止める
+        // (止めると鳴動画面が畳まれ解除要求も取り消されるので、停止は解除後に行う)
+        val km = getSystemService(android.app.KeyguardManager::class.java)
+        if (km?.isKeyguardLocked == true) {
+            km.requestDismissKeyguard(
+                this,
+                object : android.app.KeyguardManager.KeyguardDismissCallback() {
+                    override fun onDismissSucceeded() = sendSourceAndDismiss(id)
+                },
+            )
+            return
+        }
+        sendSourceAndDismiss(id)
+    }
+
+    private fun sendSourceAndDismiss(id: String?) {
+        val pi = id?.let { NotificationAlarmService.pendingOpens.remove(it) }
         if (pi != null) {
             val options = if (Build.VERSION.SDK_INT >= 34) {
                 android.app.ActivityOptions.makeBasic()
@@ -147,15 +196,21 @@ class RingingActivity : ComponentActivity() {
             }
             runCatching { pi.send(this, 0, null, null, null, null, options) }
         }
-        sendAction(AlarmService.ACTION_DISMISS)
+        // 対象が既に別の鳴動へ差し替わっていたら、その鳴動の画面は閉じない
+        sendAction(AlarmService.ACTION_DISMISS, targetId = id, finishScreen = id == instanceIdState.value)
     }
 
-    private fun sendAction(action: String, snoozeMinutes: Int? = null) {
+    private fun sendAction(
+        action: String,
+        snoozeMinutes: Int? = null,
+        targetId: String? = instanceIdState.value,
+        finishScreen: Boolean = true,
+    ) {
         val delivered = runCatching {
             startService(
                 Intent(this, AlarmService::class.java).apply {
                     this.action = action
-                    putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceIdState.value)
+                    putExtra(AlarmService.EXTRA_INSTANCE_ID, targetId)
                     if (snoozeMinutes != null) {
                         putExtra(AlarmService.EXTRA_SNOOZE_MINUTES, snoozeMinutes)
                     }
@@ -167,24 +222,27 @@ class RingingActivity : ComponentActivity() {
             // (onDismissed は DB の終端化 + AlarmManager 予約の取消を含む冪等処理)
             lifecycleScope.launch {
                 runCatching {
-                    app.container.repository.onDismissed(instanceIdState.value)
+                    app.container.repository.onDismissed(targetId)
                 }
             }
         }
-        finish()
+        if (finishScreen) finish()
     }
 
+    /**
+     * ロック画面の上に出して画面を点けるだけにする。キーガード解除は要求しない:
+     * PIN/パターンのロック中に要求すると、鳴動画面の上に PIN 入力 (bouncer) が重なり
+     * 停止ボタンが隠れる。停止に端末のロック解除は不要。
+     */
     private fun applyLockscreenFlags() {
         if (Build.VERSION.SDK_INT >= 27) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-            getSystemService(KeyguardManager::class.java)?.requestDismissKeyguard(this, null)
         } else {
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD,
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
             )
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -227,7 +285,11 @@ private fun RingingScreen(
             Box(Modifier.fillMaxSize().background(Color(0xFF0A0C11)))
         }
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp),
+            // targetSdk 35 は edge-to-edge 強制なので、停止ボタンがナビゲーションバーの下に潜らないよう避ける
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // 日付チップ
@@ -243,68 +305,84 @@ private fun RingingScreen(
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
                 )
             }
-            Spacer(Modifier.weight(1f))
-            // アクセントリング 2重 (290/230) + 大時刻
-            Box(contentAlignment = Alignment.Center) {
-                Box(
-                    Modifier.size(290.dp).border(
-                        1.5.dp, accent.copy(alpha = 0.25f), CircleShape,
-                    ),
-                )
-                Box(
-                    Modifier.size(230.dp).border(
-                        1.dp, accent.copy(alpha = 0.15f), CircleShape,
-                    ),
-                )
-                Text(
-                    text = time,
-                    fontSize = 112.sp,
-                    fontFamily = OutfitFontFamily,
-                    fontWeight = FontWeight.ExtraLight,
-                    letterSpacing = (-4).sp,
-                    color = Color(0xFFF4F5F8),
-                )
-            }
-            Spacer(Modifier.height(18.dp))
-            // 開始までの残り (eventStartMillis が無い通知由来等は「まもなく開始」)
-            val remain = eventStartMillis?.minus(System.currentTimeMillis())
-            Text(
-                if (remain != null && remain > 0) {
-                    "${(remain + 30_000) / 60_000}分後に開始"
-                } else {
-                    "まもなく開始"
-                },
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = accent,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = title,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 42.sp,
-                color = Color(0xFFF4F5F8),
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-            )
-            if (weather != null) {
-                Spacer(Modifier.height(14.dp))
-                Surface(
-                    color = Color.White.copy(alpha = 0.06f),
-                    shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
-                ) {
+            // 時計〜タイトルは残りの高さに収める。下の停止/スヌーズは固定高で先に確保され、
+            // 小さい画面や大きい文字サイズでも画面外に押し出されない
+            BoxWithConstraints(
+                modifier = Modifier.weight(1f).fillMaxWidth().clipToBounds(),
+                contentAlignment = Alignment.Center,
+            ) {
+                // 本来の高さ (リング 290 + 下の文字群) に足りない分だけリングと時刻を縮める
+                val ringScale = ((maxHeight - 170.dp) / 290.dp).coerceIn(0.35f, 1f)
+                val ringOuter = minOf(290.dp * ringScale, maxWidth)
+                val density = LocalDensity.current
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // アクセントリング 2重 (290/230) + 大時刻
+                    Box(contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier.size(ringOuter).border(
+                                1.5.dp, accent.copy(alpha = 0.25f), CircleShape,
+                            ),
+                        )
+                        Box(
+                            Modifier.size(ringOuter * (230f / 290f)).border(
+                                1.dp, accent.copy(alpha = 0.15f), CircleShape,
+                            ),
+                        )
+                        // 時刻はリングに収める飾りなので端末の文字サイズ設定では拡大しない
+                        Text(
+                            text = time,
+                            fontSize = with(density) { (ringOuter * (112f / 290f)).toSp() },
+                            fontFamily = OutfitFontFamily,
+                            fontWeight = FontWeight.ExtraLight,
+                            letterSpacing = with(density) { (ringOuter * (-4f / 290f)).toSp() },
+                            color = Color(0xFFF4F5F8),
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                    Spacer(Modifier.height(18.dp * ringScale))
+                    // 開始までの残り (eventStartMillis が無い通知由来等は「まもなく開始」)
+                    val remain = eventStartMillis?.minus(System.currentTimeMillis())
                     Text(
-                        "${com.calendaralarm.shared.weather.WeatherApi.describe(weather.weatherCode)}" +
-                            " ${weather.temperature.toInt()}°",
-                        fontSize = 14.sp,
-                        color = Color(0xFFB7BECB),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        if (remain != null && remain > 0) {
+                            "${(remain + 30_000) / 60_000}分後に開始"
+                        } else {
+                            "まもなく開始"
+                        },
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = accent,
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = title,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 42.sp,
+                        color = Color(0xFFF4F5F8),
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (weather != null) {
+                        Spacer(Modifier.height(14.dp))
+                        Surface(
+                            color = Color.White.copy(alpha = 0.06f),
+                            shape = RoundedCornerShape(14.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+                        ) {
+                            Text(
+                                "${com.calendaralarm.shared.weather.WeatherApi.describe(weather.weatherCode)}" +
+                                    " ${weather.temperature.toInt()}°",
+                                fontSize = 14.sp,
+                                color = Color(0xFFB7BECB),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
                 }
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(12.dp))
             // スヌーズプリセット 6列チップ
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 snoozePresets.take(6).forEach { m ->

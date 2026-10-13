@@ -422,12 +422,14 @@ private fun MinuteWheel(minutes: Int, onMinutes: (Int) -> Unit) {
         initialFirstVisibleItemIndex = (minutes - 1).coerceIn(0, 89),
     )
     // 中央にあるアイテムを選択分として確定する
-    val centerItem by androidx.compose.runtime.derivedStateOf {
-        val info = listState.layoutInfo
-        val center = (info.viewportStartOffset + info.viewportEndOffset) / 2
-        info.visibleItemsInfo.minByOrNull {
-            kotlin.math.abs(it.offset + it.size / 2 - center)
-        }?.index?.plus(1)
+    val centerItem by remember(listState) {
+        androidx.compose.runtime.derivedStateOf {
+            val info = listState.layoutInfo
+            val center = (info.viewportStartOffset + info.viewportEndOffset) / 2
+            info.visibleItemsInfo.minByOrNull {
+                kotlin.math.abs(it.offset + it.size / 2 - center)
+            }?.index?.plus(1)
+        }
     }
     LaunchedEffect(centerItem) {
         centerItem?.let { if (it != minutes) onMinutes(it) }

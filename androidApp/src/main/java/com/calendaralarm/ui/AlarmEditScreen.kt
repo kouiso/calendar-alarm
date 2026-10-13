@@ -79,7 +79,7 @@ fun AlarmEditScreen(
     settings: SettingsRepository,
     alarmId: Long,
     onDone: () -> Unit,
-    onAlarmArmed: (String?) -> Unit,
+    onAlarmArmed: (String?, Int?) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -377,6 +377,7 @@ fun AlarmEditScreen(
                     if (enabled) {
                         onAlarmArmed(
                             label.ifBlank { "%d:%02d".format(hour, minute) },
+                            null,
                         )
                     }
                     scope.launch {

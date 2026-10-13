@@ -20,11 +20,19 @@ interface ScheduledInstanceDao {
     @Query("SELECT * FROM scheduled_instances WHERE id = :id")
     suspend fun byId(id: String): ScheduledInstanceEntity?
 
+    /** 1行だけの監視。鳴動画面が全件取得せずに自分の状態変化を追うのに使う。 */
+    @Query("SELECT * FROM scheduled_instances WHERE id = :id")
+    fun byIdFlow(id: String): Flow<ScheduledInstanceEntity?>
+
     @Query("SELECT * FROM scheduled_instances")
     suspend fun all(): List<ScheduledInstanceEntity>
 
     @Query("UPDATE scheduled_instances SET state = :state WHERE id = :id")
     suspend fun setState(id: String, state: String)
+
+    /** FIRED 化は PENDING/FIRED からのみ。DISMISSED 等の終端を発火で上書きしない (更新行数を返す)。 */
+    @Query("UPDATE scheduled_instances SET state = 'FIRED' WHERE id = :id AND state IN ('PENDING', 'FIRED')")
+    suspend fun setFiredIfPending(id: String): Int
 
     /** 鳴動猶予内の最新 FIRED 行。鳴動中プロセスキル後の再起動が拾う。 */
     @Query("SELECT * FROM scheduled_instances WHERE state = 'FIRED' AND triggerAtMillis > :since ORDER BY triggerAtMillis DESC LIMIT 1")

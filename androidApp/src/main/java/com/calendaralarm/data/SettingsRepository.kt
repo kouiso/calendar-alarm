@@ -37,6 +37,9 @@ class SettingsRepository(private val context: Context) {
         val weatherEnabled: Boolean = true,
         /** 初回アラームON時の権限シートを出し終えたか (「最初の1回だけ」用)。 */
         val ringSetupDone: Boolean = false,
+        val onboardingDone: Boolean = false,
+        /** 「他のアプリの上に表示」許可の一度きり案内を出したか (更新ユーザー向け)。 */
+        val overlayPromptShown: Boolean = false,
         /** 既定の開始時アクション。 */
         val defaultStartAction: EventAction = EventAction.ALARM,
         /** 既定のリマインダーアクション。 */
@@ -98,6 +101,8 @@ class SettingsRepository(private val context: Context) {
             defaultSnoozeMinutes = p[KEY_SNOOZE] ?: 10,
             weatherEnabled = p[KEY_WEATHER] ?: true,
             ringSetupDone = p[KEY_RING_SETUP_DONE] ?: false,
+            onboardingDone = p[KEY_ONBOARDED] ?: false,
+            overlayPromptShown = p[KEY_OVERLAY_PROMPTED] ?: false,
             defaultStartAction = p[KEY_DEF_START_ACTION]
                 ?.let { runCatching { EventAction.valueOf(it) }.getOrNull() } ?: EventAction.ALARM,
             defaultReminderAction = p[KEY_DEF_REM_ACTION]
@@ -173,6 +178,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setDefaultSnoozeMinutes(v: Int) = edit { it[KEY_SNOOZE] = v }
     suspend fun setWeatherEnabled(v: Boolean) = edit { it[KEY_WEATHER] = v }
     suspend fun setRingSetupDone(v: Boolean) = edit { it[KEY_RING_SETUP_DONE] = v }
+    suspend fun setOnboardingDone(v: Boolean) = edit { it[KEY_ONBOARDED] = v }
+    suspend fun setOverlayPromptShown(v: Boolean) = edit { it[KEY_OVERLAY_PROMPTED] = v }
     suspend fun setDefaultStartAction(v: EventAction) = edit { it[KEY_DEF_START_ACTION] = v.name }
     suspend fun setDefaultReminderAction(v: EventAction) = edit { it[KEY_DEF_REM_ACTION] = v.name }
     suspend fun setTitleCodes(v: TitleCodeSettings) = edit {
@@ -263,6 +270,8 @@ class SettingsRepository(private val context: Context) {
         val KEY_SNOOZE = intPreferencesKey("default_snooze_minutes")
         val KEY_WEATHER = booleanPreferencesKey("weather_enabled")
         val KEY_RING_SETUP_DONE = booleanPreferencesKey("ring_setup_done")
+        val KEY_ONBOARDED = booleanPreferencesKey("onboarding_done")
+        val KEY_OVERLAY_PROMPTED = booleanPreferencesKey("overlay_prompt_shown")
         val KEY_DEF_START_ACTION = stringPreferencesKey("default_start_action")
         val KEY_DEF_REM_ACTION = stringPreferencesKey("default_reminder_action")
         val KEY_ALWAYS_CODES = stringPreferencesKey("title_always_codes")

@@ -126,6 +126,8 @@ class MainActivity : ComponentActivity() {
                     app.container.repository.resync("app start")
                 }
                 MainScaffold(app.container.repository, app.container.settings)
+                // 更新ユーザー(onboardingDone=true)向けの「他のアプリの上に表示」一度きり案内。新規は初回アラームON時のシートが担う
+                com.calendaralarm.ui.OverlayPermissionPrompt(app.container.settings, this@MainActivity)
                 // メール→予定: 抽出結果が届いていれば確認ダイアログを最前面に出す
                 extractedJson.value?.let { json ->
                         val ev = runCatching {
@@ -210,7 +212,7 @@ private val tabs = listOf(
 )
 
 /** 権限シートの表示要求。auto=true は初回アラームONによる自動表示 (1回きり)。 */
-private data class RingSetupRequest(val subject: String?, val auto: Boolean)
+private data class RingSetupRequest(val subject: String?, val leadMinutes: Int?, val auto: Boolean)
 
 @Composable
 private fun MainScaffold(
@@ -227,10 +229,10 @@ private fun MainScaffold(
     }
     // 初めてアラームをオンにした時だけ権限シートを出す (「最初の1回だけ」)。
     // 出し終えたら ringSetupDone を立てて以後は出さない。
-    val onAlarmArmed: (String?) -> Unit = { subject ->
+    val onAlarmArmed: (String?, Int?) -> Unit = { subject, leadMinutes ->
         scope.launch {
             if (!settings.flow.first().ringSetupDone) {
-                ringSetupRequest = RingSetupRequest(subject, auto = true)
+                ringSetupRequest = RingSetupRequest(subject, leadMinutes, auto = true)
             }
         }
     }
@@ -297,7 +299,7 @@ private fun MainScaffold(
                     repository = repository,
                     onAlarmArmed = onAlarmArmed,
                     onShowRingSetup = {
-                        ringSetupRequest = RingSetupRequest(null, auto = false)
+                        ringSetupRequest = RingSetupRequest(null, null, auto = false)
                     },
                 )
             }
@@ -327,6 +329,7 @@ private fun MainScaffold(
         RingSetupSheet(
             repository = repository,
             subject = req.subject,
+            leadMinutes = req.leadMinutes,
             onDismiss = {
                 ringSetupRequest = null
                 if (req.auto) scope.launch { settings.setRingSetupDone(true) }

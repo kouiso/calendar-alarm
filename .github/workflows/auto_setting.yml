@@ -4,9 +4,14 @@ on:
   pull_request:
     types: [opened, reopened]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   assign_pr_to_creator:
-    runs-on: ${{ vars.RUNNER_LINUX }}
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    timeout-minutes: 5
     steps:
       - name: Auto Assign PR to Creator
         uses: actions/github-script@v5
@@ -30,7 +35,8 @@ jobs:
             }
 
   auto-label:
-    runs-on: ${{ vars.RUNNER_LINUX }}
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    timeout-minutes: 5
     steps:
       - name: Add label based on branch name
         uses: actions/github-script@v5
@@ -86,7 +92,8 @@ jobs:
             }
 
   pull_request_taking_for_jira:
-    runs-on: ${{ vars.RUNNER_LINUX }}
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    timeout-minutes: 5
     steps:
       - name: Install Axios
         run: npm install axios
@@ -168,7 +175,8 @@ jobs:
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
 
   check-base-branch:
-    runs-on: ${{ vars.RUNNER_LINUX }}
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    timeout-minutes: 5
     steps:
       # デフォルトブランチは master (develop は 2024 年の Flutter 版で放置中)。
       # かつては develop 強制だったが全 PR が master 向けなので常に落ちていた (#28)
