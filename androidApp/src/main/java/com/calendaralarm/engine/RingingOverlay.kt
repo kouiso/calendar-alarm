@@ -80,7 +80,8 @@ object RingingOverlay {
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                     WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
                     WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                    // FLAG_DISMISS_KEYGUARD は付けない: PIN ロック中に解除要求が出ると
+                    // 鳴動画面の上に PIN 入力が重なり停止ボタンが押せなくなる (PR #54 と同根)
                     WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 android.graphics.PixelFormat.TRANSLUCENT,
             ).apply {
@@ -199,6 +200,7 @@ object RingingOverlay {
 
         val dismiss = pill("停止", accent, Color.parseColor("#26247A"))
         dismiss.setOnClickListener {
+            audit(context.applicationContext, "STOP_TAP", "オーバーレイ: $instanceId")
             // 鳴動通知の「停止」と同じ放送経路: サービス不在でも AlarmReceiver が
             // サービス停止 + DB終端化を行うので必ず届く
             context.sendBroadcast(

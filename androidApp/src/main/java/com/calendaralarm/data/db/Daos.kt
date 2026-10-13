@@ -34,6 +34,10 @@ interface ScheduledInstanceDao {
     @Query("UPDATE scheduled_instances SET state = 'FIRED' WHERE id = :id AND state IN ('PENDING', 'FIRED')")
     suspend fun setFiredIfPending(id: String): Int
 
+    /** 生存中 (PENDING/FIRED) の行だけを DISMISSED にする。停止・スヌーズ済みの終端は上書きしない (更新行数を返す)。 */
+    @Query("UPDATE scheduled_instances SET state = 'DISMISSED' WHERE id = :id AND state IN ('PENDING', 'FIRED')")
+    suspend fun setDismissedIfLive(id: String): Int
+
     /** 鳴動猶予内の最新 FIRED 行。鳴動中プロセスキル後の再起動が拾う。 */
     @Query("SELECT * FROM scheduled_instances WHERE state = 'FIRED' AND triggerAtMillis > :since ORDER BY triggerAtMillis DESC LIMIT 1")
     suspend fun latestFiredSince(since: Long): ScheduledInstanceEntity?

@@ -215,11 +215,19 @@ class AlarmService : Service() {
         // 「確認〜公開」の窓で鳴動ゼロ(IDLE)判定のまま素通りして墓標済み
         // 要求が鳴る、という同族レースが残る。先に自世代を確定してから先代を
         // 畳むので、公開直後に届く DISMISS も PENDING 判定でこの要求だけ潰せる
+        // 座席確保で押し出した先代 (鳴動中または座席確保済み) の id。押し出された側は
+        // 自分のコルーチンで何も記録せずに抜けるため、ここで終端化しないと DB に FIRED の
+        // まま残り、停止後のプロセス再起動 (START_STICKY → firedWithinGrace) で
+        // 「止めたのにまた鳴る」原因になる (同時刻の予定2件で実機再現 10/14 0:00)
+        var displaced: String? = null
         val gen = synchronized(ringLock) {
             requestedIds -= instanceId
             if (destroyed || isDismissed(instanceId)) {
                 null
             } else {
+                displaced = (ringingInstanceId.value ?: pendingStartId)?.takeIf { it != instanceId }
+                // 押し出した先代は墓標で以後の鳴動を抑止する (滞留中の再発火も潰す)
+                markDismissed(displaced)
                 ringGen++
                 // 前面化は維持する: 直前に自分の startForeground で出した通知を
                 // ここで外すと、以後の鳴動は前面サービスでなくなり OS に畳まれ得る
@@ -237,6 +245,9 @@ class AlarmService : Service() {
             // 現行鳴動があればその停止UIへ戻す。無ければ滞留通知ごと畳む
             restoreOrFinish()
             return
+        }
+        displaced?.let { prev ->
+            runCatching { app.container.repository.onSuperseded(prev, instanceId) }
         }
         if (destroyed) return
         val instance = app.container.repository.instanceById(instanceId)
@@ -472,28 +483,7 @@ class AlarmService : Service() {
             .build()
     }
 
-    private fun createChannel() {
-        val mgr = getSystemService(NotificationManager::class.java) ?: return
-        // チャンネルの振動属性は作成後に変更できないため、鳴動中バイブの ON/OFF で
-        // チャンネルを分ける。旧 1 チャンネル (alarm_v1) は設定画面に残らないよう消す
-        mgr.deleteNotificationChannel(LEGACY_CHANNEL_ID)
-        fun channel(id: String, label: String, vibrate: Boolean) =
-            NotificationChannel(id, label, NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "アラーム鳴動時のフルスクリーン通知"
-                // 音は MediaPlayer が出すのでチャンネルは無音
-                setSound(null, null)
-                enableVibration(vibrate)
-                if (vibrate) vibrationPattern = VIBRATION_PATTERN
-                setBypassDnd(true)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            }
-        mgr.createNotificationChannels(
-            listOf(
-                channel(CHANNEL_ID, "アラーム", vibrate = true),
-                channel(CHANNEL_ID_NOVIB, "アラーム（バイブなし）", vibrate = false),
-            ),
-        )
-    }
+    private fun createChannel() = ensureChannels(this)
 
     private fun startAudio(soundUri: String?, volumePercent: Int, crescendo: Boolean, gen: Int) {
         // カスタム音が失効していても無音にはしない。候補を順に試す。
@@ -790,8 +780,9 @@ class AlarmService : Service() {
         const val ACTION_SNOOZE = "com.calendaralarm.action.SNOOZE"
         const val EXTRA_INSTANCE_ID = "instance_id"
         const val EXTRA_SNOOZE_MINUTES = "snooze_minutes"
-        private const val CHANNEL_ID = "alarm_vib"
-        private const val CHANNEL_ID_NOVIB = "alarm_novib"
+        // トラブルシューティング画面がチャンネルの重要度・ロック画面表示を検査するので公開
+        const val CHANNEL_ID = "alarm_vib"
+        const val CHANNEL_ID_NOVIB = "alarm_novib"
         private const val LEGACY_CHANNEL_ID = "alarm_v1"
         private val VIBRATION_PATTERN = longArrayOf(0, 800, 400, 800, 400)
         /** クレッシェンドの立ち上がり時間と開始音量。 */
@@ -819,6 +810,32 @@ class AlarmService : Service() {
         // beginRinging 冒頭で必ず引く。サイズは最新32件に制限
         private val dismissTombstone = LinkedHashSet<String>()
         private val tombstoneLock = Any()
+
+        /**
+         * 鳴動通知チャンネルを作る (冪等)。チャンネルの振動属性は作成後に変更できないため、
+         * 鳴動中バイブの ON/OFF でチャンネルを分ける。旧 1 チャンネル (alarm_v1) は消す。
+         * 鳴動前でもトラブルシューティング画面から検査・設定できるよう公開する
+         */
+        fun ensureChannels(context: Context) {
+            val mgr = context.getSystemService(NotificationManager::class.java) ?: return
+            mgr.deleteNotificationChannel(LEGACY_CHANNEL_ID)
+            fun channel(id: String, label: String, vibrate: Boolean) =
+                NotificationChannel(id, label, NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "アラーム鳴動時のフルスクリーン通知"
+                    // 音は MediaPlayer が出すのでチャンネルは無音
+                    setSound(null, null)
+                    enableVibration(vibrate)
+                    if (vibrate) vibrationPattern = VIBRATION_PATTERN
+                    setBypassDnd(true)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                }
+            mgr.createNotificationChannels(
+                listOf(
+                    channel(CHANNEL_ID, "アラーム", vibrate = true),
+                    channel(CHANNEL_ID_NOVIB, "アラーム（バイブなし）", vibrate = false),
+                ),
+            )
+        }
 
         fun markDismissed(id: String?) {
             if (id == null) return

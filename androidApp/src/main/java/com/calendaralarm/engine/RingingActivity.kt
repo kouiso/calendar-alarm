@@ -206,6 +206,12 @@ class RingingActivity : ComponentActivity() {
         targetId: String? = instanceIdState.value,
         finishScreen: Boolean = true,
     ) {
+        // 押下が画面に届いた事実を先に残す。「押しても止まらない」報告を、
+        // タップ未到達 (ログ無し) とサービス側の停止失敗 (TAP はあるが DISMISS 無し) に切り分ける
+        val tapLabel = if (action == AlarmService.ACTION_DISMISS) "STOP_TAP" else "SNOOZE_TAP"
+        lifecycleScope.launch {
+            runCatching { app.container.repository.audit(tapLabel, "画面: ${targetId ?: "(id不明)"}") }
+        }
         val delivered = runCatching {
             startService(
                 Intent(this, AlarmService::class.java).apply {
