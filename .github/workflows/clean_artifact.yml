@@ -1,11 +1,15 @@
 name: 'artifacts cleanup'
+
+# 定期実行はやめて手動実行のみにする。毎日「30分より古い artifact を全部消す」運用だと
+# 各 workflow の retention-days が意味を持たず、証跡 (emulator 検証など) も日次で消えるため。
+# 容量を急いで空けたい時だけ dispatch で回す。
 on:
-  schedule:
-    - cron: '0 20 * * *' # UTC
+  workflow_dispatch:
 
 jobs:
   delete-artifacts:
-    runs-on: ${{ vars.RUNNER_LINUX }}
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    timeout-minutes: 5
     steps:
       - uses: kolpav/purge-artifacts-action@v1
         with:

@@ -73,6 +73,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 val pending = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
+                        runCatching { AlarmService.markDismissed(instanceId) }
                         runCatching {
                             (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
                                 .container.repository.onDismissed(instanceId)
@@ -90,12 +91,29 @@ class AlarmReceiver : BroadcastReceiver() {
                 val pending = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        context.stopService(Intent(context, AlarmService::class.java))
-                        // サービスが既に死んでいると通知だけ残って「押しても止まらない」
-                        // ゾンビ状態になるので、受信側でも通知とオーバーレイを直接畳む
-                        context.getSystemService(android.app.NotificationManager::class.java)
-                            ?.cancel(AlarmService.NOTIFICATION_ID)
-                        RingingOverlay.hide(context)
+                        // 停止を最速で届けるため転送を先に行い、監査は後書きにする
+                        runCatching {
+                            context.startService(Intent(context, AlarmService::class.java).apply {
+                                action = AlarmService.ACTION_DISMISS
+                                if (instanceId != null) {
+                                    putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
+                                }
+                            })
+                        }.onFailure {
+                            // サービスへ届けられない=未起動/起動不可。鳴動資源は
+                            // 存在しないので滞留通知・オーバーレイだけ畳み、DB終端もここで済ませる
+                            context.getSystemService(android.app.NotificationManager::class.java)
+                                ?.cancel(AlarmService.NOTIFICATION_ID)
+                            RingingOverlay.hide(context)
+                            runCatching {
+                                (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
+                                    .container.repository.onDismissed(instanceId)
+                            }
+                        }
+                        // 届かなかった場合でも対象 id の終端意図を墓標へ記録し、
+                        // 後から走る鳴動処理が止まるようにする (サービス側は
+                        // 受信した DISMISS を必ず墓標へ書くので二重でも無害)
+                        runCatching { AlarmService.markDismissed(instanceId) }
                         // 「届いた」事実を鳴動ログに残す。次の障害時に
                         // ボタン未到達か終端化失敗かをここで切り分けられる
                         runCatching {
@@ -103,10 +121,6 @@ class AlarmReceiver : BroadcastReceiver() {
                                 .container.repository.audit(
                                     "DISMISS_RECV", instanceId ?: "(id不明)",
                                 )
-                        }
-                        runCatching {
-                            (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
-                                .container.repository.onDismissed(instanceId)
                         }
                     } finally {
                         pending.finish()

@@ -63,10 +63,14 @@ object RingingOverlay {
         title: String,
         snoozeMinutes: Int,
         snoozePresets: List<Int> = emptyList(),
+        stillValid: () -> Boolean = { true },
     ) {
         if (!canShow(context)) return
         val app = context.applicationContext
         Handler(Looper.getMainLooper()).post {
+            // 投稿から実行までの間に停止が走った場合は表示しない。
+            // hide() の投稿が先に処理されていてもここで止められる
+            if (!stillValid()) return@post
             removeNow(app)
             val wm = app.getSystemService(WindowManager::class.java) ?: run {
                 audit(app, "OVERLAY_FAIL", "$instanceId: WindowManager取得不可")

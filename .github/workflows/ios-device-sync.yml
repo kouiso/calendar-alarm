@@ -22,8 +22,15 @@ on:
         type: boolean
   schedule:
     # テスターが UDID を提出した後、こちらが何もしなくても
-    # 最悪6時間で登録→再配布まで自動で完了するようにする
-    - cron: '17 */6 * * *'
+    # 最悪1日で登録→再配布まで自動で完了するようにする。
+    # 6時間毎だと端末が増えない日も毎回 FAD / ASC API を叩くだけなので日次に間引いた
+    - cron: '17 3 * * *'
+
+# dispatch と cron が同時に走ると fad.yml の iOS 再配布を二重に起動するので、
+# ワークフロー全体で直列化する (途中の run は殺さない)
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 env:
   # Firebase project number は公開識別子で秘匿不要
@@ -121,10 +128,6 @@ jobs:
       contents: read
       # fad.yml の workflow_dispatch 起動に必要
       actions: write
-    concurrency:
-      # 直列化（同時に複数回走らせない）
-      group: ${{ github.workflow }}
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 

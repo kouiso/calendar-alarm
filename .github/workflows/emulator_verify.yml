@@ -1,0 +1,171 @@
+name: (verify) alarm stop E2E (emulator)
+
+# 鳴動中の停止UIと停止経路をエミュレータ (API 35 / x86_64) で検証する。
+# 公開リポジトリなので GitHub-hosted ubuntu-latest (KVM 有り) は無料。
+#
+# PR / emu-verify/** への push では 2 レーンを並べる:
+#   fix              : 対象コミット。unlocked / race / locked / locked_screen_on の全シナリオ PASS が期待値
+#   control-3d106817 : FAD 配布版 (オーバーレイ抑止ゲート入り) を陰性対照に同じシナリオを流し、
+#                      停止UI欠落 (STOP_UI_MISSING) を再現できること = テストがバグを検出できることを確かめる
+# workflow_dispatch では任意の ref を 1 レーンで検証する。
+# シナリオ詳細は scripts/emulator/run_scenarios.sh を参照。
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_ref:
+        description: アプリをビルドする ref (空ならこのワークフローの ref)
+        required: false
+        default: ''
+        type: string
+      expect:
+        description: 期待値 (pass = 全シナリオ PASS / stop-ui-missing = 陰性対照として停止UI欠落の再現)
+        required: true
+        default: pass
+        type: choice
+        options:
+          - pass
+          - stop-ui-missing
+      scenarios:
+        description: 実行するシナリオ (空白区切り, unlocked race locked locked_screen_on)
+        required: true
+        default: unlocked race locked locked_screen_on
+        type: string
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - androidApp/src/main/**
+      - androidApp/build.gradle.kts
+      - shared/src/**
+      - gradle/**
+      - scripts/emulator/**
+      - .github/workflows/emulator_verify.yml
+  push:
+    branches:
+      - "emu-verify/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emulator-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # 陰性対照: ユーザーの FAD 配布版 (AlarmService の `!fsiOk &&` ゲートで FSI 許可時にオーバーレイが出ない)
+  CONTROL_SHA: 3d106817a95987a3b22c0669f8cc6490bceb29b1
+
+jobs:
+  plan:
+    # draft の途中コミット毎に 45 分 x 2 レーンのエミュレータを回さない。
+    # push / dispatch では pull_request.draft が null なので != true で通す
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      lanes: ${{ steps.plan.outputs.lanes }}
+    steps:
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          INPUT_APP_REF: ${{ inputs.app_ref }}
+          INPUT_EXPECT: ${{ inputs.expect }}
+          INPUT_SCENARIOS: ${{ inputs.scenarios }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then
+            # grep は行単位で照合し改行入りの値を通すので、値全体を bash の正規表現で照合する
+            re='^(unlocked|race|locked|locked_screen_on)( (unlocked|race|locked|locked_screen_on))*$'
+            if ! [[ $INPUT_SCENARIOS =~ $re ]]; then
+              echo "invalid scenarios: $INPUT_SCENARIOS" >&2; exit 1
+            fi
+            if [ "$INPUT_EXPECT" = stop-ui-missing ] && [ "$INPUT_SCENARIOS" != unlocked ]; then
+              echo "stop-ui-missing (negative control) runs the unlocked scenario only" >&2; exit 1
+            fi
+            lanes=$(jq -cn --arg ref "${INPUT_APP_REF:-$HEAD_SHA}" --arg exp "$INPUT_EXPECT" --arg sc "$INPUT_SCENARIOS" \
+              '[{name: "dispatch", app_ref: $ref, expect: $exp, scenarios: $sc}]')
+          else
+            lanes=$(jq -cn --arg head "$HEAD_SHA" --arg ctl "$CONTROL_SHA" \
+              '[{name: "fix", app_ref: $head, expect: "pass", scenarios: "unlocked race locked locked_screen_on"},
+                {name: "control-3d106817", app_ref: $ctl, expect: "stop-ui-missing", scenarios: "unlocked"}]')
+          fi
+          echo "lanes=$lanes" >> "$GITHUB_OUTPUT"
+          echo "$lanes" | jq .
+
+  verify:
+    needs: plan
+    name: verify (${{ matrix.lane.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: ${{ fromJSON(needs.plan.outputs.lanes) }}
+    steps:
+      - name: Checkout verifier scripts
+        uses: actions/checkout@v4
+        with:
+          path: verifier
+
+      - name: Checkout app under test
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.lane.app_ref }}
+          path: app
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Inject E2E harness (debug source set, not committed)
+        run: bash verifier/scripts/emulator/inject_harness.sh app
+
+      - name: Build debug APK
+        working-directory: app
+        run: ./gradlew :androidApp:assembleDebug --stacktrace
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run scenarios on emulator
+        id: scenario
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SCENARIOS: ${{ matrix.lane.scenarios }}
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          # -noaudio は付けない (USAGE_ALARM プレイヤーの再生状態を検証するため)
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -camera-back none -camera-front none
+          script: bash verifier/scripts/emulator/run_scenarios.sh app/androidApp/build/outputs/apk/debug/androidApp-debug.apk out $SCENARIOS
+
+      - name: Evaluate against lane expectation
+        if: always()
+        env:
+          EXPECT: ${{ matrix.lane.expect }}
+          LANE: ${{ matrix.lane.name }}
+          SCENARIOS: ${{ matrix.lane.scenarios }}
+          SCENARIO_OUTCOME: ${{ steps.scenario.outcome }}
+        run: |
+          echo "scenario step outcome: $SCENARIO_OUTCOME"
+          bash verifier/scripts/emulator/evaluate.sh out "$EXPECT" "$LANE" "$SCENARIOS"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-verify-${{ matrix.lane.name }}
+          path: out/
+          retention-days: 30
+          if-no-files-found: warn
