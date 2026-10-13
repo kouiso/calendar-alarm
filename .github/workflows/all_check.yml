@@ -20,7 +20,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # WHY: master への連続 push で前の CI と APK 生成が打ち切られると、どのコミットが
+  #      緑か分からなくなる。打ち切りは PR の古い実行だけに限る
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
