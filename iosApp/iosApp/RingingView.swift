@@ -138,6 +138,9 @@ struct RingingView: View {
                         // 画面が残る以上、スライダーの丸を戻して再操作させるため成否を返す
                         return !engine.alertingIds.contains(inst.id)
                     }
+                    // 鳴動ごとに丸の状態を分ける: 同時に鳴る別アラームへ切り替わった時に
+                    // 前の鳴動の「右端に貼り付いた丸」を引き継がない
+                    .id(inst.id)
                     .padding(.top, 8).padding(.bottom, 8)
                     Text("Calendar Alarm")
                         .font(NightTheme.font(12))
@@ -174,7 +177,6 @@ private struct SlideToStop: View {
     /// 停止実行。true=停止成功 (画面が閉じる) / false=失敗で鳴動継続 (丸を戻して再操作させる)
     let onStop: () -> Bool
     @State private var progress: CGFloat = 0
-    @State private var grabbed = false
     private let thumbSize: CGFloat = 64
     private let pad: CGFloat = 8
     private let stopThreshold: CGFloat = 0.8
@@ -210,12 +212,10 @@ private struct SlideToStop: View {
                     .onChanged { value in
                         // 掴み始めが丸の外 (トラック右側等) なら無効: 画面のどこでも
                         // 横スワイプが効くと意図しない停止につながるため起点を縛る
-                        guard grabbed || value.startLocation.x <= thumbSize + pad * 3 else { return }
-                        grabbed = true
+                        guard value.startLocation.x <= thumbSize + pad * 3 else { return }
                         progress = min(max(value.translation.width / travel, 0), 1)
                     }
                     .onEnded { _ in
-                        grabbed = false
                         if progress >= stopThreshold {
                             progress = 1
                             if !onStop() {

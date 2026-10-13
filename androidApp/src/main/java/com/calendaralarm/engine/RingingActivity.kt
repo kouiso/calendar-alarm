@@ -145,19 +145,23 @@ class RingingActivity : ComponentActivity() {
                     val canOpenSource = instKind ==
                         com.calendaralarm.shared.model.AlarmKind.NOTIFICATION &&
                         NotificationAlarmService.pendingOpens.containsKey(instanceIdState.value)
-                    RingingScreen(
-                        weather = weather,
-                        title = instance?.title ?: "アラーム",
-                        triggerAtMillis = instance?.triggerAtMillis ?: System.currentTimeMillis(),
-                        eventStartMillis = instance?.eventStartMillis,
-                        snoozeMinutes = instance?.snoozeMinutes ?: 10,
-                        snoozePresets = presets,
-                        canOpenSource = canOpenSource,
-                        onOpenSource = { openSourcePendingIntent() },
-                        onDismiss = { sendAction(AlarmService.ACTION_DISMISS) },
-                        onSnooze = { sendAction(AlarmService.ACTION_SNOOZE) },
-                        onSnoozeAt = { m -> sendAction(AlarmService.ACTION_SNOOZE, m) },
-                    )
+                    // 鳴動ごとに画面の状態 (スライダーの丸の位置を含む) を分ける。ドラッグ中に
+                    // 別の鳴動へ切り替わった時、離した指で見ていない方を止めてしまわないため
+                    androidx.compose.runtime.key(watchedId) {
+                        RingingScreen(
+                            weather = weather,
+                            title = instance?.title ?: "アラーム",
+                            triggerAtMillis = instance?.triggerAtMillis ?: System.currentTimeMillis(),
+                            eventStartMillis = instance?.eventStartMillis,
+                            snoozeMinutes = instance?.snoozeMinutes ?: 10,
+                            snoozePresets = presets,
+                            canOpenSource = canOpenSource,
+                            onOpenSource = { openSourcePendingIntent() },
+                            onDismiss = { sendAction(AlarmService.ACTION_DISMISS) },
+                            onSnooze = { sendAction(AlarmService.ACTION_SNOOZE) },
+                            onSnoozeAt = { m -> sendAction(AlarmService.ACTION_SNOOZE, m) },
+                        )
+                    }
                 }
             }
         }
