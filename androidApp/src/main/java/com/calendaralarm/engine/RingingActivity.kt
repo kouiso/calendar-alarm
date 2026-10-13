@@ -11,14 +11,18 @@ import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,9 +36,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
@@ -253,7 +260,11 @@ private fun RingingScreen(
             Box(Modifier.fillMaxSize().background(Color(0xFF0A0C11)))
         }
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp),
+            // targetSdk 35 は edge-to-edge 強制なので、停止ボタンがナビゲーションバーの下に潜らないよう避ける
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // 日付チップ
@@ -269,68 +280,84 @@ private fun RingingScreen(
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
                 )
             }
-            Spacer(Modifier.weight(1f))
-            // アクセントリング 2重 (290/230) + 大時刻
-            Box(contentAlignment = Alignment.Center) {
-                Box(
-                    Modifier.size(290.dp).border(
-                        1.5.dp, accent.copy(alpha = 0.25f), CircleShape,
-                    ),
-                )
-                Box(
-                    Modifier.size(230.dp).border(
-                        1.dp, accent.copy(alpha = 0.15f), CircleShape,
-                    ),
-                )
-                Text(
-                    text = time,
-                    fontSize = 112.sp,
-                    fontFamily = OutfitFontFamily,
-                    fontWeight = FontWeight.ExtraLight,
-                    letterSpacing = (-4).sp,
-                    color = Color(0xFFF4F5F8),
-                )
-            }
-            Spacer(Modifier.height(18.dp))
-            // 開始までの残り (eventStartMillis が無い通知由来等は「まもなく開始」)
-            val remain = eventStartMillis?.minus(System.currentTimeMillis())
-            Text(
-                if (remain != null && remain > 0) {
-                    "${(remain + 30_000) / 60_000}分後に開始"
-                } else {
-                    "まもなく開始"
-                },
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = accent,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = title,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 42.sp,
-                color = Color(0xFFF4F5F8),
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-            )
-            if (weather != null) {
-                Spacer(Modifier.height(14.dp))
-                Surface(
-                    color = Color.White.copy(alpha = 0.06f),
-                    shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
-                ) {
+            // 時計〜タイトルは残りの高さに収める。下の停止/スヌーズは固定高で先に確保され、
+            // 小さい画面や大きい文字サイズでも画面外に押し出されない
+            BoxWithConstraints(
+                modifier = Modifier.weight(1f).fillMaxWidth().clipToBounds(),
+                contentAlignment = Alignment.Center,
+            ) {
+                // 本来の高さ (リング 290 + 下の文字群) に足りない分だけリングと時刻を縮める
+                val ringScale = ((maxHeight - 170.dp) / 290.dp).coerceIn(0.35f, 1f)
+                val ringOuter = minOf(290.dp * ringScale, maxWidth)
+                val density = LocalDensity.current
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // アクセントリング 2重 (290/230) + 大時刻
+                    Box(contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier.size(ringOuter).border(
+                                1.5.dp, accent.copy(alpha = 0.25f), CircleShape,
+                            ),
+                        )
+                        Box(
+                            Modifier.size(ringOuter * (230f / 290f)).border(
+                                1.dp, accent.copy(alpha = 0.15f), CircleShape,
+                            ),
+                        )
+                        // 時刻はリングに収める飾りなので端末の文字サイズ設定では拡大しない
+                        Text(
+                            text = time,
+                            fontSize = with(density) { (ringOuter * (112f / 290f)).toSp() },
+                            fontFamily = OutfitFontFamily,
+                            fontWeight = FontWeight.ExtraLight,
+                            letterSpacing = with(density) { (ringOuter * (-4f / 290f)).toSp() },
+                            color = Color(0xFFF4F5F8),
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                    Spacer(Modifier.height(18.dp * ringScale))
+                    // 開始までの残り (eventStartMillis が無い通知由来等は「まもなく開始」)
+                    val remain = eventStartMillis?.minus(System.currentTimeMillis())
                     Text(
-                        "${com.calendaralarm.shared.weather.WeatherApi.describe(weather.weatherCode)}" +
-                            " ${weather.temperature.toInt()}°",
-                        fontSize = 14.sp,
-                        color = Color(0xFFB7BECB),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        if (remain != null && remain > 0) {
+                            "${(remain + 30_000) / 60_000}分後に開始"
+                        } else {
+                            "まもなく開始"
+                        },
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = accent,
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = title,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 42.sp,
+                        color = Color(0xFFF4F5F8),
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (weather != null) {
+                        Spacer(Modifier.height(14.dp))
+                        Surface(
+                            color = Color.White.copy(alpha = 0.06f),
+                            shape = RoundedCornerShape(14.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+                        ) {
+                            Text(
+                                "${com.calendaralarm.shared.weather.WeatherApi.describe(weather.weatherCode)}" +
+                                    " ${weather.temperature.toInt()}°",
+                                fontSize = 14.sp,
+                                color = Color(0xFFB7BECB),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
                 }
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(12.dp))
             // スヌーズプリセット 6列チップ
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 snoozePresets.take(6).forEach { m ->
