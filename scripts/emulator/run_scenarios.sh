@@ -22,7 +22,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 CHECK=(python3 "$HERE/emu_check.py")
 PKG=com.calendaralarm
 HARNESS="$PKG/.emu.EmuHarnessReceiver"
-STOP_TEXT="停止"
+STOP_TEXT="停止"                  # 通知の停止アクション (ヘッズアップ)
+SLIDE_DESC="スライドして停止"      # 鳴動画面/オーバーレイの停止スライダー (タップでは止まらずドラッグで止める)
 NOTIF_ID=1
 PIN=1111
 
@@ -317,16 +318,16 @@ scenario_unlocked() {
     record "$name" FAIL UI_DUMP_FAILED "uiautomator dump failed 12s after fire; stop UI presence unknown"
     return
   fi
-  if ! xy=$("${CHECK[@]}" stop-node "$p.t12.ui.xml" "$PKG" "$STOP_TEXT"); then
+  if ! xy=$("${CHECK[@]}" slide-swipe "$p.t12.ui.xml" "$PKG" "$SLIDE_DESC"); then
     cleanup_ring "$id"
     stop_recording "$name"
-    record "$name" FAIL STOP_UI_MISSING "no $PKG '$STOP_TEXT' node on screen 12s after fire (overlay_windows=$ov, headsup_stop=$hun)"
+    record "$name" FAIL STOP_UI_MISSING "no $PKG '$SLIDE_DESC' node on screen 12s after fire (overlay_windows=$ov, headsup_stop=$hun)"
     return
   fi
   t_tap=$(now_ms)
   # shellcheck disable=SC2086
-  adb shell input tap $xy
-  log "$name: tapped $STOP_TEXT at $xy"
+  adb shell input swipe $xy 400
+  log "$name: swiped $SLIDE_DESC $xy"
   if wait_stopped "$t_tap" 3000; then
     sleep 2
     capture "$p.after"
@@ -439,8 +440,8 @@ locked_case() {
   } > "$p.facts.txt"
   cat "$p.facts.txt" >&2
   if [ "$rr" = yes ] && [ "$ov" != 0 ]; then
-    xy=$("${CHECK[@]}" stop-node "$p.t12.ui.xml" "$PKG" "$STOP_TEXT") || xy=
-    [ -n "$xy" ] && adb shell input tap $xy
+    xy=$("${CHECK[@]}" slide-swipe "$p.t12.ui.xml" "$PKG" "$SLIDE_DESC") || xy=
+    [ -n "$xy" ] && adb shell input swipe $xy 400
     sleep 3; cleanup_ring "$id"; stop_recording "$name"
     record "$name" FAIL STACKED_UI "RingingActivity resumed AND overlay window on screen at the same time"
     locked_restore "$name"; return
@@ -450,9 +451,9 @@ locked_case() {
     record "$name" FAIL UI_DUMP_FAILED "uiautomator dump failed 12s after fire while locked"
     locked_restore "$name"; return
   fi
-  if ! xy=$("${CHECK[@]}" stop-node "$p.t12.ui.xml" "$PKG" "$STOP_TEXT"); then
+  if ! xy=$("${CHECK[@]}" slide-swipe "$p.t12.ui.xml" "$PKG" "$SLIDE_DESC"); then
     cleanup_ring "$id"; stop_recording "$name"
-    record "$name" FAIL STOP_UI_MISSING "no $PKG '$STOP_TEXT' node while locked (ringing_activity=$rr overlay=$ov)"
+    record "$name" FAIL STOP_UI_MISSING "no $PKG '$SLIDE_DESC' node while locked (ringing_activity=$rr overlay=$ov)"
     locked_restore "$name"; return
   fi
   if ! probes_ringing "$a" "$s" "$n"; then
@@ -462,7 +463,7 @@ locked_case() {
   fi
   t_tap=$(now_ms)
   # shellcheck disable=SC2086
-  adb shell input tap $xy
+  adb shell input swipe $xy 400
   if wait_stopped "$t_tap" 3000; then
     sleep 2; capture "$p.after"; stop_recording "$name"
     sh_ dumpsys window | grep -Ei "keyguard|showing_lockscreen|mDreaming" > "$p.keyguard_after.txt" 2>&1
