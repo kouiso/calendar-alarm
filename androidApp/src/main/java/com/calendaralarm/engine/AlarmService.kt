@@ -30,10 +30,12 @@ import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -59,9 +61,9 @@ class AlarmService : Service() {
     // サービス不在のまま音だけ鳴り続けるゾンビ状態になる (実機報告)。
     // IO ディスパッチャ上で開始されるので volatile で可視性を確保する。
     @Volatile private var destroyed = false
-    // stopRinging が走るたびに進む世代番号。beginRinging/startAudio は
+    // 停止 (stopRingingLocked) が走るたびに進む世代番号。beginRinging/startAudio は
     // 途中で世代が進んでいたら鳴動を開始しない。DISMISS/SNOOZE の
-    // stopRinging 直後に滞留コルーチンが start() へ滑り込む窓を塞ぐ
+    // 停止直後に滞留コルーチンが start() へ滑り込む窓を塞ぐ
     @Volatile private var ringGen = 0
     // mediaPlayer への書き込みは IO コルーチン、stop() の読み出しは別スレッド。
     // 世代ガードで大抵は塞がるが、代入直後の stopRinging が stale null を
@@ -101,9 +103,9 @@ class AlarmService : Service() {
             ACTION_DISMISS -> {
                 // 物理停止を最優先に潰す。DB記録が例外/遅延しても
                 // 「UIは閉じたのに音だけ鳴り続ける」事故にしないため。
-                // 畳むかどうかの判定は対象一致と世代奪取を不可分に行う:
+                // 対象一致の判定・世代奪取・資源の畳みを不可分に行う:
                 // 別インスタンス宛の遅延 DISMISS が現行鳴動を殺したり、
-                // 確認〜畳みの間に後発鳴動が生まれてそれを殺さないようにする
+                // 判定〜畳みの間に後発鳴動が生まれてそれを殺さないようにする
                 val (claim, targetId) = claimTeardownFor(intent.getStringExtra(EXTRA_INSTANCE_ID)) {
                     // IDLE確定時に同じロック内で実行される。判定〜畳みの間に
                     // 新鳴動が始まってもその adopt はロック待ちになるので、
@@ -112,14 +114,12 @@ class AlarmService : Service() {
                     RingingOverlay.hide(this@AlarmService)
                 }
                 when (claim) {
+                    // MATCHED/PENDING は claimTeardownFor のロック内で畳み済み。
                     // PENDING (座席確保済みの未開始鳴動) は先代を畳み済みなので、守るべき
-                    // 他の鳴動は無い。採用済みの資源ごと現行と同じく畳む
-                    TeardownClaim.MATCHED, TeardownClaim.PENDING -> {
-                        stopRinging()
-                        scope.launch {
-                            runCatching { app.container.repository.onDismissed(targetId) }
-                            finishIfIdle()
-                        }
+                    // 他の鳴動は無い。採用済みの資源ごと現行と同じく畳んである
+                    TeardownClaim.MATCHED, TeardownClaim.PENDING -> scope.launch {
+                        runCatching { app.container.repository.onDismissed(targetId) }
+                        finishIfIdle()
                     }
                     TeardownClaim.REQUESTED -> scope.launch {
                         // 座席確保前の要求は墓標で抑止済み。現行鳴動には触れない
@@ -149,12 +149,9 @@ class AlarmService : Service() {
                     RingingOverlay.hide(this@AlarmService)
                 }
                 when (claim) {
-                    TeardownClaim.MATCHED, TeardownClaim.PENDING -> {
-                        stopRinging()
-                        scope.launch {
-                            runCatching { app.container.repository.onSnoozed(targetId, mins) }
-                            finishIfIdle()
-                        }
+                    TeardownClaim.MATCHED, TeardownClaim.PENDING -> scope.launch {
+                        runCatching { app.container.repository.onSnoozed(targetId, mins) }
+                        finishIfIdle()
                     }
                     TeardownClaim.REQUESTED -> scope.launch {
                         runCatching { app.container.repository.onSnoozed(targetId, mins) }
@@ -227,7 +224,7 @@ class AlarmService : Service() {
                 ringGen++
                 // 前面化は維持する: 直前に自分の startForeground で出した通知を
                 // ここで外すと、以後の鳴動は前面サービスでなくなり OS に畳まれ得る
-                teardownRing(keepForeground = true)
+                teardownRingLocked(keepForeground = true)
                 pendingStartId = instanceId
                 ringGen
             }
@@ -312,7 +309,7 @@ class AlarmService : Service() {
         if (destroyed || ringGen != gen) return
         // リソースは局所参照で生成し、世代がまだ現行の時だけ共有フィールド
         // へ adopt する。採用されなかったものは局所参照で畳み (新世代のもの
-        // は止めない)、採用後に世代が進んだ分は新世代側の stopRinging が畳く
+        // は止めない)、採用後に世代が進んだ分は新世代側の停止が畳む
         val myVibrator = if (ringSettings.vibrateWhileRinging) startVibration() else null
         if (myVibrator != null && !adoptIfCurrent(gen) { vibrator = myVibrator }) {
             runCatching { myVibrator.cancel() }
@@ -352,12 +349,14 @@ class AlarmService : Service() {
             ringTimeoutJob?.cancel()
             ringTimeoutJob = scope.launch {
                 kotlinx.coroutines.delay(RING_TIMEOUT_MS)
-                // 発火時点で後始末権を奪取できた場合だけ自分の鳴動を畳む
-                if (!claimTeardown(gen)) return@launch
-                app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
-                app.container.repository.markMissed(instance.id, "鳴動が${RING_TIMEOUT_MS / 60_000}分続き自動停止")
+                // 発火時点で後始末権を奪取できた場合だけ、同じロック内で自分の鳴動を畳む。
+                // 畳みの中でこのジョブ自身もキャンセルされるので、記録は NonCancellable で行う
+                if (!stopIfCurrent(gen)) return@launch
+                withContext(NonCancellable) {
+                    app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
+                    app.container.repository.markMissed(instance.id, "鳴動が${RING_TIMEOUT_MS / 60_000}分続き自動停止")
+                }
                 MissedNotifier.post(this@AlarmService, instance.title)
-                stopRinging()
                 finishIfIdle()
             }
         }
@@ -527,14 +526,18 @@ class AlarmService : Service() {
                 // セクションで行う。先に代入して再検査すると、旧世代の
                 // 代入が新世代の mediaPlayer 参照を上書きして新しい音を
                 // 停止不能にする
-                if (!adoptIfCurrent(gen) { mediaPlayer = player }) {
+                // クレッシェンドのジョブも同じゲート内で採用する (ゲート外だと旧世代の
+                // 代入が新世代のジョブ参照を上書きし、停止時にキャンセルされなくなる)
+                if (!adoptIfCurrent(gen) {
+                    mediaPlayer = player
+                    if (crescendo && target >= 0f) crescendoJob = startCrescendo(player, target)
+                }) {
                     // 世代が進んだ/破棄済み: 全体停止は新鳴動を殺すので
                     // 呼ばず、自分のプレイヤーだけ局所参照で畳む
                     runCatching { player.stop() }
                     player.release()
                     return
                 }
-                if (crescendo && target >= 0f) startCrescendo(player, target)
                 if (uri != candidates.firstOrNull()) {
                     scope.launch {
                         app.container.repository.audit("ERROR", "希望の音が使えず代替音へ: $uri")
@@ -551,9 +554,9 @@ class AlarmService : Service() {
     }
 
     /** 30秒かけて音量を目標値まで滑らかに上げる。 */
-    private fun startCrescendo(player: MediaPlayer, target: Float) {
+    private fun startCrescendo(player: MediaPlayer, target: Float): kotlinx.coroutines.Job {
         val steps = 20
-        crescendoJob = scope.launch {
+        return scope.launch {
             repeat(steps) { i ->
                 kotlinx.coroutines.delay(CRESCENDO_MS / steps)
                 if (mediaPlayer !== player || !player.isPlaying) return@launch
@@ -604,14 +607,11 @@ class AlarmService : Service() {
      * 鳴動しない判断が出た後の後始末。世代が進んでいなければ従来通り
      * 全体停止してサービスを畳む。世代が進んでいる=新しい鳴動が共有
      * リソースを所有しているので、それを殺さないよう何もせず抜ける
-     * (gen 不一致で stopRinging/stopSelf を呼ぶと onDestroy→stopRinging
+     * (gen 不一致で全体停止や stopSelf を呼ぶと onDestroy→全体停止
      *  経由で新鳴動まで消える)。
      */
     private fun finishIfCurrent(gen: Int) {
-        // 後始末権を世代単位で atomic に奪取する。確認と世代前進を分けると、
-        // 確認〜停止の間に新世代がリソースを得てそれを畳んでしまう
-        if (!claimTeardown(gen)) return
-        stopRinging()
+        if (!stopIfCurrent(gen)) return
         finishIfIdle()
     }
 
@@ -621,19 +621,23 @@ class AlarmService : Service() {
             if (!destroyed && ringGen == gen) { assign(); true } else false
         }
 
-    /** 後始末権を世代単位で atomic に奪取する。奪取できた世代だけが全体停止へ進める。 */
-    private fun claimTeardown(gen: Int): Boolean =
+    /**
+     * 後始末権を世代単位で奪取し、奪取できたら同じロック内で鳴動を畳む。
+     * 奪取と畳みを分けると、その間に座席確保した後続鳴動の世代を無効化したり、
+     * 後続が採用したプレイヤー参照を止めずに捨てたりする (停止不能な音)
+     */
+    private fun stopIfCurrent(gen: Int): Boolean =
         synchronized(ringLock) {
-            if (!destroyed && ringGen == gen) { ringGen++; true } else false
+            if (!destroyed && ringGen == gen) { stopRingingLocked(); true } else false
         }
 
     private enum class TeardownClaim { MATCHED, PENDING, REQUESTED, BUSY, IDLE }
 
     /**
-     * DISMISS/SNOOZE が指す対象の後始末権を、対象判定と世代前進を同じ
-     * ロック内で不可分に奪取する。
-     * - MATCHED:   対象が現行の鳴動 → 畳んでよい
-     * - PENDING:   対象が座席確保済みの未開始鳴動 → その要求だけを潰す
+     * DISMISS/SNOOZE が指す対象の後始末権を、対象判定・世代前進・資源の畳みを
+     * 同じロック内で不可分に行って奪取する。
+     * - MATCHED:   対象が現行の鳴動 → ロック内で畳み済み
+     * - PENDING:   対象が座席確保済みの未開始鳴動 → その要求 (と採用済みの資源) をロック内で畳み済み
      * - REQUESTED: 対象が座席確保前の要求 → 墓標だけで抑止し、現行鳴動の世代は進めない
      * - BUSY:      別の鳴動が資源を持つ → 殺さず終端記録のみ
      * - IDLE:      鳴動中・要求中ともに無し → onIdle (滞留UIの後始末) を
@@ -655,9 +659,9 @@ class AlarmService : Service() {
             markDismissed(target)
             val wasRequested = target != null && requestedIds.remove(target)
             val claim = when {
-                cur != null && target == cur -> { ringGen++; TeardownClaim.MATCHED }
+                cur != null && target == cur -> { stopRingingLocked(); TeardownClaim.MATCHED }
                 pendingStartId != null && target == pendingStartId -> {
-                    pendingStartId = null; ringGen++; TeardownClaim.PENDING
+                    stopRingingLocked(); TeardownClaim.PENDING
                 }
                 wasRequested -> TeardownClaim.REQUESTED
                 cur == null && pendingStartId == null && requestedIds.isEmpty() -> {
@@ -712,31 +716,39 @@ class AlarmService : Service() {
             true
         }
 
-    private fun stopRinging() {
-        // 世代前進も同じロック下で行い、adopt/claim の世代検査と順序を一意にする
-        // (滞留中の鳴動要求は世代が進んだ時点で全て死ぬのでマーカーも消す)。
-        // 座席確保前の要求が待っていれば、その鳴動のために前面化と通知は残す
-        val othersWaiting = synchronized(ringLock) {
-            ringGen++; pendingStartId = null
-            !destroyed && requestedIds.isNotEmpty()
-        }
-        teardownRing(keepForeground = othersWaiting)
+    /**
+     * 世代前進から資源の畳みまでを ringLock 内で一続きに行う (呼び出し側がロック保持)。
+     * 途中でロックを手放すと、その隙に座席確保・採用した後続鳴動の世代や資源を
+     * この停止が無効化・破棄してしまう (BUG: 停止不能な音)。
+     * 滞留中の鳴動要求は世代が進んだ時点で全て死ぬのでマーカーも消す。
+     * 座席確保前の要求が待っていれば、その鳴動のために前面化と通知は残す
+     */
+    private fun stopRingingLocked() {
+        ringGen++; pendingStartId = null
+        teardownRingLocked(keepForeground = !destroyed && requestedIds.isNotEmpty())
     }
 
     /**
-     * 現行の鳴動資源を畳む本体。外部停止 (stopRinging) と beginRinging の
-     * 座席確定 (墓標確認・世代・公開と同じロック内) の両方から呼ぶ。
-     * 世代奪取は呼び出し側が先に済ませる前提。
+     * 現行の鳴動資源を畳む本体。必ず ringLock 内で、世代前進と同じクリティカル
+     * セクションから呼ぶ (stopRingingLocked と beginRinging の座席確定)。
+     * 共有フィールドから局所参照へ切り離してから止めるので、参照を捨てる
+     * 対象は必ずここで止めた資源そのものになる。
      * keepForeground: 座席確定時は自分の前面化通知を残し、前面サービスのまま鳴動へ進む
      */
-    private fun teardownRing(keepForeground: Boolean = false) {
-        ringTimeoutJob?.cancel(); ringTimeoutJob = null
-        crescendoJob?.cancel(); crescendoJob = null
-        runCatching { mediaPlayer?.stop() }
-        mediaPlayer?.release(); mediaPlayer = null
-        vibrator?.cancel(); vibrator = null
-        runCatching { wakeLock?.release() }
-        wakeLock = null
+    private fun teardownRingLocked(keepForeground: Boolean = false) {
+        val timeout = ringTimeoutJob; ringTimeoutJob = null
+        val crescendo = crescendoJob; crescendoJob = null
+        val player = mediaPlayer; mediaPlayer = null
+        val vib = vibrator; vibrator = null
+        val lock = wakeLock; wakeLock = null
+        timeout?.cancel()
+        crescendo?.cancel()
+        if (player != null) {
+            runCatching { player.stop() }
+            runCatching { player.release() }
+        }
+        runCatching { vib?.cancel() }
+        runCatching { lock?.release() }
         if (!keepForeground) {
             // FGS 状態も確実に抜く (通知だけ消すと前面化中サービスとして残り得る)
             removeRingNotification()
@@ -747,8 +759,10 @@ class AlarmService : Service() {
     }
 
     override fun onDestroy() {
-        destroyed = true
-        stopRinging()
+        synchronized(ringLock) {
+            destroyed = true
+            stopRingingLocked()
+        }
         scope.cancel()
         super.onDestroy()
     }

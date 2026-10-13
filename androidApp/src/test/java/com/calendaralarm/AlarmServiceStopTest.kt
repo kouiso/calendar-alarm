@@ -31,6 +31,9 @@ import org.robolectric.android.controller.ServiceController
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowMediaPlayer
 import org.robolectric.shadows.ShadowSettings
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 鳴動サービスの停止経路の回帰テスト。
@@ -282,6 +285,126 @@ class AlarmServiceStopTest {
         assertNull(ringingNotification())
     }
 
+    // ---- 停止の後始末と後続鳴動の開始が交錯するレース ----
+
+    /** 停止 (stop/release) が呼ばれた瞬間に一度だけ [hook] を差し込めるプレイヤー。 */
+    private class HookPlayer(
+        private val onStop: (() -> Unit)? = null,
+        private val onRelease: (() -> Unit)? = null,
+    ) : MediaPlayer() {
+        private val fired = AtomicBoolean(false)
+        override fun stop() {
+            if (onStop != null && fired.compareAndSet(false, true)) onStop.invoke()
+            super.stop()
+        }
+        override fun release() {
+            if (onRelease != null && fired.compareAndSet(false, true)) onRelease.invoke()
+            super.release()
+        }
+    }
+
+    private fun MediaPlayer.playing(): Boolean = runCatching { isPlaying }.getOrDefault(false)
+
+    /**
+     * A の鳴動中に B の鳴動要求を受理させ、B の開始コルーチンを座席確保の手前
+     * (前面化の notificationLock) で止めておく。A への停止の後始末が A のプレイヤーへ
+     * 触れた瞬間 (stop か release) に B を解放し、B が自分のプレイヤーを採用するまで
+     * (または猶予切れまで) 停止側を待たせる。後始末が開始と不可分でなければ、
+     * B はその隙に座席確保・プレイヤー採用まで進む。
+     * 戻り値は「後始末の途中で採用された B のプレイヤー」(不可分なら null)
+     */
+    private fun dismissWhileSuccessorStarts(
+        c: ServiceController<AlarmService>,
+        a: String,
+        b: String,
+        hookOnRelease: Boolean,
+    ): MediaPlayer? {
+        val svc = c.get()
+        assertTrue(waitUntil { svc.isPlaying() && AlarmService.ringingInstanceId.value == a })
+        assertTrue(waitUntil { svc.ringTimeoutJob()?.isActive == true })
+
+        val notificationLock = AlarmService::class.java.getDeclaredField("notificationLock")
+            .apply { isAccessible = true }.get(null)!!
+        val held = CountDownLatch(1)
+        val releaseB = CountDownLatch(1)
+        val gate = Thread {
+            synchronized(notificationLock) {
+                held.countDown()
+                releaseB.await(10, TimeUnit.SECONDS)
+            }
+        }.apply { isDaemon = true; start() }
+        assertTrue(held.await(5, TimeUnit.SECONDS))
+
+        var adoptedDuringTeardown: MediaPlayer? = null
+        lateinit var hookA: HookPlayer
+        val hook = {
+            releaseB.countDown()
+            val end = System.currentTimeMillis() + SUCCESSOR_WAIT_MS
+            while (System.currentTimeMillis() < end) {
+                val p = svc.player()
+                if (p != null && p !== hookA) { adoptedDuringTeardown = p; break }
+                Thread.sleep(10)
+            }
+        }
+        hookA = if (hookOnRelease) HookPlayer(onRelease = hook) else HookPlayer(onStop = hook)
+        hookA.setDataSource(app, android.net.Uri.parse("content://test/$a"))
+        hookA.prepare()
+        hookA.start()
+        val realA = svc.player()!!
+        AlarmService::class.java.getDeclaredField("mediaPlayer")
+            .apply { isAccessible = true }.set(svc, hookA)
+        realA.stop(); realA.release()
+
+        c.withIntent(startIntent(b)).startCommand(0, 2)
+        c.withIntent(dismissIntent(a)).startCommand(0, 3)
+        releaseB.countDown()
+        gate.join(5_000)
+        assertFalse("A の音が止まっていること", hookA.playing())
+        return adoptedDuringTeardown
+    }
+
+    private fun assertSuccessorRingsAndStops(c: ServiceController<AlarmService>, b: String, orphan: MediaPlayer?) {
+        val svc = c.get()
+        if (orphan != null) {
+            settle(500)
+            assertFalse(
+                "後始末の途中で採用された後続のプレイヤーが、参照を失ったまま鳴り続けないこと",
+                orphan.playing() && svc.player() !== orphan,
+            )
+        }
+        assertTrue(
+            "A の停止が後続 B の鳴動を巻き添えにしないこと",
+            waitUntil { svc.isPlaying() && AlarmService.ringingInstanceId.value == b },
+        )
+        val playerB = svc.player()!!
+        assertEquals("通知の「停止」が B を指すこと", b, stopActionTarget(ringingNotification()!!))
+        c.withIntent(dismissIntent(b)).startCommand(0, 4)
+        assertTrue(waitUntil { !playerB.playing() && shadowOf(svc).isStoppedBySelf })
+        assertFalse("停止後にどのプレイヤーも鳴っていないこと", orphan?.playing() == true)
+        assertNull(svc.player())
+        assertNull(AlarmService.ringingInstanceId.value)
+    }
+
+    @Test
+    fun `停止の後始末がプレイヤーへ触れる前に後続が採用されても後続を殺さない`() {
+        seed("race-stop-a", "A")
+        seed("race-stop-b", "B")
+        val c = startService("race-stop-a")
+        val adopted = dismissWhileSuccessorStarts(c, "race-stop-a", "race-stop-b", hookOnRelease = false)
+        assertSuccessorRingsAndStops(c, "race-stop-b", adopted)
+        assertNull("停止の後始末中に後続が座席確保・採用まで進まないこと", adopted)
+    }
+
+    @Test
+    fun `停止の後始末がプレイヤーを解放した直後に後続が採用されても参照を失わない`() {
+        seed("race-rel-a", "A")
+        seed("race-rel-b", "B")
+        val c = startService("race-rel-a")
+        val adopted = dismissWhileSuccessorStarts(c, "race-rel-a", "race-rel-b", hookOnRelease = true)
+        assertSuccessorRingsAndStops(c, "race-rel-b", adopted)
+        assertNull("停止の後始末中に後続が座席確保・採用まで進まないこと", adopted)
+    }
+
     // ---- 停止後に遅れて着弾する鳴動通知 ----
 
     @Test
@@ -417,5 +540,10 @@ class AlarmServiceStopTest {
                 audits().any { it.first == "WARN" && it.second.startsWith("warn-nt") && "通知OFF" in it.second }
             },
         )
+    }
+
+    private companion object {
+        /** 後始末の途中で後続の採用を待つ上限。不可分なら採用は起きないのでこの時間で諦める */
+        const val SUCCESSOR_WAIT_MS = 1_500L
     }
 }
