@@ -257,6 +257,17 @@ internal fun PermissionNagCard(
 }
 
 /**
+ * 権限シートの見出し。リード分が分かる時 (予定の鳴動) だけ「N分前」を出し、
+ * 単発アラームのように開始時刻ちょうどで鳴るものには分数を付けない。
+ */
+internal fun ringSetupTitle(subject: String?, leadMinutes: Int?): String =
+    if (leadMinutes != null && leadMinutes > 0) {
+        "${subject ?: "予定"}の${leadMinutes}分前に、きちんと鳴らすために"
+    } else {
+        "${subject ?: "アラーム"}を、きちんと鳴らすために"
+    }
+
+/**
  * 初めてアラームをオンにした時の権限シート。段階は権限状態から導出するため、
  * 設定アプリから戻った時点の最新状態に自動で追従する (ON_RESUME 再評価)。
  * 段1=鳴らす許可 (通知/正確な時刻)、段2=止める許可 (全画面/他アプリの上)、段3=完了+テスト。
@@ -316,11 +327,7 @@ internal fun RingSetupSheet(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        if (leadMinutes != null && leadMinutes > 0) {
-                            "${subject ?: "予定"}の${leadMinutes}分前に、きちんと鳴らすために"
-                        } else {
-                            "${subject ?: "アラーム"}を、きちんと鳴らすために"
-                        },
+                        ringSetupTitle(subject, leadMinutes),
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Spacer(Modifier.height(4.dp))
