@@ -152,7 +152,6 @@ FG_CANDIDATES=(
   com.google.android.documentsui com.android.documentsui
 )
 FG_PKG=
-YOUTUBE_URL="https://www.youtube.com/watch?v=jNQXAC9IVRw"
 
 launch_foreground_app() {
   local log=$1 pkg hiding
@@ -160,11 +159,7 @@ launch_foreground_app() {
     sh_ pm path "$pkg" | grep -q '^package:' || continue
     # 初回起動の通知許可ダイアログ (権限コントローラはオーバーレイを隠す) を出さない
     sh_ pm grant "$pkg" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
-    if [ "$pkg" = com.google.android.youtube ]; then
-      sh_ am start -W -a android.intent.action.VIEW -d "$YOUTUBE_URL" -p "$pkg" >> "$log" 2>&1
-    else
-      sh_ monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >> "$log" 2>&1
-    fi
+    sh_ monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >> "$log" 2>&1
     sleep 6
     sh_ dumpsys activity activities > "$log.activities.txt"
     if ! grep -Em1 "topResumedActivity" "$log.activities.txt" | grep -q " $pkg/"; then
@@ -181,6 +176,7 @@ launch_foreground_app() {
     fi
     FG_PKG=$pkg
     echo "foreground=$pkg" >> "$log"
+    adb exec-out screencap -p > "$log.png" 2>/dev/null
     log "foreground app: $pkg"
     return 0
   done
