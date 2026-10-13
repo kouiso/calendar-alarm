@@ -152,21 +152,30 @@ FG_CANDIDATES=(
   com.google.android.documentsui com.android.documentsui
 )
 FG_PKG=
+YOUTUBE_URL="https://www.youtube.com/watch?v=jNQXAC9IVRw"
 
 launch_foreground_app() {
-  local log=$1 pkg
+  local log=$1 pkg hiding
   for pkg in ${FG_PKG:-} "${FG_CANDIDATES[@]}"; do
     sh_ pm path "$pkg" | grep -q '^package:' || continue
-    sh_ monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >> "$log" 2>&1
-    sleep 4
+    # 初回起動の通知許可ダイアログ (権限コントローラはオーバーレイを隠す) を出さない
+    sh_ pm grant "$pkg" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
+    if [ "$pkg" = com.google.android.youtube ]; then
+      sh_ am start -W -a android.intent.action.VIEW -d "$YOUTUBE_URL" -p "$pkg" >> "$log" 2>&1
+    else
+      sh_ monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >> "$log" 2>&1
+    fi
+    sleep 6
     sh_ dumpsys activity activities > "$log.activities.txt"
     if ! grep -Em1 "topResumedActivity" "$log.activities.txt" | grep -q " $pkg/"; then
       echo "$pkg: not resumed ($(top_activity "$log.activities.txt"))" >> "$log"
       continue
     fi
     sh_ dumpsys window windows > "$log.window.txt"
-    if grep -q "HIDE_NON_SYSTEM_OVERLAY_WINDOWS" "$log.window.txt"; then
-      echo "$pkg: hides non-system overlays; skipped" >> "$log"
+    hiding=$("${CHECK[@]}" hiding-windows "$log.window.txt")
+    if [ -n "$hiding" ]; then
+      echo "$pkg: on-screen window hides non-system overlays; skipped: $hiding" >> "$log"
+      adb shell input keyevent KEYCODE_BACK
       adb shell input keyevent KEYCODE_HOME
       continue
     fi
@@ -252,6 +261,7 @@ scenario_unlocked() {
     echo "ringing_activity_resumed=$(ringing_resumed "$p.t12.activities.txt" && echo yes || echo no)"
     echo "systemui_headsup_stop_visible=$hun"
     echo "overlay_force_hidden=$(overlay_force_hidden "$p.t12.window.txt" && echo yes || echo no)"
+    echo "overlay_hiding_windows=$("${CHECK[@]}" hiding-windows "$p.t12.window.txt" | tr '\n' ' ')"
     echo "pre_stop alarm_players=$a service=$s notification=$n"
   } > "$p.facts.txt"
   cat "$p.facts.txt" >&2

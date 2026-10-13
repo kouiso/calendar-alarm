@@ -4,6 +4,7 @@
 サブコマンド:
   stop-node <ui.xml> <pkg> <text>   指定パッケージの text ノード中心座標を "x y" で出す (無ければ exit 1)
   overlay <dumpsys_window.txt> <pkg> 画面上にある pkg の APPLICATION_OVERLAY 窓の数を出す
+  hiding-windows <dumpsys_window.txt> 画面上で他アプリのオーバーレイを隠す窓 (HIDE_NON_SYSTEM_OVERLAY_WINDOWS) を出す
   alarm-players <dumpsys_audio.txt> <uid>  uid の USAGE_ALARM で state:started のプレイヤー数を出す
   notif <dumpsys_notification.txt> <pkg> <id>  pkg/id の通知レコード数を出す
   audit <db> [since_millis]          audit_log を時刻順に TSV で出す
@@ -69,6 +70,24 @@ def overlay(path, pkg):
     return 0
 
 
+def hiding_windows(path):
+    """dumpsys window の "Hiding System Alert Windows:" 節に載っている窓 (= 今オーバーレイを隠している窓)。"""
+    inside = False
+    for line in open(path, encoding="utf-8", errors="replace"):
+        line = line.rstrip("\n")
+        if line.strip() == "Hiding System Alert Windows:":
+            inside = True
+            continue
+        if not inside:
+            continue
+        m = re.match(r"\s*#\d+ (Window\{.*\}):?$", line)
+        if m:
+            print(m.group(1))
+        elif line.strip() and not line.startswith("    "):
+            inside = False
+    return 0
+
+
 def alarm_players(path, uid):
     n = 0
     for line in open(path, encoding="utf-8", errors="replace"):
@@ -111,6 +130,8 @@ def main(argv):
         return stop_node(*args)
     if cmd == "overlay":
         return overlay(*args)
+    if cmd == "hiding-windows":
+        return hiding_windows(*args)
     if cmd == "alarm-players":
         return alarm_players(*args)
     if cmd == "notif":
