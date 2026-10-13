@@ -1,6 +1,5 @@
 package com.calendaralarm.engine
 
-import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -198,17 +197,20 @@ class RingingActivity : ComponentActivity() {
         finish()
     }
 
+    /**
+     * ロック画面の上に出して画面を点けるだけにする。キーガード解除は要求しない:
+     * PIN/パターンのロック中に要求すると、鳴動画面の上に PIN 入力 (bouncer) が重なり
+     * 停止ボタンが隠れる。停止に端末のロック解除は不要。
+     */
     private fun applyLockscreenFlags() {
         if (Build.VERSION.SDK_INT >= 27) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-            getSystemService(KeyguardManager::class.java)?.requestDismissKeyguard(this, null)
         } else {
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD,
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
             )
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
