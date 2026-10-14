@@ -272,6 +272,10 @@ class AlarmServiceStopTest {
         assertTrue(waitUntil { AlarmService.ringingInstanceId.value == "sup-b" && c.get().isPlaying() })
         assertTrue(waitUntil { state("sup-a") == "DISMISSED" })
         assertTrue(AlarmService.isDismissed("sup-a"))
+        // 先行の終端化と同時に後発が FIRED 化されること。ここでプロセスが死んでも
+        // 復旧 (firedWithinGrace) が拾う行が残り、鳴るべきアラームが消えない
+        assertTrue(waitUntil { state("sup-b") == "FIRED" })
+        assertEquals("sup-b", runBlocking { app.container.repository.firedWithinGrace()?.id })
         c.withIntent(dismissIntent("sup-b")).startCommand(0, 3)
         assertTrue(waitUntil { !c.get().isPlaying() && shadowOf(c.get()).isStoppedBySelf })
         assertNull(runBlocking { app.container.repository.firedWithinGrace() })

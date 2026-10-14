@@ -233,7 +233,10 @@ class AlarmRepository(
      * FIRED/PENDING 以外 (既に停止・スヌーズ済み) は触らない
      */
     suspend fun onSuperseded(id: String, by: String) {
-        val rows = db.scheduledInstances().setDismissedIfLive(id)
+        // 後発の FIRED 化と先行の終端化を1トランザクションにする。先行だけが
+        // DISMISSED になった状態でプロセスが死ぬと復旧が拾う行が無くなり、
+        // 鳴るべきアラームが無鳴動で終わるため (Codex #63)
+        val rows = db.scheduledInstances().supersede(id, by)
         if (rows > 0) {
             scheduler.cancel(id)
             audit("SUPERSEDED", "$id → $by: 後発の鳴動に置き換え")

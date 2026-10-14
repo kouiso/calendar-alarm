@@ -120,17 +120,32 @@ object TroubleshootChecks {
 
         // おやすみモード: 鳴動音は USAGE_ALARM。OFF なら素通り、優先モードは「アラーム」許可が要る、
         // アラームも含めて全て遮断 (NONE) だと鳴らない
+        val dndFilter = runCatching { nm?.currentInterruptionFilter }.getOrNull()
         val dndOk = runCatching {
-            when (nm?.currentInterruptionFilter) {
+            when (dndFilter) {
                 null, NotificationManager.INTERRUPTION_FILTER_ALL,
                 NotificationManager.INTERRUPTION_FILTER_UNKNOWN -> true
                 NotificationManager.INTERRUPTION_FILTER_ALARMS -> true
                 NotificationManager.INTERRUPTION_FILTER_PRIORITY ->
-                    (nm.notificationPolicy.priorityCategories and
+                    // 自動ルールで発動した優先モードはユーザーの既定ポリシーとは
+                    // 別物が適用されるため、実効中の consolidated ポリシーを見る (API 30+)
+                    (((if (Build.VERSION.SDK_INT >= 30) {
+                        nm?.consolidatedNotificationPolicy
+                    } else {
+                        nm?.notificationPolicy
+                    })?.priorityCategories ?: 0) and
                         NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS) != 0
                 else -> false
             }
         }.getOrDefault(true)
+        // 全遮断 (NONE) の時は優先モード設定では効かないため、総合のおやすみモード設定へ分岐する。
+        // ACTION_ZEN_MODE_SETTINGS は API 30 で deprecated になり新しい compileSdk の stub には
+        // 残っていないため、同等の action 文字列を直接使う (無い端末は openSafely がアプリ詳細へ逃がす)
+        val dndFix = if (dndFilter == NotificationManager.INTERRUPTION_FILTER_NONE) {
+            Intent("android.settings.ZEN_MODE_SETTINGS")
+        } else {
+            Intent(Settings.ACTION_ZEN_MODE_PRIORITY_SETTINGS)
+        }
 
         fun s(ok: Boolean) = if (ok) CheckState.OK else CheckState.NG
 
@@ -189,7 +204,7 @@ object TroubleshootChecks {
                 "dnd", s(dndOk),
                 if (dndOk) "おやすみモード中にアラーム可能" else "おやすみモードでアラームが鳴りません",
                 "おやすみモード中でもアラームが鳴るよう、おやすみモードの「アラーム」を許可してください。",
-                Intent(Settings.ACTION_ZEN_MODE_PRIORITY_SETTINGS),
+                dndFix,
             ),
         )
     }

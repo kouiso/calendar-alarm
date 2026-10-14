@@ -247,7 +247,12 @@ class AlarmService : Service() {
             return
         }
         displaced?.let { prev ->
-            runCatching { app.container.repository.onSuperseded(prev, instanceId) }
+            // サービス停止 (onDestroy の scope.cancel) に埋もれて終端化が消えないよう、
+            // アプリ寿命のスコープへ投げる。置き換えがキャンセルで無かったことになると
+            // 先行行が FIRED のまま残り、再起動復旧が拾って再鳴動する (CodeRabbit #63)
+            app.container.appScope.launch {
+                runCatching { app.container.repository.onSuperseded(prev, instanceId) }
+            }
         }
         if (destroyed) return
         val instance = app.container.repository.instanceById(instanceId)
