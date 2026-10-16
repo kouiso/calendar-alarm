@@ -1,11 +1,8 @@
 package com.calendaralarm.ui
 
 import android.app.Activity
-import android.app.AlarmManager
-import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
@@ -81,12 +78,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.db.CalendarPrefEntity
 import com.calendaralarm.data.db.AuditLogEntity
-import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventType
@@ -96,7 +91,6 @@ import com.calendaralarm.ui.theme.AppPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -123,8 +117,10 @@ fun SettingsScreen(
     val audit by repository.auditFlow(50).collectAsState(initial = emptyList())
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        calendars = repository.calendarSources()
-        calPrefs = repository.calendarPrefsFlowList().associateBy { it.calendarId }
+        // READ_CALENDAR 未許可だと calendarSources が SecurityException で死ぬ
+        calendars = runCatching { repository.calendarSources() }.getOrDefault(emptyList())
+        calPrefs = runCatching { repository.calendarPrefsFlowList() }
+            .getOrDefault(emptyList()).associateBy { it.calendarId }
     }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
@@ -460,19 +456,14 @@ internal fun IconSettingRow(icon: ImageVector, content: @Composable () -> Unit) 
 private fun PermissionHealthCard(context: Context, repository: AlarmRepository) {
     val activity = context as? Activity
 
-    val notifOk = Build.VERSION.SDK_INT < 33 ||
-        ContextCompat.checkSelfPermission(
-            context, android.Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
-    // canScheduleExactAlarms() は API 31+。それ未満は正確アラームが常時許可なので true。
-    val exactOk = Build.VERSION.SDK_INT < 31 ||
-        (context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() ?: true)
-    val fsiOk = if (Build.VERSION.SDK_INT >= 34) {
-        context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() ?: true
-    } else true
-    // オーバーレイは FSI が効かない環境での鳴動停止UIフォールバック。
-    // 両方無いと鳴動中に画面上の停止手段が消えるためヘルス対象に数える。
-    val overlayOk = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(context)
+    // 通知/正確な時刻/全画面/他アプリの上の判定は初回シートと共通 (computePermSnapshot)。
+    // オーバーレイは FSI が効かない環境での鳴動停止UIフォールバックで、両方無いと
+    // 鳴動中に画面上の停止手段が消えるためヘルス対象に数える。
+    val snap = computePermSnapshot(context)
+    val notifOk = snap.notifOk
+    val exactOk = snap.exactOk
+    val fsiOk = snap.fsiOk
+    val overlayOk = snap.overlayOk
     val batteryOk = context.getSystemService(PowerManager::class.java)
         ?.isIgnoringBatteryOptimizations(context.packageName) ?: true
     // 「鳴ったはずだが無音」の最多因はアラーム音量0 (鳴動音は STREAM_ALARM)。
@@ -571,18 +562,12 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }
-                    // 鳴らない時の最終確認: 実際に10秒後に鳴らして経路全体を検証する
+                    // 鳴らない時の最終確認: 実際に10秒後に鳴らして経路全体を検証する。
+                    // 初回権限シートの完了段とも同じ共通関数を使う。
                     val testScope = rememberCoroutineScope()
                     TextButton(
                         onClick = {
-                            testScope.launch {
-                                repository.scheduleAdhoc(
-                                    AlarmExpander.timerInstance(
-                                        durationMillis = 10_000L,
-                                        now = Clock.System.now(),
-                                    ).copy(title = "テスト鳴動"),
-                                )
-                            }
+                            testScope.launch { scheduleRingTest(repository) }
                         },
                     ) {
                         Text("10秒後に鳴動テスト", color = MaterialTheme.colorScheme.primary)

@@ -35,6 +35,9 @@ class SettingsRepository(private val context: Context) {
         val defaultMinutesBefore: Int = 0,
         val defaultSnoozeMinutes: Int = 10,
         val weatherEnabled: Boolean = true,
+        /** 初回アラームON時の権限シートを出し終えたか (「最初の1回だけ」用)。 */
+        val ringSetupDone: Boolean = false,
+        /** 旧オンボーディング画面を済ませたか。画面廃止後は書き込まれず、更新ユーザーの印として読むだけ。 */
         val onboardingDone: Boolean = false,
         /** 「他のアプリの上に表示」許可の一度きり案内を出したか (更新ユーザー向け)。 */
         val overlayPromptShown: Boolean = false,
@@ -98,6 +101,9 @@ class SettingsRepository(private val context: Context) {
             defaultMinutesBefore = p[KEY_MINUTES] ?: 0,
             defaultSnoozeMinutes = p[KEY_SNOOZE] ?: 10,
             weatherEnabled = p[KEY_WEATHER] ?: true,
+            // 旧オンボーディングを済ませた更新ユーザーは初回扱いにしない
+            // (起動時の一度きり案内と警告カードが担う)
+            ringSetupDone = resolveRingSetupDone(p[KEY_RING_SETUP_DONE], p[KEY_ONBOARDED]),
             onboardingDone = p[KEY_ONBOARDED] ?: false,
             overlayPromptShown = p[KEY_OVERLAY_PROMPTED] ?: false,
             defaultStartAction = p[KEY_DEF_START_ACTION]
@@ -174,6 +180,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setDefaultMinutesBefore(v: Int) = edit { it[KEY_MINUTES] = v }
     suspend fun setDefaultSnoozeMinutes(v: Int) = edit { it[KEY_SNOOZE] = v }
     suspend fun setWeatherEnabled(v: Boolean) = edit { it[KEY_WEATHER] = v }
+    suspend fun setRingSetupDone(v: Boolean) = edit { it[KEY_RING_SETUP_DONE] = v }
     suspend fun setOnboardingDone(v: Boolean) = edit { it[KEY_ONBOARDED] = v }
     suspend fun setOverlayPromptShown(v: Boolean) = edit { it[KEY_OVERLAY_PROMPTED] = v }
     suspend fun setDefaultStartAction(v: EventAction) = edit { it[KEY_DEF_START_ACTION] = v.name }
@@ -265,6 +272,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_MINUTES = intPreferencesKey("default_minutes_before")
         val KEY_SNOOZE = intPreferencesKey("default_snooze_minutes")
         val KEY_WEATHER = booleanPreferencesKey("weather_enabled")
+        val KEY_RING_SETUP_DONE = booleanPreferencesKey("ring_setup_done")
         val KEY_ONBOARDED = booleanPreferencesKey("onboarding_done")
         val KEY_OVERLAY_PROMPTED = booleanPreferencesKey("overlay_prompt_shown")
         val KEY_DEF_START_ACTION = stringPreferencesKey("default_start_action")
@@ -316,3 +324,10 @@ class SettingsRepository(private val context: Context) {
             this?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
     }
 }
+
+/**
+ * 初回アラームON時の権限シートを出し終えたか。明示的に保存された値を優先し、未保存なら
+ * 旧オンボーディングを済ませた更新ユーザーは「済み」として扱う。
+ */
+internal fun resolveRingSetupDone(stored: Boolean?, onboarded: Boolean?): Boolean =
+    stored ?: (onboarded ?: false)
