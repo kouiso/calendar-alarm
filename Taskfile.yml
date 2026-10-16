@@ -1,0 +1,32 @@
+version: '3'
+
+tasks:
+  ci:fast:
+    desc: 共通 JVM・Android unit 検査
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+      - bash scripts/ci.sh fast
+
+  ci:
+    desc: Android CI の全 unit 検査と debug APK ビルド
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+      - bash scripts/ci.sh all
+
+  ci:ios:
+    desc: iOS simulator ビルド（Xcode と xcodegen が必要）
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+      - bash scripts/ci.sh ios
+
+  ci:emulator:
+    desc: API 35 emulator のシナリオ実行と期待値評価
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+      - bash scripts/ci.sh emulator
+
+  ci:emulator:build:
+    desc: 指定した隔離 checkout に検証 harness を入れて APK をビルド
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+      - bash scripts/ci.sh emulator-build "$CI_EMULATOR_APP"

@@ -39,6 +39,7 @@ on:
       - shared/src/**
       - gradle/**
       - scripts/emulator/**
+      - scripts/ci.sh
       - .github/workflows/emulator_verify.yml
   push:
     branches:
@@ -122,12 +123,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Inject E2E harness (debug source set, not committed)
-        run: bash verifier/scripts/emulator/inject_harness.sh app
-
-      - name: Build debug APK
-        working-directory: app
-        run: ./gradlew :androidApp:assembleDebug --stacktrace
+      - name: Inject E2E harness and build debug APK
+        run: bash verifier/scripts/ci.sh emulator-build app
 
       - name: Enable KVM
         run: |
@@ -148,7 +145,7 @@ jobs:
           disable-animations: true
           # -noaudio は付けない (USAGE_ALARM プレイヤーの再生状態を検証するため)
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -camera-back none -camera-front none
-          script: bash verifier/scripts/emulator/run_scenarios.sh app/androidApp/build/outputs/apk/debug/androidApp-debug.apk out $SCENARIOS
+          script: bash verifier/scripts/ci.sh emulator-run "$GITHUB_WORKSPACE/app/androidApp/build/outputs/apk/debug/androidApp-debug.apk" "$GITHUB_WORKSPACE/out"
 
       - name: Evaluate against lane expectation
         if: always()
@@ -159,7 +156,7 @@ jobs:
           SCENARIO_OUTCOME: ${{ steps.scenario.outcome }}
         run: |
           echo "scenario step outcome: $SCENARIO_OUTCOME"
-          bash verifier/scripts/emulator/evaluate.sh out "$EXPECT" "$LANE" "$SCENARIOS"
+          bash verifier/scripts/ci.sh emulator-evaluate "$GITHUB_WORKSPACE/out" "$EXPECT" "$LANE"
 
       - name: Upload evidence
         if: always()
