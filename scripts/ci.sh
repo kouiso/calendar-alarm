@@ -13,8 +13,8 @@ validate_scenarios() {
   if ! [[ "$SCENARIOS" =~ $pattern ]]; then echo 'Invalid emulator scenarios' >&2; exit 2; fi
 }
 case "$mode" in
-  fast) ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest --stacktrace ;;
-  all) ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest :androidApp:assembleDebug --stacktrace ;;
+  fast) ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest --stacktrace --no-parallel ;;
+  all) ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest :androidApp:assembleDebug --stacktrace --no-parallel ;;
   android-build) ./gradlew :androidApp:assembleDebug --stacktrace ;;
   ios)
     (cd iosApp; xcodegen generate; xcodebuild -project CalendarAlarm.xcodeproj -target iosApp -sdk iphonesimulator -configuration Debug build)

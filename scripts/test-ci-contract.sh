@@ -25,11 +25,11 @@ DEVICE
 for tool in xcodegen xcodebuild; do cp "$fixture/gradlew" "$fixture/bin/$tool"; done
 export PATH="$fixture/bin:$PATH" COMMAND_LOG="$fixture/commands"
 (cd "$fixture"; task ci) > "$fixture/output" 2>&1
-expected='gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest :androidApp:assembleDebug --stacktrace'
+expected='gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest :androidApp:assembleDebug --stacktrace --no-parallel'
 test "$(cat "$COMMAND_LOG")" = "$expected"
 : > "$COMMAND_LOG"
 (cd "$fixture"; task ci:fast) > "$fixture/output" 2>&1
-test "$(cat "$COMMAND_LOG")" = 'gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest --stacktrace'
+test "$(cat "$COMMAND_LOG")" = 'gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest --stacktrace --no-parallel'
  : > "$COMMAND_LOG"
 (cd "$fixture"; task ci:ios) > "$fixture/output" 2>&1
 printf '%s\n' 'xcodegen generate' 'xcodebuild -project CalendarAlarm.xcodeproj -target iosApp -sdk iphonesimulator -configuration Debug build' > "$fixture/ios-expected"
