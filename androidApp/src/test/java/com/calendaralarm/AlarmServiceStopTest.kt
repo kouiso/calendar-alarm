@@ -234,6 +234,53 @@ class AlarmServiceStopTest {
         assertTrue(waitUntil { !c.get().isPlaying() && shadowOf(c.get()).isStoppedBySelf })
     }
 
+    private fun state(id: String): String? = runBlocking {
+        app.container.db.scheduledInstances().byId(id)?.state
+    }
+
+    @Test
+    fun `同時刻の2件で押し出された側はFIREDのまま残らず停止後に再鳴動の対象にならない`() {
+        seed("dup-a", "A")
+        seed("dup-b", "B")
+        val c = Robolectric.buildService(AlarmService::class.java, startIntent("dup-a")).create()
+        controllers += c
+        // 実機 10/14 0:00 と同じく、2件の START がほぼ同時に届く
+        c.startCommand(0, 1)
+        c.withIntent(startIntent("dup-b")).startCommand(0, 2)
+        assertTrue(waitUntil { c.get().isPlaying() && AlarmService.ringingInstanceId.value != null })
+        settle(1_000)
+        val live = AlarmService.ringingInstanceId.value!!
+        val loser = if (live == "dup-a") "dup-b" else "dup-a"
+        assertEquals("押し出された側は DISMISSED に終端化されること", "DISMISSED", state(loser))
+        assertTrue(audits().any { it.first == "SUPERSEDED" && it.second.startsWith(loser) })
+        c.withIntent(dismissIntent(live)).startCommand(0, 3)
+        assertTrue(waitUntil { !c.get().isPlaying() && shadowOf(c.get()).isStoppedBySelf })
+        assertEquals("DISMISSED", state(live))
+        assertNull(
+            "停止後に鳴動猶予内の FIRED が残らないこと (残るとプロセス再起動で再鳴動する)",
+            runBlocking { app.container.repository.firedWithinGrace() },
+        )
+    }
+
+    @Test
+    fun `鳴動中のAを後発のBが押し出すとAは終端化されBの停止で全て止まる`() {
+        seed("sup-a", "A")
+        seed("sup-b", "B")
+        val c = startService("sup-a")
+        assertTrue(waitUntil { c.get().isPlaying() && AlarmService.ringingInstanceId.value == "sup-a" })
+        c.withIntent(startIntent("sup-b")).startCommand(0, 2)
+        assertTrue(waitUntil { AlarmService.ringingInstanceId.value == "sup-b" && c.get().isPlaying() })
+        assertTrue(waitUntil { state("sup-a") == "DISMISSED" })
+        assertTrue(AlarmService.isDismissed("sup-a"))
+        // 先行の終端化と同時に後発が FIRED 化されること。ここでプロセスが死んでも
+        // 復旧 (firedWithinGrace) が拾う行が残り、鳴るべきアラームが消えない
+        assertTrue(waitUntil { state("sup-b") == "FIRED" })
+        assertEquals("sup-b", runBlocking { app.container.repository.firedWithinGrace()?.id })
+        c.withIntent(dismissIntent("sup-b")).startCommand(0, 3)
+        assertTrue(waitUntil { !c.get().isPlaying() && shadowOf(c.get()).isStoppedBySelf })
+        assertNull(runBlocking { app.container.repository.firedWithinGrace() })
+    }
+
     @Test
     fun `id無し停止は最新の未開始要求を潰し先の要求は鳴る`() {
         seed("nw-a", "A")
