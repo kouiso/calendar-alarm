@@ -164,9 +164,6 @@ object RingingOverlay {
             val pad = dp(24)
             setPadding(pad, dp(48), pad, dp(40))
         }
-        // プリセット展開で縦が溢れても停止スライダーへ辿り着けるよう全体をスクロール可能にする
-        val scrollView = ScrollView(context).apply { addView(root) }
-
         // 時刻・タイトルは ScrollView (fillViewport) 内に配置し、低い画面や
         // プリセット展開時に溢れてもスクロールで到達できるようにする。
         // 下部の操作群は root 直下で固定。
@@ -304,7 +301,7 @@ object RingingOverlay {
             LinearLayout.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(10) })
 
-        return scrollView
+        return root
     }
 
     /**
