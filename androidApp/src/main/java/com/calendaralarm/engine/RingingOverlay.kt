@@ -9,9 +9,13 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -19,6 +23,9 @@ import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
+/** スライド停止の閾値 (RingingActivity/iOS の3実装で同じ値に揃える) */
+internal const val SLIDE_STOP_THRESHOLD = 0.8f
 
 /**
  * 鳴動中の「停止UIが1つも画面に出ない」事故への最終防衛オーバーレイ。
@@ -56,6 +63,7 @@ object RingingOverlay {
         instanceId: String,
         title: String,
         snoozeMinutes: Int,
+        snoozePresets: List<Int> = emptyList(),
         stillValid: () -> Boolean = { true },
     ) {
         if (!canShow(context)) return
@@ -69,7 +77,7 @@ object RingingOverlay {
                 audit(app, "OVERLAY_FAIL", "$instanceId: WindowManager取得不可")
                 return@post
             }
-            val view = buildView(app, instanceId, title, snoozeMinutes)
+            val view = buildView(app, instanceId, title, snoozeMinutes, snoozePresets)
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -130,6 +138,7 @@ object RingingOverlay {
         instanceId: String,
         title: String,
         snoozeMinutes: Int,
+        snoozePresets: List<Int>,
     ): View {
         val accent = Color.parseColor("#BDBDFF")
         val fg = Color.parseColor("#F4F5F8")
@@ -155,8 +164,15 @@ object RingingOverlay {
             val pad = dp(24)
             setPadding(pad, dp(48), pad, dp(40))
         }
+        // 時刻・タイトルは ScrollView (fillViewport) 内に配置し、低い画面や
+        // プリセット展開時に溢れてもスクロールで到達できるようにする。
+        // 下部の操作群は root 直下で固定。
+        val top = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
 
-        root.addView(TextView(context).apply {
+        top.addView(TextView(context).apply {
             text = SimpleDateFormat("H:mm", Locale.getDefault()).format(Date())
             textSize = 96f
             setTextColor(fg)
@@ -165,7 +181,7 @@ object RingingOverlay {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 2.2f,
         ).apply { gravity = Gravity.CENTER })
 
-        root.addView(TextView(context).apply {
+        top.addView(TextView(context).apply {
             text = title.ifBlank { "アラーム" }
             textSize = 30f
             setTextColor(fg)
@@ -177,8 +193,16 @@ object RingingOverlay {
         ))
 
         val spacer = View(context)
-        root.addView(spacer, LinearLayout.LayoutParams(
+        top.addView(spacer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 3f,
+        ))
+
+        val scroll = ScrollView(context).apply {
+            isFillViewport = true
+            addView(top)
+        }
+        root.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f,
         ))
 
         val snooze = pill("スヌーズ ${snoozeMinutes}分", Color.parseColor("#14FFFFFF"), fg)
@@ -197,20 +221,75 @@ object RingingOverlay {
             LinearLayout.LayoutParams.MATCH_PARENT, dp(72),
         ))
 
-        val dismiss = pill("停止", accent, Color.parseColor("#26247A"))
-        dismiss.setOnClickListener {
-            // 鳴動通知の「停止」と同じ放送経路: サービス不在でも AlarmReceiver が
-            // サービス停止 + DB終端化を行うので必ず届く
-            context.sendBroadcast(
-                Intent(context, AlarmReceiver::class.java).apply {
-                    action = AlarmService.ACTION_DISMISS
-                    putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
-                },
-            )
+        // 別分数スヌーズは開閉式: 鳴動画面 (RingingActivity) と同じく
+        // 「スヌーズ時間を選ぶ ▾」を押した時だけプリセットチップを出す。
+        // サービスへの ACTION_SNOOZE は EXTRA_SNOOZE_MINUTES で分数を渡す。
+        if (snoozePresets.isNotEmpty()) {
+            // プリセットが多くても横スクロールで分数を読めるようにする (1行詰め込みで潰れない)
+            val chipRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+            }
+            val chipScroll = HorizontalScrollView(context).apply {
+                isHorizontalScrollBarEnabled = false
+                visibility = View.GONE
+                addView(chipRow)
+            }
+            fun sendSnooze(minutes: Int) {
+                runCatching {
+                    context.startService(
+                        Intent(context, AlarmService::class.java).apply {
+                            action = AlarmService.ACTION_SNOOZE
+                            putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
+                            putExtra(AlarmService.EXTRA_SNOOZE_MINUTES, minutes)
+                        },
+                    )
+                }
+            }
+            // 鳴動画面と同じく最大6個: それ以上は1行に詰まり分数が読めない。
+            for (m in snoozePresets.take(6)) {
+                val chip = TextView(context).apply {
+                    text = "+${m}分"
+                    textSize = 14f
+                    setTextColor(fg)
+                    gravity = Gravity.CENTER
+                    background = GradientDrawable().apply {
+                        cornerRadius = dp(14).toFloat()
+                        setColor(Color.parseColor("#14FFFFFF"))
+                    }
+                    setOnClickListener { sendSnooze(m) }
+                }
+                chipRow.addView(chip, LinearLayout.LayoutParams(
+                    dp(64), dp(40),
+                ).apply { marginStart = dp(4); marginEnd = dp(4) })
+            }
+            val toggle = TextView(context).apply {
+                text = "スヌーズ時間を選ぶ ▾"
+                textSize = 14f
+                setTextColor(sub)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(8), 0, dp(8))
+                setOnClickListener {
+                    val open = chipScroll.visibility != View.VISIBLE
+                    chipScroll.visibility = if (open) View.VISIBLE else View.GONE
+                    text = if (open) "スヌーズ時間を選ぶ ▴" else "スヌーズ時間を選ぶ ▾"
+                }
+            }
+            root.addView(toggle, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(4) })
+            root.addView(chipScroll, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ))
         }
-        root.addView(dismiss, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(72),
-        ).apply { topMargin = dp(12) })
+
+        // 停止はスライド式: 誤タップで止まらないよう左端の丸を右へ80%ドラッグ。
+        // TalkBack はこのトラックへのダブルタップ (performClick) で停止できる。
+        root.addView(buildSlideToStop(context, instanceId, accent, fg),
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(72),
+            ).apply { topMargin = dp(12) })
 
         root.addView(TextView(context).apply {
             text = "Calendar Alarm"
@@ -223,5 +302,120 @@ object RingingOverlay {
         ).apply { topMargin = dp(10) })
 
         return root
+    }
+
+    /**
+     * 停止スライダー (View版)。ドラッグ量がトラック幅の80%を超えたら停止。
+     * 鳴動通知の「停止」と同じ放送経路で止めるので、サービス不在でも AlarmReceiver が
+     * サービス停止 + DB終端化を行い必ず届く。
+     * タップは OnTouchListener が消費してスナップバックするだけに留め、
+     * アクセシビリティの ACTION_CLICK → performClick のみ OnClickListener で停止する。
+     */
+    private fun buildSlideToStop(
+        context: Context,
+        instanceId: String,
+        accent: Int,
+        fg: Int,
+    ): View {
+        val dp = { v: Int -> (v * context.resources.displayMetrics.density).toInt() }
+        val thumbSize = dp(56)
+        val pad = dp(8)
+
+        fun dismiss() {
+            context.sendBroadcast(
+                Intent(context, AlarmReceiver::class.java).apply {
+                    action = AlarmService.ACTION_DISMISS
+                    putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
+                },
+            )
+        }
+
+        val slider = FrameLayout(context).apply {
+            contentDescription = "スライドして停止"
+            background = GradientDrawable().apply {
+                cornerRadius = dp(36).toFloat()
+                setColor(Color.parseColor("#14FFFFFF"))
+                // アクセントの35%枠: RingingActivity のスライダーと同じ視認性
+                setStroke(dp(1), Color.argb(89, Color.red(accent), Color.green(accent), Color.blue(accent)))
+            }
+        }
+
+        val label = TextView(context).apply {
+            text = "スライドして停止 ›"
+            textSize = 20f
+            setTextColor(fg)
+            gravity = Gravity.CENTER
+        }
+        slider.addView(label, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT,
+        ))
+
+        // 丸の中は停止の■ (デザイン正本: 矢印ではなく停止アイコン)
+        val thumb = FrameLayout(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(accent)
+            }
+        }
+        thumb.addView(View(context).apply {
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#26247A"))
+                cornerRadius = dp(3).toFloat()
+            }
+        }, FrameLayout.LayoutParams(dp(22), dp(22)).apply {
+            gravity = Gravity.CENTER
+        })
+        slider.addView(thumb, FrameLayout.LayoutParams(thumbSize, thumbSize).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            leftMargin = pad
+        })
+
+        var downX = 0f
+        // 掴み始めが丸の範囲内の時だけドラッグを受理: トラック上の任意スワイプで
+        // 止まってしまうと誤停止になるため起点を縛る (RingingActivity と同じ判定)
+        var grabbed = false
+        slider.setOnTouchListener { v, ev ->
+            val travel = (v.width - thumbSize - pad * 2).coerceAtLeast(1).toFloat()
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    grabbed = ev.x <= thumbSize + pad * 3
+                    downX = ev.x
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!grabbed) return@setOnTouchListener true
+                    val dx = (ev.x - downX).coerceIn(0f, travel)
+                    thumb.translationX = dx
+                    label.alpha = (1f - dx / travel).coerceIn(0f, 1f)
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!grabbed) return@setOnTouchListener true
+                    grabbed = false
+                    if ((ev.x - downX) >= travel * SLIDE_STOP_THRESHOLD) {
+                        thumb.translationX = travel
+                        dismiss()
+                    } else {
+                        thumb.animate().translationX(0f).setDuration(120).start()
+                        label.animate().alpha(1f).setDuration(120).start()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    if (grabbed) {
+                        thumb.animate().translationX(0f).setDuration(120).start()
+                        label.animate().alpha(1f).setDuration(120).start()
+                    }
+                    grabbed = false
+                    true
+                }
+                else -> true
+            }
+        }
+        // TalkBack ダブルタップ (performClick) で停止。通常タップは OnTouch が
+        // 消費するのでここには来ず、スナップバックだけになる。
+        slider.setOnClickListener { dismiss() }
+        return slider
     }
 }
