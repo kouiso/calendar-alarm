@@ -2,8 +2,8 @@ import SwiftUI
 
 /// 鳴動画面 (Night UI スペック): 日付チップ + アクセントリング2重 + Outfit極細112pt時刻
 /// + 残りラベル + 天気チップ + スヌーズ大ボタン (80h) / 開閉式プリセットチップ / スライド停止 (80h)。常時ダーク基調。
-/// RootView からアプリ内の全面オーバーレイとして表示する。AlarmKit のカード窓
-/// アラートは OS 自身の UI で描かれ、このビューは使われない。
+/// CalendarAlarmApp が alertingIds 非空の間アプリ内全画面オーバーレイとして描画する。
+/// AlarmKit のシステムカード UI は OS 描画であり本 View ではない (小さい窓対策は全画面前提のまま保持)。
 struct RingingView: View {
     @EnvironmentObject var engine: Engine
     @EnvironmentObject var store: Store
@@ -32,7 +32,6 @@ struct RingingView: View {
             } else {
                 NightTheme.nightBg.ignoresSafeArea()
             }
-            // AlarmKit のアラート表示は画面より小さいカード窓になることがある。
             // 上部(日付/時刻/件名)は窓に応じてスクロール、下部の操作群(スヌーズ/スライド停止)は
             // 常時到達できるようピン留め — 止め方が画面外に逃げるのを防ぐための構造。
             GeometryReader { geo in
@@ -50,10 +49,11 @@ struct RingingView: View {
                                     .stroke(Color.white.opacity(0.10), lineWidth: 1)
                             )
                             .padding(.top, 12)
-                        Spacer(minLength: 8)
+                        // 時刻はチップ直下の固定位置に置く。Spacer 中央配置だと窓が
+                        // 小さい時にリングがスクロール領域外へ沈み時刻が見えなくなる
+                        Spacer(minLength: 8).frame(maxHeight: 48)
                         // アクセントリング + 大時刻 (デザイン正本: 112pt / リング 224・196)
-                        // 本 View はアプリ内全画面オーバーレイでしか出ない (AlarmKit カード窓には
-                        // 描かれない) ので原寸が基本。窓が小さい時だけ高さに応じて縮める。
+                        // 窓が小さい時だけ高さに応じて縮める (レターボックス等の小窓で隠れない)。
                         ZStack {
                             Circle().stroke(accent.opacity(0.25), lineWidth: 1.5).frame(width: 224, height: 224)
                             Circle().stroke(accent.opacity(0.15), lineWidth: 1).frame(width: 196, height: 196)

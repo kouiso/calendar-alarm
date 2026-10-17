@@ -13,6 +13,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -163,6 +164,8 @@ object RingingOverlay {
             val pad = dp(24)
             setPadding(pad, dp(48), pad, dp(40))
         }
+        // プリセット展開で縦が溢れても停止スライダーへ辿り着けるよう全体をスクロール可能にする
+        val scrollView = ScrollView(context).apply { addView(root) }
 
         // 時刻・タイトルは ScrollView (fillViewport) 内に配置し、低い画面や
         // プリセット展開時に溢れてもスクロールで到達できるようにする。
@@ -225,9 +228,14 @@ object RingingOverlay {
         // 「スヌーズ時間を選ぶ ▾」を押した時だけプリセットチップを出す。
         // サービスへの ACTION_SNOOZE は EXTRA_SNOOZE_MINUTES で分数を渡す。
         if (snoozePresets.isNotEmpty()) {
+            // プリセットが多くても横スクロールで分数を読めるようにする (1行詰め込みで潰れない)
             val chipRow = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
+            }
+            val chipScroll = HorizontalScrollView(context).apply {
+                isHorizontalScrollBarEnabled = false
                 visibility = View.GONE
+                addView(chipRow)
             }
             fun sendSnooze(minutes: Int) {
                 runCatching {
@@ -254,7 +262,7 @@ object RingingOverlay {
                     setOnClickListener { sendSnooze(m) }
                 }
                 chipRow.addView(chip, LinearLayout.LayoutParams(
-                    0, dp(40), 1f,
+                    dp(64), dp(40),
                 ).apply { marginStart = dp(4); marginEnd = dp(4) })
             }
             val toggle = TextView(context).apply {
@@ -264,8 +272,8 @@ object RingingOverlay {
                 gravity = Gravity.CENTER
                 setPadding(0, dp(8), 0, dp(8))
                 setOnClickListener {
-                    val open = chipRow.visibility != View.VISIBLE
-                    chipRow.visibility = if (open) View.VISIBLE else View.GONE
+                    val open = chipScroll.visibility != View.VISIBLE
+                    chipScroll.visibility = if (open) View.VISIBLE else View.GONE
                     text = if (open) "スヌーズ時間を選ぶ ▴" else "スヌーズ時間を選ぶ ▾"
                 }
             }
@@ -273,7 +281,7 @@ object RingingOverlay {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { topMargin = dp(4) })
-            root.addView(chipRow, LinearLayout.LayoutParams(
+            root.addView(chipScroll, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ))
@@ -296,7 +304,7 @@ object RingingOverlay {
             LinearLayout.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(10) })
 
-        return root
+        return scrollView
     }
 
     /**
