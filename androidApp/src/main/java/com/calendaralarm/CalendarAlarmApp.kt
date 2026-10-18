@@ -89,6 +89,10 @@ class CalendarAlarmApp : Application() {
         container
         scheduleHealthCheck()
         ensureCalendarObserver()
+        // 冪等なので毎回走らせてよい。書込み失敗で起動ごと落とさない
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            runCatching { container.settings.dropLegacyAiKey() }
+        }
     }
 
     private var calendarObserverRegistered = false

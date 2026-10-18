@@ -35,8 +35,6 @@ final class Store: ObservableObject {
         var weatherOnAlarmScreen: Bool = true
         var timerPresets: [TimerPresetDTO] = TimerPresets.defaults
         /// OpenRouter APIキー (AI機能用)
-        var openRouterApiKey: String? = nil
-        var openRouterModel: String = "openai/gpt-4.1-mini"
         // calendar_prefs: calendarId -> AlarmRuleDTO
         var calendarRules: [String: AlarmRuleDTO] = [:]
         // event_overrides: instanceKey -> EventOverrideDTO
@@ -135,8 +133,6 @@ final class Store: ObservableObject {
     func setWeatherHeaderEnabled(_ v: Bool) { mutate { $0.weatherHeaderEnabled = v } }
     func setWeatherOnAlarmScreen(_ v: Bool) { mutate { $0.weatherOnAlarmScreen = v } }
     func setTimerPresets(_ v: [TimerPresetDTO]) { mutate { $0.timerPresets = v } }
-    func setOpenRouterApiKey(_ v: String?) { mutate { $0.openRouterApiKey = v?.isEmpty == false ? v : nil } }
-    func setOpenRouterModel(_ v: String) { mutate { $0.openRouterModel = v } }
 
     /// カスタム背景画像の保存先 (固定パス)。
     static var backgroundImageURL: URL {
@@ -294,8 +290,6 @@ extension Store.Persisted {
         weatherHeaderEnabled = try c.decodeIfPresent(Bool.self, forKey: .weatherHeaderEnabled) ?? true
         weatherOnAlarmScreen = try c.decodeIfPresent(Bool.self, forKey: .weatherOnAlarmScreen) ?? true
         timerPresets = try c.decodeIfPresent([TimerPresetDTO].self, forKey: .timerPresets) ?? TimerPresets.defaults
-        openRouterApiKey = try c.decodeIfPresent(String.self, forKey: .openRouterApiKey)
-        openRouterModel = try c.decodeIfPresent(String.self, forKey: .openRouterModel) ?? "openai/gpt-4.1-mini"
         calendarRules = try c.decodeIfPresent([String: AlarmRuleDTO].self, forKey: .calendarRules) ?? [:]
         overrides = try c.decodeIfPresent([String: EventOverrideDTO].self, forKey: .overrides) ?? [:]
         standaloneAlarms = try c.decodeIfPresent([StandaloneAlarmDTO].self, forKey: .standaloneAlarms) ?? []

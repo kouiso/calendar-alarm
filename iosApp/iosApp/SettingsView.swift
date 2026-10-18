@@ -13,8 +13,6 @@ struct SettingsView: View {
     @State private var showCodes = false
     @State private var photoItem: PhotosPickerItem? = nil
     @State private var weatherLocDraft = ""
-    @State private var apiKeyDraft = ""
-    @State private var modelDraft = ""
 
     private let actionOptions: [(EventAction, String)] =
         [(.alarm, "アラーム"), (.notify, "通知"), (.mute, "OFF")]
@@ -144,34 +142,6 @@ struct SettingsView: View {
                     }
                     .onAppear {
                         weatherLocDraft = store.state.weatherLocation
-                        apiKeyDraft = store.state.openRouterApiKey ?? ""
-                        modelDraft = store.state.openRouterModel
-                    }
-
-                    // AI カード: OpenRouter (メール→予定・通知ルール生成に使用)
-                    Card {
-                        VStack(spacing: 14) {
-                            IconRow("envelope.badge.fill") {
-                                SecureField("OpenRouter キー", text: $apiKeyDraft)
-                                    .font(NightTheme.font(14))
-                                    .textFieldStyle(.roundedBorder)
-                                Button {
-                                    store.setOpenRouterApiKey(apiKeyDraft)
-                                } label: {
-                                    Text("保存").font(NightTheme.font(13)).foregroundStyle(NightTheme.indigo)
-                                }
-                            }
-                            IconRow("brain") {
-                                TextField("モデル", text: $modelDraft)
-                                    .font(NightTheme.font(14))
-                                    .textFieldStyle(.roundedBorder)
-                                Button {
-                                    store.setOpenRouterModel(modelDraft)
-                                } label: {
-                                    Text("保存").font(NightTheme.font(13)).foregroundStyle(NightTheme.indigo)
-                                }
-                            }
-                        }
                     }
 
                     // 予定ルールカード (既定アクション/タイトルコード/招待フィルタ/リマインダー取込)
