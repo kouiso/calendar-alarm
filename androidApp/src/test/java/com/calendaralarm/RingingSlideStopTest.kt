@@ -51,6 +51,11 @@ class RingingSlideStopTest {
 
     private companion object {
         const val SLIDER = "スライドして停止"
+        // RingingActivity.SlideToStop の丸 64dp・余白 8dp (qualifiers の mdpi では 1dp = 1px)。変えたらここも合わせる
+        const val THUMB_PX = 64f
+        const val PAD_PX = 8f
+        // 動き出しにタッチスロップ (8dp) が消費される分
+        const val TOUCH_SLOP_PX = 8f
         const val ID = "tm:slide"
         const val TITLE = "SlideStopTest"
     }
@@ -100,10 +105,10 @@ class RingingSlideStopTest {
     private fun slideTo(progress: Float, fromX: Float = 40f) {
         compose.onNodeWithContentDescription(SLIDER).performTouchInput {
             // 丸の移動量は トラック幅 - 丸64dp - 余白8dp*2。タッチスロップ (8) 分は動き出しに消費される
-            val travel = width - 80f
+            val travel = width - (THUMB_PX + 2 * PAD_PX)
             swipe(
                 Offset(fromX, centerY),
-                Offset(fromX + 8f + progress * travel, centerY),
+                Offset(fromX + TOUCH_SLOP_PX + progress * travel, centerY),
                 durationMillis = 300,
             )
         }
