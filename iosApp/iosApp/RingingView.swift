@@ -187,6 +187,8 @@ private struct SlideToStop: View {
     var body: some View {
         GeometryReader { geo in
             let travel = max(geo.size.width - thumbSize - pad * 2, 1)
+            // 式を modifier の引数に直接置くと、Xcode 26 で .font が曖昧と判定される
+            let labelOpacity = Double(max(0, 1 - progress * 1.2))
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 40)
                     .fill(Color.white.opacity(0.08))
@@ -196,7 +198,7 @@ private struct SlideToStop: View {
                     .font(NightTheme.font(20, weight: .semibold))
                     .foregroundStyle(NightTheme.onNight)
                     .frame(maxWidth: .infinity)
-                    .opacity(max(0, 1 - progress * 1.2))
+                    .opacity(labelOpacity)
                 Circle()
                     .fill(accent)
                     .frame(width: thumbSize, height: thumbSize)
