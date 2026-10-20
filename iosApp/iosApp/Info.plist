@@ -39,6 +39,8 @@
 	<string>カレンダーの予定をアラームで鳴らすために読み取ります</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>通知によるアラームのために使います</string>
+	<key>OpenRouterAPIKey</key>
+	<string>$(OPENROUTER_API_KEY)</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>plex_sans_jp_regular.ttf</string>

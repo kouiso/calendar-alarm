@@ -15,6 +15,7 @@ import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.AlarmState
+import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
 import com.calendaralarm.shared.model.RepeatMode
@@ -208,8 +209,15 @@ class AlarmRepository(
         }
     }
 
-    suspend fun calendarSources() = withContext(Dispatchers.IO) {
-        calendarReader.calendars()
+    suspend fun calendarSources(): List<CalendarSource> = withContext(Dispatchers.IO) {
+        // 権限が無いまま読むと SecurityException でアプリごと落ち、設定画面にも入れなくなる (#85)。
+        // resync と同じく先に確かめる。確かめた直後に権限を外される窓もあるので、読み取りの拒否も空として扱う
+        if (!hasCalendarPermission()) return@withContext emptyList()
+        try {
+            calendarReader.calendars()
+        } catch (e: SecurityException) {
+            emptyList()
+        }
     }
 
     suspend fun calendarPrefsFlowList() = db.calendarPrefs().all()

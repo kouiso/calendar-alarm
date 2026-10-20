@@ -477,4 +477,29 @@ class EngineTest {
         assertEquals("見逃しにした行は待ち行列から外れる", 0, repository.rearmWaitingRings(resolvedId = null))
     }
 
+    /** OS のカレンダー provider と同じく、権限の無い読み取りを SecurityException で拒む fake。 */
+    private class DenyingCalendarProvider : ContentProvider() {
+        override fun onCreate() = true
+        override fun query(
+            uri: Uri, projection: Array<out String>?, selection: String?,
+            selectionArgs: Array<out String>?, sortOrder: String?,
+        ): Cursor = throw SecurityException("requires android.permission.READ_CALENDAR")
+        override fun getType(uri: Uri): String? = null
+        override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?) = 0
+        override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?) = 0
+    }
+
+    @Test
+    fun `カレンダー権限が無くても設定のカレンダー一覧は空で返り落ちない`() = runBlocking {
+        Robolectric.buildContentProvider(DenyingCalendarProvider::class.java).create(CalendarContract.AUTHORITY)
+        assertTrue(repository.calendarSources().isEmpty())
+    }
+
+    @Test
+    fun `権限ありと判定した直後に外されても一覧は空で返り落ちない`() = runBlocking {
+        Robolectric.buildContentProvider(DenyingCalendarProvider::class.java).create(CalendarContract.AUTHORITY)
+        assertTrue(repositoryWithCalendar.calendarSources().isEmpty())
+    }
+
 }

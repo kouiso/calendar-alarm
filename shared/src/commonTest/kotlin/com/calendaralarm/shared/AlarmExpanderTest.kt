@@ -419,6 +419,77 @@ class AlarmExpanderTest {
         )
         assertEquals(listOf(15, 30), out.map { it.minutesBefore })
     }
+
+    // ---- 決定8: Google の通知時刻 + アプリの時刻で鳴らし、同じ時刻は1回 (#75) ----
+
+    private fun expandWithReminders(rule: AlarmRule, googleMinutes: List<Int>) =
+        AlarmExpander.expandEvents(
+            listOf(event("e1", start = ldt("2026-10-05T10:00:00")).copy(calendarReminderMinutes = googleMinutes)),
+            calendarRules = mapOf("c1" to rule),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            importEventReminders = true,
+        )
+
+    @Test
+    fun `決定8 通知時刻のみ アプリ側の鳴動を切っても Google の通知時刻で鳴る`() {
+        val out = expandWithReminders(AlarmRule(minutesBefore = 0, startAction = EventAction.MUTE), listOf(10))
+        assertEquals(listOf(10), out.map { it.minutesBefore })
+        assertEquals(ldt("2026-10-05T09:50:00").toEpochMilliseconds(), out.single().triggerAtMillis)
+        assertEquals(EventAction.ALARM, out.single().delivery)
+    }
+
+    @Test
+    fun `決定8 アプリ時刻のみ Google の通知が無い予定はアプリの時刻で鳴る`() {
+        val out = expandWithReminders(AlarmRule(minutesBefore = 15), emptyList())
+        assertEquals(listOf(15), out.map { it.minutesBefore })
+        assertEquals(ldt("2026-10-05T09:45:00").toEpochMilliseconds(), out.single().triggerAtMillis)
+    }
+
+    @Test
+    fun `決定8 両方で時刻が違えば両方の時刻で鳴る`() {
+        val out = expandWithReminders(AlarmRule(minutesBefore = 15), listOf(30))
+        assertEquals(listOf(15, 30), out.map { it.minutesBefore })
+        assertEquals(
+            listOf(ldt("2026-10-05T09:45:00"), ldt("2026-10-05T09:30:00")).map { it.toEpochMilliseconds() },
+            out.map { it.triggerAtMillis },
+        )
+    }
+
+    @Test
+    fun `決定8 両方が同じ時刻なら1回だけ鳴る`() {
+        val out = expandWithReminders(AlarmRule(minutesBefore = 15), listOf(15))
+        assertEquals(1, out.size)
+        assertEquals(ldt("2026-10-05T09:45:00").toEpochMilliseconds(), out.single().triggerAtMillis)
+    }
+
+    @Test
+    fun `決定8 Google の通知が重複していても同じ時刻は1回`() {
+        // いじわる: Google 側に同じ分数が2つ + アプリの時刻とも一致
+        val out = expandWithReminders(AlarmRule(minutesBefore = 10, extraOffsets = listOf(10)), listOf(10, 10, 60))
+        assertEquals(listOf(10, 60), out.map { it.minutesBefore })
+    }
+
+    @Test
+    fun `決定8 iOS が通るブリッジ経由でも同じ時刻は1回`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00")).copy(calendarReminderMinutes = listOf(15, 30))
+        val req = com.calendaralarm.shared.bridge.SharedBridge.ExpandRequest(
+            events = listOf(ev),
+            nowMillis = now.toEpochMilliseconds(),
+            horizonMillis = horizon.toEpochMilliseconds(),
+            zoneId = TZ.id,
+            defaultMinutesBefore = 15,
+            importEventReminders = true,
+        )
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        val res = json.decodeFromString(
+            com.calendaralarm.shared.bridge.SharedBridge.ExpandResult.serializer(),
+            com.calendaralarm.shared.bridge.SharedBridge.expand(
+                json.encodeToString(com.calendaralarm.shared.bridge.SharedBridge.ExpandRequest.serializer(), req),
+            ),
+        )
+        assertEquals(listOf(15, 30), res.instances.map { it.minutesBefore })
+    }
 }
 
 class AlarmPlannerTest {
