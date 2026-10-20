@@ -28,7 +28,10 @@ import java.util.concurrent.TimeUnit
 /** 手動DIコンテナ。規模から見て DI フレームワークを入れる必要がない。 */
 class AppContainer(val app: Application) {
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // Service/Activity の破棄に連動してキャンセルされるスコープでは
+    // 「鳴動の終端化・タップ監査の書き込み」が途中で消えるため、
+    // アプリ寿命で生きるスコープとして公開する
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val db: AppDatabase by lazy {
         Room.databaseBuilder(app, AppDatabase::class.java, "calendar-alarm.db")

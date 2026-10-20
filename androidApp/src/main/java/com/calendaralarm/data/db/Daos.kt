@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -33,6 +34,23 @@ interface ScheduledInstanceDao {
     /** FIRED 化は PENDING/FIRED からのみ。DISMISSED 等の終端を発火で上書きしない (更新行数を返す)。 */
     @Query("UPDATE scheduled_instances SET state = 'FIRED' WHERE id = :id AND state IN ('PENDING', 'FIRED')")
     suspend fun setFiredIfPending(id: String): Int
+
+    /** 生存中 (PENDING/FIRED) の行だけを DISMISSED にする。停止・スヌーズ済みの終端は上書きしない (更新行数を返す)。 */
+    @Query("UPDATE scheduled_instances SET state = 'DISMISSED' WHERE id = :id AND state IN ('PENDING', 'FIRED')")
+    suspend fun setDismissedIfLive(id: String): Int
+
+    /**
+     * 置き換えの終端化を1トランザクションで行う。
+     * 先行だけ DISMISSED 化された状態でプロセスが死ぬと、firedWithinGrace が拾える
+     * FIRED 行がどちらにも残らず (後発の AlarmManager 発火は消費済み)、鳴るべき
+     * アラームが無鳴動で終わる。トランザクションが丸ごと戻った場合は先行が
+     * FIRED のまま残るので、復旧は先行を再鳴動する (無鳴動より安全側)。
+     */
+    @Transaction
+    suspend fun supersede(predecessorId: String, successorId: String): Int {
+        setFiredIfPending(successorId)
+        return setDismissedIfLive(predecessorId)
+    }
 
     /** 鳴動猶予内の最新 FIRED 行。鳴動中プロセスキル後の再起動が拾う。 */
     @Query("SELECT * FROM scheduled_instances WHERE state = 'FIRED' AND triggerAtMillis > :since ORDER BY triggerAtMillis DESC LIMIT 1")

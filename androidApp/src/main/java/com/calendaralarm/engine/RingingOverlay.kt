@@ -20,8 +20,6 @@ import android.widget.TextView
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /** スライド停止の閾値 (RingingActivity/iOS の3実装で同じ値に揃える) */
@@ -88,7 +86,8 @@ object RingingOverlay {
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                     WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
                     WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                    // FLAG_DISMISS_KEYGUARD は付けない: PIN ロック中に解除要求が出ると
+                    // 鳴動画面の上に PIN 入力が重なり停止ボタンが押せなくなる (PR #54 と同根)
                     WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 android.graphics.PixelFormat.TRANSLUCENT,
             ).apply {
@@ -127,9 +126,10 @@ object RingingOverlay {
 
     private fun audit(context: Context, action: String, detail: String) {
         runCatching {
-            val repo = (context as com.calendaralarm.CalendarAlarmApp)
-                .container.repository
-            CoroutineScope(Dispatchers.IO).launch { repo.audit(action, detail) }
+            val container = (context as com.calendaralarm.CalendarAlarmApp).container
+            // 画面側 (RingingActivity) と同じアプリ寿命のスコープで書く。
+            // オーバーレイを閉じても書き込みが途中で消えないようにするため
+            container.appScope.launch { container.repository.audit(action, detail) }
         }
     }
 
@@ -207,6 +207,9 @@ object RingingOverlay {
 
         val snooze = pill("スヌーズ ${snoozeMinutes}分", Color.parseColor("#14FFFFFF"), fg)
         snooze.setOnClickListener {
+            // 停止ボタンと同じく押下の事実を先に残す。スヌーズが効かなかった時に
+            // タップ未到達 (ログ無し) とサービス側の失敗 (TAP だけある) を切り分けるため
+            audit(context.applicationContext, "SNOOZE_TAP", "オーバーレイ: $instanceId")
             // 鳴動中はサービスが必ず生きているので startService で届く
             runCatching {
                 context.startService(
@@ -322,6 +325,7 @@ object RingingOverlay {
         val pad = dp(8)
 
         fun dismiss() {
+            audit(context.applicationContext, "STOP_TAP", "オーバーレイ: $instanceId")
             context.sendBroadcast(
                 Intent(context, AlarmReceiver::class.java).apply {
                     action = AlarmService.ACTION_DISMISS
