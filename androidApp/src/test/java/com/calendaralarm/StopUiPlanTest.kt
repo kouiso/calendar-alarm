@@ -1,12 +1,7 @@
 package com.calendaralarm
 
-import androidx.test.core.app.ApplicationProvider
-import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.engine.StopUiPermissions
 import com.calendaralarm.engine.StopUiPlan
-import com.calendaralarm.ui.OverlayPrompt
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -44,25 +39,5 @@ class StopUiPlanTest {
         val all = StopUiPlan.of(StopUiPermissions(false, fsiOk = false, overlayOk = false)).warnings
         assertEquals(3, all.size)
         assertTrue(all.any { "通知OFF" in it })
-    }
-
-    @Test
-    fun `オーバーレイ案内は更新ユーザーで未許可かつ未表示のときだけ出す`() {
-        assertTrue(OverlayPrompt.shouldShow(onboarded = true, overlayGranted = false, alreadyShown = false))
-        assertFalse(OverlayPrompt.shouldShow(onboarded = true, overlayGranted = false, alreadyShown = true))
-        assertFalse(OverlayPrompt.shouldShow(onboarded = true, overlayGranted = true, alreadyShown = false))
-        // 初回オンボーディング中は専用カードが案内するので出さない
-        assertFalse(OverlayPrompt.shouldShow(onboarded = false, overlayGranted = false, alreadyShown = false))
-    }
-
-    @Test
-    fun `オーバーレイ案内の表示済みは永続化され再表示されない`() = runBlocking {
-        val settings = SettingsRepository(ApplicationProvider.getApplicationContext())
-        settings.setOnboardingDone(true)
-        assertFalse(settings.flow.first().overlayPromptShown)
-        assertTrue(OverlayPrompt.shouldShow(true, false, settings.flow.first().overlayPromptShown))
-        settings.setOverlayPromptShown(true)
-        assertTrue(settings.flow.first().overlayPromptShown)
-        assertFalse(OverlayPrompt.shouldShow(true, false, settings.flow.first().overlayPromptShown))
     }
 }

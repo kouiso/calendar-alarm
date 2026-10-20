@@ -30,3 +30,15 @@ tasks:
     dir: '{{.TASKFILE_DIR}}'
     cmds:
       - bash scripts/ci.sh emulator-build "$CI_EMULATOR_APP"
+
+  ai:sync:
+    desc: AGENTS.md と .agents/skills から各 AI の入口を生成し直す
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+      - node scripts/sync-ai-rule.mjs
+
+  ai:check:
+    desc: 各 AI の入口が正本から古くなっていないか検査
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+      - node scripts/sync-ai-rule.mjs --check
