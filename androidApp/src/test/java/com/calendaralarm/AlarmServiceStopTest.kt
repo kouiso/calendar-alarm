@@ -290,7 +290,7 @@ class AlarmServiceStopTest {
         seed("def-b", "B", muteUntilUnlock = true)
         val c = startService("def-a")
         assertTrue(waitUntil { c.get().isPlaying() && AlarmService.ringingInstanceId.value == "def-a" })
-        shadowOf(app.getSystemService(android.app.KeyguardManager::class.java)).setIsKeyguardLocked(true)
+        shadowOf(app.getSystemService(android.app.KeyguardManager::class.java)).setKeyguardLocked(true)
         c.withIntent(startIntent("def-b")).startCommand(0, 2)
         assertTrue(waitUntil { audits().any { it.first == "DEFER" && it.second.startsWith("def-b") } })
         settle(500)
