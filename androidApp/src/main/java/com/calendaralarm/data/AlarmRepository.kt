@@ -128,6 +128,8 @@ class AlarmRepository(
             Log.w(TAG, "鳴動ログの書き込みに失敗: $action", e)
         } catch (e: Exception) {
             Log.w(TAG, "鳴動ログの書き込みに失敗: $action", e)
+            // 書き込みの失敗中に呼び出し側が取り消されていたら、その取り消しは伝える
+            currentCoroutineContext().ensureActive()
         }
     }
 
@@ -648,7 +650,16 @@ class AlarmRepository(
 
     private suspend fun pruneOldLogs() {
         val cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
-        db.auditLog().prune(cutoff)
+        // resync から独立したコルーチンで走るので、DB 障害を外へ出すとプロセスごと落ちる (#46)。
+        // 古いログが残るだけなので、失敗は記録して次の resync に任せる
+        try {
+            db.auditLog().prune(cutoff)
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            Log.w(TAG, "古い鳴動ログの掃除に失敗", e)
+        } catch (e: Exception) {
+            Log.w(TAG, "古い鳴動ログの掃除に失敗", e)
+        }
     }
 
     // ---- 変換 ----

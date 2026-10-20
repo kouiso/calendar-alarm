@@ -109,4 +109,29 @@ class AuditNeverThrowsTest {
         assertEquals("OK", logs.single().action)
         db.close()
     }
+
+    @Test
+    fun oldLogCleanupAfterResyncNeverReachesUncaughtHandler() = runBlocking {
+        val db = memoryDb()
+        val uncaught = CompletableDeferred<Throwable?>()
+        // resync は古いログの掃除をアプリ寿命のスコープへ投げる。そのスコープで漏れた例外を捕まえる
+        val appScope = CoroutineScope(
+            SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, e -> uncaught.complete(e) },
+        )
+        val repository = AlarmRepository(
+            db = db,
+            scheduler = AlarmScheduler(context),
+            calendarReader = CalendarContractReader(context),
+            settings = SettingsRepository(context),
+            hasCalendarPermission = { false },
+            appScope = appScope,
+        )
+        db.openHelper.writableDatabase.execSQL("DROP TABLE audit_log")
+        repository.resync("test")
+        appScope.coroutineContext[kotlinx.coroutines.Job]!!.children.forEach { it.join() }
+        uncaught.complete(null)
+        assertNull(uncaught.await())
+        appScope.cancel()
+        db.close()
+    }
 }
