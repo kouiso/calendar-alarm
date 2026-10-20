@@ -387,4 +387,26 @@ class EngineTest {
         assertTrue("FIRE" in actions)
         assertTrue("DISMISS" in actions)
     }
+
+    @Test
+    fun `置き換えは先行を DISMISSED・後発を FIRED に同一トランザクションで倒す`() = runBlocking {
+        val prev = AlarmInstance(
+            id = "sup-p", triggerAtMillis = System.currentTimeMillis(),
+            title = "t", kind = AlarmKind.EVENT,
+        )
+        val next = AlarmInstance(
+            id = "sup-n", triggerAtMillis = System.currentTimeMillis(),
+            title = "t", kind = AlarmKind.EVENT,
+        )
+        repository.scheduleAdhoc(prev)
+        repository.scheduleAdhoc(next)
+        repository.onFired(prev.id)
+        repository.onSuperseded(prev.id, next.id)
+
+        assertEquals(AlarmState.DISMISSED.name, db.scheduledInstances().byId(prev.id)!!.state)
+        // 先行の終端化だけが残り後発が PENDING のままだと、プロセスキル後の復旧
+        // (firedWithinGrace) が拾える FIRED 行が無くなり鳴るべきアラームが消える
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(next.id)!!.state)
+        assertEquals(next.id, repository.firedWithinGrace()?.id)
+    }
 }

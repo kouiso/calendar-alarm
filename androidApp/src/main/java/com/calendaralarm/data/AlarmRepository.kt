@@ -225,6 +225,28 @@ class AlarmRepository(
         onScheduleChanged?.invoke()
     }
 
+    /**
+     * 鳴動中 (または鳴動開始直前) の [id] が、同時刻などで後から来た [by] の鳴動に
+     * 座席を譲った時の終端化。押し出された側は誰も停止しないので、FIRED のまま残すと
+     * 鳴動中プロセスキル後の復帰 (firedWithinGrace) が拾って再鳴動させてしまう。
+     * 利用者は後発の鳴動を止めた時点で両方を止めた意図なので DISMISSED に倒す。
+     * FIRED/PENDING 以外 (既に停止・スヌーズ済み) は触らない
+     */
+    suspend fun onSuperseded(id: String, by: String) {
+        // 後発の FIRED 化と先行の終端化を1トランザクションにする。先行だけが
+        // DISMISSED になった状態でプロセスが死ぬと復旧が拾う行が無くなり、
+        // 鳴るべきアラームが無鳴動で終わるため (Codex #63)
+        val rows = db.scheduledInstances().supersede(id, by)
+        if (rows > 0) {
+            scheduler.cancel(id)
+            audit("SUPERSEDED", "$id → $by: 後発の鳴動に置き換え")
+            db.scheduledInstances().byId(id)?.standaloneAlarmId?.let {
+                disableConsumedOneShots(setOf(it))
+            }
+            onScheduleChanged?.invoke()
+        }
+    }
+
     suspend fun onSnoozed(id: String?, snoozeMinutes: Int? = null) {
         val entity = id?.let { db.scheduledInstances().byId(it) } ?: return
         val instance = entity.toInstance()

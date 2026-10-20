@@ -20,7 +20,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # WHY: master への連続 push で前の CI と APK 生成が打ち切られると、どのコミットが
+  #      緑か分からなくなる。打ち切りは PR の古い実行だけに限る
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -42,14 +44,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run shared tests (common + JVM + Android)
-        run: ./gradlew :shared:jvmTest :shared:testDebugUnitTest --stacktrace
-
-      - name: Run app unit tests
-        run: ./gradlew :androidApp:testDebugUnitTest --stacktrace
-
-      - name: Build debug APK
-        run: ./gradlew :androidApp:assembleDebug --stacktrace
+      - name: Run all unit tests and build debug APK
+        run: bash scripts/ci.sh all
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
