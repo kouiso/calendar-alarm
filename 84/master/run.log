@@ -1,0 +1,10 @@
+[23:53:02] installed apk/master-h.apk
+[23:53:03] scheduled tm:1792507977164 tm:1792507977347 (same +15s)
+[23:53:29] after fire: AlarmService records=3
+[23:53:29] dismissed the ringing one
+[23:53:42] 8-12s after stop: AlarmService records=0
+[23:53:42] dismissed again
+[23:53:46] after 2nd stop: AlarmService records=0
+[23:53:46] states:
+tm:1792507977164	DISMISSED	1792507992164
+tm:1792507977347	DISMISSED	1792507992347
