@@ -283,19 +283,23 @@ class AlarmService : Service() {
             return
         }
         val ringSettings = app.container.settings.flow.first()
-        // 先行の終端化は、後発が実際に鳴ると決まったここで行う。上の見逃し・留保の判定より前に
+        // 先行の終端化は、後発が実際に鳴ると決まってから行う。見逃し・留保の判定より前に
         // 後発を FIRED にすると、ロック解除まで留保された後発が終端扱いになり、解除後に再発火
         // しても AlarmReceiver が PENDING 以外として抑止してしまう (Codex #63)。
-        // 後発が鳴らずに抜けた場合、先行の行は FIRED のまま残り、再起動復旧が拾う (無鳴動より安全側)
-        displaced?.let { prev ->
-            // サービス停止 (onDestroy の scope.cancel) に埋もれて終端化が消えないよう、
-            // アプリ寿命のスコープへ投げる。置き換えがキャンセルで無かったことになると
-            // 先行行が FIRED のまま残り、再起動復旧が拾って再鳴動する (CodeRabbit #63)
-            // 後発の FIRED 化より前に終端化を終わらせるため join で待つ。待っている間にサービスが
-            // 破棄されても、appScope 側のジョブは取り消されずに最後まで走る (CodeRabbit #63)
-            app.container.appScope.launch {
-                runCatching { app.container.repository.onSuperseded(prev, instanceId) }
-            }.join()
+        // 後発が鳴らずに抜けた場合 (留保など) は、先行の行が FIRED のまま残り、再起動復旧が拾う (無鳴動より安全側)。
+        // 後発を鳴動中として公開するより前に先行を DISMISSED にすると、先行の鳴動画面が
+        // 後発へ追従する前に終端と見て閉じてしまうので、公開のあとに行う (Codex #63)
+        val terminalizeDisplaced: suspend () -> Unit = {
+            displaced?.let { prev ->
+                // サービス停止 (onDestroy の scope.cancel) に埋もれて終端化が消えないよう、
+                // アプリ寿命のスコープへ投げる。置き換えがキャンセルで無かったことになると
+                // 先行行が FIRED のまま残り、再起動復旧が拾って再鳴動する (CodeRabbit #63)
+                // 終端化が済んでから先へ進むよう join で待つ。待っている間にサービスが
+                // 破棄されても、appScope 側のジョブは取り消されずに最後まで走る (CodeRabbit #63)
+                app.container.appScope.launch {
+                    runCatching { app.container.repository.onSuperseded(prev, instanceId) }
+                }.join()
+            }
         }
         // PENDING→FIRED のみ遷移 (DISMISSED を FIRED に戻さない atomic 制限)
         app.container.repository.onFired(instanceId)
@@ -304,7 +308,10 @@ class AlarmService : Service() {
         // ここで notify してしまうと取消後に通知だけが残るゾンビになる。
         // 世代が進んでいても全体停止は呼ばない (新しい鳴動を殺すので BUG_0001)。
         // この時点ではリソースを何も生成していないので、そのまま抜ければよい
-        if (destroyed || ringGen != gen) return
+        if (destroyed || ringGen != gen) {
+            terminalizeDisplaced()
+            return
+        }
         // 世代確定後にだけ自分のインスタンスを共有状態へ書く (stale 世代が
         // 書き残すと DISMISS の id フォールバックや救出経路が古い id を見る)
         if (!adoptIfCurrent(gen) {
@@ -312,7 +319,10 @@ class AlarmService : Service() {
             // タイトルが取れたので通知を張り替える。停止の世代前進と同じロック下で行う:
             // ロック外だと停止が通知を消した直後に張り替えが出し直し、通知だけ残る
             postRingNotification(instanceId)
-        }) return
+        }) {
+            terminalizeDisplaced()
+            return
+        }
         startAudio(
             instance.soundUri ?: ringSettings.defaultSoundUri,
             volumePercent = ringSettings.alarmVolumePercent,
@@ -325,6 +335,7 @@ class AlarmService : Service() {
             ringingInstanceId.value = instanceId
             pendingStartId = null
         }
+        terminalizeDisplaced()
         // startAudio 内で自分のプレイヤーは世代検査つきで畳まれているので、
         // 世代が進んでいたら新鳴動のリソースに触れないよう静かに抜ける
         if (destroyed || ringGen != gen) return
