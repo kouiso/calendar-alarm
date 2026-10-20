@@ -298,10 +298,17 @@ private fun MainScaffold(
             }
             composable("timer") { TimerScreen(repository, settings) }
             composable("settings") {
-                SettingsScreen(repository, settings, onOpenPermissions = { nav.navigate("permissions") })
+                SettingsScreen(
+                    repository, settings,
+                    onOpenPermissions = { nav.navigate("permissions") },
+                    onOpenTroubleshooting = { nav.navigate("troubleshoot") },
+                )
             }
             composable("permissions") {
                 com.calendaralarm.ui.PermissionsScreen(onBack = { nav.popBackStack() })
+            }
+            composable("troubleshoot") {
+                com.calendaralarm.ui.TroubleshootingScreen(settings, onBack = { nav.popBackStack() })
             }
         }
     }
