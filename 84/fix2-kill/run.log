@@ -1,0 +1,12 @@
+[00:32:28] installed apk/b84h2.apk
+[00:32:30] scheduled tm:1792510343427 tm:1792510343570 (same +15s)
+[00:32:55] after fire: AlarmService records=3
+[00:32:55] killed app process 17753 while ringing
+[00:33:10] after kill+15s: AlarmService records=3
+[00:33:10] dismissed the ringing one
+[00:33:23] 8-12s after stop: AlarmService records=3
+[00:33:23] dismissed again
+[00:33:27] after 2nd stop: AlarmService records=0
+[00:33:27] states:
+tm:1792510343427	DISMISSED	1792510358427
+tm:1792510343570	DISMISSED	1792510358570
