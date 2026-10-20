@@ -332,20 +332,21 @@ struct SettingsView: View {
                         }
                     }
                 }
+                // 権限画面はカードの開閉に関係なく入れるようにする。通知だけ断られている時も直せるように
+                Divider().padding(.vertical, 8)
+                NavigationLink {
+                    PermissionsView()
+                } label: {
+                    HStack {
+                        Image(systemName: "checkmark.shield").foregroundStyle(NightTheme.indigo)
+                        Text("権限画面を開く").font(NightTheme.font(13))
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
+                    }
+                }
                 if showPerms {
                     Divider().padding(.vertical, 8)
                     VStack(spacing: 10) {
-                        // 断られた許可は権限画面で「全部許可」か1つずつ直す (局長決定 2026-10-17 の2)
-                        NavigationLink {
-                            PermissionsView()
-                        } label: {
-                            HStack {
-                                Image(systemName: "checkmark.shield").foregroundStyle(NightTheme.indigo)
-                                Text("権限画面を開く").font(NightTheme.font(13))
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
-                            }
-                        }
                         // 鳴らない時の最終確認: 10秒後に実際に鳴らして経路全体を検証
                         Button {
                             Task {

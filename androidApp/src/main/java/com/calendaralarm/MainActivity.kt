@@ -305,7 +305,15 @@ private fun MainScaffold(
                 )
             }
             composable("permissions") {
-                com.calendaralarm.ui.PermissionsScreen(onBack = { nav.popBackStack() })
+                val permScope = androidx.compose.runtime.rememberCoroutineScope()
+                com.calendaralarm.ui.PermissionsScreen(
+                    onBack = { nav.popBackStack() },
+                    onGranted = { p ->
+                        if (p == com.calendaralarm.ui.AppPermission.CALENDAR) {
+                            permScope.launch { repository.resync("calendar granted") }
+                        }
+                    },
+                )
             }
             composable("troubleshoot") {
                 com.calendaralarm.ui.TroubleshootingScreen(settings, onBack = { nav.popBackStack() })

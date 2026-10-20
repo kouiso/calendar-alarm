@@ -212,8 +212,9 @@ internal fun rememberPermissionRequester(onResult: (AppPermission, Boolean) -> U
  * (局長決定 2026-10-17 の2)。押すと端末のその設定が直接開き、戻ると状態が自動で変わる。
  */
 @Composable
-fun PermissionsScreen(onBack: () -> Unit) {
+fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {}) {
     val context = LocalContext.current
+    val activity = context as? Activity
     val tick = rememberResumeTick()
     var granted by remember { mutableStateOf(probePermissions(context)) }
     // 「全部許可する」の連続依頼中か。戻っても未許可なら断られたとみなして止める
@@ -235,7 +236,10 @@ fun PermissionsScreen(onBack: () -> Unit) {
         }
     }
     LaunchedEffect(tick) {
-        granted = probePermissions(context)
+        val now = probePermissions(context)
+        // 新たに付いた許可を知らせる。カレンダーなら呼び出し側が予約を作り直す (待たせると次の定期同期まで鳴らない)
+        AppPermission.entries.filter { granted[it] == false && now[it] == true }.forEach(onGranted)
+        granted = now
         requestNext?.invoke()
     }
 
@@ -308,7 +312,11 @@ fun PermissionsScreen(onBack: () -> Unit) {
                 val on = granted[p] == true
                 val stateText = if (on) "許可済み" else "未許可"
                 // 許可済みでも押せば OS の設定を開き、そこでオフにできる (アプリからは外せないため)
-                val open = { chain = false; requester.request(p) }
+                val open = {
+                    chain = false
+                    // 許可済みの実行時権限を頼み直しても OS は何も出さない。外したい時に備えて端末の設定を開く
+                    if (on && activity != null) openSettingsFor(activity, p) else requester.request(p)
+                }
                 Row(
                     Modifier
                         .fillMaxWidth()

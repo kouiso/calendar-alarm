@@ -79,11 +79,20 @@ final class PermissionCenter: ObservableObject {
         case .notDetermined: s[.calendar] = .notDetermined
         default: s[.calendar] = .denied
         }
-        s[.alarm] = engine.schedulerAuthorized ? .granted : (engine.schedulerUndetermined ? .notDetermined : .denied)
         switch await UNUserNotificationCenter.current().notificationSettings().authorizationStatus {
         case .authorized, .provisional, .ephemeral: s[.notify] = .granted
         case .notDetermined: s[.notify] = .notDetermined
         default: s[.notify] = .denied
+        }
+        if engine.usesRealAlarms {
+            s[.alarm] = engine.schedulerAuthorized ? .granted : (engine.schedulerUndetermined ? .notDetermined : .denied)
+        } else {
+            // iOS 26 未満のアラームは通知で鳴らすので、OS の通知の許可がそのままアラームの許可になる。
+            // 設定アプリで後から許可された時も拾えるよう、通知経路が覚えている値も OS の値で更新する
+            s[.alarm] = s[.notify]
+            if s[.notify] != .notDetermined {
+                UserDefaults.standard.set(s[.notify] == .granted, forKey: "notifAuthorized")
+            }
         }
         states = s
     }
