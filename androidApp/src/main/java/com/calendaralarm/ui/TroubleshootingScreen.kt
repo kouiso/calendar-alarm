@@ -120,8 +120,6 @@ object TroubleshootChecks {
             else -> CheckState.NG
         }
 
-        val overlayOk = Settings.canDrawOverlays(context)
-
         // おやすみモード: 鳴動音は USAGE_ALARM。OFF なら素通り、優先モードは「アラーム」許可が要る、
         // アラームも含めて全て遮断 (NONE) だと鳴らない
         val dndFilter = runCatching { nm?.currentInterruptionFilter }.getOrNull()
@@ -199,12 +197,6 @@ object TroubleshootChecks {
                 if (fsiState != CheckState.NG) "全画面アラーム通知を表示可能" else "全画面アラーム通知が許可されていません",
                 "通常の目覚まし時計と同じようにアラームをロック画面へ全画面表示するには、この許可が必要です。",
                 Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkgUri),
-            ),
-            TroubleshootItem(
-                "overlay", s(overlayOk),
-                if (overlayOk) "他のアプリの上に表示" else "他のアプリの上に表示できません",
-                "他のアプリを使用中でもアラーム画面を表示するには、この権限が必要です。",
-                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkgUri),
             ),
             TroubleshootItem(
                 "dnd", s(dndOk),
