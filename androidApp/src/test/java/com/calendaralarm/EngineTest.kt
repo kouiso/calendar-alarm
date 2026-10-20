@@ -523,4 +523,38 @@ class EngineTest {
         assertEquals(AlarmState.CANCELLED.name, db.scheduledInstances().byId("wait-off")!!.state)
     }
 
+    @Test
+    fun `待つ間に予定をミュートされたら鳴らし直さない・ミュートしなければ待ち続ける`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 30 * 60_000
+        val inst = mapOf(
+            CalendarContract.Instances.EVENT_ID to 1L,
+            CalendarContract.Instances.CALENDAR_ID to 1L,
+            CalendarContract.Instances.TITLE to "会議",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to start,
+            CalendarContract.Instances.END to start + 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        FakeCalendarProvider.instanceRows = listOf(inst)
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        repositoryWithCalendar.resync("test")
+        val id = "ev:1:1:$start:b0"
+        repositoryWithCalendar.onFired(id)
+        repositoryWithCalendar.onDisplaced(id, "other")
+
+        // 対照: 何も変えない resync では待ち続ける
+        repositoryWithCalendar.resync("control")
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(id)!!.state)
+
+        repositoryWithCalendar.setEventOverride("1:1:$start", com.calendaralarm.shared.model.EventAction.MUTE, null)
+        assertEquals(AlarmState.CANCELLED.name, db.scheduledInstances().byId(id)!!.state)
+        assertEquals(0, repositoryWithCalendar.rearmWaitingRings(resolvedId = "other"))
+    }
+
 }

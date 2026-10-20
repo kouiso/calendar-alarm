@@ -333,6 +333,23 @@ class AlarmRepository(
         return waiting.size
     }
 
+    /**
+     * 押し出されて待っている予定由来の鳴動のうち、ミュート・カレンダー OFF・予定削除などで
+     * もう展開されなくなったものを取り消す。待っている行は FIRED で resync の差分に出ないため、ここで見る。
+     * 読み取りの失敗中や権限なしの時は判断できないので何もしない
+     */
+    private suspend fun cancelStaleWaitingEvents(desiredIds: Set<String>, canJudge: Boolean) {
+        if (!canJudge) return
+        for (id in waitingRings.all()) {
+            val row = db.scheduledInstances().byId(id) ?: continue
+            val isEvent = row.standaloneAlarmId == null && row.kind == AlarmKind.EVENT.name
+            if (!isEvent || row.state != AlarmState.FIRED.name || id in desiredIds) continue
+            setState(id, AlarmState.CANCELLED)
+            waitingRings.remove(id)
+            audit("REARM_SKIP", "$id: 待つ間に予定のミュート等で対象外になったため鳴らし直さない")
+        }
+    }
+
     /** 押し出されて鳴らし直しを待つ id。プロセスが死んでも残るよう端末に保存する (#84)。 */
     private val waitingRings = WaitingRingStore(calendarReader.appContext())
 
@@ -501,7 +518,9 @@ class AlarmRepository(
 
         // 終了済み状態 (鳴動/停止/スヌーズ/見逃し) の同 id は蘇生させない。
         // 展開が同 id を再発行しても、ユーザーが「止めた」「スヌーズした」意味を守る。
+        val desiredBeforeTerminal = desired.map { it.id }.toSet()
         desired.removeAll { it.id in terminalIds }
+        cancelStaleWaitingEvents(desiredBeforeTerminal, canJudge = hasCalendarPermission() && !keepPendingEvents)
 
         // タイマー・スヌーズなど Expander が再生しない予約は「理想状態」へ持ち越す。
         // 持ち越さないと差分計算で毎 resync キャンセルされてしまう。
