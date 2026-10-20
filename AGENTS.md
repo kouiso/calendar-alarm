@@ -32,3 +32,14 @@ xcodebuild -project CalendarAlarm.xcodeproj -target iosApp -sdk iphonesimulator 
 ```bash
 ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest
 ```
+
+## AI ごとの入口
+- 共通ルールの正本はこの `AGENTS.md`。共通 Skill の正本は `.agents/skills/<skill>/SKILL.md`
+- `CLAUDE.md`、`GEMINI.md`、`.github/copilot-instructions.md`、`.cursor/rules/calendar-alarm.mdc`、
+  `.claude/skills/` の中身は `scripts/sync-ai-rule.mjs` が生成する。直接は編集しない
+- 正本を変えたら `node scripts/sync-ai-rule.mjs` で生成し直す。`--check` で古い生成物を検出する（CI でも検査）
+- Codex・Devin・OpenCode はこの `AGENTS.md` を直接読む
+- `.claude/settings.json` と `.github/mcp-config.json` は AI 専用の設定で、生成の対象外
+
+## Skills
+- `local-ci` — 変更の種類ごとに手元で回す検査（`.agents/skills/local-ci/SKILL.md`）
