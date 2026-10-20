@@ -75,6 +75,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -108,6 +109,7 @@ import java.util.Locale
 fun SettingsScreen(
     repository: AlarmRepository,
     settings: SettingsRepository,
+    onOpenTroubleshooting: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -337,6 +339,34 @@ fun SettingsScreen(
         // ---- 権限 ----
         item { Spacer(Modifier.height(16.dp)) }
         item { PermissionHealthCard(context, repository) }
+        item { Spacer(Modifier.height(8.dp)) }
+        item {
+            Card(
+                Modifier.fillMaxWidth().clickable(onClick = onOpenTroubleshooting),
+                shape = RoundedCornerShape(22.dp),
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                ),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.Info, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text("トラブルシューティング", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Icon(
+                        Icons.Default.KeyboardArrowDown, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.rotate(-90f),
+                    )
+                }
+            }
+        }
 
         // ---- 監査ログ ----
         item { Spacer(Modifier.height(16.dp)) }

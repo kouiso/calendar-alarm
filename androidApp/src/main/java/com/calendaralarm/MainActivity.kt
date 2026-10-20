@@ -298,7 +298,12 @@ private fun MainScaffold(
                 )
             }
             composable("timer") { TimerScreen(repository, settings) }
-            composable("settings") { SettingsScreen(repository, settings) }
+            composable("settings") {
+                SettingsScreen(repository, settings, onOpenTroubleshooting = { nav.navigate("troubleshoot") })
+            }
+            composable("troubleshoot") {
+                com.calendaralarm.ui.TroubleshootingScreen(settings, onBack = { nav.popBackStack() })
+            }
         }
     }
 }
