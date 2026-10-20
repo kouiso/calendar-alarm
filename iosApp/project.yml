@@ -11,6 +11,9 @@ settings:
     CODE_SIGN_STYLE: Automatic
     # 自動署名の対象チーム（FAD の ad-hoc 配布は RITMO の ADP アカウントで行う）
     DEVELOPMENT_TEAM: ZZ4FA7NLUY
+    # AI 機能のキー。配布ビルドには入れない (局長決定 2026-10-17 の7)。
+    # 開発者が手元で試す時だけ xcodebuild OPENROUTER_API_KEY=... で渡す
+    OPENROUTER_API_KEY: ""
 
 schemes:
   iosApp:
@@ -46,6 +49,7 @@ targets:
       properties:
         CFBundleDisplayName: Calendar Alarm
         CFBundleIdentifier: com.calendaralarm.ios
+        OpenRouterAPIKey: $(OPENROUTER_API_KEY)
         UILaunchScreen_Generation: YES
         UIApplicationSceneManifest_Generation: YES
         UISupportedInterfaceOrientations:
@@ -136,6 +140,13 @@ targets:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
           NSExtensionActivationRule: "SUBQUERY (extensionItems, $extensionItem, ANY $extensionItem.attachments.conformsToType UTI \"public.plain-text\" OR ANY $extensionItem.attachments.conformsToType UTI \"public.url\").@count > 0"
+    # キーの無いビルドでは共有シートに「予定に変換」を出さない。出すと必ず失敗する入口になるため
+    postBuildScripts:
+      - name: Hide the share entry without an AI key
+        script: |
+          if [ -z "${OPENROUTER_API_KEY}" ]; then
+            /usr/libexec/PlistBuddy -c "Set :NSExtension:NSExtensionActivationRule FALSEPREDICATE" "${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
+          fi
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.ios.shareext

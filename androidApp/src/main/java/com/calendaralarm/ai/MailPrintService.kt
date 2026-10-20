@@ -10,17 +10,14 @@ import android.printservice.PrintJob
 import android.printservice.PrintService
 import android.printservice.PrinterDiscoverySession
 import androidx.core.app.NotificationCompat
-import com.calendaralarm.CalendarAlarmApp
 import com.calendaralarm.MainActivity
 import com.calendaralarm.shared.ai.MailEventExtractor
-import com.calendaralarm.shared.ai.OpenRouterApi
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.serialization.json.Json
@@ -59,11 +56,9 @@ class MailPrintService : PrintService() {
             val tag = info.label ?: "印刷ジョブ"
             try {
                 val text = extractText(printJob)
-                val settings = (application as CalendarAlarmApp).container.settings
-                val prefs = settings.flow.first()
-                val key = prefs.openRouterApiKey
-                if (key.isNullOrBlank()) {
-                    notifyExtract("AIキー未設定: 設定画面で OpenRouter のキーを入れてください", null)
+                val api = AiConfig.api()
+                if (api == null) {
+                    notifyExtract("このビルドでは AI の読み取りを使えません", null)
                     printJob.complete()
                     return@launch
                 }
@@ -72,7 +67,6 @@ class MailPrintService : PrintService() {
                     printJob.complete()
                     return@launch
                 }
-                val api = OpenRouterApi(apiKey = key, model = prefs.openRouterModel)
                 val nowIso = SimpleDateFormat(
                     "yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US,
                 ).format(Date())
