@@ -74,13 +74,20 @@ struct RootView: View {
                 RingingView()
             }
         }
-        .sheet(item: $asker.current) { p in
+        // 鳴動中は許可を頼むシートを出さない。鳴動画面の停止ボタンを隠してしまうため
+        .sheet(item: Binding(
+            get: { engine.alertingIds.isEmpty ? asker.current : nil },
+            set: { asker.current = $0 }
+        )) { p in
             PermissionAskSheet(permission: p, retry: asker.isRetry(p), needsSettings: permissions.states[p] == .denied) { action in
                 Task { await asker.handle(action, for: p, center: permissions, engine: engine) }
             }
             .presentationDetents([.medium])
         }
-        .sheet(isPresented: $asker.showReady) {
+        .sheet(isPresented: Binding(
+            get: { engine.alertingIds.isEmpty && asker.showReady },
+            set: { asker.showReady = $0 }
+        )) {
             ReadySheet {
                 asker.showReady = false
                 Task { await engine.scheduleTimer(durationMillis: 10_000, label: "テスト鳴動") }
@@ -90,6 +97,9 @@ struct RootView: View {
             .presentationDetents([.medium])
         }
         .task { await asker.advance(center: permissions, engine: engine) }
+        .onChange(of: engine.alertingIds.isEmpty) { _, idle in
+            if idle { Task { await asker.advance(center: permissions, engine: engine) } }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await asker.advance(center: permissions, engine: engine) } }
         }

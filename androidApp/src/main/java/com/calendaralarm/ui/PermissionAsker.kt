@@ -45,19 +45,31 @@ fun PermissionAsker(repository: AlarmRepository, onGranted: (AppPermission) -> U
     var stopped by rememberSaveable { mutableStateOf(false) }
     var asked by rememberSaveable { mutableStateOf<String?>(null) }
     var retried by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    // 頼み直しの結果待ち。OS のダイアログや設定画面から戻るまでは「断られた」と決めない
+    var awaitingRetry by rememberSaveable { mutableStateOf<String?>(null) }
     var askedAny by rememberSaveable { mutableStateOf(false) }
     var readyClosed by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // 新たに付いた許可の通知は ON_RESUME の差分だけで出す (ダイアログ結果と二重に出さない)
     var seen by remember { mutableStateOf(granted) }
+    // 頼み直しから戻った時点で、まだオフなら断られたとして記録する
+    fun settleRetry(now: Map<AppPermission, Boolean>) {
+        val a = awaitingRetry ?: return
+        awaitingRetry = null
+        if (now[AppPermission.entries.first { it.name == a }] == false) retried = retried + a
+    }
     LaunchedEffect(tick) {
         val now = probePermissions(context)
         AppPermission.entries.filter { seen[it] == false && now[it] == true }.forEach(onGranted)
         seen = now
         granted = now
+        settleRetry(now)
     }
-    val requester = rememberPermissionRequester { _, _ -> granted = probePermissions(context) }
+    val requester = rememberPermissionRequester { _, _ ->
+        granted = probePermissions(context)
+        settleRetry(granted)
+    }
     if (stopped) return
 
     val askedPerm = asked?.let { a -> AppPermission.entries.firstOrNull { it.name == a } }
@@ -103,7 +115,7 @@ fun PermissionAsker(repository: AlarmRepository, onGranted: (AppPermission) -> U
             },
             later = "あとで",
             onCta = {
-                if (retry) retried = retried + current.name
+                if (retry) awaitingRetry = current.name
                 asked = current.name
                 askedAny = true
                 requester.request(current)
