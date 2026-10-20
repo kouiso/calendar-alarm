@@ -502,4 +502,25 @@ class EngineTest {
         assertTrue(repositoryWithCalendar.calendarSources().isEmpty())
     }
 
+    @Test
+    fun `待つ間に親のアラームを OFF にされたら鳴らし直さない`() = runBlocking {
+        val alarmId = db.standaloneAlarms().upsert(
+            com.calendaralarm.data.db.StandaloneAlarmEntity(
+                hour = 7, minute = 0, enabled = true, daysMask = 0, label = "p",
+                soundUri = null, snoozeMinutes = 10, exceptionsCsv = "",
+            ),
+        )
+        val now = System.currentTimeMillis()
+        val waitingRow = ScheduledInstanceEntity.of(
+            AlarmInstance(id = "wait-off", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT),
+        ).copy(standaloneAlarmId = alarmId)
+        db.scheduledInstances().upsert(listOf(waitingRow))
+        repository.onFired("wait-off")
+        repository.onDisplaced("wait-off", "other")
+        db.standaloneAlarms().byId(alarmId)!!.let { db.standaloneAlarms().upsert(it.copy(enabled = false)) }
+
+        assertEquals(0, repository.rearmWaitingRings(resolvedId = "other"))
+        assertEquals(AlarmState.CANCELLED.name, db.scheduledInstances().byId("wait-off")!!.state)
+    }
+
 }

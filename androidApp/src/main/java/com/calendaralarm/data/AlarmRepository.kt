@@ -285,7 +285,22 @@ class AlarmRepository(
             db.scheduledInstances().firedBetween(since, now))
             .distinctBy { it.id }
             .map { it.toInstance() to it.state }
+        // 待っている間に親のアラームを OFF・削除されたら鳴らし直さない。resync は PENDING しか
+        // 取り消さないので、FIRED のまま待つ行はここで確かめる
+        val enabledAlarmIds = db.standaloneAlarms().all().filter { it.enabled }.map { it.id }.toSet()
+        val orphaned = candidates.filter { (_, state) ->
+            state == AlarmState.FIRED.name || state == AlarmState.PENDING.name
+        }.map { it.first }.filter { inst ->
+            val parent = db.scheduledInstances().byId(inst.id)?.standaloneAlarmId
+            parent != null && parent !in enabledAlarmIds && inst.id != resolvedId
+        }.map { it.id }.toSet()
+        orphaned.forEach {
+            setState(it, AlarmState.CANCELLED)
+            waitingRings.remove(it)
+            audit("REARM_SKIP", "$it: 待つ間に親のアラームが OFF か削除されたため鳴らし直さない")
+        }
         val waiting = candidates.filter { (inst, state) ->
+            inst.id !in orphaned &&
             inst.id != resolvedId &&
                 (state == AlarmState.FIRED.name || state == AlarmState.PENDING.name) &&
                 inst.triggerAtMillis in (since + 1)..now &&
