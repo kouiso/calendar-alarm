@@ -18,6 +18,8 @@ protocol AlarmScheduler {
     /// true = AlarmKit の本物アラーム経路が使える
     var usesRealAlarms: Bool { get }
     var authorizationGranted: Bool { get }
+    /// まだ一度も頼んでいない (OS のダイアログで頼める) か
+    var authorizationUndetermined: Bool { get }
     func requestAuthorization() async
     /// @returns AlarmKit UUID など予約側の識別子 (通知経路は nil)
     func schedule(_ inst: AlarmInstanceDTO) async throws -> String?
@@ -42,6 +44,7 @@ final class AlarmKitScheduler: AlarmScheduler {
 
     var usesRealAlarms: Bool { true }
     var authorizationGranted: Bool { manager.authorizationState == .authorized }
+    var authorizationUndetermined: Bool { manager.authorizationState == .notDetermined }
 
     func requestAuthorization() async {
         _ = try? await manager.requestAuthorization()
@@ -194,6 +197,10 @@ final class NotificationScheduler: AlarmScheduler {
 
     var authorizationGranted: Bool {
         UserDefaults.standard.bool(forKey: "notifAuthorized")
+    }
+
+    var authorizationUndetermined: Bool {
+        UserDefaults.standard.object(forKey: "notifAuthorized") == nil
     }
 
     func requestAuthorization() async {

@@ -111,6 +111,7 @@ import java.util.Locale
 fun SettingsScreen(
     repository: AlarmRepository,
     settings: SettingsRepository,
+    onOpenPermissions: () -> Unit = {},
     onOpenTroubleshooting: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
@@ -351,7 +352,7 @@ fun SettingsScreen(
 
         // ---- 権限 ----
         item { Spacer(Modifier.height(16.dp)) }
-        item { PermissionHealthCard(context, repository) }
+        item { PermissionHealthCard(context, repository, onOpenPermissions) }
         item { Spacer(Modifier.height(8.dp)) }
         item {
             Card(
@@ -451,7 +452,11 @@ internal fun IconSettingRow(icon: ImageVector, content: @Composable () -> Unit) 
 
 /** 権限状態。既定はアイコン+結果だけの1行 — 欠落がある時だけ自動展開して修復導線を出す。 */
 @Composable
-private fun PermissionHealthCard(context: Context, repository: AlarmRepository) {
+private fun PermissionHealthCard(
+    context: Context,
+    repository: AlarmRepository,
+    onOpenPermissions: () -> Unit,
+) {
     val activity = context as? Activity
 
     val notifOk = Build.VERSION.SDK_INT < 33 ||
@@ -509,6 +514,11 @@ private fun PermissionHealthCard(context: Context, repository: AlarmRepository) 
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            // 断った許可を後から直す入口。全部許可と項目ごとのスイッチは権限画面に置く
+            TextButton(
+                onClick = onOpenPermissions,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+            ) { Text("権限の一覧を開く（全部許可・項目ごとに切替）") }
             if (expanded) {
                 Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp)) {
                     HealthRow("通知", notifOk) {
