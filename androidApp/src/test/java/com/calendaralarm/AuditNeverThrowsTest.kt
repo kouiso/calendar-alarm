@@ -54,10 +54,20 @@ class AuditNeverThrowsTest {
     }
 
     @Test
+    fun brokenTableDoesNotThrow() = runBlocking {
+        val db = memoryDb()
+        val repository = repo(db)
+        // 閉じた DB は取り消し扱いの例外になるので、実際の DB 障害 (SQLiteException) は表を消して起こす
+        db.openHelper.writableDatabase.execSQL("DROP TABLE audit_log")
+        repository.audit("X", "y")
+        db.close()
+    }
+
+    @Test
     fun failureInsideDetachedCoroutineNeverReachesUncaughtHandler() = runBlocking {
         val db = memoryDb()
         val repository = repo(db)
-        db.close()
+        db.openHelper.writableDatabase.execSQL("DROP TABLE audit_log")
         val uncaught = CompletableDeferred<Throwable?>()
         // 鳴動経路と同じ「ハンドラ無しの独立スコープで launch」を再現し、漏れた例外を捕まえる
         val scope = CoroutineScope(
@@ -67,6 +77,7 @@ class AuditNeverThrowsTest {
         uncaught.complete(null)
         assertNull(uncaught.await())
         scope.cancel()
+        db.close()
     }
 
     @Test
