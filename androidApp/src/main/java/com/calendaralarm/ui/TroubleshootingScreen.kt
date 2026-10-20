@@ -197,13 +197,13 @@ object TroubleshootChecks {
             TroubleshootItem(
                 "fullscreen", fsiState,
                 if (fsiState != CheckState.NG) "全画面アラーム通知を表示可能" else "全画面アラーム通知が許可されていません",
-                "通常の目覚まし時計と同じように、アラームがロック画面に全画面表示されます。",
+                "通常の目覚まし時計と同じようにアラームをロック画面へ全画面表示するには、この許可が必要です。",
                 Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkgUri),
             ),
             TroubleshootItem(
                 "overlay", s(overlayOk),
                 if (overlayOk) "他のアプリの上に表示" else "他のアプリの上に表示できません",
-                "他のアプリを使用中でもアラーム画面を表示する権限が許可されています。",
+                "他のアプリを使用中でもアラーム画面を表示するには、この権限が必要です。",
                 Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkgUri),
             ),
             TroubleshootItem(

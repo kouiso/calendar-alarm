@@ -291,9 +291,11 @@ class AlarmService : Service() {
             // サービス停止 (onDestroy の scope.cancel) に埋もれて終端化が消えないよう、
             // アプリ寿命のスコープへ投げる。置き換えがキャンセルで無かったことになると
             // 先行行が FIRED のまま残り、再起動復旧が拾って再鳴動する (CodeRabbit #63)
+            // 後発の FIRED 化より前に終端化を終わらせるため join で待つ。待っている間にサービスが
+            // 破棄されても、appScope 側のジョブは取り消されずに最後まで走る (CodeRabbit #63)
             app.container.appScope.launch {
                 runCatching { app.container.repository.onSuperseded(prev, instanceId) }
-            }
+            }.join()
         }
         // PENDING→FIRED のみ遷移 (DISMISSED を FIRED に戻さない atomic 制限)
         app.container.repository.onFired(instanceId)
