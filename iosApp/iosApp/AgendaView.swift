@@ -105,10 +105,10 @@ struct AgendaView: View {
                     event: ev,
                     calendarName: cal?.name ?? "",
                     calendarColor: cal?.color ?? 0xFF888888,
-                    // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
-                    muted: ov?.muted == true || !rule.enabled
-                        || !store.state.inviteFilter.allows(ev.inviteStatus)
-                        || !store.state.eventTypeFilter.allows(resolveEventType(ev)),
+                    // 展開と同じ規則で判定する (一覧表示と鳴動の一致)
+                    muted: !isEventEligible(ev, ruleEnabled: rule.enabled, override: ov,
+                                            inviteFilter: store.state.inviteFilter,
+                                            eventTypeFilter: store.state.eventTypeFilter),
                     effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore
                 )
             }

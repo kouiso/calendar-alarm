@@ -7,7 +7,6 @@ import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
 import com.calendaralarm.shared.model.EventTypeFilter
-import com.calendaralarm.shared.model.resolveEventType
 import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
@@ -59,7 +58,7 @@ object AlarmExpander {
         defaultRule: AlarmRule = AlarmRule(),
         titleCodes: TitleCodeSettings = TitleCodeSettings(),
         inviteFilter: InviteFilter = InviteFilter(),
-        /** イベント種別ごとの鳴動ON/OFF (誕生日/不在/勤務場所/タスク/予定)。 */
+        /** イベント種別ごとの鳴動ON/OFF と「予定なし」の扱い。 */
         eventTypeFilter: EventTypeFilter = EventTypeFilter(),
         /** true のときイベントがカレンダーに持つリマインダーも鳴動対象にする。 */
         importEventReminders: Boolean = false,
@@ -72,16 +71,7 @@ object AlarmExpander {
             if (event.calendarId in disabledCalendarIds) continue
             val rule = calendarRules[event.calendarId] ?: defaultRule
             val override = overrides[event.instanceKey]
-            if (!rule.enabled || override?.action == EventAction.MUTE) continue
-            // 招待予定フィルタ。明示的に ALARM を選んだ予定はフィルタより優先
-            // (個別指定がカレンダー横断の既定より具体的な意思表示のため)。
-            if (override?.action != EventAction.ALARM &&
-                !inviteFilter.allows(event.inviteStatus)
-            ) continue
-            // イベント種別フィルタ。個別 ALARM 指定はフィルタより優先 (招待フィルタと同規則)
-            if (override?.action != EventAction.ALARM &&
-                !eventTypeFilter.allows(resolveEventType(event))
-            ) continue
+            if (!isEventEligible(event, rule, override, inviteFilter, eventTypeFilter)) continue
             // 終日イベントは startMillis が UTC 0時。深夜に鳴らさないため
             // イベント日のローカル allDayMinutes (既定9:00) に倒す。負数なら鳴らさない。
             val eventStart = if (event.allDay) {
@@ -130,6 +120,25 @@ object AlarmExpander {
             }
         }
         return result
+    }
+
+    /**
+     * 予定を鳴動対象に含めるか。展開と予定一覧の表示が同じ判定を使い、
+     * 一覧の「鳴る／鳴らない」と実際の予約がずれないようにする。
+     *
+     * 順番: カレンダー無効・個別 MUTE → 個別 ALARM → 招待 → 種別 → 予定あり／なし。
+     * 個別 ALARM はカレンダー横断の既定より具体的な意思表示なので、招待・種別・予定なしより優先する。
+     */
+    fun isEventEligible(
+        event: CalendarEvent,
+        rule: AlarmRule,
+        override: EventOverride?,
+        inviteFilter: InviteFilter,
+        eventTypeFilter: EventTypeFilter,
+    ): Boolean {
+        if (!rule.enabled || override?.action == EventAction.MUTE) return false
+        if (override?.action == EventAction.ALARM) return true
+        return inviteFilter.allows(event.inviteStatus) && eventTypeFilter.allows(event)
     }
 
     /**

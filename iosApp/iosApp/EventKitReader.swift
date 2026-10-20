@@ -58,7 +58,10 @@ final class EventKitReader {
                 inviteStatus: Self.inviteStatus(of: ev),
                 calendarReminderMinutes: Self.reminderMinutes(of: ev),
                 // Google Calendar API の iCalUID と照合するための外部UID
-                iCalUID: ev.calendarItemExternalIdentifier
+                iCalUID: ev.calendarItemExternalIdentifier,
+                // 連絡先の誕生日カレンダーはタイトルに「誕生日」が無くても誕生日と確実に分かる
+                knownEventType: cal.type == .birthday ? EventType.birthday.rawValue : nil,
+                availability: Self.availability(of: ev).rawValue
             )
         }
     }
@@ -113,6 +116,16 @@ final class EventKitReader {
         case .declined: return InviteStatus.declined.rawValue
         case .pending: return InviteStatus.needsAction.rawValue
         default: return nil
+        }
+    }
+
+    /// EKEvent.availability → 予定あり／なし。unavailable は「予定あり」と同じく鳴らす側に倒す。
+    private static func availability(of ev: EKEvent) -> EventAvailability {
+        switch ev.availability {
+        case .busy, .unavailable: return .busy
+        case .free: return .free
+        case .tentative: return .tentative
+        default: return .unknown
         }
     }
 

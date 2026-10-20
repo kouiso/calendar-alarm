@@ -117,11 +117,13 @@ final class Store: ObservableObject {
         case .birthday: g.birthday.toggle()
         case .absence: g.absence.toggle()
         case .workplace: g.workplace.toggle()
+        case .focusTime: g.focusTime.toggle()
         case .task: g.task.toggle()
         case .event: g.event.toggle()
         }
         mutate { $0.eventTypeFilter = g }
     }
+    func setFreeEventsEnabled(_ on: Bool) { mutate { $0.eventTypeFilter.freeEvents = on } }
     func toggleInviteStatus(_ s: InviteStatus) {
         mutate { f in
             switch s {

@@ -201,14 +201,35 @@ struct SettingsView: View {
                                         }
                                     })
                             }
-                            // イベント種別フィルタ (誕生日/不在/勤務場所/タスク/予定)
+                            // 鳴らす予定の種類 (#79)。iOS は種類を OS から取れないため誕生日カレンダー以外はタイトル推定
                             IconRow("square.grid.2x2.fill") {
-                                let f = store.state.eventTypeFilter
-                                MultiChips(
-                                    items: EventType.allCases,
-                                    isOn: { t in f.allows(t) },
-                                    onToggle: { t in store.toggleEventType(t); resync("event type filter") },
-                                    label: { t in t.label })
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("鳴らす予定の種類").font(NightTheme.font(13, weight: .medium))
+                                    ForEach([EventType.birthday, .workplace, .focusTime, .absence, .task, .event], id: \.self) { t in
+                                        Toggle(isOn: Binding(
+                                            get: { store.state.eventTypeFilter.allows(t) },
+                                            set: { _ in store.toggleEventType(t); resync("event type filter") }
+                                        )) {
+                                            VStack(alignment: .leading, spacing: 1) {
+                                                Text(t.label).font(NightTheme.font(13))
+                                                if let note = eventTypeNote(t) {
+                                                    Text(note).font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Toggle(isOn: Binding(
+                                        get: { store.state.eventTypeFilter.freeEvents },
+                                        set: { store.setFreeEventsEnabled($0); resync("free events") }
+                                    )) {
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text("予定なし（空き時間）の予定").font(NightTheme.font(13))
+                                            Text("仮の予定は予定ありとして鳴らします").font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    Text("予定ごとに「アラーム」を指定した予定は、ここの設定に関係なく鳴ります")
+                                        .font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                }
                             }
                             // 予定側リマインダー取込 (既定ON: 元カレンダー通知の「何分前」で鳴らす)
                             IconRow("bell.badge.fill") {
@@ -538,5 +559,14 @@ enum PreviewClock {
     static func clock(_ minuteOfDay: Int) -> String {
         let m = ((minuteOfDay % 1440) + 1440) % 1440
         return "\(m / 60):" + String(format: "%02d", m % 60)
+    }
+}
+
+/// 種類ごとの判定の確からしさ。iOS は Google の種類を取れないので、誕生日カレンダー以外はタイトル頼み。
+fileprivate func eventTypeNote(_ t: EventType) -> String? {
+    switch t {
+    case .event: return nil
+    case .birthday: return "誕生日カレンダー以外はタイトルから推定"
+    default: return "タイトルから推定"
     }
 }

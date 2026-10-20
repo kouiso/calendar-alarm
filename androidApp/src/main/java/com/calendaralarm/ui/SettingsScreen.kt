@@ -804,23 +804,7 @@ private fun EventRulesCard(
                     )
                 }
             }
-            // イベント種別フィルタ (誕生日/不在/勤務場所/タスク/予定)
-            IconSettingRow(Icons.Default.Notifications) {
-                listOf(
-                    EventType.BIRTHDAY to "誕生日",
-                    EventType.ABSENCE to "不在",
-                    EventType.WORKPLACE to "勤務場所",
-                    EventType.TASK to "タスク",
-                    EventType.EVENT to "予定",
-                ).forEach { (t, label) ->
-                    FilterChip(
-                        selected = prefs.eventTypeFilter.allows(t),
-                        onClick = { scope.launch { settings.toggleEventType(t); repository.resync("settings") } },
-                        label = { Text(label, maxLines = 1) },
-                        modifier = Modifier.padding(end = 4.dp),
-                    )
-                }
-            }
+            EventTypeSection(prefs, settings, repository, scope)
             // Googleカレンダー連携 (eventType を API の正本から取得)
             val googleLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.StartActivityForResult()
@@ -887,6 +871,83 @@ private fun EventRulesCard(
             onDismiss = { showCodes = false },
             onSave = { scope.launch { settings.setTitleCodes(it); repository.resync("settings") }; showCodes = false },
         )
+    }
+}
+
+/**
+ * 鳴らす予定の種類 (#79)。種類6つと「予定なし」を一か所で切り替える。
+ * OS が種類を教えてくれない時はタイトルからの推定なので、確実に分かるとは書かない。
+ */
+@Composable
+private fun EventTypeSection(
+    prefs: SettingsRepository.Settings,
+    settings: SettingsRepository,
+    repository: AlarmRepository,
+    scope: kotlinx.coroutines.CoroutineScope,
+) {
+    val googleLinked = prefs.googleAccountEmail != null
+    Text(
+        "鳴らす予定の種類",
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+    )
+    listOf(
+        EventType.BIRTHDAY to "誕生日",
+        EventType.WORKPLACE to "勤務場所",
+        EventType.FOCUS_TIME to "サイレントモード",
+        EventType.ABSENCE to "不在",
+        EventType.TASK to "タスク",
+        EventType.EVENT to "予定",
+    ).forEach { (type, label) ->
+        // タスクは Calendar API に種類の値が無く、連携していても常にタイトル頼み
+        val guessed = type != EventType.EVENT && (!googleLinked || type == EventType.TASK)
+        EventTypeSwitchRow(
+            label = label,
+            note = if (guessed) "タイトルから推定" else null,
+            checked = prefs.eventTypeFilter.allows(type),
+            onChange = { on ->
+                scope.launch { settings.setEventTypeEnabled(type, on); repository.resync("settings") }
+            },
+        )
+    }
+    EventTypeSwitchRow(
+        label = "予定なし（空き時間）の予定",
+        note = "仮の予定は予定ありとして鳴らします",
+        checked = prefs.eventTypeFilter.freeEvents,
+        onChange = { on ->
+            scope.launch { settings.setFreeEventsEnabled(on); repository.resync("settings") }
+        },
+    )
+    Text(
+        "予定ごとに「アラーム」を指定した予定は、ここの設定に関係なく鳴ります",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun EventTypeSwitchRow(
+    label: String,
+    note: String?,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            if (note != null) {
+                Text(
+                    note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 

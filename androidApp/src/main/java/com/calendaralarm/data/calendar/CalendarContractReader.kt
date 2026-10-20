@@ -4,6 +4,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.provider.CalendarContract
 import com.calendaralarm.shared.model.CalendarEvent
+import com.calendaralarm.shared.model.EventAvailability
 import com.calendaralarm.shared.model.CalendarSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -63,6 +64,7 @@ class CalendarContractReader(private val context: Context) {
             CalendarContract.Instances.ALL_DAY,
             CalendarContract.Instances.SELF_ATTENDEE_STATUS,
             CalendarContract.Instances.ORGANIZER,
+            CalendarContract.Instances.AVAILABILITY,
         )
         val out = mutableListOf<CalendarEvent>()
         val baseEventIds = mutableSetOf<Long>()
@@ -92,6 +94,7 @@ class CalendarContractReader(private val context: Context) {
                     inviteStatus = selfStatusToInvite(
                         selfStatus, organizer, accountByCal[calId],
                     ),
+                    availability = availabilityOf(if (c.isNull(10)) null else c.getInt(10)),
                 )
             }
         }
@@ -131,6 +134,14 @@ class CalendarContractReader(private val context: Context) {
             }
             out
         }
+
+    /** AVAILABILITY → 空き状況。未知の値は UNKNOWN (予定あり扱い) にして黙って鳴らなくなるのを防ぐ。 */
+    private fun availabilityOf(value: Int?): EventAvailability = when (value) {
+        CalendarContract.Events.AVAILABILITY_BUSY -> EventAvailability.BUSY
+        CalendarContract.Events.AVAILABILITY_FREE -> EventAvailability.FREE
+        CalendarContract.Events.AVAILABILITY_TENTATIVE -> EventAvailability.TENTATIVE
+        else -> EventAvailability.UNKNOWN
+    }
 
     /**
      * 出席ステータス → InviteStatus。主催者=カレンダー所有者自身の予定は

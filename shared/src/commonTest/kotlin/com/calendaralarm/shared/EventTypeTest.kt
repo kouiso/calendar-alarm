@@ -30,7 +30,7 @@ class EventTypeTest {
         assertEquals(EventType.WORKPLACE, googleEventTypeToEventType("workingLocation"))
         assertEquals(EventType.TASK, googleEventTypeToEventType("task"))
         assertEquals(EventType.EVENT, googleEventTypeToEventType("default"))
-        assertEquals(EventType.EVENT, googleEventTypeToEventType("focusTime"))
+        assertEquals(EventType.FOCUS_TIME, googleEventTypeToEventType("focusTime"))
         assertEquals(EventType.EVENT, googleEventTypeToEventType("fromGmail"))
     }
 
@@ -80,14 +80,10 @@ class EventTypeTest {
     // ---- EventTypeFilter ----
 
     @Test
-    fun デフォルトは全種別許可() {
-        val f = EventTypeFilter()
-        EventType.entries.forEach { assertTrue(f.allows(it), "$it") }
-    }
-
-    @Test
     fun OFFにした種別だけ鳴らない() {
-        val f = EventTypeFilter(birthday = false, absence = false)
+        val f = EventTypeFilter(
+            birthday = false, absence = false, workplace = true, task = true, event = true,
+        )
         assertFalse(f.allows(EventType.BIRTHDAY))
         assertFalse(f.allows(EventType.ABSENCE))
         assertTrue(f.allows(EventType.WORKPLACE))

@@ -110,12 +110,11 @@ class SettingsRepository(private val context: Context) {
                 needsAction = (p[KEY_INVITE_MASK] ?: 7) and 4 != 0,
                 declined = (p[KEY_INVITE_MASK] ?: 7) and 8 != 0,
             ),
-            eventTypeFilter = EventTypeFilter(
-                birthday = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 1 != 0,
-                absence = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 2 != 0,
-                workplace = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 4 != 0,
-                task = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 8 != 0,
-                event = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 16 != 0,
+            // 旧版から保存済みのマスクは選択を保つ。新しい2項目は別キーにして旧マスクの意味を変えない
+            eventTypeFilter = EventTypeFilter.fromStored(
+                legacyMask = p[KEY_EVENT_TYPE_MASK],
+                focusTime = p[KEY_EVENT_TYPE_FOCUS_TIME],
+                freeEvents = p[KEY_EVENT_FREE],
             ),
             googleAccountEmail = p[KEY_GOOGLE_ACCOUNT],
             importEventReminders = p[KEY_IMPORT_REMINDERS] ?: true,
@@ -194,16 +193,18 @@ class SettingsRepository(private val context: Context) {
         }
         p[KEY_INVITE_MASK] = (p[KEY_INVITE_MASK] ?: 7) xor bit
     }
-    suspend fun toggleEventType(type: EventType) = edit { p ->
-        val bit = when (type) {
-            EventType.BIRTHDAY -> 1
-            EventType.ABSENCE -> 2
-            EventType.WORKPLACE -> 4
-            EventType.TASK -> 8
-            EventType.EVENT -> 16
+    suspend fun setEventTypeEnabled(type: EventType, on: Boolean) = edit { p ->
+        val current = EventTypeFilter.fromStored(
+            p[KEY_EVENT_TYPE_MASK], p[KEY_EVENT_TYPE_FOCUS_TIME], p[KEY_EVENT_FREE],
+        )
+        val next = current.withType(type, on)
+        if (type == EventType.FOCUS_TIME) {
+            p[KEY_EVENT_TYPE_FOCUS_TIME] = next.focusTime
+        } else {
+            p[KEY_EVENT_TYPE_MASK] = next.toLegacyMask()
         }
-        p[KEY_EVENT_TYPE_MASK] = (p[KEY_EVENT_TYPE_MASK] ?: 31) xor bit
     }
+    suspend fun setFreeEventsEnabled(on: Boolean) = edit { it[KEY_EVENT_FREE] = on }
     suspend fun setImportEventReminders(v: Boolean) = edit { it[KEY_IMPORT_REMINDERS] = v }
     suspend fun setSnoozePresets(v: List<Int>) = edit { it[KEY_SNOOZE_PRESETS] = v.joinToString(",") }
     suspend fun setAlarmVolumePercent(v: Int) = edit { it[KEY_ALARM_VOLUME] = v }
@@ -265,6 +266,8 @@ class SettingsRepository(private val context: Context) {
         val KEY_CODE_SCOPE = intPreferencesKey("title_code_scope")
         val KEY_INVITE_MASK = intPreferencesKey("invite_mask")
         val KEY_EVENT_TYPE_MASK = intPreferencesKey("event_type_mask")
+        val KEY_EVENT_TYPE_FOCUS_TIME = booleanPreferencesKey("event_type_focus_time")
+        val KEY_EVENT_FREE = booleanPreferencesKey("event_free_enabled")
         val KEY_GOOGLE_ACCOUNT = stringPreferencesKey("google_account_email")
         val KEY_IMPORT_REMINDERS = booleanPreferencesKey("import_event_reminders")
         val KEY_SNOOZE_PRESETS = stringPreferencesKey("snooze_presets")

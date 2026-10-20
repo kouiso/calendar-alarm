@@ -59,12 +59,12 @@ data class InviteFilter(
 }
 
 /**
- * イベント種別 (元アプリのイベントタイプメニュー仕様)。
- * 誕生日/不在/勤務場所/タスクはタイトル文字列で分類し、残りは通常予定。
- * (Googleカレンダーの誕生日はタイトルに「誕生日」または"birthday"を含む前提)
+ * イベント種別 (元アプリのイベントタイプメニュー仕様 + Google カレンダーの作成メニュー)。
+ * OS カレンダーに種別の列が無いため、Google Calendar API の eventType か
+ * iOS の誕生日カレンダーで分かる時以外はタイトル文字列で推定する。
  */
 @Serializable
-enum class EventType { BIRTHDAY, ABSENCE, WORKPLACE, TASK, EVENT }
+enum class EventType { BIRTHDAY, ABSENCE, WORKPLACE, FOCUS_TIME, TASK, EVENT }
 
 /** タイトル文字からイベント種別を分類する。判定順 = 先勝ち (「誕生日」最優先)。 */
 fun classifyEventType(title: String): EventType {
@@ -73,6 +73,8 @@ fun classifyEventType(title: String): EventType {
     return when {
         hit("誕生日", "バースデー", "birthday") -> EventType.BIRTHDAY
         hit("不在", "休暇", "休み", "有休", "欠勤", "absence", "absent", "away", "out of office") -> EventType.ABSENCE
+        // 勤務場所の "office" より先に見ないと "focus time @office" が勤務場所に化ける
+        hit("サイレントモード", "サイレント モード", "focus time") -> EventType.FOCUS_TIME
         hit("勤務場所", "出社", "在宅勤務", "リモートワーク", "workplace", "work location", "office") -> EventType.WORKPLACE
         hit("タスク", "todo", "to-do", "task") -> EventType.TASK
         else -> EventType.EVENT
@@ -84,33 +86,104 @@ fun googleEventTypeToEventType(googleType: String?): EventType? = when (googleTy
     "birthday" -> EventType.BIRTHDAY
     "outOfOffice" -> EventType.ABSENCE
     "workingLocation" -> EventType.WORKPLACE
+    "focusTime" -> EventType.FOCUS_TIME
     "task" -> EventType.TASK
-    "default", "focusTime", "fromGmail" -> EventType.EVENT
+    "default", "fromGmail" -> EventType.EVENT
     else -> null
 }
 
 /**
- * イベントの実種別。Google Calendar API の eventType が取れていればそれを正本、
- * 取れないイベントはタイトル文字列判定へフォールバックする。
+ * イベントの実種別。OS が確実に示した種別 (iOS の誕生日カレンダー) を最優先し、
+ * 次に Google Calendar API の eventType、どちらも無ければタイトル文字列で推定する。
  */
 fun resolveEventType(event: CalendarEvent): EventType =
-    googleEventTypeToEventType(event.googleEventType) ?: classifyEventType(event.title)
+    event.knownEventType
+        ?: googleEventTypeToEventType(event.googleEventType)
+        ?: classifyEventType(event.title)
 
-/** イベント種別ごとの鳴動ON/OFF (元アプリ仕様)。false の種別は鳴らさない。 */
+/**
+ * 予定の空き状況 (Google の「予定あり／予定なし」)。
+ * Android は Instances.AVAILABILITY、iOS は EKEvent.availability から写す。
+ */
+@Serializable
+enum class EventAvailability { BUSY, FREE, TENTATIVE, UNKNOWN }
+
+/**
+ * イベント種別ごとの鳴動ON/OFF と「予定なし」の扱い。false の種別は鳴らさない。
+ * 既定値は #79 の表: 不在・サイレントモード・勤務場所・誕生日は鳴らさない、
+ * タスク・予定・予定なしは鳴らす (黙って鳴らなくなるのが最悪の失敗のため)。
+ */
 @Serializable
 data class EventTypeFilter(
-    val birthday: Boolean = true,
-    val absence: Boolean = true,
-    val workplace: Boolean = true,
+    val birthday: Boolean = false,
+    val absence: Boolean = false,
+    val workplace: Boolean = false,
     val task: Boolean = true,
     val event: Boolean = true,
+    val focusTime: Boolean = false,
+    /** 「予定なし」(free) の予定を鳴らすか。仮 (tentative) と不明は予定あり扱い。 */
+    val freeEvents: Boolean = true,
 ) {
     fun allows(type: EventType): Boolean = when (type) {
         EventType.BIRTHDAY -> birthday
         EventType.ABSENCE -> absence
         EventType.WORKPLACE -> workplace
+        EventType.FOCUS_TIME -> focusTime
         EventType.TASK -> task
         EventType.EVENT -> event
+    }
+
+    fun allows(availability: EventAvailability): Boolean =
+        availability != EventAvailability.FREE || freeEvents
+
+    /** 種別 → 予定あり／なしの順で判定する。個別指定の優先は呼び出し側 (AlarmExpander) が持つ。 */
+    fun allows(event: CalendarEvent): Boolean =
+        allows(resolveEventType(event)) && allows(event.availability)
+
+    fun withType(type: EventType, on: Boolean): EventTypeFilter = when (type) {
+        EventType.BIRTHDAY -> copy(birthday = on)
+        EventType.ABSENCE -> copy(absence = on)
+        EventType.WORKPLACE -> copy(workplace = on)
+        EventType.FOCUS_TIME -> copy(focusTime = on)
+        EventType.TASK -> copy(task = on)
+        EventType.EVENT -> copy(event = on)
+    }
+
+    /** Android の保存キー event_type_mask の形。旧版と同じビット割り当てを保つ。 */
+    fun toLegacyMask(): Int =
+        (if (birthday) MASK_BIRTHDAY else 0) +
+            (if (absence) MASK_ABSENCE else 0) +
+            (if (workplace) MASK_WORKPLACE else 0) +
+            (if (task) MASK_TASK else 0) +
+            (if (event) MASK_EVENT else 0)
+
+    companion object {
+        const val MASK_BIRTHDAY = 1
+        const val MASK_ABSENCE = 2
+        const val MASK_WORKPLACE = 4
+        const val MASK_TASK = 8
+        const val MASK_EVENT = 16
+
+        /**
+         * 保存値から復元する。旧版から保存済みのマスクはそのまま使い、利用者の選択を変えない。
+         * 一度も触っていない (マスクが無い) 人と、旧版に無かった項目だけが新しい既定値になる。
+         */
+        fun fromStored(legacyMask: Int?, focusTime: Boolean?, freeEvents: Boolean?): EventTypeFilter {
+            val defaults = EventTypeFilter()
+            val base = legacyMask?.let { m ->
+                defaults.copy(
+                    birthday = m and MASK_BIRTHDAY != 0,
+                    absence = m and MASK_ABSENCE != 0,
+                    workplace = m and MASK_WORKPLACE != 0,
+                    task = m and MASK_TASK != 0,
+                    event = m and MASK_EVENT != 0,
+                )
+            } ?: defaults
+            return base.copy(
+                focusTime = focusTime ?: defaults.focusTime,
+                freeEvents = freeEvents ?: defaults.freeEvents,
+            )
+        }
     }
 }
 
@@ -145,6 +218,10 @@ data class CalendarEvent(
     val iCalUID: String? = null,
     /** Google Calendar API の eventType 生値。連携済みアカウントで取得できた時のみ入る。 */
     val googleEventType: String? = null,
+    /** OS が確実に示した種別 (iOS の誕生日カレンダー)。タイトル推定より優先するため別に持つ。 */
+    val knownEventType: EventType? = null,
+    /** 予定あり／予定なし。読めない OS・カレンダーは UNKNOWN (予定あり扱い) にして黙って止めない。 */
+    val availability: EventAvailability = EventAvailability.UNKNOWN,
 ) {
     /** 同一イベントの複数回を区別するため、開始時刻込みの安定キーを返す。 */
     val instanceKey: String get() = "$calendarId:$id:$startMillis"

@@ -184,13 +184,10 @@ class AlarmRepository(
                     ?: appSettings.defaultReminderAction,
             )
             val override = ov?.toModel()
-            // 招待フィルタも反映する: 展開側で鳴らない予定が「アラーム」
-            // アイコン表示になるのは矛盾
-            val (start, reminder) = if (pref?.enabled == false ||
-                !appSettings.inviteFilter.allows(ev.inviteStatus)
-                    || !appSettings.eventTypeFilter.allows(
-                        com.calendaralarm.shared.model.resolveEventType(ev)
-                    )
+            // 展開と同じ判定関数を使う: 一覧が「アラーム」表示なのに予約されない、を起こさないため
+            val (start, reminder) = if (!AlarmExpander.isEventEligible(
+                    ev, rule, override, appSettings.inviteFilter, appSettings.eventTypeFilter,
+                )
             ) {
                 EventAction.MUTE to EventAction.MUTE
             } else {

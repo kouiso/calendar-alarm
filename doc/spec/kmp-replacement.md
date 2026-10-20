@@ -132,6 +132,32 @@ interface AlarmAudio { fun play(sound: AlarmSound); fun stop() }
 iOS は AlarmKit の予約上限 (約 64 件) と繰り返しが週次のみという制約があるため、
 上記と同じ展開結果を「ワンショットの列」としてウィンドウ内に絞って予約する設計に揃える。
 
+### 5.4 予定の種類と「予定なし」(#79)
+
+予約に含めるかは `AlarmExpander.isEventEligible` が決める。予定一覧の「鳴る／鳴らない」表示も同じ関数を使う（iOS は `Models.swift` に同じ規則を写す）。
+
+判定の順番:
+
+1. カレンダーが無効、または予定ごとに「ミュート」 → 鳴らさない
+2. 予定ごとに「アラーム」 → 鳴らす（下の設定は見ない）
+3. 招待フィルタ → 種類 → 予定あり／なし
+
+| 種類 | 既定 | 何で分かるか |
+|---|---|---|
+| 誕生日 | 鳴らさない | Google 連携の `eventType=birthday`、iOS の誕生日カレンダー、それ以外はタイトルから推定 |
+| 勤務場所 | 鳴らさない | Google 連携の `workingLocation`、無ければタイトルから推定 |
+| サイレントモード | 鳴らさない | Google 連携の `focusTime`、無ければタイトルから推定 |
+| 不在 | 鳴らさない | Google 連携の `outOfOffice`、無ければタイトルから推定 |
+| タスク | 鳴らす | タイトルから推定のみ（Calendar API に種類の値が無い） |
+| 予定 | 鳴らす | 上のどれでもない予定 |
+| 予定なし | 鳴らす | Android `Instances.AVAILABILITY`、iOS `EKEvent.availability` |
+
+- 仮（tentative）と読めない値は「予定あり」として扱う。iOS の `unavailable` も「予定あり」。
+- iOS には Google 連携が無いので、誕生日カレンダー以外の種類はタイトルからの推定だけになる。
+- 保存値の移行:
+  - Android: `event_type_mask` を保存済みの人は、その選択を変えない。サイレントモードは `event_type_focus_time`、予定なしは `event_free_enabled` に別で保存する。マスクが無い人は新しい既定値になる。
+  - iOS: `store.json` の `eventTypeFilter` は項目ごとに読み、保存済みの項目は変えない。iOS は全設定を毎回まとめて書くため、旧版を一度でも使った人は「未操作」と区別できず、旧版の値（全種類オン）が残る。
+
 ## 6. プラットフォーム設計 (Android)
 
 ### 鳴動経路
