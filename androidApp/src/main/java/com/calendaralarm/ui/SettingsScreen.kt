@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Email
@@ -79,7 +80,6 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -88,6 +88,7 @@ import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.db.CalendarPrefEntity
 import com.calendaralarm.data.db.AuditLogEntity
 import com.calendaralarm.shared.logic.AlarmExpander
+import com.calendaralarm.shared.logic.SettingsPreview
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventType
@@ -153,6 +154,12 @@ fun SettingsScreen(
                             )
                         }
                     }
+                    PreviewLine(
+                        "9:00 の予定",
+                        "${SettingsPreview.ringClock(SettingsPreview.SAMPLE_EVENT_MINUTE, prefs?.defaultMinutesBefore ?: 0)} に鳴る",
+                        // 「カレンダーの通知設定を使う」を切ると通知の時刻では鳴らないので、注記も出さない
+                        "＋ カレンダーの通知（重なれば1回）".takeIf { prefs?.importEventReminders != false },
+                    )
                     // スヌーズ
                     IconSettingRow(Icons.Default.Snooze) {
                         listOf(5, 10, 15).forEach { m ->
@@ -164,6 +171,11 @@ fun SettingsScreen(
                             )
                         }
                     }
+                    PreviewLine(
+                        "6:30 に鳴ってスヌーズ",
+                        "${SettingsPreview.snoozeClock(SettingsPreview.SAMPLE_ALARM_MINUTE, prefs?.defaultSnoozeMinutes ?: 10)} にもう一度",
+                        null,
+                    )
                     // 天気
                     IconSettingRow(Icons.Default.WbSunny) {
                         Spacer(Modifier.weight(1f))
@@ -222,54 +234,6 @@ fun SettingsScreen(
         item { Spacer(Modifier.height(12.dp)) }
         item {
             prefs?.let { p -> NotificationRulesCard(settings, p) }
-        }
-
-        // ---- AI: OpenRouter キー (メール→予定・通知ルール生成に使用) ----
-        item { Spacer(Modifier.height(12.dp)) }
-        item {
-            prefs?.let { p ->
-                Card(
-                    Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = androidx.compose.material3.CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    ),
-                ) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-                        IconSettingRow(Icons.Default.Email) {
-                            var key by remember(p.openRouterApiKey) {
-                                mutableStateOf(p.openRouterApiKey.orEmpty())
-                            }
-                            OutlinedTextField(
-                                value = key,
-                                onValueChange = { key = it },
-                                placeholder = { Text("OpenRouter キー") },
-                                singleLine = true,
-                                visualTransformation = PasswordVisualTransformation(),
-                                modifier = Modifier.weight(1f),
-                            )
-                            TextButton(onClick = {
-                                scope.launch { settings.setOpenRouterApiKey(key.ifBlank { null }) }
-                            }) { Text("保存") }
-                        }
-                        IconSettingRow(Icons.Default.Email) {
-                            var model by remember(p.openRouterModel) {
-                                mutableStateOf(p.openRouterModel)
-                            }
-                            OutlinedTextField(
-                                value = model,
-                                onValueChange = { model = it },
-                                placeholder = { Text("モデル") },
-                                singleLine = true,
-                                modifier = Modifier.weight(1f),
-                            )
-                            TextButton(onClick = {
-                                scope.launch { settings.setOpenRouterModel(model) }
-                            }) { Text("保存") }
-                        }
-                    }
-                }
-            }
         }
 
         // ---- カレンダー ----
@@ -1231,6 +1195,7 @@ private fun AppearanceCard(
                     }
                 }
             }
+            ThemePreview()
             // カスタム背景
             Row(
                 Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -1253,6 +1218,64 @@ private fun AppearanceCard(
                     }) { Text("削除") }
                 }
             }
+        }
+    }
+}
+
+/**
+ * 設定の選択肢の下に、選んだ結果を例の時刻で見せる1行 (局長決定 2026-10-17 の5)。
+ * 「例 → 結果」の形にして、結果だけをテーマ色で強調する。
+ */
+@Composable
+private fun PreviewLine(sample: String, result: String, note: String?) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 32.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(sample, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(
+            Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 6.dp).size(14.dp),
+        )
+        Text(
+            result,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        note?.let {
+            Spacer(Modifier.width(6.dp))
+            Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/**
+ * テーマを選んだ結果の見え方。テーマ色は「鳴る/オン」の意味だけに使うので、
+ * 次のアラームの時刻とオンのスイッチに色が付く様子を縮小して見せる。
+ */
+@Composable
+private fun ThemePreview() {
+    Card(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
+    ) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("次のアラーム", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text("6:30", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "チーム朝会 · 7:00 開始",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = true, onCheckedChange = null)
         }
     }
 }

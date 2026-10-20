@@ -15,7 +15,8 @@ import com.calendaralarm.shared.model.TitleCodeSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore by preferencesDataStore(name = "settings")
+// テストから旧キーの残存を確かめるため internal にしている
+internal val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
 /** アプリ全体設定。DataStore Preferences で保持する。 */
 class SettingsRepository(private val context: Context) {
@@ -81,17 +82,13 @@ class SettingsRepository(private val context: Context) {
         val showNextAlarmAfterDismiss: Boolean = false,
         /** タイマープリセット。 */
         val timerPresets: List<TimerPreset> = DEFAULT_TIMER_PRESETS,
-        /** OpenRouter APIキー (AI機能用。ローカル入力)。 */
-        val openRouterApiKey: String? = null,
-        /** OpenRouter のモデル指定。 */
-        val openRouterModel: String = "openai/gpt-4.1-mini",
         /** 通知アラーム (他アプリ通知→アラーム) の有効フラグ */
         val notificationAlarmEnabled: Boolean = false,
         /** 通知アラームのルール一覧 */
         val notificationRules: List<com.calendaralarm.shared.model.NotificationRuleSpec> = emptyList(),
     )
 
-    val flow: Flow<Settings> = context.dataStore.data.map { p ->
+    val flow: Flow<Settings> = context.settingsDataStore.data.map { p ->
         Settings(
             defaultMinutesBefore = p[KEY_MINUTES] ?: 0,
             defaultSnoozeMinutes = p[KEY_SNOOZE] ?: 10,
@@ -153,8 +150,6 @@ class SettingsRepository(private val context: Context) {
                         }
                     }
                 }.ifEmpty { DEFAULT_TIMER_PRESETS },
-            openRouterApiKey = p[KEY_OPENROUTER_KEY]?.ifBlank { null },
-            openRouterModel = p[KEY_OPENROUTER_MODEL] ?: "openai/gpt-4.1-mini",
             notificationAlarmEnabled = p[KEY_NOTIF_ALARM] ?: false,
             notificationRules = runCatching {
                 rulesJson.decodeFromString<List<com.calendaralarm.shared.model.NotificationRuleSpec>>(
@@ -237,10 +232,11 @@ class SettingsRepository(private val context: Context) {
         // 旧版と同じキーで秒を保持。読み取り側は `sec:` 接頭辞で新形式と判別する
         it[KEY_TIMER_PRESETS] = v.joinToString(";") { p -> "${p.label}|sec:${p.seconds}" }
     }
-    suspend fun setOpenRouterApiKey(v: String?) = edit {
-        if (v.isNullOrBlank()) it.remove(KEY_OPENROUTER_KEY) else it[KEY_OPENROUTER_KEY] = v
+    /** 入力欄を廃止した旧版で保存されたキーを端末に残さない。 */
+    suspend fun dropLegacyAiKey() = edit {
+        it.remove(KEY_OPENROUTER_KEY)
+        it.remove(KEY_OPENROUTER_MODEL)
     }
-    suspend fun setOpenRouterModel(v: String) = edit { it[KEY_OPENROUTER_MODEL] = v }
     suspend fun setNotificationAlarmEnabled(v: Boolean) = edit { it[KEY_NOTIF_ALARM] = v }
     suspend fun setNotificationRules(
         v: List<com.calendaralarm.shared.model.NotificationRuleSpec>,
@@ -254,7 +250,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
-        context.dataStore.edit(block)
+        context.settingsDataStore.edit(block)
     }
 
     private companion object {

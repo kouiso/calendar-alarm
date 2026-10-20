@@ -52,13 +52,12 @@ struct MailImportSheet: View {
     }
 
     private func extract() async {
-        guard let key = store.state.openRouterApiKey, !key.isEmpty else {
-            error = "OpenRouter のキーが未設定です (設定 → AI)"
+        guard let svc = OpenRouterService.fromBundle() else {
+            error = "このビルドでは AI の読み取りを使えません"
             loading = false
             return
         }
         do {
-            let svc = OpenRouterService(apiKey: key, model: store.state.openRouterModel)
             if let ev = try await svc.extractEvent(text: rawText) {
                 title = ev.title
                 start = ev.start
