@@ -6,6 +6,7 @@ import WidgetKit
 struct CalendarAlarmApp: App {
 
     @StateObject private var engine = Engine()
+    @StateObject private var permissions = PermissionCenter()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -17,6 +18,7 @@ struct CalendarAlarmApp: App {
             RootView()
                 .environmentObject(engine)
                 .environmentObject(engine.store)
+                .environmentObject(permissions)
                 .nightFont()
                 .task {
                     await engine.resync(reason: "app start")
