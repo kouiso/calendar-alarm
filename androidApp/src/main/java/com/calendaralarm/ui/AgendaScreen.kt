@@ -136,6 +136,19 @@ fun AgendaScreen(
         items = repository.upcomingEvents(days = fetchDays)
     }
 
+    // カレンダー権限が false→true に変わった時 (接続カード経由でも設定アプリ経由でも)、
+    // 一覧を取り直して resync する。接続カードの onConnected だけでは設定アプリ側の許可を拾えない
+    var prevCalendarOk by remember { mutableStateOf(perms.value.calendarOk) }
+    LaunchedEffect(perms.value.calendarOk) {
+        val ok = perms.value.calendarOk
+        if (ok && !prevCalendarOk) {
+            app.ensureCalendarObserver()
+            repository.resync("calendar permission granted")
+            refreshKey++
+        }
+        prevCalendarOk = ok
+    }
+
     val nextAlarm = pending.firstOrNull()
 
     Column(Modifier.fillMaxSize()) {
@@ -161,7 +174,7 @@ fun AgendaScreen(
                 ) {
                     onAlarmArmed("予定", s?.defaultMinutesBefore)
                 }
-                scope.launch { repository.resync("calendar linked") }
+                scope.launch { repository.resync("calendar linked"); refreshKey++ }
             },
         )
         PermissionNagCard(perms = perms.value, onFix = onShowRingSetup)
