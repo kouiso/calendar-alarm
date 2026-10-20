@@ -36,11 +36,18 @@ struct SettingsView: View {
                                     store.setDefaultMinutes(m); resync("default")
                                 } label: { m in m == 0 ? "開始時" : "\(m)分前" }
                             }
+                            PreviewLine(sample: "9:00 の予定",
+                                        result: "\(PreviewClock.clock(9 * 60 - store.state.defaultMinutesBefore)) に鳴る",
+                                        // 「カレンダーの通知設定を使う」を切ると通知の時刻では鳴らないので、注記も出さない
+                                        note: store.state.importEventReminders ? "＋ カレンダーの通知（重なれば1回）" : nil)
                             IconRow("zzz") {
                                 Chips(items: snoozeOptions, current: store.state.defaultSnoozeMinutes) { m in
                                     store.setDefaultSnooze(m); resync("default")
                                 } label: { "\($0)分" }
                             }
+                            PreviewLine(sample: "6:30 に鳴ってスヌーズ",
+                                        result: "\(PreviewClock.clock(6 * 60 + 30 + store.state.defaultSnoozeMinutes)) にもう一度",
+                                        note: nil)
                             IconRow("sun.max.fill") {
                                 Toggle("", isOn: Binding(get: { store.state.weatherEnabled },
                                                          set: { store.setWeatherEnabled($0) })).labelsHidden()
@@ -534,5 +541,32 @@ struct MultiChips<T: Hashable>: View {
                 }.buttonStyle(.plain)
             }
         }
+    }
+}
+
+/// 設定の選択肢の下に、選んだ結果を例の時刻で見せる1行 (局長決定 2026-10-17 の5)。
+/// 計算は Android と同じ shared の SettingsPreview と揃える。
+struct PreviewLine: View {
+    let sample: String
+    let result: String
+    let note: String?
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(sample).foregroundStyle(.secondary)
+            Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(.secondary)
+            Text(result).fontWeight(.semibold).foregroundStyle(NightTheme.indigo)
+            if let note { Text(note).font(NightTheme.font(10)).foregroundStyle(.secondary) }
+            Spacer(minLength: 0)
+        }
+        .font(NightTheme.font(12))
+        .padding(.leading, 34)
+    }
+}
+
+enum PreviewClock {
+    /// 分を 0:00〜23:59 に収めて "8:50" の形にする。日をまたげば前日/翌日の時刻。
+    static func clock(_ minuteOfDay: Int) -> String {
+        let m = ((minuteOfDay % 1440) + 1440) % 1440
+        return "\(m / 60):" + String(format: "%02d", m % 60)
     }
 }
