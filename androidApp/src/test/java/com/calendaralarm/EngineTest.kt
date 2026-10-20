@@ -389,24 +389,45 @@ class EngineTest {
     }
 
     @Test
-    fun `置き換えは先行を DISMISSED・後発を FIRED に同一トランザクションで倒す`() = runBlocking {
-        val prev = AlarmInstance(
-            id = "sup-p", triggerAtMillis = System.currentTimeMillis(),
-            title = "t", kind = AlarmKind.EVENT,
-        )
-        val next = AlarmInstance(
-            id = "sup-n", triggerAtMillis = System.currentTimeMillis(),
-            title = "t", kind = AlarmKind.EVENT,
-        )
+    fun `押し出された先行は鳴動待ちに戻り、後発の停止後に鳴らし直しの予約が入る`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val prev = AlarmInstance(id = "sup-p", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT)
+        val next = AlarmInstance(id = "sup-n", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT)
         repository.scheduleAdhoc(prev)
         repository.scheduleAdhoc(next)
         repository.onFired(prev.id)
-        repository.onSuperseded(prev.id, next.id)
+        repository.onFired(next.id)
+        repository.onDisplaced(prev.id, next.id)
 
-        assertEquals(AlarmState.DISMISSED.name, db.scheduledInstances().byId(prev.id)!!.state)
-        // 先行の終端化だけが残り後発が PENDING のままだと、プロセスキル後の復旧
-        // (firedWithinGrace) が拾える FIRED 行が無くなり鳴るべきアラームが消える
-        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(next.id)!!.state)
+        // 押し出された側は誰も止めていないので終端にしない
+        assertEquals(AlarmState.PENDING.name, db.scheduledInstances().byId(prev.id)!!.state)
+        // 後発は FIRED のまま。ここでプロセスが死んでも復旧 (firedWithinGrace) が後発を拾う
         assertEquals(next.id, repository.firedWithinGrace()?.id)
+
+        repository.onDismissed(next.id)
+        assertEquals(1, repository.rearmWaitingRings(next.id))
+        val alarm = shadowOf(context.getSystemService(android.app.AlarmManager::class.java)).nextScheduledAlarm
+        assertTrue("先行の鳴らし直しが今すぐ予約される", alarm != null && alarm.triggerAtMs - System.currentTimeMillis() < 5_000)
+        assertTrue(repository.auditFlow(20).first().any { it.action == "REARM" && it.detail.startsWith(prev.id) })
     }
+
+    @Test
+    fun `止めた鳴動・通知のみ・猶予切れは鳴らし直さない`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val stopped = AlarmInstance(id = "rm-stopped", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT)
+        val notify = AlarmInstance(
+            id = "rm-notify", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT,
+            delivery = com.calendaralarm.shared.model.EventAction.NOTIFY,
+        )
+        val stale = AlarmInstance(id = "rm-stale", triggerAtMillis = now - 2 * 60 * 60_000L, title = "t", kind = AlarmKind.EVENT)
+        val future = AlarmInstance(id = "rm-future", triggerAtMillis = now + 60 * 60_000L, title = "t", kind = AlarmKind.EVENT)
+        db.scheduledInstances().upsert(listOf(stopped, notify, stale, future).map { ScheduledInstanceEntity.of(it) })
+        repository.onFired(stopped.id)
+        repository.onDismissed(stopped.id)
+        repository.onFired(notify.id)
+
+        assertEquals(0, repository.rearmWaitingRings(resolvedId = null))
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(notify.id)!!.state)
+    }
+
 }

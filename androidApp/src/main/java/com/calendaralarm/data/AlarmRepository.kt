@@ -226,25 +226,41 @@ class AlarmRepository(
     }
 
     /**
-     * 鳴動中 (または鳴動開始直前) の [id] が、同時刻などで後から来た [by] の鳴動に
-     * 座席を譲った時の終端化。押し出された側は誰も停止しないので、FIRED のまま残すと
-     * 鳴動中プロセスキル後の復帰 (firedWithinGrace) が拾って再鳴動させてしまう。
-     * 利用者は後発の鳴動を止めた時点で両方を止めた意図なので DISMISSED に倒す。
-     * FIRED/PENDING 以外 (既に停止・スヌーズ済み) は触らない
+     * 鳴動中 (または鳴動開始直前) の [id] が、同時刻などで後から来た [by] に座席を譲った時の扱い。
+     * 押し出された側は誰も止めていないので、終端にせず鳴動待ち (PENDING) に戻し、
+     * [by] が片付いた後に [rearmWaitingRings] で鳴らし直す (同時刻衝突ポリシー、#84)。
+     * FIRED 以外 (既に停止・スヌーズ済み) は触らない
      */
-    suspend fun onSuperseded(id: String, by: String) {
-        // 後発の FIRED 化と先行の終端化を1トランザクションにする。先行だけが
-        // DISMISSED になった状態でプロセスが死ぬと復旧が拾う行が無くなり、
-        // 鳴るべきアラームが無鳴動で終わるため (Codex #63)
-        val rows = db.scheduledInstances().supersede(id, by)
-        if (rows > 0) {
-            scheduler.cancel(id)
-            audit("SUPERSEDED", "$id → $by: 後発の鳴動に置き換え")
-            db.scheduledInstances().byId(id)?.standaloneAlarmId?.let {
-                disableConsumedOneShots(setOf(it))
+    suspend fun onDisplaced(id: String, by: String) {
+        val rows = db.scheduledInstances().setPendingIfFired(id)
+        if (rows > 0) audit("DISPLACED", "$id → $by: 後発が片付いた後に鳴らし直す")
+    }
+
+    /**
+     * 押し出されて待っている鳴動を、すぐ鳴るよう予約し直す (#84)。
+     * 待ち行は「時刻を過ぎたのに片付いていない」行。押し出しで AlarmManager の発火は消費済みなので、
+     * 予約し直さないと二度と鳴らない。FIRED のまま残った行 (押し出しの途中でプロセスが死んだ等) も
+     * PENDING に戻して同じく鳴らし直す。複数あっても順に押し出し合い、1件ずつ鳴る。
+     * 行の鳴動時刻は変えない (猶予の判定と予定との対応を保つため)。AlarmManager の発火だけ今に置く。
+     * 呼び出し側は、鳴動中の鳴動が無い時だけ呼ぶ。戻り値は予約し直した件数
+     */
+    suspend fun rearmWaitingRings(resolvedId: String?): Int {
+        val now = System.currentTimeMillis()
+        val waiting = db.scheduledInstances()
+            .unresolvedBetween(since = now - AlarmExpander.FIRE_GRACE.inWholeMilliseconds, now = now)
+            .map { it.toInstance() }
+            .filter { it.id != resolvedId && it.delivery == EventAction.ALARM }
+        waiting.forEachIndexed { i, inst ->
+            db.scheduledInstances().setPendingIfFired(inst.id)
+            val fireAt = now + REARM_DELAY_MS + i * REARM_STAGGER_MS
+            if (scheduler.schedule(inst.copy(triggerAtMillis = fireAt))) {
+                audit("REARM", "${inst.id}: 押し出された鳴動を鳴らし直す")
+            } else {
+                audit("EXACT_DENIED", "rearm ${inst.id}")
             }
-            onScheduleChanged?.invoke()
         }
+        if (waiting.isNotEmpty()) onScheduleChanged?.invoke()
+        return waiting.size
     }
 
     suspend fun onSnoozed(id: String?, snoozeMinutes: Int? = null) {
@@ -681,6 +697,11 @@ class AlarmRepository(
     )
 
     companion object {
+        /** 鳴らし直しの発火までの間。停止した鳴動の後始末 (通知の掃除など) が済んでから鳴らす */
+        private const val REARM_DELAY_MS = 1_500L
+        /** 待ちが複数ある時の発火のずらし幅。同じ時刻に重ねず、押し出しの順を安定させる */
+        private const val REARM_STAGGER_MS = 500L
+
         // ビット: 1=SUN,2=MON,4=TUE,8=WED,16=THU,32=FRI,64=SAT
         fun daysToMask(days: Set<DayOfWeek>): Int = days.fold(0) { acc, d ->
             acc or (1 shl ((d.ordinal + 1) % 7))
