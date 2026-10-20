@@ -6,7 +6,7 @@
 // Usage:
 //   node scripts/sync-ai-rule.mjs          write generated files (idempotent)
 //   node scripts/sync-ai-rule.mjs --check  exit 1 if any generated file is stale
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,7 +23,7 @@ const targets = [
   [".github/copilot-instructions.md", `${PROLOG}\n\n${agents}`],
   [
     ".cursor/rules/calendar-alarm.mdc",
-    `---\ndescription: calendar-alarm workspace rules (canonical: AGENTS.md)\nalwaysApply: true\n---\n\n${PROLOG}\n\n${agents}`,
+    `---\ndescription: ${JSON.stringify("calendar-alarm workspace rules (canonical: AGENTS.md)")}\nalwaysApply: true\n---\n\n${PROLOG}\n\n${agents}`,
   ],
 ];
 
@@ -37,12 +37,35 @@ if (existsSync(skillsDir)) {
     const description = text.match(/^description:\s*(.+)$/m)?.[1]?.trim() ?? "";
     targets.push([
       `.claude/skills/${name}/SKILL.md`,
-      `---\nname: ${name}\ndescription: ${description}\n---\n\n${PROLOG}\n\nCanonical source: \`.agents/skills/${name}/SKILL.md\` — read that file and follow it.\n`,
+      `---\nname: ${name}\ndescription: ${JSON.stringify(description)}\n---\n\n${PROLOG}\n\nCanonical source: \`.agents/skills/${name}/SKILL.md\` — read that file and follow it.\n`,
     ]);
   }
 }
 
+// 正本の Skill を消した・名前を変えた時に、生成済みのスタブだけが残らないようにする。
+// 手で置いた Claude 専用 Skill は消さない (生成物の印 PROLOG があるものだけが対象)
+const generatedSkills = new Set(targets.map(([rel]) => rel).filter((rel) => rel.startsWith(".claude/skills/")));
+const orphans = [];
+const claudeSkillsDir = join(ROOT, ".claude/skills");
+if (existsSync(claudeSkillsDir)) {
+  for (const name of readdirSync(claudeSkillsDir)) {
+    const rel = `.claude/skills/${name}/SKILL.md`;
+    const path = join(ROOT, rel);
+    if (generatedSkills.has(rel) || !existsSync(path)) continue;
+    if (readFileSync(path, "utf8").includes(PROLOG)) orphans.push(name);
+  }
+}
+
 let stale = 0;
+for (const name of orphans) {
+  stale += 1;
+  if (CHECK) {
+    console.log(`orphan: .claude/skills/${name}/SKILL.md`);
+    continue;
+  }
+  rmSync(join(claudeSkillsDir, name), { recursive: true, force: true });
+  console.log(`removed: .claude/skills/${name}`);
+}
 for (const [rel, content] of targets) {
   const path = join(ROOT, rel);
   if (existsSync(path) && readFileSync(path, "utf8") === content) continue;
