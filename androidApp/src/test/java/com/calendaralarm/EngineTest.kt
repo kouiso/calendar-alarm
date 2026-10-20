@@ -399,13 +399,14 @@ class EngineTest {
         repository.onFired(next.id)
         repository.onDisplaced(prev.id, next.id)
 
-        // 押し出された側は誰も止めていないので終端にしない
-        assertEquals(AlarmState.PENDING.name, db.scheduledInstances().byId(prev.id)!!.state)
-        // 後発は FIRED のまま。ここでプロセスが死んでも復旧 (firedWithinGrace) が後発を拾う
-        assertEquals(next.id, repository.firedWithinGrace()?.id)
+        // 押し出された側は誰も止めていないので終端にしない (FIRED のまま待つ)
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(prev.id)!!.state)
 
         repository.onDismissed(next.id)
         assertEquals(1, repository.rearmWaitingRings(next.id))
+        assertEquals("鳴らし直す時は AlarmReceiver が受け付ける PENDING に戻す",
+            AlarmState.PENDING.name, db.scheduledInstances().byId(prev.id)!!.state)
+        assertEquals("同じ鳴動を二度は予約し直さない", 0, repository.rearmWaitingRings(null))
         val alarm = shadowOf(context.getSystemService(android.app.AlarmManager::class.java)).nextScheduledAlarm
         assertTrue("先行の鳴らし直しが今すぐ予約される", alarm != null && alarm.triggerAtMs - System.currentTimeMillis() < 5_000)
         assertTrue(repository.auditFlow(20).first().any { it.action == "REARM" && it.detail.startsWith(prev.id) })
@@ -428,6 +429,36 @@ class EngineTest {
 
         assertEquals(0, repository.rearmWaitingRings(resolvedId = null))
         assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(notify.id)!!.state)
+    }
+
+
+    @Test
+    fun `押し出されて待っている間の resync は待ち側を予約し直さない`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val prev = AlarmInstance(id = "wait-p", triggerAtMillis = now, title = "t", kind = AlarmKind.TIMER)
+        repository.scheduleAdhoc(prev)
+        repository.onFired(prev.id)
+        repository.onDisplaced(prev.id, "wait-n")
+        scheduler.cancel(prev.id)
+        repository.resync("test")
+        // 予約し直すと過去の時刻ですぐ発火し、後発の鳴動中に割り込んでしまう
+        val armed = shadowOf(alarmManager).scheduledAlarms
+            .mapNotNull { shadowOf(it.operation).savedIntent.data?.lastPathSegment }
+        assertTrue("待ち側が AlarmManager に入っていないこと: $armed", prev.id !in armed)
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(prev.id)!!.state)
+    }
+
+    @Test
+    fun `通知権限なしで鳴動に回った通知のみの予定も、押し出されたら鳴らし直す`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val notify = AlarmInstance(
+            id = "wait-notify", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT,
+            delivery = com.calendaralarm.shared.model.EventAction.NOTIFY,
+        )
+        db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(notify)))
+        repository.onFired(notify.id)
+        repository.onDisplaced(notify.id, "other")
+        assertEquals(1, repository.rearmWaitingRings(resolvedId = "other"))
     }
 
 }

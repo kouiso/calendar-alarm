@@ -50,9 +50,9 @@ interface ScheduledInstanceDao {
     @Query("UPDATE scheduled_instances SET state = 'PENDING' WHERE id = :id AND state = 'FIRED'")
     suspend fun setPendingIfFired(id: String): Int
 
-    /** 時刻を過ぎたのに片付いていない行 (鳴動待ちか鳴動中)。押し出された鳴動の鳴らし直しに使う。 */
-    @Query("SELECT * FROM scheduled_instances WHERE state IN ('PENDING', 'FIRED') AND triggerAtMillis > :since AND triggerAtMillis <= :now ORDER BY triggerAtMillis ASC")
-    suspend fun unresolvedBetween(since: Long, now: Long): List<ScheduledInstanceEntity>
+    /** 鳴ったが片付いていない行 (FIRED)。途中で途切れた鳴動の鳴らし直しに使う。 */
+    @Query("SELECT * FROM scheduled_instances WHERE state = 'FIRED' AND triggerAtMillis > :since AND triggerAtMillis <= :now ORDER BY triggerAtMillis ASC")
+    suspend fun firedBetween(since: Long, now: Long): List<ScheduledInstanceEntity>
 
     /** 鳴動猶予内の最新 FIRED 行。鳴動中プロセスキル後の再起動が拾う。 */
     @Query("SELECT * FROM scheduled_instances WHERE state = 'FIRED' AND triggerAtMillis > :since ORDER BY triggerAtMillis DESC LIMIT 1")

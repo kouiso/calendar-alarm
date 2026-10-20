@@ -226,32 +226,47 @@ class AlarmRepository(
     }
 
     /**
-     * 鳴動中 (または鳴動開始直前) の [id] が、同時刻などで後から来た [by] に座席を譲った時の扱い。
-     * 押し出された側は誰も止めていないので、終端にせず鳴動待ち (PENDING) に戻し、
-     * [by] が片付いた後に [rearmWaitingRings] で鳴らし直す (同時刻衝突ポリシー、#84)。
-     * FIRED 以外 (既に停止・スヌーズ済み) は触らない
+     * 鳴動中 (または鳴動開始直前) の [id] が、同時刻などで後から来た [by] に座席を譲った時の扱い (#84)。
+     * 押し出された側は誰も止めていないので終端にしない。行は FIRED (鳴ったが片付いていない) のまま残し、
+     * 待ち行列 ([waitingRings]) に載せて、[by] が片付いた後に [rearmWaitingRings] で鳴らし直す。
+     * PENDING に戻さないのは、resync が PENDING の過去分を予約し直して、[by] が鳴っている最中に
+     * すぐ発火させてしまうため。待ち行列に載せるのは、通知だけの予定 (NOTIFY) が通知権限なしで
+     * 鳴動に回った場合も取りこぼさないため
      */
     suspend fun onDisplaced(id: String, by: String) {
-        val rows = db.scheduledInstances().setPendingIfFired(id)
-        if (rows > 0) audit("DISPLACED", "$id → $by: 後発が片付いた後に鳴らし直す")
+        waitingRings.add(id)
+        audit("DISPLACED", "$id → $by: 後発が片付いた後に鳴らし直す")
     }
 
     /**
      * 押し出されて待っている鳴動を、すぐ鳴るよう予約し直す (#84)。
-     * 待ち行は「時刻を過ぎたのに片付いていない」行。押し出しで AlarmManager の発火は消費済みなので、
-     * 予約し直さないと二度と鳴らない。FIRED のまま残った行 (押し出しの途中でプロセスが死んだ等) も
-     * PENDING に戻して同じく鳴らし直す。複数あっても順に押し出し合い、1件ずつ鳴る。
-     * 行の鳴動時刻は変えない (猶予の判定と予定との対応を保つため)。AlarmManager の発火だけ今に置く。
+     * 対象は待ち行列の行と、鳴動猶予内で FIRED のまま残った鳴動 (押し出しの途中でプロセスが死んだ等)。
+     * 押し出しで AlarmManager の発火は消費済みなので、予約し直さないと二度と鳴らない。
+     * AlarmReceiver は PENDING の行だけを鳴らすので PENDING に戻してから予約する。
+     * 複数あっても順に押し出し合い、1件ずつ鳴る。行の鳴動時刻は変えない (猶予の判定と予定との対応を保つため)。
      * 呼び出し側は、鳴動中の鳴動が無い時だけ呼ぶ。戻り値は予約し直した件数
      */
     suspend fun rearmWaitingRings(resolvedId: String?): Int {
         val now = System.currentTimeMillis()
-        val waiting = db.scheduledInstances()
-            .unresolvedBetween(since = now - AlarmExpander.FIRE_GRACE.inWholeMilliseconds, now = now)
-            .map { it.toInstance() }
-            .filter { it.id != resolvedId && it.delivery == EventAction.ALARM }
+        val since = now - AlarmExpander.FIRE_GRACE.inWholeMilliseconds
+        val queued = waitingRings.all()
+        resolvedId?.let { waitingRings.remove(it) }
+        val candidates = (queued.mapNotNull { db.scheduledInstances().byId(it) } +
+            db.scheduledInstances().firedBetween(since, now))
+            .distinctBy { it.id }
+            .map { it.toInstance() to it.state }
+        val waiting = candidates.filter { (inst, state) ->
+            inst.id != resolvedId &&
+                (state == AlarmState.FIRED.name || state == AlarmState.PENDING.name) &&
+                inst.triggerAtMillis in (since + 1)..now &&
+                // 待ち行列に無い FIRED は、鳴動の途中で途切れた鳴動だけ (通知だけの予定は通知済み)
+                (inst.id in queued || inst.delivery == EventAction.ALARM)
+        }.map { it.first }
+        // 片付いた・猶予を過ぎた行は待ち行列から外す (猶予切れは次の健全性チェックが見逃しにする)
+        queued.filter { q -> waiting.none { it.id == q } }.forEach { waitingRings.remove(it) }
         waiting.forEachIndexed { i, inst ->
             db.scheduledInstances().setPendingIfFired(inst.id)
+            waitingRings.remove(inst.id)
             val fireAt = now + REARM_DELAY_MS + i * REARM_STAGGER_MS
             if (scheduler.schedule(inst.copy(triggerAtMillis = fireAt))) {
                 audit("REARM", "${inst.id}: 押し出された鳴動を鳴らし直す")
@@ -262,6 +277,9 @@ class AlarmRepository(
         if (waiting.isNotEmpty()) onScheduleChanged?.invoke()
         return waiting.size
     }
+
+    /** 押し出されて鳴らし直しを待つ id。プロセスが死んでも残るよう端末に保存する (#84)。 */
+    private val waitingRings = WaitingRingStore(calendarReader.appContext())
 
     suspend fun onSnoozed(id: String?, snoozeMinutes: Int? = null) {
         val entity = id?.let { db.scheduledInstances().byId(it) } ?: return

@@ -203,6 +203,7 @@ class AlarmService : Service() {
                             app.container.repository.markMissed(id, "鳴動サービスの前面化がOSに拒否")
                             MissedNotifier.post(this@AlarmService, null)
                         }
+                        releaseWaitingRings(id)
                         finishIfIdle()
                         return@launch
                     }
@@ -220,6 +221,8 @@ class AlarmService : Service() {
         val ready = prepareToRing(instanceId)
         if (ready == null) {
             synchronized(ringLock) { requestedIds -= instanceId }
+            // この要求が最後の要求だった場合、先に片付いた鳴動の時に保留された鳴らし直しをここで行う
+            releaseWaitingRings(instanceId)
             // 自分の前面化で通知 (停止の宛先を含む) を差し替えているので、
             // 現行鳴動があればその停止UIへ戻す。無ければ滞留通知ごと畳む
             restoreOrFinish()
@@ -233,7 +236,7 @@ class AlarmService : Service() {
         // 要求が鳴る、という同族レースが残る。先に自世代を確定してから先代を
         // 畳むので、公開直後に届く DISMISS も PENDING 判定でこの要求だけ潰せる
         // 座席確保で押し出した先代 (鳴動中または座席確保済み) の id。押し出された側は
-        // 止められたわけではないので墓標は立てず、鳴動待ち (PENDING) に戻して、
+        // 止められたわけではないので墓標は立てず、待ち行列に載せて、
         // この鳴動が片付いた後に鳴らし直す (同時刻衝突ポリシー、#84)
         var displaced: String? = null
         var duplicate = false
@@ -263,13 +266,14 @@ class AlarmService : Service() {
                     app.container.repository.audit("STALE_FIRE", "$instanceId: DISMISS済みのため鳴動を抑止")
                 }
             }
+            releaseWaitingRings(instanceId)
             restoreOrFinish()
             return
         }
-        // 押し出した先代を鳴動待ちへ戻す。後発を鳴動中として公開したあとに行う:
+        // 押し出した先代を鳴らし直しの待ち行列へ載せる。後発を鳴動中として公開したあとに行う:
         // 先に戻すと、先代の鳴動画面が後発へ追従する前に行の変化を見てしまう。
         // サービス停止 (onDestroy の scope.cancel) に埋もれないよう、アプリ寿命のスコープで最後まで走らせる。
-        // 戻す前にプロセスが死んでも、先代は FIRED のまま残り、再起動の復旧か停止後の鳴らし直しが拾う
+        // 載せる前にプロセスが死んでも、先代は FIRED のまま残り、停止後の鳴らし直しが拾う
         val returnDisplaced: suspend () -> Unit = {
             displaced?.let { prev ->
                 app.container.appScope.launch {
@@ -414,7 +418,7 @@ class AlarmService : Service() {
         val ringSettings = app.container.settings.flow.first()
         // PENDING→FIRED のみ遷移 (DISMISSED を FIRED に戻さない atomic 制限)。
         // 座席を取る前に FIRED にしておくと、この後に押し出されても行は FIRED のまま残り、
-        // 押し出した側が鳴動待ち (PENDING) へ確実に戻せる
+        // 鳴動が片付いた後の鳴らし直しが確実に拾える
         repo.onFired(instanceId)
         return instance to ringSettings
     }

@@ -260,7 +260,7 @@ class AlarmServiceStopTest {
         settle(1_000)
         val live = AlarmService.ringingInstanceId.value!!
         val waiting = if (live == "dup-a") "dup-b" else "dup-a"
-        assertEquals("押し出された側は止めていないので鳴動待ちに戻る", "PENDING", state(waiting))
+        assertEquals("押し出された側は止めていないので終端にせず FIRED のまま待つ", "FIRED", state(waiting))
         assertFalse("押し出された側に墓標を立てない (立てると二度と鳴れない)", AlarmService.isDismissed(waiting))
         assertTrue(audits().any { it.first == "DISPLACED" && it.second.startsWith(waiting) })
         c.withIntent(dismissIntent(live)).startCommand(0, 3)
@@ -268,7 +268,7 @@ class AlarmServiceStopTest {
         assertEquals("DISMISSED", state(live))
         assertTrue("止めた直後に待ち側の鳴らし直しが予約される", waitUntil { rearmedId() == waiting })
         assertTrue(audits().any { it.first == "REARM" && it.second.startsWith(waiting) })
-        assertEquals("待ち側は PENDING のまま (AlarmReceiver が鳴動として受け付ける)", "PENDING", state(waiting))
+        assertEquals("鳴らし直す時に PENDING へ戻す (AlarmReceiver が鳴動として受け付ける)", "PENDING", state(waiting))
         assertNull(
             "止めた側が鳴動猶予内の FIRED に残らないこと (残るとプロセス再起動で再鳴動する)",
             runBlocking { app.container.repository.firedWithinGrace() },
@@ -283,7 +283,8 @@ class AlarmServiceStopTest {
         assertTrue(waitUntil { c.get().isPlaying() && AlarmService.ringingInstanceId.value == "sup-a" })
         c.withIntent(startIntent("sup-b")).startCommand(0, 2)
         assertTrue(waitUntil { AlarmService.ringingInstanceId.value == "sup-b" && c.get().isPlaying() })
-        assertTrue(waitUntil { state("sup-a") == "PENDING" })
+        assertTrue(waitUntil { audits().any { it.first == "DISPLACED" && it.second.startsWith("sup-a") } })
+        assertEquals("FIRED", state("sup-a"))
         // 後発は FIRED。ここでプロセスが死んでも復旧 (firedWithinGrace) が後発を拾う
         assertEquals("FIRED", state("sup-b"))
         assertEquals("sup-b", runBlocking { app.container.repository.firedWithinGrace()?.id })
@@ -318,6 +319,25 @@ class AlarmServiceStopTest {
         assertFalse(audits().any { it.first == "DISPLACED" })
         // 停止の宛先も先行のまま
         assertEquals("def-a", ringingNotification()?.let { stopActionTarget(it) })
+    }
+
+    @Test
+    fun `後発を止めた時に留保される要求が残っていても、待っている先行は鳴らし直される`() {
+        seed("rel-a", "A")
+        seed("rel-b", "B")
+        seed("rel-c", "C", muteUntilUnlock = true)
+        val c = startService("rel-a")
+        assertTrue(waitUntil { c.get().isPlaying() && AlarmService.ringingInstanceId.value == "rel-a" })
+        c.withIntent(startIntent("rel-b")).startCommand(0, 2)
+        assertTrue(waitUntil { AlarmService.ringingInstanceId.value == "rel-b" && c.get().isPlaying() })
+        assertTrue(waitUntil { audits().any { it.first == "DISPLACED" && it.second.startsWith("rel-a") } })
+        // ロック中に留保される C の要求と、B の停止をほぼ同時に届ける。
+        // 停止の時点で C が要求中なら鳴らし直しは保留され、C が留保で抜ける時に行う必要がある
+        shadowOf(app.getSystemService(android.app.KeyguardManager::class.java)).setKeyguardLocked(true)
+        c.withIntent(startIntent("rel-c")).startCommand(0, 3)
+        c.withIntent(dismissIntent("rel-b")).startCommand(0, 4)
+        assertTrue(waitUntil { audits().any { it.first == "DEFER" && it.second.startsWith("rel-c") } })
+        assertTrue("A の鳴らし直しが予約されること", waitUntil { rearmedId() == "rel-a" })
     }
 
     @Test
