@@ -557,4 +557,49 @@ class EngineTest {
         assertEquals(0, repositoryWithCalendar.rearmWaitingRings(resolvedId = "other"))
     }
 
+    @Test
+    fun `待つ間に一括ミュートされたら鳴らし直さない`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val w = AlarmInstance(id = "wait-mute-all", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT)
+        db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(w)))
+        repository.onFired(w.id)
+        repository.onDisplaced(w.id, "other")
+        val settings = SettingsRepository(context)
+        settings.setMuteAll(true)
+        try {
+            assertEquals(0, repository.rearmWaitingRings(resolvedId = "other"))
+            assertEquals(AlarmState.CANCELLED.name, db.scheduledInstances().byId(w.id)!!.state)
+        } finally {
+            // 設定は DataStore に残り他の試験へ漏れるので戻す
+            settings.setMuteAll(false)
+        }
+    }
+
+    @Test
+    fun `待つ間の resync は猶予切れとスヌーズの子を取り消さず、猶予切れは見逃しにする`() = runBlocking {
+        FakeCalendarProvider.instanceRows = emptyList()
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        val now = System.currentTimeMillis()
+        val expired = AlarmInstance(
+            id = "ev:9:9:1:b0", triggerAtMillis = now - 61 * 60_000L, title = "t", kind = AlarmKind.EVENT,
+        )
+        val snoozeChild = AlarmInstance(
+            id = "ev:9:9:2:b0:snz1", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT, snoozeSeq = 1,
+        )
+        db.scheduledInstances().upsert(listOf(expired, snoozeChild).map { ScheduledInstanceEntity.of(it) })
+        listOf(expired, snoozeChild).forEach {
+            repositoryWithCalendar.onFired(it.id)
+            repositoryWithCalendar.onDisplaced(it.id, "other")
+        }
+
+        repositoryWithCalendar.resync("while-waiting")
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(expired.id)!!.state)
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(snoozeChild.id)!!.state)
+
+        assertEquals(1, repositoryWithCalendar.rearmWaitingRings(resolvedId = "other"))
+        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(expired.id)!!.state)
+    }
+
 }

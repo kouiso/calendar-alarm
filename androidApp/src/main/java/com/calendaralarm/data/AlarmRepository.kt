@@ -288,16 +288,18 @@ class AlarmRepository(
         // 待っている間に親のアラームを OFF・削除されたら鳴らし直さない。resync は PENDING しか
         // 取り消さないので、FIRED のまま待つ行はここで確かめる
         val enabledAlarmIds = db.standaloneAlarms().all().filter { it.enabled }.map { it.id }.toSet()
+        val muteAll = settings.flow.first().muteAll
         val orphaned = candidates.filter { (_, state) ->
             state == AlarmState.FIRED.name || state == AlarmState.PENDING.name
         }.map { it.first }.filter { inst ->
             val parent = db.scheduledInstances().byId(inst.id)?.standaloneAlarmId
-            parent != null && parent !in enabledAlarmIds && inst.id != resolvedId
+            inst.id != resolvedId && (inst.id in queued || inst.delivery == EventAction.ALARM) &&
+                (muteAll || (parent != null && parent !in enabledAlarmIds))
         }.map { it.id }.toSet()
         orphaned.forEach {
             setState(it, AlarmState.CANCELLED)
             waitingRings.remove(it)
-            audit("REARM_SKIP", "$it: 待つ間に親のアラームが OFF か削除されたため鳴らし直さない")
+            audit("REARM_SKIP", "$it: 待つ間に親のアラームが OFF・削除、または一括ミュートされたため鳴らし直さない")
         }
         val waiting = candidates.filter { (inst, state) ->
             inst.id !in orphaned &&
@@ -338,15 +340,23 @@ class AlarmRepository(
      * もう展開されなくなったものを取り消す。待っている行は FIRED で resync の差分に出ないため、ここで見る。
      * 読み取りの失敗中や権限なしの時は判断できないので何もしない
      */
-    private suspend fun cancelStaleWaitingEvents(desiredIds: Set<String>, canJudge: Boolean) {
+    private suspend fun cancelStaleWaitingEvents(desired: Map<String, EventAction>, canJudge: Boolean) {
         if (!canJudge) return
+        val since = System.currentTimeMillis() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds
         for (id in waitingRings.all()) {
             val row = db.scheduledInstances().byId(id) ?: continue
             val isEvent = row.standaloneAlarmId == null && row.kind == AlarmKind.EVENT.name
-            if (!isEvent || row.state != AlarmState.FIRED.name || id in desiredIds) continue
+            // スヌーズの子は展開に出ない (親の予定の id と別) ので判断しない。
+            // 猶予切れは展開から外れるだけで設定の変更ではないので、見逃しの処理 (rearmWaitingRings) に任せる
+            if (!isEvent || row.state != AlarmState.FIRED.name || row.snoozeSeq > 0) continue
+            if (row.triggerAtMillis <= since) continue
+            val now = desired[id]
+            // 展開されなくなった (ミュート等)、または通知だけに変わったものは、音で鳴らし直さない
+            val stale = now == null || (now != EventAction.ALARM && row.delivery == EventAction.ALARM.name)
+            if (!stale) continue
             setState(id, AlarmState.CANCELLED)
             waitingRings.remove(id)
-            audit("REARM_SKIP", "$id: 待つ間に予定のミュート等で対象外になったため鳴らし直さない")
+            audit("REARM_SKIP", "$id: 待つ間に予定の設定が変わり鳴らし直さない")
         }
     }
 
@@ -518,7 +528,7 @@ class AlarmRepository(
 
         // 終了済み状態 (鳴動/停止/スヌーズ/見逃し) の同 id は蘇生させない。
         // 展開が同 id を再発行しても、ユーザーが「止めた」「スヌーズした」意味を守る。
-        val desiredBeforeTerminal = desired.map { it.id }.toSet()
+        val desiredBeforeTerminal = desired.associate { it.id to it.delivery }
         desired.removeAll { it.id in terminalIds }
         cancelStaleWaitingEvents(desiredBeforeTerminal, canJudge = hasCalendarPermission() && !keepPendingEvents)
 
