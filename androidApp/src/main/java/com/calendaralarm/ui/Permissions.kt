@@ -320,7 +320,13 @@ fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {
                 val open = {
                     chain = false
                     // 許可済みの実行時権限を頼み直しても OS は何も出さない。外したい時に備えて端末の設定を開く
-                    if (on && activity != null) openSettingsFor(activity, p) else requester.request(p)
+                    // 通知は権限があっても設定で切られていることがあり、その時も頼み直しでは何も出ない
+                    val notifyBlockedInSettings = p == AppPermission.NOTIFY && !on && (
+                        Build.VERSION.SDK_INT < 33 ||
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                            PackageManager.PERMISSION_GRANTED
+                        )
+                    if ((on || notifyBlockedInSettings) && activity != null) openSettingsFor(activity, p) else requester.request(p)
                 }
                 Row(
                     Modifier
