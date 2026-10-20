@@ -38,7 +38,8 @@ struct SettingsView: View {
                             }
                             PreviewLine(sample: "9:00 の予定",
                                         result: "\(PreviewClock.clock(9 * 60 - store.state.defaultMinutesBefore)) に鳴る",
-                                        note: "＋ カレンダーの通知（重なれば1回）")
+                                        // 「カレンダーの通知設定を使う」を切ると通知の時刻では鳴らないので、注記も出さない
+                                        note: store.state.importEventReminders ? "＋ カレンダーの通知（重なれば1回）" : nil)
                             IconRow("zzz") {
                                 Chips(items: snoozeOptions, current: store.state.defaultSnoozeMinutes) { m in
                                     store.setDefaultSnooze(m); resync("default")

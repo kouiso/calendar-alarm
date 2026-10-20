@@ -157,7 +157,8 @@ fun SettingsScreen(
                     PreviewLine(
                         "9:00 の予定",
                         "${SettingsPreview.ringClock(SettingsPreview.SAMPLE_EVENT_MINUTE, prefs?.defaultMinutesBefore ?: 0)} に鳴る",
-                        "＋ カレンダーの通知（重なれば1回）",
+                        // 「カレンダーの通知設定を使う」を切ると通知の時刻では鳴らないので、注記も出さない
+                        "＋ カレンダーの通知（重なれば1回）".takeIf { prefs?.importEventReminders != false },
                     )
                     // スヌーズ
                     IconSettingRow(Icons.Default.Snooze) {
