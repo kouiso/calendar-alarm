@@ -7,7 +7,6 @@ import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
 import com.calendaralarm.shared.model.EventTypeFilter
-import com.calendaralarm.shared.model.resolveEventType
 import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
@@ -73,15 +72,7 @@ object AlarmExpander {
             val rule = calendarRules[event.calendarId] ?: defaultRule
             val override = overrides[event.instanceKey]
             if (!rule.enabled || override?.action == EventAction.MUTE) continue
-            // 招待予定フィルタ。明示的に ALARM を選んだ予定はフィルタより優先
-            // (個別指定がカレンダー横断の既定より具体的な意思表示のため)。
-            if (override?.action != EventAction.ALARM &&
-                !inviteFilter.allows(event.inviteStatus)
-            ) continue
-            // イベント種別フィルタ。個別 ALARM 指定はフィルタより優先 (招待フィルタと同規則)
-            if (override?.action != EventAction.ALARM &&
-                !eventTypeFilter.allows(resolveEventType(event))
-            ) continue
+            if (!passesEventFilters(event, override, inviteFilter, eventTypeFilter)) continue
             // 終日イベントは startMillis が UTC 0時。深夜に鳴らさないため
             // イベント日のローカル allDayMinutes (既定9:00) に倒す。負数なら鳴らさない。
             val eventStart = if (event.allDay) {
@@ -130,6 +121,22 @@ object AlarmExpander {
             }
         }
         return result
+    }
+
+    /**
+     * 予定の絞り込み (招待・種類・予定あり／なし) を通るか。予約の展開と予定一覧の表示が同じ判定を使う (#79)。
+     * 判定の順番: 予定一つへの個別指定 → 招待 → 種類 → 予定あり／なし。
+     * 個別に「アラーム」を選んだ予定は、絞り込みに関係なく通す (一つの予定への指定が最も具体的な意思表示のため)
+     */
+    fun passesEventFilters(
+        event: CalendarEvent,
+        override: EventOverride?,
+        inviteFilter: InviteFilter,
+        eventTypeFilter: EventTypeFilter,
+    ): Boolean {
+        if (override?.action == EventAction.MUTE) return false
+        if (override?.action == EventAction.ALARM) return true
+        return inviteFilter.allows(event.inviteStatus) && eventTypeFilter.allows(event)
     }
 
     /**

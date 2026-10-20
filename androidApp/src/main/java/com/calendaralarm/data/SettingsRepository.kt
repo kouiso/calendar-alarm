@@ -110,13 +110,7 @@ class SettingsRepository(private val context: Context) {
                 needsAction = (p[KEY_INVITE_MASK] ?: 7) and 4 != 0,
                 declined = (p[KEY_INVITE_MASK] ?: 7) and 8 != 0,
             ),
-            eventTypeFilter = EventTypeFilter(
-                birthday = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 1 != 0,
-                absence = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 2 != 0,
-                workplace = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 4 != 0,
-                task = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 8 != 0,
-                event = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 16 != 0,
-            ),
+            eventTypeFilter = eventTypeFilterOf(p),
             googleAccountEmail = p[KEY_GOOGLE_ACCOUNT],
             importEventReminders = p[KEY_IMPORT_REMINDERS] ?: true,
             snoozePresets = (p[KEY_SNOOZE_PRESETS] ?: "5,10,15,30,45,60")
@@ -195,14 +189,21 @@ class SettingsRepository(private val context: Context) {
         p[KEY_INVITE_MASK] = (p[KEY_INVITE_MASK] ?: 7) xor bit
     }
     suspend fun toggleEventType(type: EventType) = edit { p ->
-        val bit = when (type) {
-            EventType.BIRTHDAY -> 1
-            EventType.ABSENCE -> 2
-            EventType.WORKPLACE -> 4
-            EventType.TASK -> 8
-            EventType.EVENT -> 16
+        val current = eventTypeFilterOf(p)
+        // 一度でも触ったら保存キーを全部書き、以後は既定値の変更に影響されないようにする
+        p[KEY_EVENT_TYPE_FOCUS] = if (type == EventType.FOCUS_TIME) !current.focusTime else current.focusTime
+        p[KEY_RING_FREE] = current.free
+        val bit = typeBit(type) ?: run {
+            p[KEY_EVENT_TYPE_MASK] = maskOf(current)
+            return@edit
         }
-        p[KEY_EVENT_TYPE_MASK] = (p[KEY_EVENT_TYPE_MASK] ?: 31) xor bit
+        p[KEY_EVENT_TYPE_MASK] = maskOf(current) xor bit
+    }
+    suspend fun setRingFree(v: Boolean) = edit { p ->
+        val current = eventTypeFilterOf(p)
+        p[KEY_EVENT_TYPE_MASK] = maskOf(current)
+        p[KEY_EVENT_TYPE_FOCUS] = current.focusTime
+        p[KEY_RING_FREE] = v
     }
     suspend fun setImportEventReminders(v: Boolean) = edit { it[KEY_IMPORT_REMINDERS] = v }
     suspend fun setSnoozePresets(v: List<Int>) = edit { it[KEY_SNOOZE_PRESETS] = v.joinToString(",") }
@@ -253,7 +254,7 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit(block)
     }
 
-    private companion object {
+    internal companion object {
         val KEY_MINUTES = intPreferencesKey("default_minutes_before")
         val KEY_SNOOZE = intPreferencesKey("default_snooze_minutes")
         val KEY_WEATHER = booleanPreferencesKey("weather_enabled")
@@ -265,6 +266,47 @@ class SettingsRepository(private val context: Context) {
         val KEY_CODE_SCOPE = intPreferencesKey("title_code_scope")
         val KEY_INVITE_MASK = intPreferencesKey("invite_mask")
         val KEY_EVENT_TYPE_MASK = intPreferencesKey("event_type_mask")
+        // サイレントモードと予定なしは、旧版の event_type_mask と別のキーにする (#79)
+        val KEY_EVENT_TYPE_FOCUS = booleanPreferencesKey("event_type_focus_time")
+        val KEY_RING_FREE = booleanPreferencesKey("ring_free_events")
+
+        private fun typeBit(type: EventType): Int? = when (type) {
+            EventType.BIRTHDAY -> 1
+            EventType.ABSENCE -> 2
+            EventType.WORKPLACE -> 4
+            EventType.TASK -> 8
+            EventType.EVENT -> 16
+            EventType.FOCUS_TIME -> null
+        }
+
+        private fun maskOf(f: EventTypeFilter): Int =
+            listOf(
+                f.birthday to 1, f.absence to 2, f.workplace to 4, f.task to 8, f.event to 16,
+            ).sumOf { (on, bit) -> if (on) bit else 0 }
+
+        /**
+         * 保存値から種類ごとの設定を作る (#79)。
+         * 一度も触っていない人 (旧キーが無い) は新しい既定値。
+         * 前から設定を変えていた人 (旧キーがある) はその選択を保つ。サイレントモードは旧版では「予定」扱いだったので、
+         * 新しいキーが無ければ「予定」と同じ値にする。予定なしは旧版では常に鳴っていたので、無ければ鳴らす
+         */
+        internal fun eventTypeFilterOf(p: androidx.datastore.preferences.core.Preferences): EventTypeFilter {
+            val defaults = EventTypeFilter()
+            val mask = p[KEY_EVENT_TYPE_MASK] ?: return defaults.copy(
+                focusTime = p[KEY_EVENT_TYPE_FOCUS] ?: defaults.focusTime,
+                free = p[KEY_RING_FREE] ?: defaults.free,
+            )
+            val event = mask and 16 != 0
+            return EventTypeFilter(
+                birthday = mask and 1 != 0,
+                absence = mask and 2 != 0,
+                workplace = mask and 4 != 0,
+                task = mask and 8 != 0,
+                event = event,
+                focusTime = p[KEY_EVENT_TYPE_FOCUS] ?: event,
+                free = p[KEY_RING_FREE] ?: true,
+            )
+        }
         val KEY_GOOGLE_ACCOUNT = stringPreferencesKey("google_account_email")
         val KEY_IMPORT_REMINDERS = booleanPreferencesKey("import_event_reminders")
         val KEY_SNOOZE_PRESETS = stringPreferencesKey("snooze_presets")

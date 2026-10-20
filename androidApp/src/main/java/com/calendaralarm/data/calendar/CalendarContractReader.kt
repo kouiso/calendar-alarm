@@ -3,6 +3,7 @@ package com.calendaralarm.data.calendar
 import android.content.ContentUris
 import android.content.Context
 import android.provider.CalendarContract
+import com.calendaralarm.shared.model.Availability
 import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.CalendarSource
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +64,7 @@ class CalendarContractReader(private val context: Context) {
             CalendarContract.Instances.ALL_DAY,
             CalendarContract.Instances.SELF_ATTENDEE_STATUS,
             CalendarContract.Instances.ORGANIZER,
+            CalendarContract.Instances.AVAILABILITY,
         )
         val out = mutableListOf<CalendarEvent>()
         val baseEventIds = mutableSetOf<Long>()
@@ -92,6 +94,7 @@ class CalendarContractReader(private val context: Context) {
                     inviteStatus = selfStatusToInvite(
                         selfStatus, organizer, accountByCal[calId],
                     ),
+                    availability = availabilityOf(c.getInt(10)),
                 )
             }
         }
@@ -105,6 +108,14 @@ class CalendarContractReader(private val context: Context) {
                 iCalUID = uids[it.id.toLongOrNull()],
             )
         }
+    }
+
+    /** CalendarContract の AVAILABILITY 値を予定あり／なしへ写す (#79)。仮 (TENTATIVE) は予定ありとして扱う。 */
+    private fun availabilityOf(v: Int): Availability = when (v) {
+        CalendarContract.Events.AVAILABILITY_BUSY -> Availability.BUSY
+        CalendarContract.Events.AVAILABILITY_FREE -> Availability.FREE
+        CalendarContract.Events.AVAILABILITY_TENTATIVE -> Availability.TENTATIVE
+        else -> Availability.UNKNOWN
     }
 
     /** Events テーブルから基底イベントID群の UID_2445 (iCalUID) を一括取得する。 */

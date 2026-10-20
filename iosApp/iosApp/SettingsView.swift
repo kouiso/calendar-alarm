@@ -201,14 +201,24 @@ struct SettingsView: View {
                                         }
                                     })
                             }
-                            // イベント種別フィルタ (誕生日/不在/勤務場所/タスク/予定)
-                            IconRow("square.grid.2x2.fill") {
-                                let f = store.state.eventTypeFilter
-                                MultiChips(
-                                    items: EventType.allCases,
-                                    isOn: { t in f.allows(t) },
-                                    onToggle: { t in store.toggleEventType(t); resync("event type filter") },
-                                    label: { t in t.label })
+                            // 鳴らす予定の種類と「予定なし」を一か所でまとめて切り替える (#79)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("鳴らす予定の種類").font(NightTheme.font(13, weight: .semibold))
+                                // iOS は予定の種類を OS から取れない。誕生日カレンダー以外はタイトルから推定する
+                                Text("種類は予定のタイトルから推定します（誕生日カレンダーの予定は誕生日として扱います）。")
+                                    .font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                ForEach([EventType.event, .task, .absence, .focusTime, .workplace, .birthday], id: \.self) { t in
+                                    Toggle(t.label, isOn: Binding(
+                                        get: { store.state.eventTypeFilter.allows(t) },
+                                        set: { _ in store.toggleEventType(t); resync("event type filter") }
+                                    ))
+                                    .font(NightTheme.font(13))
+                                }
+                                Toggle("「予定なし」にした予定", isOn: Binding(
+                                    get: { store.state.eventTypeFilter.free },
+                                    set: { v in store.setRingFree(v); resync("free events") }
+                                ))
+                                .font(NightTheme.font(13))
                             }
                             // 予定側リマインダー取込 (既定ON: 元カレンダー通知の「何分前」で鳴らす)
                             IconRow("bell.badge.fill") {

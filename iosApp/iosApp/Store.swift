@@ -111,12 +111,14 @@ final class Store: ObservableObject {
     func setDefaultReminderAction(_ a: EventAction) { mutate { $0.defaultReminderAction = a.rawValue } }
     func setTitleCodes(_ v: TitleCodeSettings) { mutate { $0.titleCodes = v } }
     func setEventTypeFilter(_ v: EventTypeFilter) { mutate { $0.eventTypeFilter = v } }
+    func setRingFree(_ v: Bool) { mutate { $0.eventTypeFilter.free = v } }
     func toggleEventType(_ t: EventType) {
         var g = state.eventTypeFilter
         switch t {
         case .birthday: g.birthday.toggle()
         case .absence: g.absence.toggle()
         case .workplace: g.workplace.toggle()
+        case .focusTime: g.focusTime.toggle()
         case .task: g.task.toggle()
         case .event: g.event.toggle()
         }
