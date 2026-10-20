@@ -7,7 +7,10 @@ import com.calendaralarm.shared.ai.OpenRouterApi
 object AiConfig {
     private const val MODEL = "openai/gpt-4.1-mini"
 
-    val available: Boolean get() = apiFor(BuildConfig.OPENROUTER_API_KEY) != null
+    // 描画のたびに読まれるので、HTTP クライアントを作らずキーの有無だけ見る
+    val available: Boolean get() = isAvailable(BuildConfig.OPENROUTER_API_KEY)
+
+    internal fun isAvailable(key: String): Boolean = key.isNotBlank()
 
     /** キーを渡していないビルドでは null。呼び出し側は AI の入口ごと出さない。 */
     fun api(): OpenRouterApi? = apiFor(BuildConfig.OPENROUTER_API_KEY)

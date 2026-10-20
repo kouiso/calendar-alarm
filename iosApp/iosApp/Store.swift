@@ -65,6 +65,12 @@ final class Store: ObservableObject {
         if let data = try? Data(contentsOf: fileURL),
            let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = loaded
+            // 旧版で保存した AI のキーとモデルを端末から消す。読み込みでは落ちるだけで
+            // ファイルに残るので、決定7のとおり起動時に書き直す
+            if let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               raw["openRouterApiKey"] != nil || raw["openRouterModel"] != nil {
+                save()
+            }
         }
     }
 
