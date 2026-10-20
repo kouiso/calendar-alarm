@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -206,6 +205,14 @@ class RingingActivity : ComponentActivity() {
         targetId: String? = instanceIdState.value,
         finishScreen: Boolean = true,
     ) {
+        // 押下が画面に届いた事実を先に残す。「押しても止まらない」報告を、
+        // タップ未到達 (ログ無し) とサービス側の停止失敗 (TAP はあるが DISMISS 無し) に切り分ける
+        val tapLabel = if (action == AlarmService.ACTION_DISMISS) "STOP_TAP" else "SNOOZE_TAP"
+        // finish() で lifecycleScope が畳まれて書き込みが消えないよう、
+        // アプリ寿命のスコープへ投げる (CodeRabbit/Codex #63)
+        app.container.appScope.launch {
+            runCatching { app.container.repository.audit(tapLabel, "画面: ${targetId ?: "(id不明)"}") }
+        }
         val delivered = runCatching {
             startService(
                 Intent(this, AlarmService::class.java).apply {
@@ -220,7 +227,7 @@ class RingingActivity : ComponentActivity() {
         if (!delivered) {
             // サービスが既に死んでいる時でも停止が必ず効くよう直接終端化する
             // (onDismissed は DB の終端化 + AlarmManager 予約の取消を含む冪等処理)
-            lifecycleScope.launch {
+            app.container.appScope.launch {
                 runCatching {
                     app.container.repository.onDismissed(targetId)
                 }
