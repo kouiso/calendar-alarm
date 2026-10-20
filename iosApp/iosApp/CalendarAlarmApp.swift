@@ -58,21 +58,40 @@ struct CalendarAlarmApp: App {
 struct RootView: View {
     @EnvironmentObject var engine: Engine
     @EnvironmentObject var store: Store
+    @EnvironmentObject var permissions: PermissionCenter
+    @StateObject private var asker = PermissionAsker()
+    @Environment(\.scenePhase) private var scenePhase
 
     /// 共有拡張経由で届いたメール本文。非nilで確認シートを表示する。
     @State private var mailImportText: String? = nil
 
     var body: some View {
         ZStack {
-            if !store.state.onboardingDone {
-                OnboardingView()
-            } else {
-                mainTabs
-            }
+            // 初回も専用画面を挟まず予定画面へ直行し、足りない許可は1つずつ頼む (局長決定 2026-10-17 の1)
+            mainTabs
             // 鳴動中は最前面にダーク画面
             if !engine.alertingIds.isEmpty {
                 RingingView()
             }
+        }
+        .sheet(item: $asker.current) { p in
+            PermissionAskSheet(permission: p, retry: asker.isRetry(p), needsSettings: permissions.states[p] == .denied) { action in
+                Task { await asker.handle(action, for: p, center: permissions, engine: engine) }
+            }
+            .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $asker.showReady) {
+            ReadySheet {
+                asker.showReady = false
+                Task { await engine.scheduleTimer(durationMillis: 10_000, label: "テスト鳴動") }
+            } onClose: {
+                asker.showReady = false
+            }
+            .presentationDetents([.medium])
+        }
+        .task { await asker.advance(center: permissions, engine: engine) }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await asker.advance(center: permissions, engine: engine) } }
         }
         .onOpenURL { url in
             if url.scheme == "calendaralarm-import" { loadSharedMail() }
