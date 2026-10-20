@@ -1,5 +1,6 @@
 package com.calendaralarm.data
 
+import android.util.Log
 import com.calendaralarm.data.calendar.CalendarContractReader
 import com.calendaralarm.data.db.AppDatabase
 import com.calendaralarm.data.db.AuditLogEntity
@@ -18,8 +19,11 @@ import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
 import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -105,10 +109,28 @@ class AlarmRepository(
     suspend fun setState(id: String, state: AlarmState) =
         db.scheduledInstances().setState(id, state.name)
 
-    suspend fun audit(action: String, detail: String) = withContext(Dispatchers.IO) {
-        db.auditLog().insert(
-            AuditLogEntity(atMillis = System.currentTimeMillis(), action = action, detail = detail),
-        )
+    /**
+     * 鳴動ログへ 1 行書く。書けなくても例外を外へ出さない。
+     * 呼び出し元の多くは鳴動・停止の経路にある独立コルーチンで、そこで例外が漏れると
+     * プロセスごと落ちて鳴動と停止を巻き込む (#46)。ログが欠けるより鳴動が止まる方が重い。
+     */
+    suspend fun audit(action: String, detail: String) {
+        try {
+            withContext(Dispatchers.IO) {
+                db.auditLog().insert(
+                    AuditLogEntity(atMillis = System.currentTimeMillis(), action = action, detail = detail),
+                )
+            }
+        } catch (e: CancellationException) {
+            // 呼び出し側自身が取り消されたのならそのまま伝える。閉じた DB 等が投げる
+            // 取り消しは書き込み失敗として扱う
+            currentCoroutineContext().ensureActive()
+            Log.w(TAG, "鳴動ログの書き込みに失敗: $action", e)
+        } catch (e: Exception) {
+            Log.w(TAG, "鳴動ログの書き込みに失敗: $action", e)
+            // 書き込みの失敗中に呼び出し側が取り消されていたら、その取り消しは伝える
+            currentCoroutineContext().ensureActive()
+        }
     }
 
     fun auditFlow(limit: Int = 100) = db.auditLog().recentFlow(limit)
@@ -628,7 +650,16 @@ class AlarmRepository(
 
     private suspend fun pruneOldLogs() {
         val cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
-        db.auditLog().prune(cutoff)
+        // resync から独立したコルーチンで走るので、DB 障害を外へ出すとプロセスごと落ちる (#46)。
+        // 古いログが残るだけなので、失敗は記録して次の resync に任せる
+        try {
+            db.auditLog().prune(cutoff)
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            Log.w(TAG, "古い鳴動ログの掃除に失敗", e)
+        } catch (e: Exception) {
+            Log.w(TAG, "古い鳴動ログの掃除に失敗", e)
+        }
     }
 
     // ---- 変換 ----
@@ -681,6 +712,8 @@ class AlarmRepository(
     )
 
     companion object {
+        private const val TAG = "AlarmRepository"
+
         // ビット: 1=SUN,2=MON,4=TUE,8=WED,16=THU,32=FRI,64=SAT
         fun daysToMask(days: Set<DayOfWeek>): Int = days.fold(0) { acc, d ->
             acc or (1 shl ((d.ordinal + 1) % 7))
