@@ -60,6 +60,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -105,10 +106,14 @@ fun probePermissions(context: Context): Map<AppPermission, Boolean> = mapOf(
         ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) ==
             PackageManager.PERMISSION_GRANTED
         ),
+    // 33 未満には実行時の許可が無いが、設定で通知を切られていることはある。鳴動側の判定と同じく有効かを見る
     AppPermission.NOTIFY to (
-        Build.VERSION.SDK_INT < 33 ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
+        NotificationManagerCompat.from(context).areNotificationsEnabled() &&
+            (
+                Build.VERSION.SDK_INT < 33 ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                    PackageManager.PERMISSION_GRANTED
+                )
         ),
     AppPermission.EXACT to (
         Build.VERSION.SDK_INT < 31 ||
