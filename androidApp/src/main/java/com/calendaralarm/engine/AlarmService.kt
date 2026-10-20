@@ -246,14 +246,6 @@ class AlarmService : Service() {
             restoreOrFinish()
             return
         }
-        displaced?.let { prev ->
-            // サービス停止 (onDestroy の scope.cancel) に埋もれて終端化が消えないよう、
-            // アプリ寿命のスコープへ投げる。置き換えがキャンセルで無かったことになると
-            // 先行行が FIRED のまま残り、再起動復旧が拾って再鳴動する (CodeRabbit #63)
-            app.container.appScope.launch {
-                runCatching { app.container.repository.onSuperseded(prev, instanceId) }
-            }
-        }
         if (destroyed) return
         val instance = app.container.repository.instanceById(instanceId)
         if (instance == null) {
@@ -291,6 +283,18 @@ class AlarmService : Service() {
             return
         }
         val ringSettings = app.container.settings.flow.first()
+        // 先行の終端化は、後発が実際に鳴ると決まったここで行う。上の見逃し・留保の判定より前に
+        // 後発を FIRED にすると、ロック解除まで留保された後発が終端扱いになり、解除後に再発火
+        // しても AlarmReceiver が PENDING 以外として抑止してしまう (Codex #63)。
+        // 後発が鳴らずに抜けた場合、先行の行は FIRED のまま残り、再起動復旧が拾う (無鳴動より安全側)
+        displaced?.let { prev ->
+            // サービス停止 (onDestroy の scope.cancel) に埋もれて終端化が消えないよう、
+            // アプリ寿命のスコープへ投げる。置き換えがキャンセルで無かったことになると
+            // 先行行が FIRED のまま残り、再起動復旧が拾って再鳴動する (CodeRabbit #63)
+            app.container.appScope.launch {
+                runCatching { app.container.repository.onSuperseded(prev, instanceId) }
+            }
+        }
         // PENDING→FIRED のみ遷移 (DISMISSED を FIRED に戻さない atomic 制限)
         app.container.repository.onFired(instanceId)
         // 停止が先に届いていたら通知を出し直さない。

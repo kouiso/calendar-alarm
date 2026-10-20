@@ -71,11 +71,14 @@ class AlarmServiceStopTest {
         ShadowSettings.setCanDrawOverlays(overlay)
     }
 
-    private fun seed(id: String, title: String = "会議") = runBlocking {
+    private fun seed(id: String, title: String = "会議", muteUntilUnlock: Boolean = false) = runBlocking {
         app.container.db.scheduledInstances().upsert(
             listOf(
                 ScheduledInstanceEntity.of(
-                    AlarmInstance(id, System.currentTimeMillis(), title, AlarmKind.TIMER),
+                    AlarmInstance(
+                        id, System.currentTimeMillis(), title, AlarmKind.TIMER,
+                        muteUntilUnlock = muteUntilUnlock,
+                    ),
                 ),
             ),
         )
@@ -279,6 +282,22 @@ class AlarmServiceStopTest {
         c.withIntent(dismissIntent("sup-b")).startCommand(0, 3)
         assertTrue(waitUntil { !c.get().isPlaying() && shadowOf(c.get()).isStoppedBySelf })
         assertNull(runBlocking { app.container.repository.firedWithinGrace() })
+    }
+
+    @Test
+    fun `ロック解除まで留保される後発は先行を終端化せずPENDINGのまま残る`() {
+        seed("def-a", "A")
+        seed("def-b", "B", muteUntilUnlock = true)
+        val c = startService("def-a")
+        assertTrue(waitUntil { c.get().isPlaying() && AlarmService.ringingInstanceId.value == "def-a" })
+        shadowOf(app.getSystemService(android.app.KeyguardManager::class.java)).setIsKeyguardLocked(true)
+        c.withIntent(startIntent("def-b")).startCommand(0, 2)
+        assertTrue(waitUntil { audits().any { it.first == "DEFER" && it.second.startsWith("def-b") } })
+        settle(500)
+        // 留保された後発を FIRED にすると、解除後の再発火を AlarmReceiver が終端として抑止してしまう
+        assertEquals("PENDING", state("def-b"))
+        // 後発が鳴っていないので、先行の終端化 (SUPERSEDED) もここでは行わない
+        assertFalse(audits().any { it.first == "SUPERSEDED" })
     }
 
     @Test

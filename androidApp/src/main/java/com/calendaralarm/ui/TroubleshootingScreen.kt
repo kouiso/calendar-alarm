@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -59,8 +60,11 @@ import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.engine.AlarmService
 import kotlinx.coroutines.flow.first
 
-/** 1項目の検査結果。OK=満たす / NG=要対応 (設定へ飛べる) / NA=この OS では不要。 */
-enum class CheckState { OK, NG, NA }
+/**
+ * 1項目の検査結果。OK=満たす / NG=要対応 (設定へ飛べる) / NA=この OS では不要 /
+ * INFO=満たさなくても鳴るが、端末によっては遅れ得るので知らせるだけの参考項目。
+ */
+enum class CheckState { OK, NG, NA, INFO }
 
 data class TroubleshootItem(
     val key: String,
@@ -170,10 +174,12 @@ object TroubleshootChecks {
                     .putExtra(Settings.EXTRA_APP_PACKAGE, pkg)
                     .putExtra(Settings.EXTRA_CHANNEL_ID, channelId),
             ),
+            // 鳴動は AlarmManager.setAlarmClock() 経路で、Doze 中でも発火する (仕様: 電池最適化 ON のままでも鳴動)。
+            // 最適化の対象でも NG にはしない。端末独自の省電力で遅れる場合の保険として案内だけする
             TroubleshootItem(
-                "battery", s(batteryOk),
-                if (batteryOk) "バッテリー最適化の対象外" else "バッテリー最適化の対象です",
-                "バックグラウンド停止を防ぐため、アプリをバッテリー最適化の対象外にしてください。",
+                "battery", if (batteryOk) CheckState.OK else CheckState.INFO,
+                if (batteryOk) "バッテリー最適化の対象外" else "バッテリー最適化の対象です（鳴動には影響しません）",
+                "アラームは最適化の対象でも鳴ります。端末独自の省電力で遅れる場合だけ、対象外にしてください。",
                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkgUri),
             ),
             TroubleshootItem(
@@ -273,13 +279,14 @@ private fun Context.openSafely(intent: Intent?) {
 @Composable
 private fun TroubleshootRow(item: TroubleshootItem, onFix: () -> Unit) {
     val ng = item.state == CheckState.NG
+    val info = item.state == CheckState.INFO
     val na = item.state == CheckState.NA
     val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
     Row(
         Modifier
             .fillMaxWidth()
             .testTag("troubleshoot_${item.key}")
-            .then(if (ng) Modifier.clickable(onClick = onFix) else Modifier)
+            .then(if (ng || info) Modifier.clickable(onClick = onFix) else Modifier)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -287,6 +294,7 @@ private fun TroubleshootRow(item: TroubleshootItem, onFix: () -> Unit) {
             CheckState.OK -> Icon(Icons.Default.CheckCircle, "OK", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
             CheckState.NG -> Icon(Icons.Default.Error, "要対応", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(24.dp))
             CheckState.NA -> Icon(Icons.Outlined.Circle, "対象外", tint = dim, modifier = Modifier.size(24.dp))
+            CheckState.INFO -> Icon(Icons.Default.Info, "参考", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(20.dp))
         Column(Modifier.weight(1f)) {
@@ -302,7 +310,7 @@ private fun TroubleshootRow(item: TroubleshootItem, onFix: () -> Unit) {
                 color = if (na) dim else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (ng && item.fix != null) {
+        if ((ng || info) && item.fix != null) {
             Spacer(Modifier.width(12.dp))
             Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = "設定を開く")
         }
