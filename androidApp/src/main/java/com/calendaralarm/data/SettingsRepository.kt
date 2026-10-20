@@ -15,7 +15,8 @@ import com.calendaralarm.shared.model.TitleCodeSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore by preferencesDataStore(name = "settings")
+// テストから旧キーの残存を確かめるため internal にしている
+internal val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
 /** アプリ全体設定。DataStore Preferences で保持する。 */
 class SettingsRepository(private val context: Context) {
@@ -36,8 +37,6 @@ class SettingsRepository(private val context: Context) {
         val defaultSnoozeMinutes: Int = 10,
         val weatherEnabled: Boolean = true,
         val onboardingDone: Boolean = false,
-        /** 「他のアプリの上に表示」許可の一度きり案内を出したか (更新ユーザー向け)。 */
-        val overlayPromptShown: Boolean = false,
         /** 既定の開始時アクション。 */
         val defaultStartAction: EventAction = EventAction.ALARM,
         /** 既定のリマインダーアクション。 */
@@ -83,23 +82,18 @@ class SettingsRepository(private val context: Context) {
         val showNextAlarmAfterDismiss: Boolean = false,
         /** タイマープリセット。 */
         val timerPresets: List<TimerPreset> = DEFAULT_TIMER_PRESETS,
-        /** OpenRouter APIキー (AI機能用。ローカル入力)。 */
-        val openRouterApiKey: String? = null,
-        /** OpenRouter のモデル指定。 */
-        val openRouterModel: String = "openai/gpt-4.1-mini",
         /** 通知アラーム (他アプリ通知→アラーム) の有効フラグ */
         val notificationAlarmEnabled: Boolean = false,
         /** 通知アラームのルール一覧 */
         val notificationRules: List<com.calendaralarm.shared.model.NotificationRuleSpec> = emptyList(),
     )
 
-    val flow: Flow<Settings> = context.dataStore.data.map { p ->
+    val flow: Flow<Settings> = context.settingsDataStore.data.map { p ->
         Settings(
             defaultMinutesBefore = p[KEY_MINUTES] ?: 0,
             defaultSnoozeMinutes = p[KEY_SNOOZE] ?: 10,
             weatherEnabled = p[KEY_WEATHER] ?: true,
             onboardingDone = p[KEY_ONBOARDED] ?: false,
-            overlayPromptShown = p[KEY_OVERLAY_PROMPTED] ?: false,
             defaultStartAction = p[KEY_DEF_START_ACTION]
                 ?.let { runCatching { EventAction.valueOf(it) }.getOrNull() } ?: EventAction.ALARM,
             defaultReminderAction = p[KEY_DEF_REM_ACTION]
@@ -150,8 +144,6 @@ class SettingsRepository(private val context: Context) {
                         }
                     }
                 }.ifEmpty { DEFAULT_TIMER_PRESETS },
-            openRouterApiKey = p[KEY_OPENROUTER_KEY]?.ifBlank { null },
-            openRouterModel = p[KEY_OPENROUTER_MODEL] ?: "openai/gpt-4.1-mini",
             notificationAlarmEnabled = p[KEY_NOTIF_ALARM] ?: false,
             notificationRules = runCatching {
                 rulesJson.decodeFromString<List<com.calendaralarm.shared.model.NotificationRuleSpec>>(
@@ -169,7 +161,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setDefaultSnoozeMinutes(v: Int) = edit { it[KEY_SNOOZE] = v }
     suspend fun setWeatherEnabled(v: Boolean) = edit { it[KEY_WEATHER] = v }
     suspend fun setOnboardingDone(v: Boolean) = edit { it[KEY_ONBOARDED] = v }
-    suspend fun setOverlayPromptShown(v: Boolean) = edit { it[KEY_OVERLAY_PROMPTED] = v }
     suspend fun setDefaultStartAction(v: EventAction) = edit { it[KEY_DEF_START_ACTION] = v.name }
     suspend fun setDefaultReminderAction(v: EventAction) = edit { it[KEY_DEF_REM_ACTION] = v.name }
     suspend fun setTitleCodes(v: TitleCodeSettings) = edit {
@@ -242,10 +233,11 @@ class SettingsRepository(private val context: Context) {
         // 旧版と同じキーで秒を保持。読み取り側は `sec:` 接頭辞で新形式と判別する
         it[KEY_TIMER_PRESETS] = v.joinToString(";") { p -> "${p.label}|sec:${p.seconds}" }
     }
-    suspend fun setOpenRouterApiKey(v: String?) = edit {
-        if (v.isNullOrBlank()) it.remove(KEY_OPENROUTER_KEY) else it[KEY_OPENROUTER_KEY] = v
+    /** 入力欄を廃止した旧版で保存されたキーを端末に残さない。 */
+    suspend fun dropLegacyAiKey() = edit {
+        it.remove(KEY_OPENROUTER_KEY)
+        it.remove(KEY_OPENROUTER_MODEL)
     }
-    suspend fun setOpenRouterModel(v: String) = edit { it[KEY_OPENROUTER_MODEL] = v }
     suspend fun setNotificationAlarmEnabled(v: Boolean) = edit { it[KEY_NOTIF_ALARM] = v }
     suspend fun setNotificationRules(
         v: List<com.calendaralarm.shared.model.NotificationRuleSpec>,
@@ -259,7 +251,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
-        context.dataStore.edit(block)
+        context.settingsDataStore.edit(block)
     }
 
     internal companion object {
@@ -267,7 +259,6 @@ class SettingsRepository(private val context: Context) {
         val KEY_SNOOZE = intPreferencesKey("default_snooze_minutes")
         val KEY_WEATHER = booleanPreferencesKey("weather_enabled")
         val KEY_ONBOARDED = booleanPreferencesKey("onboarding_done")
-        val KEY_OVERLAY_PROMPTED = booleanPreferencesKey("overlay_prompt_shown")
         val KEY_DEF_START_ACTION = stringPreferencesKey("default_start_action")
         val KEY_DEF_REM_ACTION = stringPreferencesKey("default_reminder_action")
         val KEY_ALWAYS_CODES = stringPreferencesKey("title_always_codes")

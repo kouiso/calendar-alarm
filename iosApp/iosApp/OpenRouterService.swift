@@ -79,3 +79,13 @@ struct OpenRouterService {
         return String(t[s...e])
     }
 }
+
+extension OpenRouterService {
+    /// キーは利用者に入力させず、ビルドする側が Info.plist の `OpenRouterAPIKey` で渡す
+    /// (局長決定 2026-10-17 で入力欄を廃止)。渡さないビルドでは nil。
+    static func fromBundle() -> OpenRouterService? {
+        guard let key = Bundle.main.object(forInfoDictionaryKey: "OpenRouterAPIKey") as? String,
+              !key.isEmpty, !key.hasPrefix("$(") else { return nil }
+        return OpenRouterService(apiKey: key, model: "openai/gpt-4.1-mini")
+    }
+}

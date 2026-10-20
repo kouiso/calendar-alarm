@@ -89,10 +89,6 @@ fun OnboardingScreen(
     val fsiOk = Build.VERSION.SDK_INT < 34 ||
         (activity.getSystemService(NotificationManager::class.java)
             ?.canUseFullScreenIntent() ?: true)
-    // SYSTEM_ALERT_WINDOW は FSI が効かない環境でも鳴動停止UIを必ず出せる
-    // 保険。未許可だと停止経路が通知シェードだけの危険状態になり得る。
-    val overlayOk = Build.VERSION.SDK_INT < 23 ||
-        Settings.canDrawOverlays(activity)
 
     Column(
         Modifier.fillMaxSize().padding(24.dp),
@@ -184,20 +180,6 @@ fun OnboardingScreen(
                     )
                 }
             }
-            OnbCard(
-                title = "他アプリの上への表示",
-                desc = "フルスクリーン通知が効かない端末でも停止画面を必ず出す",
-                granted = overlayOk,
-                compact = true,
-            ) {
-                if (!overlayOk) {
-                    activity.startActivity(
-                        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                            data = Uri.parse("package:${activity.packageName}")
-                        },
-                    )
-                }
-            }
         }
 
         Column {
@@ -205,8 +187,6 @@ fun OnboardingScreen(
             Button(
                 onClick = {
                     scope.launch {
-                        // オンボーディングで上への表示カードを見ているので更新ユーザー向け案内は不要
-                        settings.setOverlayPromptShown(true)
                         settings.setOnboardingDone(true)
                         repository.resync("onboarding")
                     }
@@ -217,7 +197,6 @@ fun OnboardingScreen(
             TextButton(
                 onClick = {
                     scope.launch {
-                        settings.setOverlayPromptShown(true)
                         settings.setOnboardingDone(true)
                     }
                 },

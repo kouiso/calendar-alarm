@@ -130,7 +130,6 @@ class MainActivity : ComponentActivity() {
                         app.container.repository.resync("app start")
                     }
                     MainScaffold(app.container.repository, app.container.settings)
-                    com.calendaralarm.ui.OverlayPermissionPrompt(app.container.settings, this@MainActivity)
                     // メール→予定: 抽出結果が届いていれば確認ダイアログを最前面に出す
                     extractedJson.value?.let { json ->
                         val ev = runCatching {
