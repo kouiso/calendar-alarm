@@ -281,9 +281,12 @@ class AlarmRepository(
         val since = now - AlarmExpander.FIRE_GRACE.inWholeMilliseconds
         val queued = waitingRings.all()
         resolvedId?.let { waitingRings.remove(it) }
+        // 判定から実行までの間に鳴り始めた鳴動は、待ち側ではないので PENDING に戻さない
+        val ringingNow = com.calendaralarm.engine.AlarmService.ringingInstanceId.value
         val candidates = (queued.mapNotNull { db.scheduledInstances().byId(it) } +
             db.scheduledInstances().firedBetween(since, now))
             .distinctBy { it.id }
+            .filter { it.id != ringingNow }
             .map { it.toInstance() to it.state }
         // 待っている間に親のアラームを OFF・削除されたら鳴らし直さない。resync は PENDING しか
         // 取り消さないので、FIRED のまま待つ行はここで確かめる
@@ -294,7 +297,8 @@ class AlarmRepository(
         }.map { it.first }.filter { inst ->
             val parent = db.scheduledInstances().byId(inst.id)?.standaloneAlarmId
             inst.id != resolvedId && (inst.id in queued || inst.delivery == EventAction.ALARM) &&
-                (muteAll || (parent != null && parent !in enabledAlarmIds))
+                ((muteAll && inst.kind != AlarmKind.TIMER && inst.kind != AlarmKind.NOTIFICATION) ||
+                    (parent != null && parent !in enabledAlarmIds))
         }.map { it.id }.toSet()
         orphaned.forEach {
             setState(it, AlarmState.CANCELLED)

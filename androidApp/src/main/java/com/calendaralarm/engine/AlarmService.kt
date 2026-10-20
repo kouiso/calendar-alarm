@@ -744,11 +744,13 @@ class AlarmService : Service() {
      * サービスが畳まれても予約し直しが消えないよう、アプリ寿命のスコープで行う
      */
     private fun releaseWaitingRings(resolvedId: String?) {
-        val idle = synchronized(ringLock) {
+        fun idleNow() = synchronized(ringLock) {
             ringingInstanceId.value == null && pendingStartId == null && requestedIds.isEmpty()
         }
-        if (!idle) return
+        if (!idleNow()) return
         app.container.appScope.launch {
+            // 判定から実行までの間に別の鳴動が始まっていたら、その鳴動の終了時に任せる
+            if (!idleNow()) return@launch
             runCatching { app.container.repository.rearmWaitingRings(resolvedId) }
         }
     }

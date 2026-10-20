@@ -566,9 +566,15 @@ class EngineTest {
         repository.onDisplaced(w.id, "other")
         val settings = SettingsRepository(context)
         settings.setMuteAll(true)
+        // 一括ミュートの対象外 (タイマー) は、重なっても鳴らし直す
+        val timer = AlarmInstance(id = "wait-timer", triggerAtMillis = now, title = "t", kind = AlarmKind.TIMER)
+        db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(timer)))
+        repository.onFired(timer.id)
+        repository.onDisplaced(timer.id, "other")
         try {
-            assertEquals(0, repository.rearmWaitingRings(resolvedId = "other"))
+            assertEquals(1, repository.rearmWaitingRings(resolvedId = "other"))
             assertEquals(AlarmState.CANCELLED.name, db.scheduledInstances().byId(w.id)!!.state)
+            assertEquals(AlarmState.PENDING.name, db.scheduledInstances().byId(timer.id)!!.state)
         } finally {
             // 設定は DataStore に残り他の試験へ漏れるので戻す
             settings.setMuteAll(false)
