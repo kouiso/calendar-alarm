@@ -279,6 +279,10 @@ class AlarmService : Service() {
                 app.container.appScope.launch {
                     app.container.repository.onDisplaced(prev, instanceId)
                 }.join()
+                // 載せる前に後発が停止されていたら、その停止の解放は先代を見落としている。ここで解放し直す。
+                // 別の鳴動が生きていれば解放は何もせず、その鳴動の終了時に任せる
+                val tornDown = synchronized(ringLock) { destroyed || ringGen != gen }
+                if (tornDown) releaseWaitingRings(instanceId)
             }
         }
         // 停止が先に届いていたら通知を出し直さない。

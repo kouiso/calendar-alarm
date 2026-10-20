@@ -461,4 +461,20 @@ class EngineTest {
         assertEquals(1, repository.rearmWaitingRings(resolvedId = "other"))
     }
 
+    @Test
+    fun `待つ間に猶予を過ぎた押し出し済みの鳴動は見逃しになり FIRED のまま残らない`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val late = AlarmInstance(
+            id = "wait-expired", triggerAtMillis = now - 61 * 60_000L, title = "t", kind = AlarmKind.EVENT,
+        )
+        db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(late)))
+        repository.onFired(late.id)
+        repository.onDisplaced(late.id, "other")
+
+        assertEquals(0, repository.rearmWaitingRings(resolvedId = "other"))
+        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(late.id)!!.state)
+        assertTrue(repository.auditFlow(20).first().any { it.action == "MISS" && it.detail.startsWith(late.id) })
+        assertEquals("見逃しにした行は待ち行列から外れる", 0, repository.rearmWaitingRings(resolvedId = null))
+    }
+
 }

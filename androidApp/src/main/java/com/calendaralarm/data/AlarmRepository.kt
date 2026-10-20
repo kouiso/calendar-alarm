@@ -262,7 +262,17 @@ class AlarmRepository(
                 // 待ち行列に無い FIRED は、鳴動の途中で途切れた鳴動だけ (通知だけの予定は通知済み)
                 (inst.id in queued || inst.delivery == EventAction.ALARM)
         }.map { it.first }
-        // 片付いた・猶予を過ぎた行は待ち行列から外す (猶予切れは次の健全性チェックが見逃しにする)
+        // 猶予を過ぎた待ち行は見逃しにして待ち行列から外す。FIRED のまま外すと、健全性チェックは
+        // PENDING しか見ないので誰も見逃しにせず、単発アラームも ON のまま残る
+        candidates.filter { (inst, state) ->
+            inst.id in queued && inst.id != resolvedId &&
+                (state == AlarmState.FIRED.name || state == AlarmState.PENDING.name) &&
+                inst.triggerAtMillis <= since
+        }.forEach { (inst, _) ->
+            markMissed(inst.id, "鳴らし直しを待つ間に鳴動猶予を過ぎた")
+            onMissed?.invoke(1)
+        }
+        // 片付いた行も待ち行列から外す
         queued.filter { q -> waiting.none { it.id == q } }.forEach { waitingRings.remove(it) }
         waiting.forEachIndexed { i, inst ->
             db.scheduledInstances().setPendingIfFired(inst.id)
