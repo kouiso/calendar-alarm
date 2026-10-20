@@ -852,23 +852,14 @@ private fun EventRulesCard(
                     )
                 }
             }
-            // イベント種別フィルタ (誕生日/不在/勤務場所/タスク/予定)
-            IconSettingRow(Icons.Default.Notifications) {
-                listOf(
-                    EventType.BIRTHDAY to "誕生日",
-                    EventType.ABSENCE to "不在",
-                    EventType.WORKPLACE to "勤務場所",
-                    EventType.TASK to "タスク",
-                    EventType.EVENT to "予定",
-                ).forEach { (t, label) ->
-                    FilterChip(
-                        selected = prefs.eventTypeFilter.allows(t),
-                        onClick = { scope.launch { settings.toggleEventType(t); repository.resync("settings") } },
-                        label = { Text(label, maxLines = 1) },
-                        modifier = Modifier.padding(end = 4.dp),
-                    )
-                }
-            }
+            // 鳴らす予定の種類と「予定なし」を一か所でまとめて切り替える (#79)
+            EventTypeRingSwitches(
+                filter = prefs.eventTypeFilter,
+                // Google 連携が無い時、種類は予定のタイトルから推定するしかない (OS のカレンダーに種類の列が無い)
+                guessedFromTitle = prefs.googleAccountEmail == null,
+                onToggleType = { t -> scope.launch { settings.toggleEventType(t); repository.resync("settings") } },
+                onToggleFree = { v -> scope.launch { settings.setRingFree(v); repository.resync("settings") } },
+            )
             // Googleカレンダー連携 (eventType を API の正本から取得)
             val googleLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.StartActivityForResult()
@@ -1256,5 +1247,47 @@ private fun AppearanceCard(
                 }
             }
         }
+    }
+}
+
+/** 鳴らす予定の種類 6 つと「予定なし」を、名前つきのスイッチで並べる (#79)。 */
+@Composable
+private fun EventTypeRingSwitches(
+    filter: com.calendaralarm.shared.model.EventTypeFilter,
+    guessedFromTitle: Boolean,
+    onToggleType: (EventType) -> Unit,
+    onToggleFree: (Boolean) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Text("鳴らす予定の種類", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        if (guessedFromTitle) {
+            Text(
+                "種類は予定のタイトルから推定します。Google 連携をすると Google の種類で判定します。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        listOf(
+            EventType.EVENT to "予定",
+            EventType.TASK to "タスク",
+            EventType.ABSENCE to "不在",
+            EventType.FOCUS_TIME to "サイレントモード",
+            EventType.WORKPLACE to "勤務場所",
+            EventType.BIRTHDAY to "誕生日",
+        ).forEach { (t, label) ->
+            RingSwitchRow(label, filter.allows(t)) { onToggleType(t) }
+        }
+        RingSwitchRow("「予定なし」にした予定", filter.free) { onToggleFree(!filter.free) }
+    }
+}
+
+@Composable
+private fun RingSwitchRow(label: String, on: Boolean, onToggle: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Switch(checked = on, onCheckedChange = { onToggle() })
     }
 }

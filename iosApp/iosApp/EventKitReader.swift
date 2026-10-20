@@ -58,7 +58,10 @@ final class EventKitReader {
                 inviteStatus: Self.inviteStatus(of: ev),
                 calendarReminderMinutes: Self.reminderMinutes(of: ev),
                 // Google Calendar API の iCalUID と照合するための外部UID
-                iCalUID: ev.calendarItemExternalIdentifier
+                iCalUID: ev.calendarItemExternalIdentifier,
+                // 連絡先の誕生日カレンダーは EventKit が種類を確実に教えてくれる (#79)
+                googleEventType: cal.type == .birthday ? "birthday" : nil,
+                availability: Self.availability(of: ev)
             )
         }
     }
@@ -174,5 +177,15 @@ final class EventKitReader {
         guard let comps = cg?.components, comps.count >= 3 else { return 0xFF888888 }
         let a = comps.count >= 4 ? comps[3] : 1.0
         return (Int(a * 255) << 24) | (Int(comps[0] * 255) << 16) | (Int(comps[1] * 255) << 8) | Int(comps[2] * 255)
+    }
+
+    /// EKEvent.availability を予定あり／なしへ写す (#79)。仮は予定ありとして扱う
+    static func availability(of ev: EKEvent) -> String? {
+        switch ev.availability {
+        case .busy, .unavailable: return Availability.busy.rawValue
+        case .free: return Availability.free.rawValue
+        case .tentative: return Availability.tentative.rawValue
+        default: return nil
+        }
     }
 }

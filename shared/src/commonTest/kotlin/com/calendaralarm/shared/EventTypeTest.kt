@@ -30,7 +30,7 @@ class EventTypeTest {
         assertEquals(EventType.WORKPLACE, googleEventTypeToEventType("workingLocation"))
         assertEquals(EventType.TASK, googleEventTypeToEventType("task"))
         assertEquals(EventType.EVENT, googleEventTypeToEventType("default"))
-        assertEquals(EventType.EVENT, googleEventTypeToEventType("focusTime"))
+        assertEquals(EventType.FOCUS_TIME, googleEventTypeToEventType("focusTime"))
         assertEquals(EventType.EVENT, googleEventTypeToEventType("fromGmail"))
     }
 
@@ -80,17 +80,25 @@ class EventTypeTest {
     // ---- EventTypeFilter ----
 
     @Test
-    fun デフォルトは全種別許可() {
+    fun 既定は予定とタスクだけ鳴らし不在などは鳴らさない() {
         val f = EventTypeFilter()
-        EventType.entries.forEach { assertTrue(f.allows(it), "$it") }
+        assertTrue(f.allows(EventType.EVENT))
+        assertTrue(f.allows(EventType.TASK))
+        assertFalse(f.allows(EventType.ABSENCE))
+        assertFalse(f.allows(EventType.FOCUS_TIME))
+        assertFalse(f.allows(EventType.WORKPLACE))
+        assertFalse(f.allows(EventType.BIRTHDAY))
+        assertTrue(f.free)
     }
 
     @Test
     fun OFFにした種別だけ鳴らない() {
-        val f = EventTypeFilter(birthday = false, absence = false)
+        val all = EventTypeFilter(birthday = true, absence = true, workplace = true, focusTime = true)
+        val f = all.copy(birthday = false, absence = false)
         assertFalse(f.allows(EventType.BIRTHDAY))
         assertFalse(f.allows(EventType.ABSENCE))
         assertTrue(f.allows(EventType.WORKPLACE))
+        assertTrue(f.allows(EventType.FOCUS_TIME))
         assertTrue(f.allows(EventType.TASK))
         assertTrue(f.allows(EventType.EVENT))
     }
@@ -98,7 +106,7 @@ class EventTypeTest {
     @Test
     fun 種別フィルタとresolveを通した経路() {
         // API正本 BIRTHDAY + birthday OFF → 鳴らない
-        val f = EventTypeFilter(birthday = false)
+        val f = EventTypeFilter(birthday = false, event = true)
         assertFalse(f.allows(resolveEventType(event("会議", googleType = "birthday"))))
         // 未連携イベントのタイトル判定 + event ON → 鳴る
         assertTrue(f.allows(resolveEventType(event("会議"))))
