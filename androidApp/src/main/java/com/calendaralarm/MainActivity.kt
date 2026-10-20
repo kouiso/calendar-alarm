@@ -45,7 +45,6 @@ import androidx.navigation.compose.rememberNavController
 import com.calendaralarm.ui.AgendaScreen
 import com.calendaralarm.ui.AlarmEditScreen
 import com.calendaralarm.ui.AlarmsScreen
-import com.calendaralarm.ui.OnboardingScreen
 import com.calendaralarm.ui.SettingsScreen
 import com.calendaralarm.ui.TimerScreen
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
@@ -94,15 +93,9 @@ class MainActivity : ComponentActivity() {
                 val bgFlow = remember { app.container.settings.flow.map { it.backgroundImageUri } }
                 val bgUri by bgFlow.collectAsState(initial = null)
                 AppBackground(bgUri) {
-                    // onboarded で既に設定済みの場合も flow は remember 必須
-                    val onboardedFlow = remember {
-                        app.container.settings.flow.map { it.onboardingDone }
-                    }
-                    val onboarded by onboardedFlow.collectAsState(initial = true)
 
                 // 通知権限が無い等でフルスクリーン通知が出せない時でも、
                 // アプリを開けば鳴動画面へ辿り着けるようにする (止める手段の確保)。
-                // onboarded 分岐の外に置き、オンボーディング中でも救出できるようにする。
                 androidx.compose.runtime.LaunchedEffect(Unit) {
                     com.calendaralarm.engine.AlarmService.ringingInstanceId.collect { id ->
                         id?.let {
@@ -114,22 +107,21 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                // カレンダー権限はメイン画面の条件にしない。
-                // 無くてもタイマー・単発アラームは動く (resync が部分動作する設計)、
-                // 不足分は権限ヘルスカードが誘導する。「権限なしで始める」の約束と一致。
-                if (!onboarded) {
-                    OnboardingScreen(
-                        repository = app.container.repository,
-                        settings = app.container.settings,
-                        activity = this,
-                    )
-                } else {
+                // 許可はメイン画面の条件にしない。無くてもタイマー・単発アラームは動く
+                // (resync が部分動作する設計)。足りない許可は PermissionAsker が1つずつ頼む
+                run {
                     // 強制終了→手動再開で AlarmManager の予約が消えるケースに備え、
                     // メイン画面に入る度に予約を再主張する (冪等)。
                     androidx.compose.runtime.LaunchedEffect(Unit) {
                         app.container.repository.resync("app start")
                     }
                     MainScaffold(app.container.repository, app.container.settings)
+                    com.calendaralarm.ui.PermissionAsker(app.container.repository) { granted ->
+                        if (granted == com.calendaralarm.ui.AppPermission.CALENDAR) {
+                            app.ensureCalendarObserver()
+                            lifecycleScope.launch { app.container.repository.resync("calendar granted") }
+                        }
+                    }
                     // メール→予定: 抽出結果が届いていれば確認ダイアログを最前面に出す
                     extractedJson.value?.let { json ->
                         val ev = runCatching {
@@ -305,7 +297,15 @@ private fun MainScaffold(
                 )
             }
             composable("permissions") {
-                com.calendaralarm.ui.PermissionsScreen(onBack = { nav.popBackStack() })
+                val permScope = androidx.compose.runtime.rememberCoroutineScope()
+                com.calendaralarm.ui.PermissionsScreen(
+                    onBack = { nav.popBackStack() },
+                    onGranted = { p ->
+                        if (p == com.calendaralarm.ui.AppPermission.CALENDAR) {
+                            permScope.launch { repository.resync("calendar granted") }
+                        }
+                    },
+                )
             }
             composable("troubleshoot") {
                 com.calendaralarm.ui.TroubleshootingScreen(settings, onBack = { nav.popBackStack() })

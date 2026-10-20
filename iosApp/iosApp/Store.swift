@@ -9,7 +9,6 @@ final class Store: ObservableObject {
 
     struct Persisted: Codable {
         // settings
-        var onboardingDone: Bool = false
         var defaultMinutesBefore: Int = 0
         var defaultSnoozeMinutes: Int = 10
         var weatherEnabled: Bool = true
@@ -103,7 +102,6 @@ final class Store: ObservableObject {
 
     // MARK: - settings
 
-    func completeOnboarding() { mutate { $0.onboardingDone = true } }
     func setDefaultMinutes(_ v: Int) { mutate { $0.defaultMinutesBefore = v } }
     func setDefaultSnooze(_ v: Int) { mutate { $0.defaultSnoozeMinutes = v } }
     func setWeatherEnabled(_ v: Bool) { mutate { $0.weatherEnabled = v } }
@@ -280,7 +278,6 @@ final class Store: ObservableObject {
 extension Store.Persisted {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        onboardingDone = try c.decodeIfPresent(Bool.self, forKey: .onboardingDone) ?? false
         defaultMinutesBefore = try c.decodeIfPresent(Int.self, forKey: .defaultMinutesBefore) ?? 0
         defaultSnoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .defaultSnoozeMinutes) ?? 10
         weatherEnabled = try c.decodeIfPresent(Bool.self, forKey: .weatherEnabled) ?? true

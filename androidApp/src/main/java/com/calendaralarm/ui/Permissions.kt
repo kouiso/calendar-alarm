@@ -60,6 +60,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -105,10 +106,14 @@ fun probePermissions(context: Context): Map<AppPermission, Boolean> = mapOf(
         ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) ==
             PackageManager.PERMISSION_GRANTED
         ),
+    // 33 未満には実行時の許可が無いが、設定で通知を切られていることはある。鳴動側の判定と同じく有効かを見る
     AppPermission.NOTIFY to (
-        Build.VERSION.SDK_INT < 33 ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
+        NotificationManagerCompat.from(context).areNotificationsEnabled() &&
+            (
+                Build.VERSION.SDK_INT < 33 ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                    PackageManager.PERMISSION_GRANTED
+                )
         ),
     AppPermission.EXACT to (
         Build.VERSION.SDK_INT < 31 ||
@@ -212,8 +217,9 @@ internal fun rememberPermissionRequester(onResult: (AppPermission, Boolean) -> U
  * (局長決定 2026-10-17 の2)。押すと端末のその設定が直接開き、戻ると状態が自動で変わる。
  */
 @Composable
-fun PermissionsScreen(onBack: () -> Unit) {
+fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {}) {
     val context = LocalContext.current
+    val activity = context as? Activity
     val tick = rememberResumeTick()
     var granted by remember { mutableStateOf(probePermissions(context)) }
     // 「全部許可する」の連続依頼中か。戻っても未許可なら断られたとみなして止める
@@ -235,7 +241,10 @@ fun PermissionsScreen(onBack: () -> Unit) {
         }
     }
     LaunchedEffect(tick) {
-        granted = probePermissions(context)
+        val now = probePermissions(context)
+        // 新たに付いた許可を知らせる。カレンダーなら呼び出し側が予約を作り直す (待たせると次の定期同期まで鳴らない)
+        AppPermission.entries.filter { granted[it] == false && now[it] == true }.forEach(onGranted)
+        granted = now
         requestNext?.invoke()
     }
 
@@ -308,7 +317,17 @@ fun PermissionsScreen(onBack: () -> Unit) {
                 val on = granted[p] == true
                 val stateText = if (on) "許可済み" else "未許可"
                 // 許可済みでも押せば OS の設定を開き、そこでオフにできる (アプリからは外せないため)
-                val open = { chain = false; requester.request(p) }
+                val open = {
+                    chain = false
+                    // 許可済みの実行時権限を頼み直しても OS は何も出さない。外したい時に備えて端末の設定を開く
+                    // 通知は権限があっても設定で切られていることがあり、その時も頼み直しでは何も出ない
+                    val notifyBlockedInSettings = p == AppPermission.NOTIFY && !on && (
+                        Build.VERSION.SDK_INT < 33 ||
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                            PackageManager.PERMISSION_GRANTED
+                        )
+                    if ((on || notifyBlockedInSettings) && activity != null) openSettingsFor(activity, p) else requester.request(p)
+                }
                 Row(
                     Modifier
                         .fillMaxWidth()
