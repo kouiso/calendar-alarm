@@ -1,0 +1,36 @@
+name: AI rules drift check
+
+# なぜ: Android CI は .md の変更で走らないので、AGENTS.md だけを変えた PR で
+#       生成物 (CLAUDE.md など) が古いまま入るのを別に止める
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "AGENTS.md"
+      - ".agents/**"
+      - "CLAUDE.md"
+      - "GEMINI.md"
+      - ".github/copilot-instructions.md"
+      - ".cursor/**"
+      - ".claude/skills/**"
+      - "scripts/sync-ai-rule.mjs"
+  push:
+    branches:
+      - master
+    paths:
+      - "AGENTS.md"
+      - ".agents/**"
+      - "scripts/sync-ai-rule.mjs"
+
+jobs:
+  check:
+    if: github.event.pull_request.draft != true
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Generated AI entry files are up to date
+        run: node scripts/sync-ai-rule.mjs --check
