@@ -389,25 +389,92 @@ class EngineTest {
     }
 
     @Test
-    fun `置き換えは先行を DISMISSED・後発を FIRED に同一トランザクションで倒す`() = runBlocking {
-        val prev = AlarmInstance(
-            id = "sup-p", triggerAtMillis = System.currentTimeMillis(),
-            title = "t", kind = AlarmKind.EVENT,
-        )
-        val next = AlarmInstance(
-            id = "sup-n", triggerAtMillis = System.currentTimeMillis(),
-            title = "t", kind = AlarmKind.EVENT,
-        )
+    fun `押し出された先行は鳴動待ちに戻り、後発の停止後に鳴らし直しの予約が入る`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val prev = AlarmInstance(id = "sup-p", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT)
+        val next = AlarmInstance(id = "sup-n", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT)
         repository.scheduleAdhoc(prev)
         repository.scheduleAdhoc(next)
         repository.onFired(prev.id)
-        repository.onSuperseded(prev.id, next.id)
+        repository.onFired(next.id)
+        repository.onDisplaced(prev.id, next.id)
 
-        assertEquals(AlarmState.DISMISSED.name, db.scheduledInstances().byId(prev.id)!!.state)
-        // 先行の終端化だけが残り後発が PENDING のままだと、プロセスキル後の復旧
-        // (firedWithinGrace) が拾える FIRED 行が無くなり鳴るべきアラームが消える
-        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(next.id)!!.state)
-        assertEquals(next.id, repository.firedWithinGrace()?.id)
+        // 押し出された側は誰も止めていないので終端にしない (FIRED のまま待つ)
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(prev.id)!!.state)
+
+        repository.onDismissed(next.id)
+        assertEquals(1, repository.rearmWaitingRings(next.id))
+        assertEquals("鳴らし直す時は AlarmReceiver が受け付ける PENDING に戻す",
+            AlarmState.PENDING.name, db.scheduledInstances().byId(prev.id)!!.state)
+        assertEquals("同じ鳴動を二度は予約し直さない", 0, repository.rearmWaitingRings(null))
+        val alarm = shadowOf(context.getSystemService(android.app.AlarmManager::class.java)).nextScheduledAlarm
+        assertTrue("先行の鳴らし直しが今すぐ予約される", alarm != null && alarm.triggerAtMs - System.currentTimeMillis() < 5_000)
+        assertTrue(repository.auditFlow(20).first().any { it.action == "REARM" && it.detail.startsWith(prev.id) })
+    }
+
+    @Test
+    fun `止めた鳴動・通知のみ・猶予切れは鳴らし直さない`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val stopped = AlarmInstance(id = "rm-stopped", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT)
+        val notify = AlarmInstance(
+            id = "rm-notify", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT,
+            delivery = com.calendaralarm.shared.model.EventAction.NOTIFY,
+        )
+        val stale = AlarmInstance(id = "rm-stale", triggerAtMillis = now - 2 * 60 * 60_000L, title = "t", kind = AlarmKind.EVENT)
+        val future = AlarmInstance(id = "rm-future", triggerAtMillis = now + 60 * 60_000L, title = "t", kind = AlarmKind.EVENT)
+        db.scheduledInstances().upsert(listOf(stopped, notify, stale, future).map { ScheduledInstanceEntity.of(it) })
+        repository.onFired(stopped.id)
+        repository.onDismissed(stopped.id)
+        repository.onFired(notify.id)
+
+        assertEquals(0, repository.rearmWaitingRings(resolvedId = null))
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(notify.id)!!.state)
+    }
+
+
+    @Test
+    fun `押し出されて待っている間の resync は待ち側を予約し直さない`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val prev = AlarmInstance(id = "wait-p", triggerAtMillis = now, title = "t", kind = AlarmKind.TIMER)
+        repository.scheduleAdhoc(prev)
+        repository.onFired(prev.id)
+        repository.onDisplaced(prev.id, "wait-n")
+        scheduler.cancel(prev.id)
+        repository.resync("test")
+        // 予約し直すと過去の時刻ですぐ発火し、後発の鳴動中に割り込んでしまう
+        val armed = shadowOf(alarmManager).scheduledAlarms
+            .mapNotNull { shadowOf(it.operation).savedIntent.data?.lastPathSegment }
+        assertTrue("待ち側が AlarmManager に入っていないこと: $armed", prev.id !in armed)
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(prev.id)!!.state)
+    }
+
+    @Test
+    fun `通知権限なしで鳴動に回った通知のみの予定も、押し出されたら鳴らし直す`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val notify = AlarmInstance(
+            id = "wait-notify", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT,
+            delivery = com.calendaralarm.shared.model.EventAction.NOTIFY,
+        )
+        db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(notify)))
+        repository.onFired(notify.id)
+        repository.onDisplaced(notify.id, "other")
+        assertEquals(1, repository.rearmWaitingRings(resolvedId = "other"))
+    }
+
+    @Test
+    fun `待つ間に猶予を過ぎた押し出し済みの鳴動は見逃しになり FIRED のまま残らない`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val late = AlarmInstance(
+            id = "wait-expired", triggerAtMillis = now - 61 * 60_000L, title = "t", kind = AlarmKind.EVENT,
+        )
+        db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(late)))
+        repository.onFired(late.id)
+        repository.onDisplaced(late.id, "other")
+
+        assertEquals(0, repository.rearmWaitingRings(resolvedId = "other"))
+        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(late.id)!!.state)
+        assertTrue(repository.auditFlow(20).first().any { it.action == "MISS" && it.detail.startsWith(late.id) })
+        assertEquals("見逃しにした行は待ち行列から外れる", 0, repository.rearmWaitingRings(resolvedId = null))
     }
 
     /** OS のカレンダー provider と同じく、権限の無い読み取りを SecurityException で拒む fake。 */
@@ -433,6 +500,112 @@ class EngineTest {
     fun `権限ありと判定した直後に外されても一覧は空で返り落ちない`() = runBlocking {
         Robolectric.buildContentProvider(DenyingCalendarProvider::class.java).create(CalendarContract.AUTHORITY)
         assertTrue(repositoryWithCalendar.calendarSources().isEmpty())
+    }
+
+    @Test
+    fun `待つ間に親のアラームを OFF にされたら鳴らし直さない`() = runBlocking {
+        val alarmId = db.standaloneAlarms().upsert(
+            com.calendaralarm.data.db.StandaloneAlarmEntity(
+                hour = 7, minute = 0, enabled = true, daysMask = 0, label = "p",
+                soundUri = null, snoozeMinutes = 10, exceptionsCsv = "",
+            ),
+        )
+        val now = System.currentTimeMillis()
+        val waitingRow = ScheduledInstanceEntity.of(
+            AlarmInstance(id = "wait-off", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT),
+        ).copy(standaloneAlarmId = alarmId)
+        db.scheduledInstances().upsert(listOf(waitingRow))
+        repository.onFired("wait-off")
+        repository.onDisplaced("wait-off", "other")
+        db.standaloneAlarms().byId(alarmId)!!.let { db.standaloneAlarms().upsert(it.copy(enabled = false)) }
+
+        assertEquals(0, repository.rearmWaitingRings(resolvedId = "other"))
+        assertEquals(AlarmState.CANCELLED.name, db.scheduledInstances().byId("wait-off")!!.state)
+    }
+
+    @Test
+    fun `待つ間に予定をミュートされたら鳴らし直さない・ミュートしなければ待ち続ける`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 30 * 60_000
+        val inst = mapOf(
+            CalendarContract.Instances.EVENT_ID to 1L,
+            CalendarContract.Instances.CALENDAR_ID to 1L,
+            CalendarContract.Instances.TITLE to "会議",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to start,
+            CalendarContract.Instances.END to start + 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        FakeCalendarProvider.instanceRows = listOf(inst)
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        repositoryWithCalendar.resync("test")
+        val id = "ev:1:1:$start:b0"
+        repositoryWithCalendar.onFired(id)
+        repositoryWithCalendar.onDisplaced(id, "other")
+
+        // 対照: 何も変えない resync では待ち続ける
+        repositoryWithCalendar.resync("control")
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(id)!!.state)
+
+        repositoryWithCalendar.setEventOverride("1:1:$start", com.calendaralarm.shared.model.EventAction.MUTE, null)
+        assertEquals(AlarmState.CANCELLED.name, db.scheduledInstances().byId(id)!!.state)
+        assertEquals(0, repositoryWithCalendar.rearmWaitingRings(resolvedId = "other"))
+    }
+
+    @Test
+    fun `待つ間に一括ミュートされたら鳴らし直さない`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val w = AlarmInstance(id = "wait-mute-all", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT)
+        db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(w)))
+        repository.onFired(w.id)
+        repository.onDisplaced(w.id, "other")
+        val settings = SettingsRepository(context)
+        settings.setMuteAll(true)
+        // 一括ミュートの対象外 (タイマー) は、重なっても鳴らし直す
+        val timer = AlarmInstance(id = "wait-timer", triggerAtMillis = now, title = "t", kind = AlarmKind.TIMER)
+        db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(timer)))
+        repository.onFired(timer.id)
+        repository.onDisplaced(timer.id, "other")
+        try {
+            assertEquals(1, repository.rearmWaitingRings(resolvedId = "other"))
+            assertEquals(AlarmState.CANCELLED.name, db.scheduledInstances().byId(w.id)!!.state)
+            assertEquals(AlarmState.PENDING.name, db.scheduledInstances().byId(timer.id)!!.state)
+        } finally {
+            // 設定は DataStore に残り他の試験へ漏れるので戻す
+            settings.setMuteAll(false)
+        }
+    }
+
+    @Test
+    fun `待つ間の resync は猶予切れとスヌーズの子を取り消さず、猶予切れは見逃しにする`() = runBlocking {
+        FakeCalendarProvider.instanceRows = emptyList()
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        val now = System.currentTimeMillis()
+        val expired = AlarmInstance(
+            id = "ev:9:9:1:b0", triggerAtMillis = now - 61 * 60_000L, title = "t", kind = AlarmKind.EVENT,
+        )
+        val snoozeChild = AlarmInstance(
+            id = "ev:9:9:2:b0:snz1", triggerAtMillis = now, title = "t", kind = AlarmKind.EVENT, snoozeSeq = 1,
+        )
+        db.scheduledInstances().upsert(listOf(expired, snoozeChild).map { ScheduledInstanceEntity.of(it) })
+        listOf(expired, snoozeChild).forEach {
+            repositoryWithCalendar.onFired(it.id)
+            repositoryWithCalendar.onDisplaced(it.id, "other")
+        }
+
+        repositoryWithCalendar.resync("while-waiting")
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(expired.id)!!.state)
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId(snoozeChild.id)!!.state)
+
+        assertEquals(1, repositoryWithCalendar.rearmWaitingRings(resolvedId = "other"))
+        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(expired.id)!!.state)
     }
 
 }

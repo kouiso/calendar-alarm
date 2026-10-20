@@ -106,8 +106,11 @@ class AlarmReceiver : BroadcastReceiver() {
                                 ?.cancel(AlarmService.NOTIFICATION_ID)
                             RingingOverlay.hide(context)
                             runCatching {
-                                (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
-                                    .container.repository.onDismissed(instanceId)
+                                val repo = (context.applicationContext as com.calendaralarm.CalendarAlarmApp)
+                                    .container.repository
+                                repo.onDismissed(instanceId)
+                                // サービスがいない = 鳴動中の鳴動は無い。押し出されて待っている鳴動を鳴らし直す (#84)
+                                repo.rearmWaitingRings(instanceId)
                             }
                         }
                         // 届かなかった場合でも対象 id の終端意図を墓標へ記録し、

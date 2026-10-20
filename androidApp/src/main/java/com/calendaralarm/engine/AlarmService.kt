@@ -25,6 +25,7 @@ import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 import com.calendaralarm.CalendarAlarmApp
 import com.calendaralarm.R
+import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmState
@@ -118,6 +119,7 @@ class AlarmService : Service() {
                     // 他の鳴動は無い。採用済みの資源ごと現行と同じく畳んである
                     TeardownClaim.MATCHED, TeardownClaim.PENDING -> scope.launch {
                         runCatching { app.container.repository.onDismissed(targetId) }
+                        releaseWaitingRings(targetId)
                         finishIfIdle()
                     }
                     TeardownClaim.REQUESTED -> scope.launch {
@@ -136,6 +138,7 @@ class AlarmService : Service() {
                     TeardownClaim.IDLE -> scope.launch {
                         // 鳴動中・要求中ともに無し: 滞留UIは onIdle で畳み済み
                         runCatching { app.container.repository.onDismissed(targetId) }
+                        releaseWaitingRings(targetId)
                         finishIfIdle()
                     }
                 }
@@ -150,6 +153,7 @@ class AlarmService : Service() {
                 when (claim) {
                     TeardownClaim.MATCHED, TeardownClaim.PENDING -> scope.launch {
                         runCatching { app.container.repository.onSnoozed(targetId, mins) }
+                        releaseWaitingRings(targetId)
                         finishIfIdle()
                     }
                     TeardownClaim.REQUESTED -> scope.launch {
@@ -162,6 +166,7 @@ class AlarmService : Service() {
                     }
                     TeardownClaim.IDLE -> scope.launch {
                         runCatching { app.container.repository.onSnoozed(targetId, mins) }
+                        releaseWaitingRings(targetId)
                         finishIfIdle()
                     }
                 }
@@ -198,6 +203,7 @@ class AlarmService : Service() {
                             app.container.repository.markMissed(id, "鳴動サービスの前面化がOSに拒否")
                             MissedNotifier.post(this@AlarmService, null)
                         }
+                        releaseWaitingRings(id)
                         finishIfIdle()
                         return@launch
                     }
@@ -209,6 +215,20 @@ class AlarmService : Service() {
     }
 
     private suspend fun beginRinging(instanceId: String) {
+        // 鳴らせるかどうか (行の有無・終端済み・猶予超過・ロック解除まで留保) は、座席を取る前に決める。
+        // 座席を取ってから判定すると、鳴らずに抜ける後発が鳴動中の先行を黙らせてしまう (#84)。
+        // 判定の間に届いた停止は、要求中 (requestedIds) として墓標に載るので座席確保で弾ける
+        val ready = prepareToRing(instanceId)
+        if (ready == null) {
+            synchronized(ringLock) { requestedIds -= instanceId }
+            // この要求が最後の要求だった場合、先に片付いた鳴動の時に保留された鳴らし直しをここで行う
+            releaseWaitingRings(instanceId)
+            // 自分の前面化で通知 (停止の宛先を含む) を差し替えているので、
+            // 現行鳴動があればその停止UIへ戻す。無ければ滞留通知ごと畳む
+            restoreOrFinish()
+            return
+        }
+        val (instance, ringSettings) = ready
         // 墓標確認・自世代確定・現行鳴動の停止・鳴動要求公開をひとつの
         // クリティカルセクションで行う。分割すると、その間に届く DISMISS が
         // 「確認〜停止」の窓で墓標済み要求を殺せずに現行鳴動が犠牲になるか、
@@ -216,18 +236,21 @@ class AlarmService : Service() {
         // 要求が鳴る、という同族レースが残る。先に自世代を確定してから先代を
         // 畳むので、公開直後に届く DISMISS も PENDING 判定でこの要求だけ潰せる
         // 座席確保で押し出した先代 (鳴動中または座席確保済み) の id。押し出された側は
-        // 自分のコルーチンで何も記録せずに抜けるため、ここで終端化しないと DB に FIRED の
-        // まま残り、停止後のプロセス再起動 (START_STICKY → firedWithinGrace) で
-        // 「止めたのにまた鳴る」原因になる (同時刻の予定2件で実機再現 10/14 0:00)
+        // 止められたわけではないので墓標は立てず、待ち行列に載せて、
+        // この鳴動が片付いた後に鳴らし直す (同時刻衝突ポリシー、#84)
         var displaced: String? = null
+        var duplicate = false
         val gen = synchronized(ringLock) {
             requestedIds -= instanceId
             if (destroyed || isDismissed(instanceId)) {
                 null
+            } else if (ringingInstanceId.value == instanceId || pendingStartId == instanceId) {
+                // 鳴らし直しの予約と元の発火が重なった等で、同じ鳴動の START が二重に届いた。
+                // 座席を取り直すと自分の音を止めて鳴らし直すだけなので、何もしない
+                duplicate = true
+                null
             } else {
                 displaced = (ringingInstanceId.value ?: pendingStartId)?.takeIf { it != instanceId }
-                // 押し出した先代は墓標で以後の鳴動を抑止する (滞留中の再発火も潰す)
-                markDismissed(displaced)
                 ringGen++
                 // 前面化は維持する: 直前に自分の startForeground で出した通知を
                 // ここで外すと、以後の鳴動は前面サービスでなくなり OS に畳まれ得る
@@ -237,79 +260,38 @@ class AlarmService : Service() {
             }
         }
         if (gen == null) {
-            // 墓標済みか破棄済み: 他の鳴動へ一切触れず終端のみ記録して抜ける
-            runCatching {
-                app.container.repository.audit("STALE_FIRE", "$instanceId: DISMISS済みのため鳴動を抑止")
+            if (!duplicate) {
+                // 墓標済みか破棄済み: 他の鳴動へ一切触れず終端のみ記録して抜ける
+                runCatching {
+                    app.container.repository.audit("STALE_FIRE", "$instanceId: DISMISS済みのため鳴動を抑止")
+                }
             }
-            // 自分の前面化で通知 (停止の宛先を含む) を差し替えているので、
-            // 現行鳴動があればその停止UIへ戻す。無ければ滞留通知ごと畳む
+            releaseWaitingRings(instanceId)
             restoreOrFinish()
             return
         }
-        if (destroyed) return
-        val instance = app.container.repository.instanceById(instanceId)
-        if (instance == null) {
-            app.container.repository.audit("ERROR", "鳴動要求されたがインスタンス不明: $instanceId")
-            finishIfCurrent(gen)
-            return
-        }
-        // 停止済み/見逃し済みのインスタンスへの遅延・重複起動は鳴らさない。
-        // (receivers 側でも抑止するが、SNOOZE→DISMISS 直後の滞留放送等
-        //  こちら側で二度と鳴らないことが絶対条件なので二重化する)
-        val state = app.container.repository.instanceState(instanceId)
-        if (state != AlarmState.PENDING && state != AlarmState.FIRED) {
-            app.container.repository.audit(
-                "STALE_FIRE", "$instanceId: state=$state のため鳴動を抑止")
-            finishIfCurrent(gen)
-            return
-        }
-        // グレース超過の過去分は鳴らさない。端末OFF中に過ぎたアラームを
-        // 起動直後に延々鳴らし続けるより、見逃した事実を知らせる方が正しい。
-        val overdueBy = System.currentTimeMillis() - instance.triggerAtMillis
-        if (overdueBy > AlarmExpander.FIRE_GRACE.inWholeMilliseconds) {
-            app.container.repository.markMissed(id = instanceId, detail = "鳴動時刻から${overdueBy / 60_000}分経過")
-            MissedNotifier.post(this, instance.title)
-            finishIfCurrent(gen)
-            return
-        }
-        // 「ロック解除までミュート」: 端末がロック中なら鳴らさず留保し、
-        // ACTION_USER_PRESENT で再発火する。予約は PENDING のまま残る。
-        if (instance.muteUntilUnlock &&
-            getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
-        ) {
-            UnlockRingReceiver.defer(this, instance.id)
-            app.container.repository.audit("DEFER", "${instance.id}: ロック解除まで鳴動を遅延")
-            finishIfCurrent(gen)
-            return
-        }
-        val ringSettings = app.container.settings.flow.first()
-        // 先行の終端化は、後発が実際に鳴ると決まってから行う。見逃し・留保の判定より前に
-        // 後発を FIRED にすると、ロック解除まで留保された後発が終端扱いになり、解除後に再発火
-        // しても AlarmReceiver が PENDING 以外として抑止してしまう (Codex #63)。
-        // 後発が鳴らずに抜けた場合 (留保など) は、先行の行が FIRED のまま残り、再起動復旧が拾う (無鳴動より安全側)。
-        // 後発を鳴動中として公開するより前に先行を DISMISSED にすると、先行の鳴動画面が
-        // 後発へ追従する前に終端と見て閉じてしまうので、公開のあとに行う (Codex #63)
-        val terminalizeDisplaced: suspend () -> Unit = {
+        // 押し出した先代を鳴らし直しの待ち行列へ載せる。後発を鳴動中として公開したあとに行う:
+        // 先に戻すと、先代の鳴動画面が後発へ追従する前に行の変化を見てしまう。
+        // サービス停止 (onDestroy の scope.cancel) に埋もれないよう、アプリ寿命のスコープで最後まで走らせる。
+        // 載せる前にプロセスが死んでも、先代は FIRED のまま残り、停止後の鳴らし直しが拾う
+        val returnDisplaced: suspend () -> Unit = {
             displaced?.let { prev ->
-                // サービス停止 (onDestroy の scope.cancel) に埋もれて終端化が消えないよう、
-                // アプリ寿命のスコープへ投げる。置き換えがキャンセルで無かったことになると
-                // 先行行が FIRED のまま残り、再起動復旧が拾って再鳴動する (CodeRabbit #63)
-                // 終端化が済んでから先へ進むよう join で待つ。待っている間にサービスが
-                // 破棄されても、appScope 側のジョブは取り消されずに最後まで走る (CodeRabbit #63)
                 app.container.appScope.launch {
-                    runCatching { app.container.repository.onSuperseded(prev, instanceId) }
+                    app.container.repository.onDisplaced(prev, instanceId)
                 }.join()
+                // 載せる前に後発が停止されていたら、その停止の解放は先代を見落としている。ここで解放し直す。
+                // 別の鳴動が生きていれば解放は何もせず、その鳴動の終了時に任せる
+                val tornDown = synchronized(ringLock) { destroyed || ringGen != gen }
+                if (tornDown) releaseWaitingRings(instanceId)
             }
         }
-        // PENDING→FIRED のみ遷移 (DISMISSED を FIRED に戻さない atomic 制限)
-        app.container.repository.onFired(instanceId)
         // 停止が先に届いていたら通知を出し直さない。
         // 放送経路の DISMISS は NotificationManager.cancel を先に実行済みなので、
         // ここで notify してしまうと取消後に通知だけが残るゾンビになる。
         // 世代が進んでいても全体停止は呼ばない (新しい鳴動を殺すので BUG_0001)。
         // この時点ではリソースを何も生成していないので、そのまま抜ければよい
         if (destroyed || ringGen != gen) {
-            terminalizeDisplaced()
+            returnDisplaced()
             return
         }
         // 世代確定後にだけ自分のインスタンスを共有状態へ書く (stale 世代が
@@ -320,7 +302,7 @@ class AlarmService : Service() {
             // ロック外だと停止が通知を消した直後に張り替えが出し直し、通知だけ残る
             postRingNotification(instanceId)
         }) {
-            terminalizeDisplaced()
+            returnDisplaced()
             return
         }
         startAudio(
@@ -335,7 +317,7 @@ class AlarmService : Service() {
             ringingInstanceId.value = instanceId
             pendingStartId = null
         }
-        terminalizeDisplaced()
+        returnDisplaced()
         // startAudio 内で自分のプレイヤーは世代検査つきで畳まれているので、
         // 世代が進んでいたら新鳴動のリソースに触れないよう静かに抜ける
         if (destroyed || ringGen != gen) return
@@ -392,10 +374,57 @@ class AlarmService : Service() {
                         app.container.repository.markMissed(instance.id, "鳴動が${RING_TIMEOUT_MS / 60_000}分続き自動停止")
                     }
                     MissedNotifier.post(this@AlarmService, instance.title)
+                    releaseWaitingRings(instance.id)
                     finishIfIdle()
                 }
             }
         }
+    }
+
+    /**
+     * 鳴らしてよい鳴動かを座席確保の前に判定し、よければ PENDING→FIRED にして中身と設定を返す。
+     * 鳴らさない場合 (行が無い・終端済み・猶予超過・ロック解除まで留保) は記録だけして null。
+     * ここでは鳴動中の別アラームに一切触れない (#84)
+     */
+    private suspend fun prepareToRing(instanceId: String): Pair<AlarmInstance, SettingsRepository.Settings>? {
+        if (destroyed || isDismissed(instanceId)) return null
+        val repo = app.container.repository
+        val instance = repo.instanceById(instanceId)
+        if (instance == null) {
+            runCatching { repo.audit("ERROR", "鳴動要求されたがインスタンス不明: $instanceId") }
+            return null
+        }
+        // 停止済み/見逃し済みのインスタンスへの遅延・重複起動は鳴らさない。
+        // (receivers 側でも抑止するが、SNOOZE→DISMISS 直後の滞留放送等
+        //  こちら側で二度と鳴らないことが絶対条件なので二重化する)
+        val state = repo.instanceState(instanceId)
+        if (state != AlarmState.PENDING && state != AlarmState.FIRED) {
+            runCatching { repo.audit("STALE_FIRE", "$instanceId: state=$state のため鳴動を抑止") }
+            return null
+        }
+        // グレース超過の過去分は鳴らさない。端末OFF中に過ぎたアラームを
+        // 起動直後に延々鳴らし続けるより、見逃した事実を知らせる方が正しい。
+        val overdueBy = System.currentTimeMillis() - instance.triggerAtMillis
+        if (overdueBy > AlarmExpander.FIRE_GRACE.inWholeMilliseconds) {
+            repo.markMissed(id = instanceId, detail = "鳴動時刻から${overdueBy / 60_000}分経過")
+            MissedNotifier.post(this, instance.title)
+            return null
+        }
+        // 「ロック解除までミュート」: 端末がロック中なら鳴らさず留保し、
+        // ACTION_USER_PRESENT で再発火する。予約は PENDING のまま残る。
+        if (instance.muteUntilUnlock &&
+            getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
+        ) {
+            UnlockRingReceiver.defer(this, instance.id)
+            runCatching { repo.audit("DEFER", "${instance.id}: ロック解除まで鳴動を遅延") }
+            return null
+        }
+        val ringSettings = app.container.settings.flow.first()
+        // PENDING→FIRED のみ遷移 (DISMISSED を FIRED に戻さない atomic 制限)。
+        // 座席を取る前に FIRED にしておくと、この後に押し出されても行は FIRED のまま残り、
+        // 鳴動が片付いた後の鳴らし直しが確実に拾える
+        repo.onFired(instanceId)
+        return instance to ringSettings
     }
 
     /** FGS 前面化を試みる。OS に拒否された場合は false (例外は飲み込む)。 */
@@ -707,6 +736,23 @@ class AlarmService : Service() {
             }
         }
         finishId?.let { stopSelfResult(it) }
+    }
+
+    /**
+     * 鳴動が片付いた後に、押し出されて待っている鳴動を鳴らし直す (同時刻衝突ポリシー、#84)。
+     * 鳴動中・座席確保済み・未開始の要求のどれかがあれば何もしない: その鳴動が片付いた時にまた呼ばれる。
+     * サービスが畳まれても予約し直しが消えないよう、アプリ寿命のスコープで行う
+     */
+    private fun releaseWaitingRings(resolvedId: String?) {
+        fun idleNow() = synchronized(ringLock) {
+            ringingInstanceId.value == null && pendingStartId == null && requestedIds.isEmpty()
+        }
+        if (!idleNow()) return
+        app.container.appScope.launch {
+            // 判定から実行までの間に別の鳴動が始まっていたら、その鳴動の終了時に任せる
+            if (!idleNow()) return@launch
+            runCatching { app.container.repository.rearmWaitingRings(resolvedId) }
+        }
     }
 
     /** 鳴動中・座席確保済み・未開始の要求がどれも無い時だけサービスを終了する。 */
