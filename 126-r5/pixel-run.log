@@ -1,0 +1,13 @@
+volume saved: {'system': 0, 'ring': 0, 'music': 0, 'alarm': 0, 'notification': 0} now: {'system': 0, 'ring': 0, 'music': 0, 'alarm': 0, 'notification': 0}
+before com.calendaralarm.r126m Success
+before set-app-locales: ok
+before repeat chips: Once:91x55@95,1792 Weekly:MISSING Weekdays:181x55@281,1792 Monthly:143x55@557,1792 Days:87x55@795,1792 Weeks:MISSING Months:MISSING
+before weekday chips: Sun:69x55@95,966 Mon:76x55@259,966 Tue:65x55@430,966 Wed:79x55@590,966 Thu:68x55@764,966 Fri:38x55@927,966 Sat:MISSING
+before Months chip cannot be tapped
+after com.calendaralarm.r126 Success
+after set-app-locales: ok
+after repeat chips: Once:91x55@95,1792 Weekly:130x55@281,1792 Weekdays:MISSING Monthly:143x55@506,1792 Days:87x55@744,1792 Weeks:118x55@95,1918 Months:132x55@308,1918
+after weekday chips: Sun:69x55@95,875 Mon:76x55@259,875 Tue:65x55@430,875 Wed:79x55@590,875 Thu:68x55@764,875 Fri:46x55@927,875 Sat:60x55@95,1001
+after interval chips: 1:24x55@104,875 2:24x55@241,875 3:24x55@378,875 5:24x55@515,875 7:24x55@652,875 10:48x55@780,875 14:48x55@923,875 30:48x55@95,1001
+test packages left: []
+volume restored: {'system': 0, 'ring': 0, 'music': 0, 'alarm': 0, 'notification': 0}
