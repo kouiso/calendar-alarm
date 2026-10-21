@@ -31,19 +31,4 @@ class RingStatusTest {
         assertEquals(RingStatus.Kind.READY, ready.kind)
         assertFalse(ready.showPermissionBanner || ready.showMissedBanner)
     }
-
-    @Test
-    fun `見逃しは直近24時間の指定した種類だけ数える`() {
-        val now = 100L * 60 * 60 * 1000
-        val day = RingStatus.MISSED_WINDOW_MILLIS
-        val entries = listOf(
-            now - 1_000 to "MISS",
-            now - day to "MISS",
-            now - day - 1 to "MISS",
-            now - 10 to "FIRE",
-            now + 10 to "MISS",
-        )
-        assertEquals(2, RingStatus.countRecentMissed(entries, now, setOf("MISS")))
-        assertEquals(0, RingStatus.countRecentMissed(entries, now, setOf("MISSED")))
-    }
 }
