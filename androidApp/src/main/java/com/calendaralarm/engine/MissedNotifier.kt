@@ -56,7 +56,7 @@ object MissedNotifier {
             NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alarm)
                 .setContentTitle(context.getString(R.string.missed_channel))
-                .setContentText(context.getString(R.string.missed_count, count))
+                .setContentText(context.resources.getQuantityString(R.plurals.missed_count, count, count))
                 .setAutoCancel(true)
                 .apply { openApp?.let(::setContentIntent) }
                 .build(),

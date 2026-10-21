@@ -29,7 +29,7 @@
     <string name="ask_open_settings_again">Open Settings again</string>
     <string name="ask_ready_body">Try one ring to check that it stops.</string>
     <string name="ask_ready_test">Ring in 10 seconds</string>
-    <string name="ask_ready_title">All set. Alarms will ring and stop right away</string>
+    <string name="ask_ready_title">All set. You can stop alarms as soon as they ring</string>
     <string name="ask_retry_body">Turn on “%1$s” in Settings to: %2$s.</string>
     <string name="ask_still_off">Still off</string>
     <string name="ask_turn_on_in_settings">Turn on in Settings</string>
@@ -45,7 +45,10 @@
     <string name="common_stop">Stop</string>
     <string name="event_channel">Event notifications</string>
     <string name="event_channel_desc">Event notifications sent for the notify-only action</string>
-    <string name="event_minutes_before">In %1$d minutes</string>
+    <plurals name="event_minutes_before">
+        <item quantity="one">In %1$d minute</item>
+        <item quantity="other">In %1$d minutes</item>
+    </plurals>
     <string name="event_starts_now">Starting now</string>
     <string name="mail_add_event">Add %1$s to your calendar</string>
     <string name="mail_ai_unavailable">AI reading is not available in this build</string>
@@ -56,7 +59,10 @@
     <string name="mail_no_text">%1$s: could not read the text</string>
     <string name="mail_print_job">Print job</string>
     <string name="missed_channel">Alarms that could not ring</string>
-    <string name="missed_count">%1$d alarms could not ring, for example because the phone was off</string>
+    <plurals name="missed_count">
+        <item quantity="one">%1$d alarm could not ring, for example because the phone was off</item>
+        <item quantity="other">%1$d alarms could not ring, for example because the phone was off</item>
+    </plurals>
     <string name="missed_one">“%1$s” could not ring</string>
     <string name="missed_service_failed">The alarm could not ring because the ringing service could not start</string>
     <string name="perm_calendar_ask_body">Connect your calendar and alarms are set before your events automatically.</string>
@@ -89,11 +95,20 @@
     <string name="repeat_chip_days">Days</string>
     <string name="repeat_chip_months">Months</string>
     <string name="repeat_chip_once">Once</string>
-    <string name="repeat_chip_weekly">Weekdays</string>
+    <string name="repeat_chip_weekly">Weekly</string>
     <string name="repeat_chip_weeks">Weeks</string>
-    <string name="repeat_every_days">Every %1$d days</string>
-    <string name="repeat_every_months">Every %1$d months</string>
-    <string name="repeat_every_weeks">Every %1$d weeks</string>
+    <plurals name="repeat_every_days">
+        <item quantity="one">Every day</item>
+        <item quantity="other">Every %1$d days</item>
+    </plurals>
+    <plurals name="repeat_every_months">
+        <item quantity="one">Every month</item>
+        <item quantity="other">Every %1$d months</item>
+    </plurals>
+    <plurals name="repeat_every_weeks">
+        <item quantity="one">Every week</item>
+        <item quantity="other">Every %1$d weeks</item>
+    </plurals>
     <string name="repeat_monthly">Monthly</string>
     <string name="repeat_monthly_day">Monthly on day %1$d</string>
     <string name="repeat_once">Once</string>

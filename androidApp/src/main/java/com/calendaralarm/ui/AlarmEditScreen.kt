@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -74,7 +76,7 @@ import kotlinx.datetime.toLocalDateTime
 /**
  * アラーム編集。時刻・曜日繰り返し・休止日・ラベル・音・スヌーズを一画面で。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AlarmEditScreen(
     repository: AlarmRepository,
@@ -199,7 +201,8 @@ fun AlarmEditScreen(
                 )
             }
             Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // 英語表記では6枚が1行に収まらず末尾が描画されないため、折り返して全部を選べるようにする
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 listOf(
                     RepeatMode.ONCE to R.string.repeat_chip_once, RepeatMode.WEEKLY to R.string.repeat_chip_weekly,
                     RepeatMode.MONTHLY to R.string.repeat_monthly, RepeatMode.INTERVAL_DAYS to R.string.repeat_chip_days,
@@ -214,7 +217,7 @@ fun AlarmEditScreen(
             }
             if (repeatMode == RepeatMode.WEEKLY) {
                 Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     val order = listOf(
                         DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
                         DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY,
@@ -252,7 +255,7 @@ fun AlarmEditScreen(
                 )
             ) {
                 Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf(1, 2, 3, 5, 7, 10, 14, 30).forEach { n ->
                         FilterChip(
                             selected = repeatInterval == n,

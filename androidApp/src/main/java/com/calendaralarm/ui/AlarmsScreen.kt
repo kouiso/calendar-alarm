@@ -33,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.calendaralarm.R
 import androidx.compose.ui.text.font.FontWeight
@@ -283,9 +284,9 @@ private fun repeatLabel(alarm: StandaloneAlarm): String =
             }
             if (day != null) stringResource(R.string.repeat_monthly_day, day) else stringResource(R.string.repeat_monthly)
         }
-        RepeatMode.INTERVAL_DAYS -> stringResource(R.string.repeat_every_days, alarm.repeatInterval)
-        RepeatMode.INTERVAL_WEEKS -> stringResource(R.string.repeat_every_weeks, alarm.repeatInterval)
-        RepeatMode.INTERVAL_MONTHS -> stringResource(R.string.repeat_every_months, alarm.repeatInterval)
+        RepeatMode.INTERVAL_DAYS -> pluralStringResource(R.plurals.repeat_every_days, alarm.repeatInterval, alarm.repeatInterval)
+        RepeatMode.INTERVAL_WEEKS -> pluralStringResource(R.plurals.repeat_every_weeks, alarm.repeatInterval, alarm.repeatInterval)
+        RepeatMode.INTERVAL_MONTHS -> pluralStringResource(R.plurals.repeat_every_months, alarm.repeatInterval, alarm.repeatInterval)
         RepeatMode.WEEKLY -> {
             // 曜日空のWEEKLYはONCEとして鳴る
             if (alarm.daysOfWeek.isEmpty()) {

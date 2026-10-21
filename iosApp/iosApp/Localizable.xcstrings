@@ -5,9 +5,21 @@
     "%lldヶ月ごと": {
       "localizations": {
         "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Every %lld months"
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Every month"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Every %lld months"
+                }
+              }
+            }
           }
         }
       }
@@ -35,9 +47,21 @@
     "%lld日ごと": {
       "localizations": {
         "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Every %lld days"
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Every day"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Every %lld days"
+                }
+              }
+            }
           }
         }
       }
@@ -45,9 +69,21 @@
     "%lld週ごと": {
       "localizations": {
         "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Every %lld weeks"
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Every week"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Every %lld weeks"
+                }
+              }
+            }
           }
         }
       }
@@ -229,7 +265,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "All set. Alarms will ring and stop right away"
+            "value": "All set. You can stop alarms as soon as they ring"
           }
         }
       }
@@ -669,7 +705,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Weekdays"
+            "value": "Weekly"
           }
         }
       }

@@ -47,7 +47,9 @@
     <string name="common_stop">停止</string>
     <string name="event_channel">予定の通知</string>
     <string name="event_channel_desc">通知のみアクションで配信される予定通知</string>
-    <string name="event_minutes_before">%1$d分前です</string>
+    <plurals name="event_minutes_before">
+        <item quantity="other">%1$d分前です</item>
+    </plurals>
     <string name="event_starts_now">開始時刻です</string>
     <string name="mail_add_event">%1$s を予定に追加</string>
     <string name="mail_ai_unavailable">このビルドでは AI の読み取りを使えません</string>
@@ -58,7 +60,9 @@
     <string name="mail_no_text">%1$s: テキストを読み取れませんでした</string>
     <string name="mail_print_job">印刷ジョブ</string>
     <string name="missed_channel">鳴らせなかったアラーム</string>
-    <string name="missed_count">端末の停止等により %1$d件のアラームを鳴らせませんでした</string>
+    <plurals name="missed_count">
+        <item quantity="other">端末の停止等により %1$d件のアラームを鳴らせませんでした</item>
+    </plurals>
     <string name="missed_one">「%1$s」を鳴らせませんでした</string>
     <string name="missed_service_failed">鳴動サービスを起動できなかったため、アラームを鳴らせませんでした</string>
     <string name="perm_calendar_ask_body">カレンダーをつなぐと、予定の前に自動でアラームが入る。</string>
@@ -93,9 +97,15 @@
     <string name="repeat_chip_once">1回</string>
     <string name="repeat_chip_weekly">曜日</string>
     <string name="repeat_chip_weeks">週ごと</string>
-    <string name="repeat_every_days">%1$d日ごと</string>
-    <string name="repeat_every_months">%1$dヶ月ごと</string>
-    <string name="repeat_every_weeks">%1$d週ごと</string>
+    <plurals name="repeat_every_days">
+        <item quantity="other">%1$d日ごと</item>
+    </plurals>
+    <plurals name="repeat_every_months">
+        <item quantity="other">%1$dヶ月ごと</item>
+    </plurals>
+    <plurals name="repeat_every_weeks">
+        <item quantity="other">%1$d週ごと</item>
+    </plurals>
     <string name="repeat_monthly">毎月</string>
     <string name="repeat_monthly_day">毎月%1$d日</string>
     <string name="repeat_once">1回のみ</string>

@@ -1,0 +1,88 @@
+package com.calendaralarm
+
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.test.core.app.ApplicationProvider
+import com.calendaralarm.ui.AlarmEditScreen
+import kotlinx.coroutines.test.StandardTestDispatcher
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.Robolectric
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+
+/**
+ * 英語表記のチップ行の回帰テスト。
+ * 英語のラベルは日本語より長く、1行の Row に6枚並べると末尾の「Months」が描画されず、
+ * 「Weeks」が1文字ずつ縦に潰れて選べなくなった (PR #126 の Android 英語画面で実測)。
+ * 文字幅を実測させるため NATIVE グラフィックスで描く。
+ */
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "en-w360dp-h800dp-xxhdpi")
+class EnglishChipLayoutTest {
+
+    @OptIn(ExperimentalTestApi::class)
+    @get:Rule
+    val compose = createEmptyComposeRule(effectContext = StandardTestDispatcher())
+
+    private fun showNewAlarm() {
+        val app = ApplicationProvider.getApplicationContext<CalendarAlarmApp>()
+        val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        activity.setContent {
+            MaterialTheme {
+                AlarmEditScreen(
+                    repository = app.container.repository,
+                    settings = app.container.settings,
+                    alarmId = 0L,
+                    onDone = {},
+                )
+            }
+        }
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodesWithText("Once").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    /** どのチップも画面内に1行の高さで収まり、押せること。 */
+    private fun assertChipsFit(labels: List<String>) {
+        val rootRight = compose.onRoot().fetchSemanticsNode().boundsInRoot.right
+        val heights = labels.map { label ->
+            compose.onNodeWithText(label).performScrollTo().assertIsDisplayed()
+            val b = compose.onNodeWithText(label).fetchSemanticsNode().boundsInRoot
+            assertTrue("$label の右端 ${b.right} が画面幅 $rootRight を超えた", b.right <= rootRight)
+            b.height
+        }
+        val oneLine = heights.first()
+        labels.zip(heights).forEach { (label, h) ->
+            assertEquals("$label が1行の高さで描かれていない (潰れて折り返した)", oneLine, h, 1f)
+        }
+    }
+
+    @Test
+    fun repeatModeAndWeekdayChipsAllFitInEnglish() {
+        showNewAlarm()
+        assertChipsFit(listOf("Once", "Weekly", "Monthly", "Days", "Weeks", "Months"))
+
+        compose.onNodeWithText("Weekly").performClick()
+        compose.waitForIdle()
+        assertChipsFit(listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"))
+
+        compose.onNodeWithText("Months").performClick()
+        compose.waitForIdle()
+        assertChipsFit(listOf("1", "2", "3", "5", "7", "10", "14", "30"))
+    }
+}

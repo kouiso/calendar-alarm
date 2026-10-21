@@ -4,6 +4,8 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -212,6 +214,7 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
 }
 
 /** ルールの手動編集ダイアログ。キーワードはカンマ区切り、曜日はチップ。 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RuleEditDialog(
     initial: NotificationRuleSpec,
@@ -277,8 +280,8 @@ private fun RuleEditDialog(
                     )
                 }
                 Spacer(Modifier.height(8.dp))
-                // 曜日 (1=月..7=日)
-                Row {
+                // 曜日 (1=月..7=日)。英語の3文字表記だと1行に7枚収まらないため折り返す
+                FlowRow(Modifier.fillMaxWidth()) {
                     listOf(
                         DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,
                         DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY,

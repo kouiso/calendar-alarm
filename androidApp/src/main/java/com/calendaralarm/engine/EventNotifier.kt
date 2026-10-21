@@ -49,7 +49,11 @@ object EventNotifier {
                 .setContentText(
                     when {
                         instance.minutesBefore <= 0 -> context.getString(R.string.event_starts_now)
-                        else -> context.getString(R.string.event_minutes_before, instance.minutesBefore)
+                        else -> context.resources.getQuantityString(
+                            R.plurals.event_minutes_before,
+                            instance.minutesBefore,
+                            instance.minutesBefore,
+                        )
                     },
                 )
                 .setCategory(NotificationCompat.CATEGORY_EVENT)
