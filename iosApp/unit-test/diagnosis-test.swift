@@ -1,4 +1,5 @@
 import XCTest
+import UserNotifications
 @testable import iosApp
 
 /// 通知で鳴らす iOS (<26) の偽の予約。予約は id を返すだけで、OS には何も入れない
@@ -9,6 +10,21 @@ final class NotificationPathScheduler: AlarmScheduler {
     func requestAuthorization() async {}
     func schedule(_ inst: AlarmInstanceDTO) async throws -> String? { inst.id }
     func cancel(instanceId: String, reservationId: String?) async {}
+}
+
+/// OS の通知センターの偽物。テストのホストはアプリ本体なので、本物を触るとアプリの通知予約が消える
+final class FakeNotificationCenter: NotificationCenterPort {
+    var pending: [String] = []
+    var removed: [String] = []
+    var added: [String] = []
+    func pendingRequestIds() async -> [String] { pending }
+    func delivered() async -> [(id: String, atMillis: Int64)] { [] }
+    func isAuthorized() async -> Bool { true }
+    func removePending(_ ids: [String]) {
+        removed += ids
+        pending.removeAll { ids.contains($0) }
+    }
+    func add(_ request: UNNotificationRequest) { added.append(request.identifier) }
 }
 
 final class DiagnosisPlanTests: XCTestCase {
@@ -36,6 +52,17 @@ final class DiagnosisPlanTests: XCTestCase {
         XCTAssertEqual(out.delivered.map { $0.id }, ["in-center"])
         XCTAssertEqual(out.delivered.first?.at, now - 59_000)
         XCTAssertEqual(out.unconfirmed, ["gone"])
+    }
+
+    /// 同じ id で前に予約した通知 (予約時刻より前に届いた物) は、今の予約が届いた証拠にしない。
+    /// 秒の端数は予約で切り捨てるので、予約時刻の秒の頭に届いた物は届いた扱い
+    func testOlderDeliveryIsNotEvidenceForTheCurrentReservation() {
+        let rows = [row("moved", at: now - 60_000), row("on-time", at: now - 30_500)]
+        let out = Engine.notificationOutcome(
+            rows, pendingRequestIds: [],
+            deliveredAtById: ["moved": now - 3_600_000, "on-time": now - 31_000], nowMillis: now)
+        XCTAssertEqual(out.delivered.map { $0.id }, ["on-time"])
+        XCTAssertEqual(out.unconfirmed, ["moved"])
     }
 
     /// 「通知のみ」の予定の記録 (NOTIFY) は最後に鳴ったアラームにしない
@@ -120,10 +147,15 @@ final class DiagnosisPlanTests: XCTestCase {
 @MainActor
 final class EngineNotificationOutcomeTests: XCTestCase {
     private var engine: Engine!
+    private var center: FakeNotificationCenter!
 
     override func setUp() async throws {
-        // 端末の保存データを上書きしないよう、一時ファイルの Store を渡す
-        engine = Engine(scheduler: NotificationPathScheduler(), store: Store(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("store-\(UUID().uuidString).json")))
+        // 端末の保存データと通知の予約を触らないよう、一時ファイルの Store と偽の通知センターを渡す
+        center = FakeNotificationCenter()
+        engine = Engine(
+            scheduler: NotificationPathScheduler(),
+            store: Store(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("store-\(UUID().uuidString).json")),
+            notifications: center)
         engine.store.mutate {
             $0.scheduled = [:]
             $0.standaloneAlarms = []
@@ -167,6 +199,28 @@ final class EngineNotificationOutcomeTests: XCTestCase {
         let at = Engine.nowMillis - 30_000
         engine.markNotificationDelivered(id, deliveredAtMillis: at)
         XCTAssertEqual(DiagnosisPlan.lastFired(engine.store.state.audit)?.atMillis, at)
+    }
+
+    /// 同じ日に時刻を変えた「1回のみ」に、変える前の通知を開いた知らせが来ても鳴動済みにしない。
+    /// 今の予約の時刻に届いた知らせで初めて鳴動済みになる
+    func testOlderDeliveryDoesNotFireTheRescheduledOneShot() {
+        let (aid, id) = pendingOneShot()
+        let trigger = engine.store.state.scheduled[id]!.instance.triggerAtMillis
+        engine.markNotificationDelivered(id, deliveredAtMillis: trigger - 3_600_000)
+        XCTAssertEqual(engine.store.state.scheduled[id]?.state, .pending)
+        XCTAssertEqual(engine.store.state.standaloneAlarms.first { $0.id == aid }?.enabled, true)
+        XCTAssertFalse(engine.store.state.audit.contains { $0.type == "FIRED" })
+
+        engine.markNotificationDelivered(id, deliveredAtMillis: trigger + 500)
+        XCTAssertEqual(engine.store.state.scheduled[id]?.state, .fired)
+        XCTAssertEqual(DiagnosisPlan.lastFired(engine.store.state.audit)?.atMillis, trigger + 500)
+    }
+
+    /// resync の通知の照合は差し替えた通知センターに向く。本物に向くとアプリの通知予約を消す
+    func testResyncReconcilesNotificationsThroughTheInjectedCenter() async {
+        center.pending = ["notify-ev:gone:0"]
+        await engine.resync(reason: "test")
+        XCTAssertEqual(center.removed, ["notify-ev:gone:0"])
     }
 
     /// 届いた「1回のみ」はその場で OFF になり、毎週のアラームは ON のまま。

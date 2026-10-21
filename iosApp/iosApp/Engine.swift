@@ -14,6 +14,8 @@ final class Engine: ObservableObject {
     let store: Store
     let reader = EventKitReader()
     private let scheduler: AlarmScheduler
+    /// resync が読む・消す・足す OS の通知
+    private let notifications: NotificationCenterPort
 
     /// 展開ホライズン (Android と同じ 14 日)
     private let horizonDays = 14
@@ -21,10 +23,11 @@ final class Engine: ObservableObject {
     /// 鳴動中のインスタンス id (RingingView 用)
     @Published var alertingIds: Set<String> = []
 
-    /// [scheduler] [store] はテストで OS の予約失敗を再現し、端末の保存データを触らないための差し替え口。
-    /// アプリは渡さない
-    init(scheduler: AlarmScheduler? = nil, store: Store? = nil) {
+    /// [scheduler] [store] [notifications] はテストで OS の予約失敗を再現し、端末の保存データと
+    /// 通知の予約を触らないための差し替え口。アプリは渡さない
+    init(scheduler: AlarmScheduler? = nil, store: Store? = nil, notifications: NotificationCenterPort? = nil) {
         self.store = store ?? Store()
+        self.notifications = notifications ?? SystemNotificationCenter()
         if let scheduler {
             self.scheduler = scheduler
         } else if #available(iOS 26.0, *) {
@@ -134,12 +137,11 @@ final class Engine: ObservableObject {
         // 通知で鳴らす iOS (<26) は OS から鳴動の知らせが来ない。見逃し判定より先に、
         // 届いた証拠のある行を鳴動済みにする (しないと鳴った分まで MISSED になる)
         if !usesRealAlarms {
-            let center = UNUserNotificationCenter.current()
-            let pendingIds = Set(await center.pendingNotificationRequests().map { $0.identifier })
+            let pendingIds = Set(await notifications.pendingRequestIds())
             // 通知センターに残っている通知は届いた証拠になり、届いた時刻も取れる
             var deliveredAt: [String: Int64] = [:]
-            for n in await center.deliveredNotifications() {
-                deliveredAt[n.request.identifier] = Int64(n.date.timeIntervalSince1970 * 1000)
+            for n in await notifications.delivered() {
+                deliveredAt[n.id] = n.atMillis
             }
             // 旧版は通知の予約に成功しても予約 id を残していなかった。OS に予約か届いた通知がある行は
             // 予約できていた行なので id を埋める (埋めないと予約失敗に見え、届いても見逃しになる)
@@ -158,7 +160,7 @@ final class Engine: ObservableObject {
             }
             // 予約から消えただけで証拠が無い行。通知センターから消されたのか、時刻に通知がオフで
             // 出なかったのか区別できない。今も許可が無ければ出なかった側なので、下の見逃し判定に任せる
-            if await center.notificationSettings().authorizationStatus == .authorized {
+            if await notifications.isAuthorized() {
                 for id in outcome.unconfirmed {
                     markNotificationUnconfirmed(id)
                 }
@@ -268,13 +270,11 @@ final class Engine: ObservableObject {
         let notifyKeep = Set((desired + dropped).filter {
             $0.delivery == EventAction.notify.rawValue
         }.map { "notify-\($0.id)" })
-        let center = UNUserNotificationCenter.current()
-        let pendingReqs = await center.pendingNotificationRequests()
-        let staleReqIds = pendingReqs.filter {
-            $0.identifier.hasPrefix("notify-") && !notifyKeep.contains($0.identifier)
-        }.map { $0.identifier }
+        let staleReqIds = await notifications.pendingRequestIds().filter {
+            $0.hasPrefix("notify-") && !notifyKeep.contains($0)
+        }
         if !staleReqIds.isEmpty {
-            center.removePendingNotificationRequests(withIdentifiers: staleReqIds)
+            notifications.removePending(staleReqIds)
             store.audit("NOTIFY_CANCEL", "\(staleReqIds.count)件")
         }
 
@@ -513,7 +513,7 @@ final class Engine: ObservableObject {
         }.sorted { $0.instance.triggerAtMillis < $1.instance.triggerAtMillis }
         var out = NotificationOutcome(delivered: [], unconfirmed: [])
         for r in gone {
-            if let at = deliveredAtById[r.instance.id] {
+            if let at = deliveredAtById[r.instance.id], isDelivery(at: at, of: r.instance) {
                 out.delivered.append((r.instance.id, at))
             } else {
                 out.unconfirmed.append(r.instance.id)
@@ -526,11 +526,19 @@ final class Engine: ObservableObject {
     /// 届いた時の受け口 (NotificationPresenter) と resync の両方から呼ぶ
     func markNotificationDelivered(_ instanceId: String, deliveredAtMillis: Int64? = nil) {
         guard !usesRealAlarms, let rec = store.state.scheduled[instanceId], rec.state == .pending else { return }
+        if let at = deliveredAtMillis, !Self.isDelivery(at: at, of: rec.instance) { return }
         store.markState(instanceId, .fired)
         // .fired は見逃し判定を通らないので、ここで消費を反映しないと「1回のみ」が ON のまま残り、
         // 終端行が 7 日で掃除された後の resync で次の日付に展開されて再び鳴る
         if let aid = rec.instance.standaloneAlarmId { disableConsumedOneShots([aid]) }
         store.audit("FIRED", "\(rec.instance.title) (通知)", atMillis: deliveredAtMillis)
+    }
+
+    /// 届いた時刻が今の予約の時刻より前なら、同じ id で前に予約した通知が届いたもの。
+    /// 「1回のみ」は同じ日に時刻を変えても id が同じなので、古い通知を今の予約の鳴動と数えると早すぎる OFF になる。
+    /// 通知は秒単位で予約するので、予約時刻の秒の頭から届いた扱いにする
+    nonisolated static func isDelivery(at deliveredAtMillis: Int64, of inst: AlarmInstanceDTO) -> Bool {
+        deliveredAtMillis >= inst.triggerAtMillis / 1000 * 1000
     }
 
     /// 届いたか確かめられない行。鳴ったとも見逃したとも言えないので、どちらの記録にもしない。
@@ -566,8 +574,7 @@ final class Engine: ObservableObject {
 
     func cancelInstance(_ id: String) async {
         await scheduler.cancel(instanceId: id, reservationId: store.state.scheduled[id]?.alarmKitId)
-        UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: ["notify-\(id)"])
+        notifications.removePending(["notify-\(id)"])
         store.removeScheduled(id)
     }
 
@@ -614,7 +621,7 @@ final class Engine: ObservableObject {
         }
         let req = UNNotificationRequest(
             identifier: "notify-\(inst.id)", content: content, trigger: trigger)
-        UNUserNotificationCenter.current().add(req) { _ in }
+        notifications.add(req)
     }
 
     /// MISSED になったアラームの通知 (通知権限がある時のみ実際に出る)。
@@ -624,6 +631,42 @@ final class Engine: ObservableObject {
         content.body = "\(inst.title) (\(Self.hm(inst.triggerAtMillis)))"
         content.sound = .default
         let req = UNNotificationRequest(identifier: "missed-\(inst.id)", content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(req) { _ in }
+        notifications.add(req)
+    }
+}
+
+/// resync が触る OS の通知センター。テストのホストはアプリ本体なので、本物のままだと
+/// テストの照合でアプリの通知予約を消してしまう
+protocol NotificationCenterPort: AnyObject {
+    func pendingRequestIds() async -> [String]
+    func delivered() async -> [(id: String, atMillis: Int64)]
+    func isAuthorized() async -> Bool
+    func removePending(_ ids: [String])
+    func add(_ request: UNNotificationRequest)
+}
+
+final class SystemNotificationCenter: NotificationCenterPort {
+    private let center = UNUserNotificationCenter.current()
+
+    func pendingRequestIds() async -> [String] {
+        await center.pendingNotificationRequests().map { $0.identifier }
+    }
+
+    func delivered() async -> [(id: String, atMillis: Int64)] {
+        await center.deliveredNotifications().map {
+            ($0.request.identifier, Int64($0.date.timeIntervalSince1970 * 1000))
+        }
+    }
+
+    func isAuthorized() async -> Bool {
+        await center.notificationSettings().authorizationStatus == .authorized
+    }
+
+    func removePending(_ ids: [String]) {
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+    }
+
+    func add(_ request: UNNotificationRequest) {
+        center.add(request) { _ in }
     }
 }
