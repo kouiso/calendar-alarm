@@ -58,7 +58,7 @@ struct TitleCodesSheet: View {
 
     /// コード入力+一覧。元アプリ同様、同一リストあたり15個まで。
     private struct CodeEditor: View {
-        let title: String
+        let title: LocalizedStringKey
         @Binding var codes: [String]
         @State private var input = ""
 
