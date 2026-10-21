@@ -192,8 +192,12 @@ struct AgendaView: View {
 
     /// 鳴動の状態 (#51 PR2)。Android と同じ優先順 (shared `RingStatus`)
     private var ringStatus: RingStatusSummary {
-        // 通知の許可は見逃しを知らせるためのもので、鳴らすのには要らない (iOS 26 未満のアラームの許可は通知の許可を写している)
-        let missing = center.states.filter { $0.key != .notify && $0.value != .granted }.count
+        // 通知だけで届く予約がこの先にある時だけ、通知の許可も鳴らすのに要る側に数える
+        let notifyAhead = store.state.scheduled.values.contains {
+            $0.instance.delivery == EventAction.notify.rawValue && $0.instance.triggerAtMillis > Engine.nowMillis
+        }
+        let missing = PermissionPlan.missingForRinging(center.states, notifyDeliveryAhead: notifyAhead,
+                                                       alarmMirrorsNotify: !engine.usesRealAlarms)
         return RingStatusSummary(missingPermissions: missing, recentMissed: recentMissedRecords.count, hasNextAlarm: nextAlarm != nil)
     }
 
