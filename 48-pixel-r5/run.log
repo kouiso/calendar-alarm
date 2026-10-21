@@ -1,0 +1,121 @@
+[05:06:18.169] saved volumes {2: 0, 3: 0, 4: 0, 5: 0} | zen 2 | vibration {'alarm_vibration_intensity': 'null', 'ring_vibration_intensity': 'null', 'notification_vibration_intensity': 'null', 'media_vibration_intensity': 'null', 'haptic_feedback_intensity': 'null'} | Night mode: no
+[05:06:19.304] volumes now {2: 0, 3: 0, 4: 0, 5: 0} | zen_mode 2 | vibration now {'alarm_vibration_intensity': '0', 'ring_vibration_intensity': '0', 'notification_vibration_intensity': '0', 'media_vibration_intensity': '0', 'haptic_feedback_intensity': '0'}
+[05:06:22.673] Success
+[05:06:33.034] appops: USE_FULL_SCREEN_INTENT: deny | SYSTEM_ALERT_WINDOW: allow
+[05:06:35.459] foreground: com.google.android.calculator/com.android.calculator2.Calculator
+[05:06:35.518] app activities before ring: []
+[05:06:36.703] schedule P48-O1 in 8s -> tm:1792613201669
+[05:06:47.266] ringing after 10.6s
+[05:06:52.060] overlay windows: ['Window{7e73280 u0 com.calendaralarm.pr48}:'] | top: com.google.android.calculator/com.android.calculator2.Calculator | texts: ['5:06', 'P48-O1', 'スヌーズ 10分', 'スヌーズ時間を選ぶ ▾', 'スライドして停止 ›', 'Calendar Alarm']
+[05:06:52.116] app activities while ringing: []
+[05:06:52.116] ROW 7a: PASS APPLICATION_OVERLAY windows=1, top=com.google.android.calculator/com.android.calculator2.Calculator
+[05:06:52.116] ROW 7-3: PASS chips closed before tap (overlay)
+[05:06:58.414] ROW 7-3b: PASS after tap: ['+5分', '+10分', '+15分', '+30分', '+45分', '+60分']
+[05:07:05.418] swipe 157,2008 -> 540,2008 (slider [63, 1914, 1017, 2103], fraction=0.5, on_thumb=True)
+[05:07:11.114] ROW 7-4: PASS still ringing=True, thumb back at left=True (pixel (157, 1961)={'left': (189, 189, 255), 'mid': (40, 42, 46), 'right': (39, 41, 45)})
+[05:07:14.279] swipe 923,2008 -> 635,2008 (slider [63, 1914, 1017, 2103], fraction=0, on_thumb=False)
+[05:07:17.801] ROW 7-6: PASS swipe not starting on the thumb: still ringing=True
+[05:07:20.662] swipe from mid 540,2008 -> 1013,2008 (slider [63, 1914, 1017, 2103])
+[05:07:24.228] ROW 7-6b: PASS rightward swipe from the track middle: still ringing=True
+[05:07:27.453] swipe 157,2008 -> 900,2008 (slider [63, 1914, 1017, 2103], fraction=0.97, on_thumb=True)
+[05:07:31.211] ROW 7-5: PASS stopped=True, overlay windows after=0, top=com.google.android.calculator/com.android.calculator2.Calculator
+[05:07:33.578] --- audit_log (overlay slide)
+[05:07:33.968]     05:06:41.760 SCHEDULE adhoc tm:1792613201669 @1792613209669
+[05:07:33.968]     05:06:42.040 RESYNC reason=boot:android.intent.action.BOOT_COMPLETED +0 -0 fire=0
+[05:07:33.968]     05:06:49.749 FSI_DENIED フルスクリーンIntent未許可のためヘッズアップ通知へフォールバック
+[05:07:33.969]     05:06:49.778 FIRE tm:1792613201669
+[05:07:33.969]     05:06:49.793 FSI_DENIED フルスクリーンIntent未許可のためヘッズアップ通知へフォールバック
+[05:07:33.969]     05:06:49.882 WARN tm:1792613201669: FSI拒否: ロック中・画面OFF時に鳴動画面が自動表示されない
+[05:07:33.969]     05:06:49.947 OVERLAY_SHOWN tm:1792613201669: 停止UIをオーバーレイで表示
+[05:07:33.969]     05:07:32.647 STOP_TAP オーバーレイ: tm:1792613201669
+[05:07:33.969]     05:07:32.662 DISMISS_RECV tm:1792613201669
+[05:07:33.969]     05:07:32.730 DISMISS tm:1792613201669
+[05:07:36.778] schedule P48-A1 in 8s -> tm:1792613261969
+[05:07:47.531] ringing after 10.8s
+[05:07:49.828] screen shows P48-A1 after 2.3s
+[05:07:50.355] top: com.calendaralarm.pr48/com.calendaralarm.engine.RingingActivity | app activities: ['com.calendaralarm.pr48/com.calendaralarm.MainActivity', 'com.calendaralarm.pr48/com.calendaralarm.engine.RingingActivity', 'com.calendaralarm.pr48/u0a1126'] | overlay windows: []
+[05:07:50.442] ROW A-path: PASS top=com.calendaralarm.pr48/com.calendaralarm.engine.RingingActivity
+[05:07:53.764] swipe 168,2030 -> 540,2030 (slider [63, 1925, 1017, 2135], fraction=0.5, on_thumb=True)
+[05:07:59.383] ROW 4: PASS activity: still ringing=True, thumb back at left=True (pixel (168, 1978)={'left': (255, 184, 112), 'mid': (29, 31, 36), 'right': (29, 31, 36)})
+[05:08:02.558] swipe 912,2030 -> 635,2030 (slider [63, 1925, 1017, 2135], fraction=0, on_thumb=False)
+[05:08:05.995] ROW 6: PASS activity: swipe not starting on the thumb: still ringing=True
+[05:08:08.895] swipe from mid 540,2030 -> 1013,2030 (slider [63, 1925, 1017, 2135])
+[05:08:12.330] ROW 6b: PASS activity: rightward swipe from the track middle: still ringing=True
+[05:08:15.498] swipe 168,2030 -> 889,2030 (slider [63, 1925, 1017, 2135], fraction=0.97, on_thumb=True)
+[05:08:18.008] ROW 5: PASS activity: stopped=True, top after=com.calendaralarm.pr48/com.calendaralarm.MainActivity
+[05:08:20.213] --- audit_log (activity slide)
+[05:08:20.456]     05:07:39.706 RESYNC reason=app start +0 -0 fire=0
+[05:08:20.456]     05:07:41.977 SCHEDULE adhoc tm:1792613261969 @1792613269969
+[05:08:20.456]     05:07:50.052 FIRE tm:1792613261969
+[05:08:20.456]     05:07:50.102 WARN tm:1792613261969: オーバーレイ未許可 (FSI=可): ロック解除中は通知シェードからのみ停止可能
+[05:08:20.456]     05:08:20.711 STOP_TAP 画面: tm:1792613261969
+[05:08:20.456]     05:08:20.755 DISMISS tm:1792613261969
+[05:08:20.591] schedule P48-E1 in 10s -> tm:1792613305780
+[05:08:20.664] schedule P48-E2 in 10s -> tm:1792613305862
+[05:08:33.541] ringing after 12.9s
+[05:08:36.325] first on screen: P48-E2 | states {'tm:1792613305780': 'FIRED', 'tm:1792613305862': 'FIRED'} | top com.calendaralarm.pr48/com.calendaralarm.engine.RingingActivity
+[05:08:39.570] swipe 168,2030 -> 889,2030 (slider [63, 1925, 1017, 2135], fraction=0.97, on_thumb=True)
+[05:08:40.892] after first slide: states {'tm:1792613305780': 'PENDING', 'tm:1792613305862': 'DISMISSED'} | ringing False
+[05:08:47.040] screen shows P48-E1 after 6.1s
+[05:08:53.177] second screen thumb at left: True (168, 1978) {'left': (255, 184, 112), 'mid': (29, 31, 36), 'right': (29, 31, 36)} | states {'tm:1792613305780': 'FIRED', 'tm:1792613305862': 'DISMISSED'}
+[05:08:56.418] swipe 168,2030 -> 889,2030 (slider [63, 1925, 1017, 2135], fraction=0.97, on_thumb=True)
+[05:08:57.773] ROW 14: PASS second (P48-E1) shown=True, its thumb at left=True, all stopped=True, states={'tm:1792613305780': 'DISMISSED', 'tm:1792613305862': 'DISMISSED'}
+[05:08:59.971] --- audit_log (row 14)
+[05:09:00.217]     05:08:20.711 STOP_TAP 画面: tm:1792613261969
+[05:09:00.217]     05:08:20.755 DISMISS tm:1792613261969
+[05:09:00.217]     05:08:25.787 SCHEDULE adhoc tm:1792613305780 @1792613315780
+[05:09:00.217]     05:08:25.867 SCHEDULE adhoc tm:1792613305862 @1792613315862
+[05:09:00.217]     05:08:35.879 FIRE tm:1792613305780
+[05:09:00.217]     05:08:35.936 FIRE tm:1792613305862
+[05:09:00.217]     05:08:35.980 DISPLACED tm:1792613305780 → tm:1792613305862: 後発が片付いた後に鳴らし直す
+[05:09:00.217]     05:08:35.984 WARN tm:1792613305862: オーバーレイ未許可 (FSI=可): ロック解除中は通知シェードからのみ停止可能
+[05:09:00.217]     05:08:44.780 STOP_TAP 画面: tm:1792613305862
+[05:09:00.217]     05:08:44.820 DISMISS tm:1792613305862
+[05:09:00.217]     05:08:44.853 REARM tm:1792613305780: 押し出された鳴動を鳴らし直す
+[05:09:00.217]     05:08:49.937 FIRE tm:1792613305780
+[05:09:00.218]     05:08:49.994 WARN tm:1792613305780: オーバーレイ未許可 (FSI=可): ロック解除中は通知シェードからのみ停止可能
+[05:09:00.218]     05:09:01.632 STOP_TAP 画面: tm:1792613305780
+[05:09:00.218]     05:09:01.669 DISMISS tm:1792613305780
+[05:09:02.488] schedule P48-FA in 8s -> tm:1792613347675
+[05:09:13.143] ringing after 10.7s
+[05:09:15.400] screen shows P48-FA after 2.3s
+[05:09:15.481] schedule P48-FB in 15s -> tm:1792613360667
+[05:09:19.534] holding at 837,2030 (90%) | states {'tm:1792613347675': 'FIRED', 'tm:1792613360667': 'PENDING'}
+[05:09:31.813] screen shows P48-FB after 11.9s
+[05:09:34.522] released | states {'tm:1792613347675': 'FIRED', 'tm:1792613360667': 'FIRED'}
+[05:09:41.450] ROW 15: PASS switched to B while holding=True, B still ringing on screen=True, states after release={'tm:1792613347675': 'FIRED', 'tm:1792613360667': 'FIRED'}
+[05:09:44.619] swipe 168,2030 -> 889,2030 (slider [63, 1925, 1017, 2135], fraction=0.97, on_thumb=True)
+[05:09:53.403] screen shows P48-FA after 8.8s
+[05:09:56.687] swipe 168,2030 -> 889,2030 (slider [63, 1925, 1017, 2135], fraction=0.97, on_thumb=True)
+[05:09:58.041] cleanup: A rang again after B= True | final states {'tm:1792613347675': 'DISMISSED', 'tm:1792613360667': 'DISMISSED'}
+[05:10:00.272] --- audit_log (row 15)
+[05:10:00.633]     05:09:07.689 SCHEDULE adhoc tm:1792613347675 @1792613355675
+[05:10:00.633]     05:09:15.757 FIRE tm:1792613347675
+[05:10:00.633]     05:09:15.819 WARN tm:1792613347675: オーバーレイ未許可 (FSI=可): ロック解除中は通知シェードからのみ停止可能
+[05:10:00.633]     05:09:20.675 SCHEDULE adhoc tm:1792613360667 @1792613375667
+[05:10:00.633]     05:09:35.719 FIRE tm:1792613360667
+[05:10:00.633]     05:09:35.791 DISPLACED tm:1792613347675 → tm:1792613360667: 後発が片付いた後に鳴らし直す
+[05:10:00.633]     05:09:35.798 WARN tm:1792613360667: オーバーレイ未許可 (FSI=可): ロック解除中は通知シェードからのみ停止可能
+[05:10:00.634]     05:09:49.832 STOP_TAP 画面: tm:1792613360667
+[05:10:00.634]     05:09:49.878 DISMISS tm:1792613360667
+[05:10:00.634]     05:09:49.901 REARM tm:1792613347675: 押し出された鳴動を鳴らし直す
+[05:10:00.634]     05:09:54.987 FIRE tm:1792613347675
+[05:10:00.634]     05:09:55.048 WARN tm:1792613347675: オーバーレイ未許可 (FSI=可): ロック解除中は通知シェードからのみ停止可能
+[05:10:00.634]     05:10:01.902 STOP_TAP 画面: tm:1792613347675
+[05:10:00.634]     05:10:01.942 DISMISS tm:1792613347675
+[05:10:03.254] restored volumes {2: 0, 3: 0, 4: 0, 5: 0} | zen: 2 | vibration: {'alarm_vibration_intensity': 'null', 'ring_vibration_intensity': 'null', 'notification_vibration_intensity': 'null', 'media_vibration_intensity': 'null', 'haptic_feedback_intensity': 'null'}
+[05:10:03.254] RESULTS
+[05:10:03.254]    7a PASS APPLICATION_OVERLAY windows=1, top=com.google.android.calculator/com.android.calculator2.Calculator
+[05:10:03.254]    7-3 PASS chips closed before tap (overlay)
+[05:10:03.254]    7-3b PASS after tap: ['+5分', '+10分', '+15分', '+30分', '+45分', '+60分']
+[05:10:03.255]    7-4 PASS still ringing=True, thumb back at left=True (pixel (157, 1961)={'left': (189, 189, 255), 'mid': (40, 42, 46), 'right': (39, 41, 45)})
+[05:10:03.255]    7-6 PASS swipe not starting on the thumb: still ringing=True
+[05:10:03.255]    7-6b PASS rightward swipe from the track middle: still ringing=True
+[05:10:03.255]    7-5 PASS stopped=True, overlay windows after=0, top=com.google.android.calculator/com.android.calculator2.Calculator
+[05:10:03.255]    A-path PASS top=com.calendaralarm.pr48/com.calendaralarm.engine.RingingActivity
+[05:10:03.255]    4 PASS activity: still ringing=True, thumb back at left=True (pixel (168, 1978)={'left': (255, 184, 112), 'mid': (29, 31, 36), 'right': (29, 31, 36)})
+[05:10:03.255]    6 PASS activity: swipe not starting on the thumb: still ringing=True
+[05:10:03.255]    6b PASS activity: rightward swipe from the track middle: still ringing=True
+[05:10:03.255]    5 PASS activity: stopped=True, top after=com.calendaralarm.pr48/com.calendaralarm.MainActivity
+[05:10:03.255]    14 PASS second (P48-E1) shown=True, its thumb at left=True, all stopped=True, states={'tm:1792613305780': 'DISMISSED', 'tm:1792613305862': 'DISMISSED'}
+[05:10:03.255]    15 PASS switched to B while holding=True, B still ringing on screen=True, states after release={'tm:1792613347675': 'FIRED', 'tm:1792613360667': 'FIRED'}
