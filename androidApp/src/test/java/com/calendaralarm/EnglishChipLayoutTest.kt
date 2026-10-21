@@ -68,12 +68,19 @@ class EnglishChipLayoutTest {
         return all[0]
     }
 
-    /** どのチップも画面内に1行の高さで収まり、押せること。 */
+    /**
+     * どのチップも同時に画面内に1行の高さで収まり、押せること。
+     * 縦にスクロールするのは最後 (一番下) の1枚までにする。ラベルごとにスクロールすると、横スクロールの行でも
+     * 1枚ずつ画面に入ってしまい、全部が同時に収まっていなくても通る
+     */
     private fun assertChipsFit(labels: List<String>) {
         val rootRight = compose.onRoot().fetchSemanticsNode().boundsInRoot.right
+        chip(labels.last()).performScrollTo()
+        compose.waitForIdle()
         val heights = labels.map { label ->
-            chip(label).performScrollTo().assertIsDisplayed()
+            chip(label).assertIsDisplayed()
             val b = chip(label).fetchSemanticsNode().boundsInRoot
+            assertTrue("$label の左端 ${b.left} が画面の外", b.left >= 0f)
             assertTrue("$label の右端 ${b.right} が画面幅 $rootRight を超えた", b.right <= rootRight)
             b.height
         }
