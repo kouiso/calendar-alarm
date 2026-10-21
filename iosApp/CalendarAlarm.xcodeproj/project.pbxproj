@@ -19,10 +19,10 @@
 		4E485751888C27D65F6C4ABA /* MailImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B399458D4913DD152149CADA /* MailImportView.swift */; };
 		54E5C67790C94D5298C69492 /* CalendarAlarmWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		56C929D3E057A4F1B62C284A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70278C1DA89E0C3594F39E2A /* SettingsView.swift */; };
+		60F95E5171F583E80686583F /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBC7C20D6CC306ED12728299 /* Permissions.swift */; };
 		61495687E00D3BDC4E29BB9B /* EventDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */; };
 		626990B5CF8E3DC8C227D393 /* OpenRouterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01AB4C06EB145E37B770350C /* OpenRouterService.swift */; };
 		6FD84B70A4880BED419DDD24 /* AgendaViewsIOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A431831DE81C49A75897127 /* AgendaViewsIOS.swift */; };
-		7004B8AD94302AD02ADCB4D4 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB316460E096240BBFE8B475 /* OnboardingView.swift */; };
 		70C15B080DE1D75F672A4741 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C59894E1200D6FB530B33BED /* Theme.swift */; };
 		78335F051083F14CA2C916EE /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7384BC516B1FE4FB2F672E67 /* WeatherService.swift */; };
 		83DF4A4775FDA2DFD643DF85 /* MailShareExt.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 90ED19FA826B4A1503E171A1 /* MailShareExt.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -34,6 +34,8 @@
 		A6D274A92BA0F9A706CB3085 /* CalendarAlarmWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */; };
 		A793851C3CD7E4B1FDBE5794 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F8642EDA4CA9194F126132 /* Store.swift */; };
 		AAFC4648F481E8E284EC4F80 /* outfit_light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8DD3A0F17E4F13654090ABE8 /* outfit_light.ttf */; };
+		AFFCC564CECA94EEBC56CA98 /* ring-history.swift in Sources */ = {isa = PBXBuildFile; fileRef = D910DFCFDA9A98A380AC51E6 /* ring-history.swift */; };
+		B35722F57D8E88FD64454F34 /* PermissionAsker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D9FE2D91349946227BD8E55 /* PermissionAsker.swift */; };
 		B419682EEBC47B0FA0D3144C /* AgendaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66A4F7800854676434D761F4 /* AgendaView.swift */; };
 		BD5D619B846CB9BA9C171212 /* TitleCodesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3A04452A7A85976807934D /* TitleCodesSheet.swift */; };
 		C81DC1220A1AA99DF92EE408 /* TimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */; };
@@ -88,6 +90,7 @@
 		7384BC516B1FE4FB2F672E67 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
 		7A3A04452A7A85976807934D /* TitleCodesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleCodesSheet.swift; sourceTree = "<group>"; };
 		8688F25F9579677C2080FB0E /* RingingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingingView.swift; sourceTree = "<group>"; };
+		8D9FE2D91349946227BD8E55 /* PermissionAsker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionAsker.swift; sourceTree = "<group>"; };
 		8DD3A0F17E4F13654090ABE8 /* outfit_light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_light.ttf; sourceTree = "<group>"; };
 		90ED19FA826B4A1503E171A1 /* MailShareExt.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MailShareExt.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		93E52D4230819F38EC3DE33A /* plex_sans_jp_light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_light.ttf; sourceTree = "<group>"; };
@@ -103,11 +106,12 @@
 		CF4FE1923E95F87EA8A05028 /* outfit_extralight.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_extralight.ttf; sourceTree = "<group>"; };
 		D2AF8727D8A981996E1355D9 /* plex_sans_jp_regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_regular.ttf; sourceTree = "<group>"; };
 		D2D9928A082C610D9B0A9D67 /* plex_sans_jp_semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_semibold.ttf; sourceTree = "<group>"; };
+		D910DFCFDA9A98A380AC51E6 /* ring-history.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ring-history.swift"; sourceTree = "<group>"; };
 		DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAlarmWidget.swift; sourceTree = "<group>"; };
 		E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitReader.swift; sourceTree = "<group>"; };
 		E4F003771A83A79DB1D7C14D /* AlarmsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmsView.swift; sourceTree = "<group>"; };
 		E77D9C74BAD6E368F79E4264 /* WeatherBackdropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherBackdropView.swift; sourceTree = "<group>"; };
-		EB316460E096240BBFE8B475 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		EBC7C20D6CC306ED12728299 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
 		EE03925928578DE0F3DE47BB /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_medium.ttf; sourceTree = "<group>"; };
 		F4F8642EDA4CA9194F126132 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
@@ -164,8 +168,10 @@
 				E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */,
 				B399458D4913DD152149CADA /* MailImportView.swift */,
 				3C4B1C1CFBE436D31467257B /* Models.swift */,
-				EB316460E096240BBFE8B475 /* OnboardingView.swift */,
 				01AB4C06EB145E37B770350C /* OpenRouterService.swift */,
+				8D9FE2D91349946227BD8E55 /* PermissionAsker.swift */,
+				EBC7C20D6CC306ED12728299 /* Permissions.swift */,
+				D910DFCFDA9A98A380AC51E6 /* ring-history.swift */,
 				8688F25F9579677C2080FB0E /* RingingView.swift */,
 				70278C1DA89E0C3594F39E2A /* SettingsView.swift */,
 				F5CB9C72F79CDC56058DD028 /* SharedKitBridge.swift */,
@@ -390,8 +396,9 @@
 				1AC90D4E8D2703925A409766 /* EventKitReader.swift in Sources */,
 				4E485751888C27D65F6C4ABA /* MailImportView.swift in Sources */,
 				FD5F5F9529EEDE44FE18F446 /* Models.swift in Sources */,
-				7004B8AD94302AD02ADCB4D4 /* OnboardingView.swift in Sources */,
 				626990B5CF8E3DC8C227D393 /* OpenRouterService.swift in Sources */,
+				B35722F57D8E88FD64454F34 /* PermissionAsker.swift in Sources */,
+				60F95E5171F583E80686583F /* Permissions.swift in Sources */,
 				2E6FBB230347EBF9423F1C52 /* RingingView.swift in Sources */,
 				56C929D3E057A4F1B62C284A /* SettingsView.swift in Sources */,
 				84CB7D0E16454D83E7DD74BE /* SharedKitBridge.swift in Sources */,
@@ -401,6 +408,7 @@
 				BD5D619B846CB9BA9C171212 /* TitleCodesSheet.swift in Sources */,
 				C85633A926A38048ACF31244 /* WeatherBackdropView.swift in Sources */,
 				78335F051083F14CA2C916EE /* WeatherService.swift in Sources */,
+				AFFCC564CECA94EEBC56CA98 /* ring-history.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
