@@ -272,7 +272,13 @@ private fun MainScaffold(
             startDestination = "agenda",
             modifier = Modifier.padding(padding),
         ) {
-            composable("agenda") { AgendaScreen(repository) }
+            composable("agenda") {
+                AgendaScreen(
+                    repository,
+                    onOpenPermissions = { nav.navigate("permissions") },
+                    onOpenTroubleshooting = { nav.navigate("troubleshoot") },
+                )
+            }
             composable("alarms") {
                 AlarmsScreen(
                     repository = repository,

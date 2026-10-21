@@ -37,6 +37,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -52,6 +53,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -97,7 +100,8 @@ internal enum class ViewMode {
         LIST -> "一覧"
         MONTH -> "月"
         THREE_DAY -> "3日"
-        TIMELINE -> "タイムライン"
+        // デザイン正本の推奨 (「タイムライン」は狭い幅で2行に折れる)
+        TIMELINE -> "時間軸"
     }
 }
 
@@ -107,7 +111,11 @@ internal enum class ViewMode {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AgendaScreen(repository: AlarmRepository) {
+fun AgendaScreen(
+    repository: AlarmRepository,
+    onOpenPermissions: () -> Unit = {},
+    onOpenTroubleshooting: () -> Unit = {},
+) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val app = context.applicationContext as CalendarAlarmApp
@@ -131,6 +139,17 @@ fun AgendaScreen(repository: AlarmRepository) {
     }
 
     val nextAlarm = pending.firstOrNull()
+    // 鳴動の状態 (#51 PR2): 足りない許可と直近24時間の見逃しから1行にまとめる
+    val resumeTick = rememberResumeTick()
+    val missingPermissions = remember(resumeTick) { probePermissions(context).count { !it.value } }
+    val audit by repository.auditFlow(200).collectAsState(initial = emptyList())
+    val ringStatus = com.calendaralarm.shared.logic.RingStatus.summarize(
+        missingPermissions = missingPermissions,
+        recentMissed = com.calendaralarm.shared.logic.RingStatus.countRecentMissed(
+            audit.map { it.atMillis to it.action }, System.currentTimeMillis(), setOf("MISS"),
+        ),
+        hasNextAlarm = nextAlarm != null,
+    )
 
     Column(Modifier.fillMaxSize()) {
         // Night UI: 日付 H1 + 天気ピルは WeatherHeaderRow が担う
@@ -140,9 +159,21 @@ fun AgendaScreen(repository: AlarmRepository) {
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = 20.dp, top = 58.dp),
         )
-        // 次のアラーム帯: いつ鳴るか常時見せるのが信頼感の肝 (Night UI hero card)
-        if (nextAlarm != null) {
-            NextAlarmBanner(nextAlarm.title, nextAlarm.triggerAtMillis)
+        // 次のアラーム欄は小さくし、その下に鳴動の状態を1行出す (#51 PR2)
+        NextAlarmBanner(nextAlarm?.title, nextAlarm?.triggerAtMillis, ringStatus.line)
+        if (ringStatus.showPermissionBanner) {
+            StatusBanner(
+                "許可が${ringStatus.missingPermissions}つ足りません。鳴らない・止められないことがあります",
+                action = "直す",
+                onAction = onOpenPermissions,
+            )
+        }
+        if (ringStatus.showMissedBanner) {
+            StatusBanner(
+                "直近24時間に鳴らせなかったアラームが${ringStatus.recentMissed}件あります",
+                action = "原因を見る",
+                onAction = onOpenTroubleshooting,
+            )
         }
 
         // ビュー切替 (Night UI 4-way segment) + 検索 + 同期
@@ -235,15 +266,36 @@ fun AgendaScreen(repository: AlarmRepository) {
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        if (searchQuery.isNotBlank()) "該当なし" else "予定なし",
+                        if (searchQuery.isNotBlank()) "該当する予定はありません" else "この先2週間の予定はありません",
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (searchQuery.isBlank()) {
+                        // 予定が無い時の画面 (#51 PR2): 何をすれば鳴るようになるかを1行で
+                        Text(
+                            "カレンダーに予定を入れると、ここに並んで前もって鳴ります",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp, start = 32.dp, end = 32.dp),
+                        )
+                    }
                 }
             }
             else -> when (viewMode) {
                 ViewMode.LIST -> AgendaList(
                     items = filtered,
                     onSelect = { selected = it },
+                    // 行の右端のスイッチ: その予定だけ鳴らす／鳴らさないを決める (#51 PR2)
+                    onToggle = { item, on ->
+                        scope.launch {
+                            repository.setEventOverride(
+                                item.event.instanceKey,
+                                if (on) EventAction.ALARM else EventAction.MUTE,
+                                null,
+                            )
+                            refreshKey++
+                        }
+                    },
                 )
                 ViewMode.MONTH -> MonthView(
                     month = focusDate,
@@ -295,46 +347,76 @@ fun AgendaScreen(repository: AlarmRepository) {
 }
 
 @Composable
-private fun NextAlarmBanner(title: String, triggerAtMillis: Long) {
-    val time = SimpleDateFormat("H:mm", Locale.JAPAN).format(Date(triggerAtMillis))
+private fun NextAlarmBanner(title: String?, triggerAtMillis: Long?, statusLine: String) {
     val accent = MaterialTheme.colorScheme.primary
     Card(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 12.dp),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = accent.copy(alpha = 0.15f),
         ),
     ) {
-        Column(Modifier.padding(horizontal = 22.dp, vertical = 18.dp)) {
-            Text(
-                "次のアラーム",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.sp,
-                color = accent,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                time,
-                fontSize = 64.sp,
-                fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
-                fontWeight = FontWeight.Light,
-                letterSpacing = (-2).sp,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(6.dp))
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(8.dp).background(accent, CircleShape),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    title,
-                    fontSize = 15.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "次のアラーム",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.sp,
+                        color = accent,
+                    )
+                    Text(
+                        title ?: "なし",
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+                if (triggerAtMillis != null) {
+                    Text(
+                        SimpleDateFormat("H:mm", Locale.JAPAN).format(Date(triggerAtMillis)),
+                        fontSize = 36.sp,
+                        fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
+                        fontWeight = FontWeight.Light,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
             }
+            Spacer(Modifier.height(6.dp))
+            // 鳴動の状態 (1行)
+            Text(
+                statusLine,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                modifier = Modifier.semantics { contentDescription = "鳴動の状態: $statusLine" },
+            )
+        }
+    }
+}
+
+/** 許可が足りない時・鳴らせなかった時のバナー (#51 PR2)。押すと直す画面へ行く */
+@Composable
+private fun StatusBanner(message: String, action: String, onAction: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 8.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+    ) {
+        Row(
+            Modifier.padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onAction) { Text(action) }
         }
     }
 }
@@ -343,6 +425,7 @@ private fun NextAlarmBanner(title: String, triggerAtMillis: Long) {
 private fun AgendaList(
     items: List<AlarmRepository.AgendaItem>,
     onSelect: (AlarmRepository.AgendaItem) -> Unit,
+    onToggle: ((AlarmRepository.AgendaItem, Boolean) -> Unit)? = null,
 ) {
     val grouped = items.groupBy { eventDate(it.event) }
     LazyColumn {
@@ -358,7 +441,11 @@ private fun AgendaList(
                         ),
                     ) {
                         dayItems.forEach { item ->
-                            EventRow(item, onClick = { onSelect(item) })
+                            EventRow(
+                                item,
+                                onClick = { onSelect(item) },
+                                onToggle = onToggle?.let { t -> { on: Boolean -> t(item, on) } },
+                            )
                         }
                     }
                 }
@@ -404,7 +491,12 @@ private fun DayHeader(date: LocalDate) {
 }
 
 @Composable
-internal fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
+internal fun EventRow(
+    item: AlarmRepository.AgendaItem,
+    onClick: () -> Unit,
+    /** 渡された時は右端を鳴らす／鳴らさないのスイッチにする (予定一覧)。他の表示はアイコンのまま */
+    onToggle: ((Boolean) -> Unit)? = null,
+) {
     val ev = item.event
     // 長さゼロ・23時間超のイベントも実質「終日」扱いにして 0:00/~0:00 表記を消す
     val effectiveAllDay = ev.allDay ||
@@ -469,15 +561,17 @@ internal fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
             else ->
                 Icons.Default.Notifications to MaterialTheme.colorScheme.tertiary
         }
-        Icon(
-            icon,
-            contentDescription = when {
-                item.muted -> "鳴動OFF"
-                item.startAction == EventAction.ALARM -> "アラーム"
-                else -> "通知のみ"
-            },
-            tint = iconTint,
-        )
+        if (onToggle == null) {
+            Icon(
+                icon,
+                contentDescription = when {
+                    item.muted -> "鳴動OFF"
+                    item.startAction == EventAction.ALARM -> "アラーム"
+                    else -> "通知のみ"
+                },
+                tint = iconTint,
+            )
+        }
         if (!item.muted && item.minutesBefore > 0) {
             Spacer(Modifier.width(6.dp))
             // 「N分前」は accent-soft の小チップ
@@ -494,6 +588,16 @@ internal fun EventRow(item: AlarmRepository.AgendaItem, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+        }
+        if (onToggle != null) {
+            Spacer(Modifier.width(6.dp))
+            Switch(
+                checked = !item.muted,
+                onCheckedChange = onToggle,
+                modifier = Modifier.semantics {
+                    contentDescription = "${ev.title.ifBlank { "予定" }}で鳴らす"
+                },
+            )
         }
     }
 }

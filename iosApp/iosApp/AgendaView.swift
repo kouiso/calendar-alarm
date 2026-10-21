@@ -4,6 +4,7 @@ import SwiftUI
 struct AgendaView: View {
     @EnvironmentObject var engine: Engine
     @EnvironmentObject var store: Store
+    @EnvironmentObject var center: PermissionCenter
     @State private var selected: DisplayEvent?
     @State private var weatherByLoc: [String: [WeatherService.Forecast]] = [:]
     @State private var nowForecast: WeatherService.NowForecast? = nil
@@ -20,8 +21,16 @@ struct AgendaView: View {
                     Text(Self.todayLabel)
                         .font(NightTheme.font(30, weight: .semibold))
                         .padding(.top, 6)
-                    if let next = nextAlarm {
-                        NextAlarmBanner(instance: next, accent: accent)
+                    // 次のアラーム欄は小さくし、その下に鳴動の状態を1行出す (#51 PR2)
+                    NextAlarmBanner(instance: nextAlarm, accent: accent, statusLine: ringStatus.line)
+                    if ringStatus.missingPermissions > 0 {
+                        NavigationLink { PermissionsView() } label: {
+                            StatusBanner(message: "許可が\(ringStatus.missingPermissions)つ足りません。鳴らない・止められないことがあります", action: "直す")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if ringStatus.recentMissed > 0 {
+                        StatusBanner(message: "直近24時間に鳴らせなかったアラームが\(ringStatus.recentMissed)件あります。設定の一番下の記録で確かめられます", action: nil)
                     }
                     // ヘッダー天気 (元アプリ: 現在気温+時間別予報)。地点設定がある時だけ。
                     if let nf = nowForecast {
@@ -50,7 +59,8 @@ struct AgendaView: View {
                     switch viewMode {
                     case .list:
                         ForEach(groupedDays, id: \.0) { day, events in
-                            DayCard(dayLabel: dayLabel(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev })
+                            DayCard(dayLabel: dayLabel(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev },
+                                    onToggle: { ev, on in toggleRing(ev, on) })
                         }
                         if groupedDays.isEmpty { emptyState }
                     case .month:
@@ -78,6 +88,7 @@ struct AgendaView: View {
             EventDetailSheet(display: ev, weather: weatherByLoc[ev.event.location])
         }
         .task { await refreshWeather() }
+        .task { await center.refresh(engine) }
     }
 
     // MARK: - データ整形
@@ -157,13 +168,35 @@ struct AgendaView: View {
         return out.string(from: d)
     }
 
+    /// 鳴動の状態 (#51 PR2)。Android と同じ優先順 (shared `RingStatus`)
+    private var ringStatus: RingStatusSummary {
+        let missing = center.states.values.filter { $0 != .granted }.count
+        let since = Engine.nowMillis - 24 * 60 * 60 * 1000
+        let missed = store.state.audit.filter { $0.type == "MISSED" && $0.atMillis >= since }.count
+        return RingStatusSummary(missingPermissions: missing, recentMissed: missed, hasNextAlarm: nextAlarm != nil)
+    }
+
+    /// 行のスイッチ: その予定だけ鳴らす／鳴らさない (個別指定は種類などの設定より優先される)
+    private func toggleRing(_ ev: DisplayEvent, _ on: Bool) {
+        let ov = store.state.overrides[ev.event.instanceKey]
+        store.setOverride(instanceKey: ev.event.instanceKey, action: on ? .alarm : .mute,
+                          minutes: ov?.minutesBefore, extras: ov?.extraOffsets)
+        Task { await engine.resync(reason: "event toggle") }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "calendar.badge.checkmark")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
-            Text("2週間内に予定なし")
+            Text("この先2週間の予定はありません")
+                .font(NightTheme.font(15, weight: .medium))
                 .foregroundStyle(.secondary)
+            // 予定が無い時の画面 (#51 PR2): 何をすれば鳴るようになるかを1行で
+            Text("カレンダーに予定を入れると、ここに並んで前もって鳴ります")
+                .font(NightTheme.font(12))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
@@ -225,35 +258,72 @@ struct WeatherHeaderRow: View {
 
 // MARK: - 部品
 
-/// Night UI hero card: accent-soft 背景 r28 + Outfit 64 時刻 + ドット+タイトル
+/// 次のアラーム欄 (#51 PR2 で小さくした): タイトルと時刻を1段に、下に鳴動の状態を1行
 struct NextAlarmBanner: View {
-    let instance: AlarmInstanceDTO
+    let instance: AlarmInstanceDTO?
     let accent: Color
+    let statusLine: String
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("次のアラーム")
-                .font(NightTheme.font(12, weight: .semibold))
-                .tracking(1)
-                .foregroundStyle(accent)
-            Text(Self.timeStr(instance.triggerAtMillis))
-                .font(NightTheme.numFont(64, weight: .light))
-                .tracking(-2)
-                .foregroundStyle(NightTheme.onNight)
-            HStack(spacing: 8) {
-                Circle().fill(accent).frame(width: 8, height: 8)
-                Text(instance.title)
-                    .font(NightTheme.font(15))
-                    .foregroundStyle(NightTheme.muted)
-                    .lineLimit(1)
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("次のアラーム")
+                        .font(NightTheme.font(12, weight: .semibold))
+                        .tracking(1)
+                        .foregroundStyle(accent)
+                    Text(instance?.title ?? "なし")
+                        .font(NightTheme.font(15))
+                        .foregroundStyle(NightTheme.muted)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if let instance {
+                    Text(Self.timeStr(instance.triggerAtMillis))
+                        .font(NightTheme.numFont(36, weight: .light))
+                        .foregroundStyle(NightTheme.onNight)
+                }
             }
+            Text(statusLine)
+                .font(NightTheme.font(12))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .accessibilityLabel("鳴動の状態: \(statusLine)")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 22).padding(.vertical, 18)
-        .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 28))
+        .padding(.horizontal, 18).padding(.vertical, 12)
+        .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 22))
     }
-    static func timeStr(_ millis: Int64) -> String {
-        let f = DateFormatter(); f.dateFormat = "H:mm"
-        return f.string(from: Date(timeIntervalSince1970: TimeInterval(millis) / 1000))
+}
+
+/// 許可が足りない時・鳴らせなかった時のバナー (#51 PR2)
+struct StatusBanner: View {
+    let message: String
+    let action: String?
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            Text(message).font(NightTheme.font(12)).foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let action {
+                Text(action).font(NightTheme.font(12, weight: .semibold)).foregroundStyle(NightTheme.indigo)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+/// 鳴動の状態の1行 (Android と同じ文言・優先順。正本は shared の `RingStatus`)
+struct RingStatusSummary {
+    let missingPermissions: Int
+    let recentMissed: Int
+    let hasNextAlarm: Bool
+
+    var line: String {
+        if missingPermissions > 0 { return "許可が\(missingPermissions)つ足りません。このままだと鳴らないことがあります" }
+        if recentMissed > 0 { return "直近24時間に鳴らせなかったアラームが\(recentMissed)件あります" }
+        if !hasNextAlarm { return "予約中のアラームはありません" }
+        return "鳴る準備ができています"
     }
 }
 
@@ -262,6 +332,8 @@ struct DayCard: View {
     let events: [DisplayEvent]
     let calendarColor: (DisplayEvent) -> Color
     let onTap: (DisplayEvent) -> Void
+    /// 渡された時は行の右端を鳴らす／鳴らさないのスイッチにする
+    var onToggle: ((DisplayEvent, Bool) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -271,7 +343,7 @@ struct DayCard: View {
                 .padding(.bottom, 6)
             VStack(spacing: 0) {
                 ForEach(events) { ev in
-                    EventRow(ev: ev, accent: calendarColor(ev))
+                    EventRow(ev: ev, accent: calendarColor(ev), onToggle: onToggle.map { t in { on in t(ev, on) } })
                         .onTapGesture { onTap(ev) }
                 }
             }
@@ -284,6 +356,7 @@ struct DayCard: View {
 struct EventRow: View {
     let ev: DisplayEvent
     let accent: Color
+    var onToggle: ((Bool) -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -307,9 +380,13 @@ struct EventRow: View {
             }
             Spacer()
             if ev.muted {
-                Image(systemName: "bell.slash").foregroundStyle(.secondary).font(.system(size: 14))
+                if onToggle == nil {
+                    Image(systemName: "bell.slash").foregroundStyle(.secondary).font(.system(size: 14))
+                }
             } else {
-                Image(systemName: "bell.fill").foregroundStyle(accent).font(.system(size: 14))
+                if onToggle == nil {
+                    Image(systemName: "bell.fill").foregroundStyle(accent).font(.system(size: 14))
+                }
                 if ev.effectiveMinutes > 0 {
                     Text("\(ev.effectiveMinutes)分前")
                         .font(NightTheme.font(11))
@@ -317,6 +394,11 @@ struct EventRow: View {
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
                 }
+            }
+            if let onToggle {
+                Toggle("", isOn: Binding(get: { !ev.muted }, set: { onToggle($0) }))
+                    .labelsHidden()
+                    .accessibilityLabel("\(ev.event.title)で鳴らす")
             }
         }
         .padding(.horizontal, 14)
