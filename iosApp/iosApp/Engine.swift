@@ -139,6 +139,15 @@ final class Engine: ObservableObject {
             for n in await center.deliveredNotifications() {
                 deliveredAt[n.request.identifier] = Int64(n.date.timeIntervalSince1970 * 1000)
             }
+            // 旧版は通知の予約に成功しても予約 id を残していなかった。OS に予約か届いた通知がある行は
+            // 予約できていた行なので id を埋める (埋めないと予約失敗に見え、届いても見逃しになる)
+            for id in Self.legacyRequestIds(Array(s.scheduled.values),
+                                            knownRequestIds: pendingIds.union(deliveredAt.keys)) {
+                if let rec = s.scheduled[id] {
+                    store.putScheduled(ScheduledRecord(instance: rec.instance, state: rec.state, alarmKitId: id))
+                }
+            }
+            s = store.state
             let outcome = Self.notificationOutcome(
                 Array(s.scheduled.values), pendingRequestIds: pendingIds,
                 deliveredAtById: deliveredAt, nowMillis: now)
@@ -471,6 +480,19 @@ final class Engine: ObservableObject {
             a.delivered.map { "\($0.id)@\($0.at)" } == b.delivered.map { "\($0.id)@\($0.at)" }
                 && a.unconfirmed == b.unconfirmed
         }
+    }
+
+    /// 予約 id が空のまま残っている待機中の行のうち、OS に同じ id の予約か届いた通知がある行
+    nonisolated static func legacyRequestIds(_ rows: [ScheduledRecord], knownRequestIds: Set<String>) -> [String] {
+        rows.filter { $0.state == .pending && $0.alarmKitId == nil && knownRequestIds.contains($0.instance.id) }
+            .map { $0.instance.id }.sorted()
+    }
+
+    /// AlarmKit でスヌーズの数え中 (countdown) の行の id。iOS 26 未満は空
+    func nativeCountdownIds() -> Set<String> {
+        guard #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler else { return [] }
+        let counting = Set(ak.allAlarms.filter { $0.state == .countdown }.map { $0.id })
+        return Set(store.state.scheduled.keys.filter { counting.contains(AlarmKitScheduler.uuid(from: $0)) })
     }
 
     /// 時刻を過ぎて OS の通知予約から消えた PENDING 行を、届いた証拠の有無で分ける。

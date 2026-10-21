@@ -87,13 +87,26 @@ enum DiagnosisPlan {
         return audit.filter { $0.type == unconfirmedType && $0.atMillis >= since }.count
     }
 
-    /// OS に予約できた (予約 id がある) 未来の行だけを次のアラームにする。
-    /// スヌーズの予約に失敗した行は入れ直し待ちで残るが、そのままでは鳴らない
-    static func nextAlarm(_ scheduled: [ScheduledRecord], nowMillis: Int64) -> AlarmInstanceDTO? {
-        scheduled
+    /// OS に予約できた (予約 id がある) 未来の行と、AlarmKit でスヌーズを数えている行から次のアラームを選ぶ。
+    /// スヌーズの予約に失敗した行は入れ直し待ちで残るが、そのままでは鳴らないので入れない。
+    /// AlarmKit のスヌーズは同じ予約が数え終わって鳴り直すので、記録は .snoozed のまま子の行を作らない。
+    /// 鳴り直す時刻は OS から取れないため、スヌーズした記録の時刻 + スヌーズ分で出す
+    static func nextAlarm(_ scheduled: [ScheduledRecord], audit: [AuditEntry] = [],
+                          countdownIds: Set<String> = [], nowMillis: Int64) -> AlarmInstanceDTO? {
+        var candidates = scheduled
             .filter { $0.state == .pending && $0.alarmKitId != nil && $0.instance.triggerAtMillis > nowMillis }
             .map { $0.instance }
-            .min { $0.triggerAtMillis < $1.triggerAtMillis }
+        for rec in scheduled where rec.state == .snoozed && countdownIds.contains(rec.instance.id) {
+            let snoozedAt = audit
+                .filter { $0.type == "SNOOZE" && $0.detail.hasPrefix(rec.instance.id + " ") }
+                .map { $0.atMillis }.max()
+            var inst = rec.instance
+            // 記録が古くて消えていても、スヌーズ分より後になることはない
+            inst.triggerAtMillis = (snoozedAt ?? nowMillis) + Int64(inst.snoozeMinutes) * 60_000
+            inst.title += "（スヌーズ中）"
+            candidates.append(inst)
+        }
+        return candidates.min { $0.triggerAtMillis < $1.triggerAtMillis }
     }
 
     static func unreservedCount(_ scheduled: [ScheduledRecord], nowMillis: Int64) -> Int {
@@ -328,7 +341,8 @@ struct DiagnosticsView: View {
                 ? Self.switchState(settings.soundSetting) : nil,
             backgroundRefreshAvailable: UIApplication.shared.backgroundRefreshStatus == .available,
             lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
-            nextAlarm: DiagnosisPlan.nextAlarm(rows, nowMillis: now),
+            nextAlarm: DiagnosisPlan.nextAlarm(rows, audit: store.state.audit,
+                                               countdownIds: engine.nativeCountdownIds(), nowMillis: now),
             unreservedCount: DiagnosisPlan.unreservedCount(rows, nowMillis: now),
             lastFired: DiagnosisPlan.lastFired(store.state.audit),
             unconfirmedCount: DiagnosisPlan.unconfirmedCount(store.state.audit, nowMillis: now),

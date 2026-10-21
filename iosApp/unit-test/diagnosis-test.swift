@@ -68,6 +68,34 @@ final class DiagnosisPlanTests: XCTestCase {
         XCTAssertEqual(items.first { $0.id == "next" }?.title.hasPrefix("次のアラーム"), true)
     }
 
+    /// 旧版で予約 id を残さなかった行は、OS に予約か届いた通知がある時だけ id を埋める。スヌーズの予約失敗は埋めない
+    func testLegacyRowsGetTheirRequestIdOnlyWhenTheOSHasIt() {
+        let rows = [
+            row("legacy-pending", at: now + 60_000, rid: nil),
+            row("legacy-delivered", at: now - 60_000, rid: nil),
+            row("failed-snooze", at: now + 60_000, rid: nil),
+            row("booked", at: now + 60_000),
+            row("legacy-fired", at: now - 60_000, state: .fired, rid: nil),
+        ]
+        XCTAssertEqual(
+            Engine.legacyRequestIds(rows, knownRequestIds: ["legacy-pending", "legacy-delivered", "booked", "legacy-fired"]),
+            ["legacy-delivered", "legacy-pending"])
+    }
+
+    /// AlarmKit でスヌーズを数えている行は、スヌーズした時刻 + スヌーズ分を次のアラームにする
+    func testNativeSnoozeCountsAsTheNextAlarm() {
+        var snoozed = row("sa:1:d", at: now - 120_000, state: .snoozed)
+        snoozed.instance.snoozeMinutes = 10
+        let later = row("booked", at: now + 3_600_000)
+        let audit = [AuditEntry(id: 1, atMillis: now - 60_000, type: "SNOOZE", detail: "sa:1:d +10m (native)")]
+        let next = DiagnosisPlan.nextAlarm([snoozed, later], audit: audit, countdownIds: ["sa:1:d"], nowMillis: now)
+        XCTAssertEqual(next?.id, "sa:1:d")
+        XCTAssertEqual(next?.triggerAtMillis, now - 60_000 + 600_000)
+        XCTAssertTrue(next?.title.hasSuffix("（スヌーズ中）") ?? false)
+        // 数えていない (止められた) スヌーズは入れない
+        XCTAssertEqual(DiagnosisPlan.nextAlarm([snoozed, later], audit: audit, countdownIds: [], nowMillis: now)?.id, "booked")
+    }
+
     /// 分からない件数は通知で鳴らす iOS だけに出す。AlarmKit では起きない
     func testUnconfirmedItemOnlyOnNotificationPath() {
         var input = baseInput(usesRealAlarms: false)

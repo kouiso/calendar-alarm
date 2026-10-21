@@ -12,6 +12,7 @@
 		12F8D12737B1B7401B66CA1E /* outfit_medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 64370CDCC54B81F0CD76CFAC /* outfit_medium.ttf */; };
 		1AC90D4E8D2703925A409766 /* EventKitReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */; };
 		29622F303C81E6C8561DA830 /* outfit_extralight.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CF4FE1923E95F87EA8A05028 /* outfit_extralight.ttf */; };
+		2C48431DBDA0DF45F9D75583 /* diagnosis-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */; };
 		2DF8005728D2E0319C73F77B /* plex_sans_jp_medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */; };
 		2E6FBB230347EBF9423F1C52 /* RingingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8688F25F9579677C2080FB0E /* RingingView.swift */; };
 		40D1C13EB37C422D85A661DF /* plex_sans_jp_semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D2D9928A082C610D9B0A9D67 /* plex_sans_jp_semibold.ttf */; };
@@ -19,11 +20,12 @@
 		4E485751888C27D65F6C4ABA /* MailImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B399458D4913DD152149CADA /* MailImportView.swift */; };
 		54E5C67790C94D5298C69492 /* CalendarAlarmWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		56C929D3E057A4F1B62C284A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70278C1DA89E0C3594F39E2A /* SettingsView.swift */; };
+		60F95E5171F583E80686583F /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBC7C20D6CC306ED12728299 /* Permissions.swift */; };
 		61495687E00D3BDC4E29BB9B /* EventDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */; };
 		626990B5CF8E3DC8C227D393 /* OpenRouterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01AB4C06EB145E37B770350C /* OpenRouterService.swift */; };
 		6FD84B70A4880BED419DDD24 /* AgendaViewsIOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A431831DE81C49A75897127 /* AgendaViewsIOS.swift */; };
-		7004B8AD94302AD02ADCB4D4 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB316460E096240BBFE8B475 /* OnboardingView.swift */; };
 		70C15B080DE1D75F672A4741 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C59894E1200D6FB530B33BED /* Theme.swift */; };
+		7121EA4333EF57BBD17EF851 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3906726812F9FD3E5895AD2A /* DiagnosticsView.swift */; };
 		78335F051083F14CA2C916EE /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7384BC516B1FE4FB2F672E67 /* WeatherService.swift */; };
 		83DF4A4775FDA2DFD643DF85 /* MailShareExt.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 90ED19FA826B4A1503E171A1 /* MailShareExt.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		84CB7D0E16454D83E7DD74BE /* SharedKitBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5CB9C72F79CDC56058DD028 /* SharedKitBridge.swift */; };
@@ -34,6 +36,7 @@
 		A6D274A92BA0F9A706CB3085 /* CalendarAlarmWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */; };
 		A793851C3CD7E4B1FDBE5794 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F8642EDA4CA9194F126132 /* Store.swift */; };
 		AAFC4648F481E8E284EC4F80 /* outfit_light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8DD3A0F17E4F13654090ABE8 /* outfit_light.ttf */; };
+		B35722F57D8E88FD64454F34 /* PermissionAsker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D9FE2D91349946227BD8E55 /* PermissionAsker.swift */; };
 		B419682EEBC47B0FA0D3144C /* AgendaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66A4F7800854676434D761F4 /* AgendaView.swift */; };
 		BD5D619B846CB9BA9C171212 /* TitleCodesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3A04452A7A85976807934D /* TitleCodesSheet.swift */; };
 		C81DC1220A1AA99DF92EE408 /* TimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */; };
@@ -44,6 +47,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		14511A4D0D896D7350F7D593 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DE0179BC75C1681044CE6A86 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 519A56C55D325CCF69337FF6;
+			remoteInfo = iosApp;
+		};
 		3AD70F7A16702DCF24845DAF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = DE0179BC75C1681044CE6A86 /* Project object */;
@@ -81,13 +91,16 @@
 		218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = CalendarAlarmWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		24F9472624F7ECEBFD26FF3E /* Engine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Engine.swift; sourceTree = "<group>"; };
 		2F0A11DC2B493DF079DC6BD6 /* CalendarAlarmWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CalendarAlarmWidget.entitlements; sourceTree = "<group>"; };
+		3906726812F9FD3E5895AD2A /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
 		3C4B1C1CFBE436D31467257B /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		64370CDCC54B81F0CD76CFAC /* outfit_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_medium.ttf; sourceTree = "<group>"; };
 		66A4F7800854676434D761F4 /* AgendaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaView.swift; sourceTree = "<group>"; };
+		677F076778749AB892413A64 /* iosAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = iosAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		70278C1DA89E0C3594F39E2A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7384BC516B1FE4FB2F672E67 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
 		7A3A04452A7A85976807934D /* TitleCodesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleCodesSheet.swift; sourceTree = "<group>"; };
 		8688F25F9579677C2080FB0E /* RingingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingingView.swift; sourceTree = "<group>"; };
+		8D9FE2D91349946227BD8E55 /* PermissionAsker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionAsker.swift; sourceTree = "<group>"; };
 		8DD3A0F17E4F13654090ABE8 /* outfit_light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_light.ttf; sourceTree = "<group>"; };
 		90ED19FA826B4A1503E171A1 /* MailShareExt.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MailShareExt.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		93E52D4230819F38EC3DE33A /* plex_sans_jp_light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_light.ttf; sourceTree = "<group>"; };
@@ -95,6 +108,7 @@
 		9A431831DE81C49A75897127 /* AgendaViewsIOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaViewsIOS.swift; sourceTree = "<group>"; };
 		9B5EFAB358775E656E932A66 /* outfit_regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_regular.ttf; sourceTree = "<group>"; };
 		9BC0FA0EA0069BF21E257989 /* iosApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = iosApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "diagnosis-test.swift"; sourceTree = "<group>"; };
 		A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerView.swift; sourceTree = "<group>"; };
 		B399458D4913DD152149CADA /* MailImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailImportView.swift; sourceTree = "<group>"; };
 		C59894E1200D6FB530B33BED /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -107,7 +121,7 @@
 		E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitReader.swift; sourceTree = "<group>"; };
 		E4F003771A83A79DB1D7C14D /* AlarmsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmsView.swift; sourceTree = "<group>"; };
 		E77D9C74BAD6E368F79E4264 /* WeatherBackdropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherBackdropView.swift; sourceTree = "<group>"; };
-		EB316460E096240BBFE8B475 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		EBC7C20D6CC306ED12728299 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
 		EE03925928578DE0F3DE47BB /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_medium.ttf; sourceTree = "<group>"; };
 		F4F8642EDA4CA9194F126132 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
@@ -136,9 +150,18 @@
 			children = (
 				218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */,
 				9BC0FA0EA0069BF21E257989 /* iosApp.app */,
+				677F076778749AB892413A64 /* iosAppTests.xctest */,
 				90ED19FA826B4A1503E171A1 /* MailShareExt.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		58C4D55CDF63CCF2265CE5D6 /* unit-test */ = {
+			isa = PBXGroup;
+			children = (
+				9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */,
+			);
+			path = "unit-test";
 			sourceTree = "<group>";
 		};
 		BE0919C17107C5FCF3FF9118 = {
@@ -146,6 +169,7 @@
 			children = (
 				CE3DB46906063622E3F3C390 /* iosApp */,
 				D71D74FB5839D64D91D1E891 /* MailShareExt */,
+				58C4D55CDF63CCF2265CE5D6 /* unit-test */,
 				D1824F3F0DF979B1DAEC4174 /* Widget */,
 				2B3FE666FD202320B4348FCD /* Products */,
 			);
@@ -159,13 +183,15 @@
 				982C5C9DA1E0E6814EDAD684 /* AlarmKitScheduler.swift */,
 				E4F003771A83A79DB1D7C14D /* AlarmsView.swift */,
 				1664780F463A19E9DA0C56BA /* CalendarAlarmApp.swift */,
+				3906726812F9FD3E5895AD2A /* DiagnosticsView.swift */,
 				24F9472624F7ECEBFD26FF3E /* Engine.swift */,
 				C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */,
 				E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */,
 				B399458D4913DD152149CADA /* MailImportView.swift */,
 				3C4B1C1CFBE436D31467257B /* Models.swift */,
-				EB316460E096240BBFE8B475 /* OnboardingView.swift */,
 				01AB4C06EB145E37B770350C /* OpenRouterService.swift */,
+				8D9FE2D91349946227BD8E55 /* PermissionAsker.swift */,
+				EBC7C20D6CC306ED12728299 /* Permissions.swift */,
 				8688F25F9579677C2080FB0E /* RingingView.swift */,
 				70278C1DA89E0C3594F39E2A /* SettingsView.swift */,
 				F5CB9C72F79CDC56058DD028 /* SharedKitBridge.swift */,
@@ -200,6 +226,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		466F91B54CF74978AEEAD7D3 /* iosAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A65824BE40E303ECEADE64B1 /* Build configuration list for PBXNativeTarget "iosAppTests" */;
+			buildPhases = (
+				B110E2B59AD690D31E9C0357 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FFF59E3E1E9DF74A6B944BC7 /* PBXTargetDependency */,
+			);
+			name = iosAppTests;
+			packageProductDependencies = (
+			);
+			productName = iosAppTests;
+			productReference = 677F076778749AB892413A64 /* iosAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		519A56C55D325CCF69337FF6 /* iosApp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4B8885203DD20A373E007B0A /* Build configuration list for PBXNativeTarget "iosApp" */;
@@ -266,6 +310,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					466F91B54CF74978AEEAD7D3 = {
+						DevelopmentTeam = ZZ4FA7NLUY;
+						ProvisioningStyle = Automatic;
+					};
 					519A56C55D325CCF69337FF6 = {
 						DevelopmentTeam = ZZ4FA7NLUY;
 						ProvisioningStyle = Automatic;
@@ -294,6 +342,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				466F91B54CF74978AEEAD7D3 /* iosAppTests */,
 				519A56C55D325CCF69337FF6 /* iosApp */,
 				CF9949E44635BD9D5B3AD451 /* CalendarAlarmWidget */,
 				7620626984EAA58FC20789E4 /* MailShareExt */,
@@ -368,6 +417,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B110E2B59AD690D31E9C0357 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C48431DBDA0DF45F9D75583 /* diagnosis-test.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BC18BD6298850BFEA340E4AA /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -385,13 +442,15 @@
 				06DB54446C328E66FFD1A494 /* AlarmKitScheduler.swift in Sources */,
 				88AD950DD0441ABF8DBADCAE /* AlarmsView.swift in Sources */,
 				D00DDF3835BD77953502752A /* CalendarAlarmApp.swift in Sources */,
+				7121EA4333EF57BBD17EF851 /* DiagnosticsView.swift in Sources */,
 				4E39CD6EA7BC70A764AACD7A /* Engine.swift in Sources */,
 				61495687E00D3BDC4E29BB9B /* EventDetailSheet.swift in Sources */,
 				1AC90D4E8D2703925A409766 /* EventKitReader.swift in Sources */,
 				4E485751888C27D65F6C4ABA /* MailImportView.swift in Sources */,
 				FD5F5F9529EEDE44FE18F446 /* Models.swift in Sources */,
-				7004B8AD94302AD02ADCB4D4 /* OnboardingView.swift in Sources */,
 				626990B5CF8E3DC8C227D393 /* OpenRouterService.swift in Sources */,
+				B35722F57D8E88FD64454F34 /* PermissionAsker.swift in Sources */,
+				60F95E5171F583E80686583F /* Permissions.swift in Sources */,
 				2E6FBB230347EBF9423F1C52 /* RingingView.swift in Sources */,
 				56C929D3E057A4F1B62C284A /* SettingsView.swift in Sources */,
 				84CB7D0E16454D83E7DD74BE /* SharedKitBridge.swift in Sources */,
@@ -417,9 +476,32 @@
 			target = 7620626984EAA58FC20789E4 /* MailShareExt */;
 			targetProxy = 3AD70F7A16702DCF24845DAF /* PBXContainerItemProxy */;
 		};
+		FFF59E3E1E9DF74A6B944BC7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 519A56C55D325CCF69337FF6 /* iosApp */;
+			targetProxy = 14511A4D0D896D7350F7D593 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		0068179081C0026FD6872C3A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iosApp.app/iosApp";
+			};
+			name = Release;
+		};
 		0E83680DF276A7E0A6B9622F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -453,6 +535,24 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.ios;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		48E16D3567AFD3ACBCEE1DE2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iosApp.app/iosApp";
 			};
 			name = Debug;
 		};
@@ -690,6 +790,15 @@
 			buildConfigurations = (
 				9A525BFF8273FF3623566D62 /* Debug */,
 				80467D985FF0C4B7F51C5ECD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A65824BE40E303ECEADE64B1 /* Build configuration list for PBXNativeTarget "iosAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				48E16D3567AFD3ACBCEE1DE2 /* Debug */,
+				0068179081C0026FD6872C3A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
