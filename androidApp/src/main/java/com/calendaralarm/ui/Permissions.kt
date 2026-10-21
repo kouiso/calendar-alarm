@@ -54,6 +54,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
+import com.calendaralarm.R
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -71,31 +74,31 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
  * 「他のアプリの上に重ねて表示」は求めない (局長決定 2026-10-17)。
  */
 enum class AppPermission(
-    val label: String,
-    val reason: String,
-    val askTitle: String,
-    val askBody: String,
+    @StringRes val label: Int,
+    @StringRes val reason: Int,
+    @StringRes val askTitle: Int,
+    @StringRes val askBody: Int,
     /** OS のダイアログでなく設定画面で切り替える許可か。 */
     val viaSettings: Boolean,
 ) {
     CALENDAR(
-        "カレンダー", "予定を読んで、前もって鳴らす",
-        "予定に合わせて、前もって鳴らすために", "カレンダーをつなぐと、予定の前に自動でアラームが入る。",
+        R.string.perm_calendar_label, R.string.perm_calendar_reason,
+        R.string.perm_calendar_ask_title, R.string.perm_calendar_ask_body,
         viaSettings = false,
     ),
     NOTIFY(
-        "通知", "鳴ったことを知らせる",
-        "鳴ったことを知らせるために", "通知を許可すると、ロック中でも鳴る。",
+        R.string.perm_notify_label, R.string.perm_notify_reason,
+        R.string.perm_notify_ask_title, R.string.perm_notify_ask_body,
         viaSettings = false,
     ),
     EXACT(
-        "正確なアラーム", "時刻ちょうどに鳴らす",
-        "時刻ちょうどに鳴らすために", "省電力中でも、ずれずに鳴る。",
+        R.string.perm_exact_label, R.string.perm_exact_reason,
+        R.string.perm_exact_ask_title, R.string.perm_exact_ask_body,
         viaSettings = true,
     ),
     FULL_SCREEN(
-        "全画面で表示", "止めるボタンを画面いっぱいに出す",
-        "鳴った時に、すぐ止められるように", "ロック中でも、止めるボタンを画面いっぱいに出す。",
+        R.string.perm_fullscreen_label, R.string.perm_fullscreen_reason,
+        R.string.perm_fullscreen_ask_title, R.string.perm_fullscreen_ask_body,
         viaSettings = true,
     ),
 }
@@ -259,9 +262,9 @@ fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 0.dp)) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
             }
-            Text("権限", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.perm_screen_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
         }
         Card(
             shape = RoundedCornerShape(22.dp),
@@ -282,15 +285,17 @@ fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text(
-                            when {
-                                allOn -> "アラームは正しく鳴る"
-                                offCount == AppPermission.entries.size -> "まだ何も許可されていない"
-                                else -> "未許可がある"
-                            },
+                            stringResource(
+                                when {
+                                    allOn -> R.string.perm_summary_all_ok
+                                    offCount == AppPermission.entries.size -> R.string.perm_summary_none
+                                    else -> R.string.perm_summary_some_missing
+                                },
+                            ),
                             style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            if (allOn) "全部許可済み" else "未許可の順に、1つずつ設定を開く",
+                            stringResource(if (allOn) R.string.perm_summary_all_granted else R.string.perm_summary_open_in_order),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -305,7 +310,7 @@ fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {
                         },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(16.dp),
-                    ) { Text("全部許可する", fontWeight = FontWeight.SemiBold) }
+                    ) { Text(stringResource(R.string.perm_grant_all), fontWeight = FontWeight.SemiBold) }
                 }
             }
         }
@@ -315,7 +320,9 @@ fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {
         ) {
             AppPermission.entries.forEachIndexed { i, p ->
                 val on = granted[p] == true
-                val stateText = if (on) "許可済み" else "未許可"
+                val stateText = stringResource(if (on) R.string.perm_state_granted else R.string.perm_state_missing)
+                val label = stringResource(p.label)
+                val openDescription = stringResource(R.string.perm_open_settings_for, label, stateText)
                 // 許可済みでも押せば OS の設定を開き、そこでオフにできる (アプリからは外せないため)
                 val open = {
                     chain = false
@@ -333,14 +340,14 @@ fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {
                         .fillMaxWidth()
                         .heightIn(min = 68.dp)
                         .clickable(onClick = open)
-                        .semantics { contentDescription = "${p.label}（$stateText）の設定を開く" }
+                        .semantics { contentDescription = openDescription }
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(p.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                         Text(
-                            p.reason, style = MaterialTheme.typography.bodySmall,
+                            stringResource(p.reason), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
@@ -356,7 +363,7 @@ fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {
             }
         }
         Text(
-            "押すと端末のその設定が直接開く。戻ると、ここの状態が自動で変わる。",
+            stringResource(R.string.perm_screen_footer),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp),

@@ -35,6 +35,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.calendaralarm.R
+import kotlinx.datetime.DayOfWeek
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
@@ -70,7 +73,7 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
             // 有効化 + 権限状態
             IconSettingRow(Icons.Default.Notifications) {
                 Text(
-                    if (listenerGranted) "通知アラーム" else "通知アラーム (要権限)",
+                    stringResource(if (listenerGranted) R.string.rules_title else R.string.rules_title_needs_permission),
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f),
                 )
@@ -87,7 +90,7 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                         Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     )
-                }) { Text("通知へのアクセスを許可") }
+                }) { Text(stringResource(R.string.rules_grant_access)) }
             }
 
             // ルール一覧
@@ -112,18 +115,18 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                                 prefs.notificationRules - rule,
                             )
                         }
-                    }) { Icon(Icons.Default.Delete, contentDescription = "削除") }
+                    }) { Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.common_delete)) }
                 }
             }
 
             // 追加ボタン群
             Row(Modifier.fillMaxWidth()) {
                 TextButton(onClick = { editDraft = NotificationRuleSpec(name = "") }) {
-                    Text("＋ルール")
+                    Text(stringResource(R.string.rules_add))
                 }
                 if (AiConfig.available) {
                     TextButton(onClick = { aiText = "" }) {
-                        Text("AI生成")
+                        Text(stringResource(R.string.rules_ai_generate))
                     }
                 }
             }
@@ -162,15 +165,18 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
     aiText?.let { text ->
         var working by remember { mutableStateOf(false) }
         var genError by remember { mutableStateOf<String?>(null) }
+        // 生成は画面の外 (コルーチン) で終わるので、出す文言は先に引いておく
+        val noAiMessage = stringResource(R.string.rules_ai_unavailable)
+        val failedMessage = stringResource(R.string.rules_ai_failed)
         AlertDialog(
             onDismissRequest = { aiText = null },
-            title = { Text("AIでルール生成") },
+            title = { Text(stringResource(R.string.rules_ai_title)) },
             text = {
                 Column {
                     OutlinedTextField(
                         value = text,
                         onValueChange = { aiText = it },
-                        placeholder = { Text("例: Gmailで重要なメールが来たら鳴らして") },
+                        placeholder = { Text(stringResource(R.string.rules_ai_placeholder)) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     genError?.let {
@@ -188,19 +194,19 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                         scope.launch {
                             val api = AiConfig.api()
                             if (api == null) {
-                                genError = "このビルドでは AI 生成を使えません"
+                                genError = noAiMessage
                                 working = false
                                 return@launch
                             }
                             val spec = NotificationRuleGenerator(api).generate(text)
                             working = false
-                            if (spec == null) genError = "生成に失敗しました"
+                            if (spec == null) genError = failedMessage
                             else { editDraft = spec; aiText = null }
                         }
                     },
-                ) { Text(if (working) "生成中…" else "生成") }
+                ) { Text(stringResource(if (working) R.string.rules_ai_working else R.string.rules_ai_run)) }
             },
-            dismissButton = { TextButton(onClick = { aiText = null }) { Text("戻る") } },
+            dismissButton = { TextButton(onClick = { aiText = null }) { Text(stringResource(R.string.common_back)) } },
         )
     }
 }
@@ -233,47 +239,50 @@ private fun RuleEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("通知ルール") },
+        title = { Text(stringResource(R.string.rules_edit_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(value = name, onValueChange = { name = it },
-                    label = { Text("名前") }, singleLine = true,
+                    label = { Text(stringResource(R.string.timer_preset_name)) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(value = pkg, onValueChange = { pkg = it },
-                    label = { Text("対象アプリ (空=全アプリ)") }, singleLine = true,
+                    label = { Text(stringResource(R.string.rules_target_apps)) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(value = req, onValueChange = { req = it },
-                    label = { Text("必須キーワード (カンマ区切り)") }, singleLine = true,
+                    label = { Text(stringResource(R.string.rules_required_keywords)) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(value = any, onValueChange = { any = it },
-                    label = { Text("任意キーワード") }, singleLine = true,
+                    label = { Text(stringResource(R.string.rules_any_keywords)) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(value = exc, onValueChange = { exc = it },
-                    label = { Text("除外キーワード") }, singleLine = true,
+                    label = { Text(stringResource(R.string.rules_exclude_keywords)) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = startText,
                         onValueChange = { startText = it.take(5) },
-                        label = { Text("開始 HH:mm") }, singleLine = true,
+                        label = { Text(stringResource(R.string.rules_start_time)) }, singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
                     OutlinedTextField(
                         value = endText,
                         onValueChange = { endText = it.take(5) },
-                        label = { Text("終了 HH:mm") }, singleLine = true,
+                        label = { Text(stringResource(R.string.rules_end_time)) }, singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
                 }
                 Spacer(Modifier.height(8.dp))
                 // 曜日 (1=月..7=日)
                 Row {
-                    listOf("月", "火", "水", "木", "金", "土", "日").forEachIndexed { i, d ->
+                    listOf(
+                        DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,
+                        DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY,
+                    ).map { weekdayShort(it) }.forEachIndexed { i, d ->
                         val dow = i + 1
                         FilterChip(
                             selected = dow in days,
@@ -304,8 +313,8 @@ private fun RuleEditDialog(
                         ),
                     )
                 },
-            ) { Text("追加") }
+            ) { Text(stringResource(R.string.common_add)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("戻る") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_back)) } },
     )
 }

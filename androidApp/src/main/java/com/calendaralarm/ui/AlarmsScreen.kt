@@ -33,6 +33,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.calendaralarm.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,7 +71,7 @@ fun AlarmsScreen(
                 Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 58.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("アラーム", fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.alarms_title), fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
                 androidx.compose.material3.Surface(
                     onClick = { onEdit(0L) },
@@ -80,7 +82,7 @@ fun AlarmsScreen(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Default.Add,
-                            contentDescription = "アラーム追加",
+                            contentDescription = stringResource(R.string.alarms_add),
                             tint = MaterialTheme.colorScheme.onPrimary,
                         )
                     }
@@ -94,8 +96,11 @@ fun AlarmsScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
                 ) {
                     Text(
-                        "次のアラーム " + SimpleDateFormat("M/d(E) H:mm", Locale.JAPAN)
-                            .format(Date(next.triggerAtMillis)) + " " + next.title,
+                        stringResource(
+                            R.string.alarms_next_banner,
+                            SimpleDateFormat("M/d(E) H:mm", Locale.getDefault()).format(Date(next.triggerAtMillis)),
+                            next.title,
+                        ),
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
@@ -113,7 +118,7 @@ fun AlarmsScreen(
                         modifier = Modifier.size(40.dp),
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text("アラームなし", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.alarms_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -126,9 +131,9 @@ fun AlarmsScreen(
                     if (confirmDelete) {
                         androidx.compose.material3.AlertDialog(
                             onDismissRequest = { confirmDelete = false },
-                            title = { Text("アラームを削除") },
+                            title = { Text(stringResource(R.string.alarms_delete_title)) },
                             text = {
-                                Text("%d:%02d %s を削除?".format(alarm.hour, alarm.minute, alarm.label))
+                                Text(stringResource(R.string.alarms_delete_confirm, "%d:%02d".format(alarm.hour, alarm.minute), alarm.label))
                             },
                             confirmButton = {
                                 androidx.compose.material3.TextButton(
@@ -136,12 +141,12 @@ fun AlarmsScreen(
                                         confirmDelete = false
                                         scope.launch { repository.deleteStandaloneAlarm(alarm.id) }
                                     },
-                                ) { Text("削除") }
+                                ) { Text(stringResource(R.string.common_delete)) }
                             },
                             dismissButton = {
                                 androidx.compose.material3.TextButton(
                                     onClick = { confirmDelete = false },
-                                ) { Text("キャンセル") }
+                                ) { Text(stringResource(R.string.common_cancel)) }
                             },
                         )
                     }
@@ -220,7 +225,7 @@ private fun AlarmRow(
                             ),
                         ) {
                             Text(
-                                "休止 ${alarm.exceptions.size}",
+                                stringResource(R.string.alarms_skipped_count, alarm.exceptions.size),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
@@ -230,8 +235,10 @@ private fun AlarmRow(
                     }
                     nextInstance?.let {
                         Text(
-                            "次 " + SimpleDateFormat("H:mm", Locale.JAPAN)
-                                .format(Date(it.triggerAtMillis)),
+                            stringResource(
+                                R.string.alarms_next_short,
+                                SimpleDateFormat("H:mm", Locale.getDefault()).format(Date(it.triggerAtMillis)),
+                            ),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         )
@@ -243,7 +250,7 @@ private fun AlarmRow(
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "削除",
+                        contentDescription = stringResource(R.string.common_delete),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -252,28 +259,44 @@ private fun AlarmRow(
     }
 }
 
+/** 曜日の短い名前。日本語は「月」。月表示の「月」と同じ字なので、曜日は専用の文言を引く */
+@Composable
+internal fun weekdayShort(day: DayOfWeek): String = stringResource(
+    when (day) {
+        DayOfWeek.MONDAY -> R.string.weekday_short_monday
+        DayOfWeek.TUESDAY -> R.string.weekday_short_tuesday
+        DayOfWeek.WEDNESDAY -> R.string.weekday_short_wednesday
+        DayOfWeek.THURSDAY -> R.string.weekday_short_thursday
+        DayOfWeek.FRIDAY -> R.string.weekday_short_friday
+        DayOfWeek.SATURDAY -> R.string.weekday_short_saturday
+        else -> R.string.weekday_short_sunday
+    },
+)
+
+@Composable
 private fun repeatLabel(alarm: StandaloneAlarm): String =
     when (alarm.effectiveRepeatMode()) {
-        RepeatMode.ONCE -> "1回のみ"
+        RepeatMode.ONCE -> stringResource(R.string.repeat_once)
         RepeatMode.MONTHLY -> {
             val day = alarm.repeatAnchorMillis?.let {
                 Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.UTC).dayOfMonth
             }
-            if (day != null) "毎月${day}日" else "毎月"
+            if (day != null) stringResource(R.string.repeat_monthly_day, day) else stringResource(R.string.repeat_monthly)
         }
-        RepeatMode.INTERVAL_DAYS -> "${alarm.repeatInterval}日ごと"
-        RepeatMode.INTERVAL_WEEKS -> "${alarm.repeatInterval}週ごと"
-        RepeatMode.INTERVAL_MONTHS -> "${alarm.repeatInterval}ヶ月ごと"
+        RepeatMode.INTERVAL_DAYS -> stringResource(R.string.repeat_every_days, alarm.repeatInterval)
+        RepeatMode.INTERVAL_WEEKS -> stringResource(R.string.repeat_every_weeks, alarm.repeatInterval)
+        RepeatMode.INTERVAL_MONTHS -> stringResource(R.string.repeat_every_months, alarm.repeatInterval)
         RepeatMode.WEEKLY -> {
             // 曜日空のWEEKLYはONCEとして鳴る
             if (alarm.daysOfWeek.isEmpty()) {
-                "1回のみ"
+                stringResource(R.string.repeat_once)
             } else {
                 val order = listOf(
                     DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
                     DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY,
                 )
-                "毎週 " + order.filter { it in alarm.daysOfWeek }.joinToString("") { it.jaShort() }
+                val days = order.filter { it in alarm.daysOfWeek }.map { weekdayShort(it) }
+                stringResource(R.string.repeat_weekly_days, days.joinToString(stringResource(R.string.weekday_separator)))
             }
         }
     }
