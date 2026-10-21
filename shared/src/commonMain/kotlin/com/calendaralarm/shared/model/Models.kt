@@ -64,7 +64,16 @@ data class InviteFilter(
  * (Googleカレンダーの誕生日はタイトルに「誕生日」または"birthday"を含む前提)
  */
 @Serializable
-enum class EventType { BIRTHDAY, ABSENCE, WORKPLACE, TASK, EVENT }
+/** 予定の種類。FOCUS_TIME は Google カレンダーの「サイレントモード」(focusTime)。 */
+enum class EventType { BIRTHDAY, ABSENCE, WORKPLACE, FOCUS_TIME, TASK, EVENT }
+
+/**
+ * 予定の空き状況 (Google の表示では「予定あり／予定なし」)。
+ * Android は Instances.AVAILABILITY、iOS は EKEvent.availability から入れる。
+ * TENTATIVE (仮) は Android の定義どおり予定ありとして扱う。取れない時は UNKNOWN (予定ありと同じ扱い)
+ */
+@Serializable
+enum class Availability { BUSY, FREE, TENTATIVE, UNKNOWN }
 
 /** タイトル文字からイベント種別を分類する。判定順 = 先勝ち (「誕生日」最優先)。 */
 fun classifyEventType(title: String): EventType {
@@ -74,6 +83,7 @@ fun classifyEventType(title: String): EventType {
         hit("誕生日", "バースデー", "birthday") -> EventType.BIRTHDAY
         hit("不在", "休暇", "休み", "有休", "欠勤", "absence", "absent", "away", "out of office") -> EventType.ABSENCE
         hit("勤務場所", "出社", "在宅勤務", "リモートワーク", "workplace", "work location", "office") -> EventType.WORKPLACE
+        hit("サイレントモード", "フォーカスタイム", "集中タイム", "focus time") -> EventType.FOCUS_TIME
         hit("タスク", "todo", "to-do", "task") -> EventType.TASK
         else -> EventType.EVENT
     }
@@ -85,7 +95,8 @@ fun googleEventTypeToEventType(googleType: String?): EventType? = when (googleTy
     "outOfOffice" -> EventType.ABSENCE
     "workingLocation" -> EventType.WORKPLACE
     "task" -> EventType.TASK
-    "default", "focusTime", "fromGmail" -> EventType.EVENT
+    "focusTime" -> EventType.FOCUS_TIME
+    "default", "fromGmail" -> EventType.EVENT
     else -> null
 }
 
@@ -96,22 +107,34 @@ fun googleEventTypeToEventType(googleType: String?): EventType? = when (googleTy
 fun resolveEventType(event: CalendarEvent): EventType =
     googleEventTypeToEventType(event.googleEventType) ?: classifyEventType(event.title)
 
-/** イベント種別ごとの鳴動ON/OFF (元アプリ仕様)。false の種別は鳴らさない。 */
+/**
+ * 予定の種類ごとと「予定なし」の、鳴らす・鳴らさない (#79)。false のものは鳴らさない。
+ * 既定値は「知らせる意味がある予定だけ鳴らす」: 不在・サイレントモード・勤務場所・誕生日は鳴らさない。
+ * 予定なし (free) は既定で鳴らす。黙って鳴らなくなるのが一番悪い失敗だから (仕様書 §1)
+ */
 @Serializable
 data class EventTypeFilter(
-    val birthday: Boolean = true,
-    val absence: Boolean = true,
-    val workplace: Boolean = true,
+    val birthday: Boolean = false,
+    val absence: Boolean = false,
+    val workplace: Boolean = false,
+    val focusTime: Boolean = false,
     val task: Boolean = true,
     val event: Boolean = true,
+    /** 「予定なし」(free) の予定を鳴らすか。 */
+    val free: Boolean = true,
 ) {
     fun allows(type: EventType): Boolean = when (type) {
         EventType.BIRTHDAY -> birthday
         EventType.ABSENCE -> absence
         EventType.WORKPLACE -> workplace
+        EventType.FOCUS_TIME -> focusTime
         EventType.TASK -> task
         EventType.EVENT -> event
     }
+
+    /** 種類と予定あり／なしの両方で判定する。判定の順番は 種類 → 予定あり／なし。 */
+    fun allows(event: CalendarEvent): Boolean =
+        allows(resolveEventType(event)) && (event.availability != Availability.FREE || free)
 }
 
 /** 端末カレンダープロバイダが返すカレンダー。 */
@@ -145,6 +168,8 @@ data class CalendarEvent(
     val iCalUID: String? = null,
     /** Google Calendar API の eventType 生値。連携済みアカウントで取得できた時のみ入る。 */
     val googleEventType: String? = null,
+    /** 予定あり／予定なし。取れない時は UNKNOWN。 */
+    val availability: Availability = Availability.UNKNOWN,
 ) {
     /** 同一イベントの複数回を区別するため、開始時刻込みの安定キーを返す。 */
     val instanceKey: String get() = "$calendarId:$id:$startMillis"

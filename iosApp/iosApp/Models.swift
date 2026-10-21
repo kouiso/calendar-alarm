@@ -28,18 +28,24 @@ struct TitleCodeSettings: Codable, Hashable {
     var applyToReminders: Bool = true
 }
 
-/// Models.kt EventType (誕生日/不在/勤務場所/タスク/予定)。
+/// Models.kt EventType (誕生日/不在/勤務場所/サイレントモード/タスク/予定)。
 enum EventType: String, Codable, CaseIterable {
-    case birthday = "BIRTHDAY", absence = "ABSENCE", workplace = "WORKPLACE", task = "TASK", event = "EVENT"
+    case birthday = "BIRTHDAY", absence = "ABSENCE", workplace = "WORKPLACE", focusTime = "FOCUS_TIME", task = "TASK", event = "EVENT"
     var label: String {
         switch self {
         case .birthday: return "誕生日"
         case .absence: return "不在"
         case .workplace: return "勤務場所"
+        case .focusTime: return "サイレントモード"
         case .task: return "タスク"
         case .event: return "予定"
         }
     }
+}
+
+/// Models.kt Availability (予定あり／予定なし)。仮 (tentative) は予定ありとして扱う。
+enum Availability: String, Codable {
+    case busy = "BUSY", free = "FREE", tentative = "TENTATIVE", unknown = "UNKNOWN"
 }
 
 /// Models.kt classifyEventType と同じ判定順・語彙 (タイトル文字列による分類)。
@@ -49,6 +55,7 @@ func classifyEventType(_ title: String) -> EventType {
     if hit(["誕生日","バースデー","birthday"]) { return .birthday }
     if hit(["不在","休暇","休み","有休","欠勤","absence","absent","away","out of office"]) { return .absence }
     if hit(["勤務場所","出社","在宅勤務","リモートワーク","workplace","work location","office"]) { return .workplace }
+    if hit(["サイレントモード","フォーカスタイム","集中タイム","focus time"]) { return .focusTime }
     if hit(["タスク","todo","to-do","task"]) { return .task }
     return .event
 }
@@ -60,7 +67,8 @@ func googleEventTypeToEventType(_ googleType: String?) -> EventType? {
     case "outOfOffice": return .absence
     case "workingLocation": return .workplace
     case "task": return .task
-    case "default", "focusTime", "fromGmail": return .event
+    case "focusTime": return .focusTime
+    case "default", "fromGmail": return .event
     default: return nil
     }
 }
@@ -70,23 +78,73 @@ func resolveEventType(_ ev: CalendarEventDTO) -> EventType {
     googleEventTypeToEventType(ev.googleEventType) ?? classifyEventType(ev.title)
 }
 
-/// Models.kt EventTypeFilter (false の種別は鳴らさない)。
+/// Models.kt EventTypeFilter (#79)。false のものは鳴らさない。既定値は Kotlin 側と同じ。
 struct EventTypeFilter: Codable, Hashable {
-    var birthday: Bool = true
-    var absence: Bool = true
-    var workplace: Bool = true
+    var birthday: Bool = false
+    var absence: Bool = false
+    var workplace: Bool = false
+    var focusTime: Bool = false
     var task: Bool = true
     var event: Bool = true
+    /// 「予定なし」(free) の予定を鳴らすか
+    var free: Bool = true
+
+    init() {}
+
+    init(birthday: Bool, absence: Bool, workplace: Bool, focusTime: Bool, task: Bool, event: Bool, free: Bool) {
+        self.birthday = birthday; self.absence = absence; self.workplace = workplace
+        self.focusTime = focusTime; self.task = task; self.event = event; self.free = free
+    }
+
+    /// 保存済みの旧版の値に新しい項目が無くても読めるよう、項目ごとに読む。
+    /// 旧版の既定 (5 種類すべてオン) のままの人は一度も触っていないとみなして新しい既定値にする。
+    /// 触っていた人の選択は保つ。サイレントモードは旧版では「予定」扱いだったので「予定」と同じ値にし、
+    /// 予定なしは旧版では常に鳴っていたので鳴らす
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let b = try c.decodeIfPresent(Bool.self, forKey: .birthday)
+        let a = try c.decodeIfPresent(Bool.self, forKey: .absence)
+        let w = try c.decodeIfPresent(Bool.self, forKey: .workplace)
+        let t = try c.decodeIfPresent(Bool.self, forKey: .task)
+        let e = try c.decodeIfPresent(Bool.self, forKey: .event)
+        let f = try c.decodeIfPresent(Bool.self, forKey: .focusTime)
+        let fr = try c.decodeIfPresent(Bool.self, forKey: .free)
+        let legacy = f == nil && fr == nil
+        if legacy && [b, a, w, t, e].allSatisfy({ $0 ?? true }) {
+            self.init()
+            return
+        }
+        let d = EventTypeFilter()
+        self.init(
+            birthday: b ?? d.birthday, absence: a ?? d.absence, workplace: w ?? d.workplace,
+            focusTime: f ?? (legacy ? (e ?? true) : d.focusTime),
+            task: t ?? d.task, event: e ?? d.event, free: fr ?? true
+        )
+    }
 
     func allows(_ type: EventType) -> Bool {
         switch type {
         case .birthday: return birthday
         case .absence: return absence
         case .workplace: return workplace
+        case .focusTime: return focusTime
         case .task: return task
         case .event: return event
         }
     }
+
+    /// 種類と予定あり／なしの両方で判定する (順番は 種類 → 予定あり／なし)
+    func allows(_ ev: CalendarEventDTO) -> Bool {
+        allows(resolveEventType(ev)) && (ev.availability != Availability.free.rawValue || free)
+    }
+}
+
+/// Models.kt AlarmExpander.passesEventFilters と同じ判定。予定一覧の表示が予約と一致するよう両方で使う (#79)。
+/// 順番: 予定一つへの個別指定 → 招待 → 種類 → 予定あり／なし
+func passesEventFilters(_ ev: CalendarEventDTO, _ ov: EventOverrideDTO?, _ invite: InviteFilter, _ types: EventTypeFilter) -> Bool {
+    if ov?.action == EventAction.mute.rawValue { return false }
+    if ov?.action == EventAction.alarm.rawValue { return true }
+    return invite.allows(ev.inviteStatus) && types.allows(ev)
 }
 
 /// Models.kt InviteFilter。
@@ -125,7 +183,10 @@ struct CalendarEventDTO: Codable, Identifiable, Hashable {
     /// Google Calendar API の iCalUID 照合キー。
     var iCalUID: String? = nil
     /// Google Calendar API の eventType 生値 (連携取得できた時のみ)。
+    /// iOS では連絡先の誕生日カレンダーの予定に "birthday" を入れる (EKCalendar.type で確実に分かるため)
     var googleEventType: String? = nil
+    /// 予定あり／なし (Availability の生値)。取れない時は nil (= 不明)
+    var availability: String? = nil
 
     /// Models.kt の instanceKey と同じ規則 ("calendarId:id:startMillis")
     var instanceKey: String { "\(calendarId):\(id):\(startMillis)" }

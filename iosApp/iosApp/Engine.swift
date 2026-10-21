@@ -32,6 +32,12 @@ final class Engine: ObservableObject {
 
     var usesRealAlarms: Bool { scheduler.usesRealAlarms }
     var schedulerAuthorized: Bool { scheduler.authorizationGranted }
+    var schedulerUndetermined: Bool { scheduler.authorizationUndetermined }
+
+    /// アラーム (AlarmKit、iOS 26 未満は通知) の許可だけを頼む。権限画面が1項目ずつ頼むのに使う
+    func requestSchedulerAuthorization() async {
+        await scheduler.requestAuthorization()
+    }
 
     func authorizeScheduler() async {
         await scheduler.requestAuthorization()

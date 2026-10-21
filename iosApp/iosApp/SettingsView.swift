@@ -13,8 +13,6 @@ struct SettingsView: View {
     @State private var showCodes = false
     @State private var photoItem: PhotosPickerItem? = nil
     @State private var weatherLocDraft = ""
-    @State private var apiKeyDraft = ""
-    @State private var modelDraft = ""
 
     private let actionOptions: [(EventAction, String)] =
         [(.alarm, "アラーム"), (.notify, "通知"), (.mute, "OFF")]
@@ -36,11 +34,18 @@ struct SettingsView: View {
                                     store.setDefaultMinutes(m); resync("default")
                                 } label: { m in m == 0 ? "開始時" : "\(m)分前" }
                             }
+                            PreviewLine(sample: "9:00 の予定",
+                                        result: "\(PreviewClock.clock(9 * 60 - store.state.defaultMinutesBefore)) に鳴る",
+                                        // 「カレンダーの通知設定を使う」を切ると通知の時刻では鳴らないので、注記も出さない
+                                        note: store.state.importEventReminders ? "＋ カレンダーの通知（重なれば1回）" : nil)
                             IconRow("zzz") {
                                 Chips(items: snoozeOptions, current: store.state.defaultSnoozeMinutes) { m in
                                     store.setDefaultSnooze(m); resync("default")
                                 } label: { "\($0)分" }
                             }
+                            PreviewLine(sample: "6:30 に鳴ってスヌーズ",
+                                        result: "\(PreviewClock.clock(6 * 60 + 30 + store.state.defaultSnoozeMinutes)) にもう一度",
+                                        note: nil)
                             IconRow("sun.max.fill") {
                                 Toggle("", isOn: Binding(get: { store.state.weatherEnabled },
                                                          set: { store.setWeatherEnabled($0) })).labelsHidden()
@@ -144,34 +149,6 @@ struct SettingsView: View {
                     }
                     .onAppear {
                         weatherLocDraft = store.state.weatherLocation
-                        apiKeyDraft = store.state.openRouterApiKey ?? ""
-                        modelDraft = store.state.openRouterModel
-                    }
-
-                    // AI カード: OpenRouter (メール→予定・通知ルール生成に使用)
-                    Card {
-                        VStack(spacing: 14) {
-                            IconRow("envelope.badge.fill") {
-                                SecureField("OpenRouter キー", text: $apiKeyDraft)
-                                    .font(NightTheme.font(14))
-                                    .textFieldStyle(.roundedBorder)
-                                Button {
-                                    store.setOpenRouterApiKey(apiKeyDraft)
-                                } label: {
-                                    Text("保存").font(NightTheme.font(13)).foregroundStyle(NightTheme.indigo)
-                                }
-                            }
-                            IconRow("brain") {
-                                TextField("モデル", text: $modelDraft)
-                                    .font(NightTheme.font(14))
-                                    .textFieldStyle(.roundedBorder)
-                                Button {
-                                    store.setOpenRouterModel(modelDraft)
-                                } label: {
-                                    Text("保存").font(NightTheme.font(13)).foregroundStyle(NightTheme.indigo)
-                                }
-                            }
-                        }
                     }
 
                     // 予定ルールカード (既定アクション/タイトルコード/招待フィルタ/リマインダー取込)
@@ -224,14 +201,24 @@ struct SettingsView: View {
                                         }
                                     })
                             }
-                            // イベント種別フィルタ (誕生日/不在/勤務場所/タスク/予定)
-                            IconRow("square.grid.2x2.fill") {
-                                let f = store.state.eventTypeFilter
-                                MultiChips(
-                                    items: EventType.allCases,
-                                    isOn: { t in f.allows(t) },
-                                    onToggle: { t in store.toggleEventType(t); resync("event type filter") },
-                                    label: { t in t.label })
+                            // 鳴らす予定の種類と「予定なし」を一か所でまとめて切り替える (#79)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("鳴らす予定の種類").font(NightTheme.font(13, weight: .semibold))
+                                // iOS は予定の種類を OS から取れない。誕生日カレンダー以外はタイトルから推定する
+                                Text("種類は予定のタイトルから推定します（誕生日カレンダーの予定は誕生日として扱います）。")
+                                    .font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                ForEach([EventType.event, .task, .absence, .focusTime, .workplace, .birthday], id: \.self) { t in
+                                    Toggle(t.label, isOn: Binding(
+                                        get: { store.state.eventTypeFilter.allows(t) },
+                                        set: { _ in store.toggleEventType(t); resync("event type filter") }
+                                    ))
+                                    .font(NightTheme.font(13))
+                                }
+                                Toggle("「予定なし」にした予定", isOn: Binding(
+                                    get: { store.state.eventTypeFilter.free },
+                                    set: { v in store.setRingFree(v); resync("free events") }
+                                ))
+                                .font(NightTheme.font(13))
                             }
                             // 予定側リマインダー取込 (既定ON: 元カレンダー通知の「何分前」で鳴らす)
                             IconRow("bell.badge.fill") {
@@ -355,15 +342,21 @@ struct SettingsView: View {
                         }
                     }
                 }
+                // 権限画面はカードの開閉に関係なく入れるようにする。通知だけ断られている時も直せるように
+                Divider().padding(.vertical, 8)
+                NavigationLink {
+                    PermissionsView()
+                } label: {
+                    HStack {
+                        Image(systemName: "checkmark.shield").foregroundStyle(NightTheme.indigo)
+                        Text("権限画面を開く").font(NightTheme.font(13))
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
+                    }
+                }
                 if showPerms {
                     Divider().padding(.vertical, 8)
                     VStack(spacing: 10) {
-                        if missingPerms.contains("calendar") {
-                            permButton("カレンダー", "calendar")
-                        }
-                        if missingPerms.contains("alarm") {
-                            permButton("アラーム", "bell.badge")
-                        }
                         // 鳴らない時の最終確認: 10秒後に実際に鳴らして経路全体を検証
                         Button {
                             Task {
@@ -378,20 +371,6 @@ struct SettingsView: View {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    private func permButton(_ name: String, _ icon: String) -> some View {
-        Button {
-            if icon == "calendar" { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) }
-            else { Task { await engine.authorizeScheduler() } }
-        } label: {
-            HStack {
-                Image(systemName: icon).foregroundStyle(NightTheme.indigo)
-                Text(name).font(NightTheme.font(13))
-                Spacer()
-                Image(systemName: "arrow.right").font(.system(size: 11)).foregroundStyle(.tertiary)
             }
         }
     }
@@ -534,5 +513,32 @@ struct MultiChips<T: Hashable>: View {
                 }.buttonStyle(.plain)
             }
         }
+    }
+}
+
+/// 設定の選択肢の下に、選んだ結果を例の時刻で見せる1行 (局長決定 2026-10-17 の5)。
+/// 計算は Android と同じ shared の SettingsPreview と揃える。
+struct PreviewLine: View {
+    let sample: String
+    let result: String
+    let note: String?
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(sample).foregroundStyle(.secondary)
+            Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(.secondary)
+            Text(result).fontWeight(.semibold).foregroundStyle(NightTheme.indigo)
+            if let note { Text(note).font(NightTheme.font(10)).foregroundStyle(.secondary) }
+            Spacer(minLength: 0)
+        }
+        .font(NightTheme.font(12))
+        .padding(.leading, 34)
+    }
+}
+
+enum PreviewClock {
+    /// 分を 0:00〜23:59 に収めて "8:50" の形にする。日をまたげば前日/翌日の時刻。
+    static func clock(_ minuteOfDay: Int) -> String {
+        let m = ((minuteOfDay % 1440) + 1440) % 1440
+        return "\(m / 60):" + String(format: "%02d", m % 60)
     }
 }

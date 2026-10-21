@@ -15,7 +15,8 @@ import com.calendaralarm.shared.model.TitleCodeSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore by preferencesDataStore(name = "settings")
+// テストから旧キーの残存を確かめるため internal にしている
+internal val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
 /** アプリ全体設定。DataStore Preferences で保持する。 */
 class SettingsRepository(private val context: Context) {
@@ -36,8 +37,6 @@ class SettingsRepository(private val context: Context) {
         val defaultSnoozeMinutes: Int = 10,
         val weatherEnabled: Boolean = true,
         val onboardingDone: Boolean = false,
-        /** 「他のアプリの上に表示」許可の一度きり案内を出したか (更新ユーザー向け)。 */
-        val overlayPromptShown: Boolean = false,
         /** 既定の開始時アクション。 */
         val defaultStartAction: EventAction = EventAction.ALARM,
         /** 既定のリマインダーアクション。 */
@@ -83,23 +82,18 @@ class SettingsRepository(private val context: Context) {
         val showNextAlarmAfterDismiss: Boolean = false,
         /** タイマープリセット。 */
         val timerPresets: List<TimerPreset> = DEFAULT_TIMER_PRESETS,
-        /** OpenRouter APIキー (AI機能用。ローカル入力)。 */
-        val openRouterApiKey: String? = null,
-        /** OpenRouter のモデル指定。 */
-        val openRouterModel: String = "openai/gpt-4.1-mini",
         /** 通知アラーム (他アプリ通知→アラーム) の有効フラグ */
         val notificationAlarmEnabled: Boolean = false,
         /** 通知アラームのルール一覧 */
         val notificationRules: List<com.calendaralarm.shared.model.NotificationRuleSpec> = emptyList(),
     )
 
-    val flow: Flow<Settings> = context.dataStore.data.map { p ->
+    val flow: Flow<Settings> = context.settingsDataStore.data.map { p ->
         Settings(
             defaultMinutesBefore = p[KEY_MINUTES] ?: 0,
             defaultSnoozeMinutes = p[KEY_SNOOZE] ?: 10,
             weatherEnabled = p[KEY_WEATHER] ?: true,
             onboardingDone = p[KEY_ONBOARDED] ?: false,
-            overlayPromptShown = p[KEY_OVERLAY_PROMPTED] ?: false,
             defaultStartAction = p[KEY_DEF_START_ACTION]
                 ?.let { runCatching { EventAction.valueOf(it) }.getOrNull() } ?: EventAction.ALARM,
             defaultReminderAction = p[KEY_DEF_REM_ACTION]
@@ -116,13 +110,7 @@ class SettingsRepository(private val context: Context) {
                 needsAction = (p[KEY_INVITE_MASK] ?: 7) and 4 != 0,
                 declined = (p[KEY_INVITE_MASK] ?: 7) and 8 != 0,
             ),
-            eventTypeFilter = EventTypeFilter(
-                birthday = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 1 != 0,
-                absence = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 2 != 0,
-                workplace = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 4 != 0,
-                task = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 8 != 0,
-                event = (p[KEY_EVENT_TYPE_MASK] ?: 31) and 16 != 0,
-            ),
+            eventTypeFilter = eventTypeFilterOf(p),
             googleAccountEmail = p[KEY_GOOGLE_ACCOUNT],
             importEventReminders = p[KEY_IMPORT_REMINDERS] ?: true,
             snoozePresets = (p[KEY_SNOOZE_PRESETS] ?: "5,10,15,30,45,60")
@@ -156,8 +144,6 @@ class SettingsRepository(private val context: Context) {
                         }
                     }
                 }.ifEmpty { DEFAULT_TIMER_PRESETS },
-            openRouterApiKey = p[KEY_OPENROUTER_KEY]?.ifBlank { null },
-            openRouterModel = p[KEY_OPENROUTER_MODEL] ?: "openai/gpt-4.1-mini",
             notificationAlarmEnabled = p[KEY_NOTIF_ALARM] ?: false,
             notificationRules = runCatching {
                 rulesJson.decodeFromString<List<com.calendaralarm.shared.model.NotificationRuleSpec>>(
@@ -175,7 +161,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setDefaultSnoozeMinutes(v: Int) = edit { it[KEY_SNOOZE] = v }
     suspend fun setWeatherEnabled(v: Boolean) = edit { it[KEY_WEATHER] = v }
     suspend fun setOnboardingDone(v: Boolean) = edit { it[KEY_ONBOARDED] = v }
-    suspend fun setOverlayPromptShown(v: Boolean) = edit { it[KEY_OVERLAY_PROMPTED] = v }
     suspend fun setDefaultStartAction(v: EventAction) = edit { it[KEY_DEF_START_ACTION] = v.name }
     suspend fun setDefaultReminderAction(v: EventAction) = edit { it[KEY_DEF_REM_ACTION] = v.name }
     suspend fun setTitleCodes(v: TitleCodeSettings) = edit {
@@ -204,14 +189,21 @@ class SettingsRepository(private val context: Context) {
         p[KEY_INVITE_MASK] = (p[KEY_INVITE_MASK] ?: 7) xor bit
     }
     suspend fun toggleEventType(type: EventType) = edit { p ->
-        val bit = when (type) {
-            EventType.BIRTHDAY -> 1
-            EventType.ABSENCE -> 2
-            EventType.WORKPLACE -> 4
-            EventType.TASK -> 8
-            EventType.EVENT -> 16
+        val current = eventTypeFilterOf(p)
+        // 一度でも触ったら保存キーを全部書き、以後は既定値の変更に影響されないようにする
+        p[KEY_EVENT_TYPE_FOCUS] = if (type == EventType.FOCUS_TIME) !current.focusTime else current.focusTime
+        p[KEY_RING_FREE] = current.free
+        val bit = typeBit(type) ?: run {
+            p[KEY_EVENT_TYPE_MASK] = maskOf(current)
+            return@edit
         }
-        p[KEY_EVENT_TYPE_MASK] = (p[KEY_EVENT_TYPE_MASK] ?: 31) xor bit
+        p[KEY_EVENT_TYPE_MASK] = maskOf(current) xor bit
+    }
+    suspend fun setRingFree(v: Boolean) = edit { p ->
+        val current = eventTypeFilterOf(p)
+        p[KEY_EVENT_TYPE_MASK] = maskOf(current)
+        p[KEY_EVENT_TYPE_FOCUS] = current.focusTime
+        p[KEY_RING_FREE] = v
     }
     suspend fun setImportEventReminders(v: Boolean) = edit { it[KEY_IMPORT_REMINDERS] = v }
     suspend fun setSnoozePresets(v: List<Int>) = edit { it[KEY_SNOOZE_PRESETS] = v.joinToString(",") }
@@ -241,10 +233,11 @@ class SettingsRepository(private val context: Context) {
         // 旧版と同じキーで秒を保持。読み取り側は `sec:` 接頭辞で新形式と判別する
         it[KEY_TIMER_PRESETS] = v.joinToString(";") { p -> "${p.label}|sec:${p.seconds}" }
     }
-    suspend fun setOpenRouterApiKey(v: String?) = edit {
-        if (v.isNullOrBlank()) it.remove(KEY_OPENROUTER_KEY) else it[KEY_OPENROUTER_KEY] = v
+    /** 入力欄を廃止した旧版で保存されたキーを端末に残さない。 */
+    suspend fun dropLegacyAiKey() = edit {
+        it.remove(KEY_OPENROUTER_KEY)
+        it.remove(KEY_OPENROUTER_MODEL)
     }
-    suspend fun setOpenRouterModel(v: String) = edit { it[KEY_OPENROUTER_MODEL] = v }
     suspend fun setNotificationAlarmEnabled(v: Boolean) = edit { it[KEY_NOTIF_ALARM] = v }
     suspend fun setNotificationRules(
         v: List<com.calendaralarm.shared.model.NotificationRuleSpec>,
@@ -258,15 +251,14 @@ class SettingsRepository(private val context: Context) {
     }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
-        context.dataStore.edit(block)
+        context.settingsDataStore.edit(block)
     }
 
-    private companion object {
+    internal companion object {
         val KEY_MINUTES = intPreferencesKey("default_minutes_before")
         val KEY_SNOOZE = intPreferencesKey("default_snooze_minutes")
         val KEY_WEATHER = booleanPreferencesKey("weather_enabled")
         val KEY_ONBOARDED = booleanPreferencesKey("onboarding_done")
-        val KEY_OVERLAY_PROMPTED = booleanPreferencesKey("overlay_prompt_shown")
         val KEY_DEF_START_ACTION = stringPreferencesKey("default_start_action")
         val KEY_DEF_REM_ACTION = stringPreferencesKey("default_reminder_action")
         val KEY_ALWAYS_CODES = stringPreferencesKey("title_always_codes")
@@ -274,6 +266,47 @@ class SettingsRepository(private val context: Context) {
         val KEY_CODE_SCOPE = intPreferencesKey("title_code_scope")
         val KEY_INVITE_MASK = intPreferencesKey("invite_mask")
         val KEY_EVENT_TYPE_MASK = intPreferencesKey("event_type_mask")
+        // サイレントモードと予定なしは、旧版の event_type_mask と別のキーにする (#79)
+        val KEY_EVENT_TYPE_FOCUS = booleanPreferencesKey("event_type_focus_time")
+        val KEY_RING_FREE = booleanPreferencesKey("ring_free_events")
+
+        private fun typeBit(type: EventType): Int? = when (type) {
+            EventType.BIRTHDAY -> 1
+            EventType.ABSENCE -> 2
+            EventType.WORKPLACE -> 4
+            EventType.TASK -> 8
+            EventType.EVENT -> 16
+            EventType.FOCUS_TIME -> null
+        }
+
+        private fun maskOf(f: EventTypeFilter): Int =
+            listOf(
+                f.birthday to 1, f.absence to 2, f.workplace to 4, f.task to 8, f.event to 16,
+            ).sumOf { (on, bit) -> if (on) bit else 0 }
+
+        /**
+         * 保存値から種類ごとの設定を作る (#79)。
+         * 一度も触っていない人 (旧キーが無い) は新しい既定値。
+         * 前から設定を変えていた人 (旧キーがある) はその選択を保つ。サイレントモードは旧版では「予定」扱いだったので、
+         * 新しいキーが無ければ「予定」と同じ値にする。予定なしは旧版では常に鳴っていたので、無ければ鳴らす
+         */
+        internal fun eventTypeFilterOf(p: androidx.datastore.preferences.core.Preferences): EventTypeFilter {
+            val defaults = EventTypeFilter()
+            val mask = p[KEY_EVENT_TYPE_MASK] ?: return defaults.copy(
+                focusTime = p[KEY_EVENT_TYPE_FOCUS] ?: defaults.focusTime,
+                free = p[KEY_RING_FREE] ?: defaults.free,
+            )
+            val event = mask and 16 != 0
+            return EventTypeFilter(
+                birthday = mask and 1 != 0,
+                absence = mask and 2 != 0,
+                workplace = mask and 4 != 0,
+                task = mask and 8 != 0,
+                event = event,
+                focusTime = p[KEY_EVENT_TYPE_FOCUS] ?: event,
+                free = p[KEY_RING_FREE] ?: true,
+            )
+        }
         val KEY_GOOGLE_ACCOUNT = stringPreferencesKey("google_account_email")
         val KEY_IMPORT_REMINDERS = booleanPreferencesKey("import_event_reminders")
         val KEY_SNOOZE_PRESETS = stringPreferencesKey("snooze_presets")

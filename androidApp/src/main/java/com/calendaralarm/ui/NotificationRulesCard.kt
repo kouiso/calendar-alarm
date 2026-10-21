@@ -41,13 +41,13 @@ import androidx.core.app.NotificationManagerCompat
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.engine.NotificationRuleTemplates
 import com.calendaralarm.shared.ai.NotificationRuleGenerator
-import com.calendaralarm.shared.ai.OpenRouterApi
+import com.calendaralarm.ai.AiConfig
 import com.calendaralarm.shared.model.NotificationRuleSpec
 import kotlinx.coroutines.launch
 
 /**
  * 通知アラームの設定カード: 有効化・権限誘導・ルール一覧・追加
- * (手動/テンプレート/AI生成の3経路。元アプリと同じ導線)。
+ * (手動/テンプレート/AI生成の3経路。元アプリと同じ導線。AI はキーを渡したビルドだけ)。
  */
 @Composable
 fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepository.Settings) {
@@ -121,8 +121,10 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                 TextButton(onClick = { editDraft = NotificationRuleSpec(name = "") }) {
                     Text("＋ルール")
                 }
-                TextButton(onClick = { aiText = "" }) {
-                    Text("AI生成")
+                if (AiConfig.available) {
+                    TextButton(onClick = { aiText = "" }) {
+                        Text("AI生成")
+                    }
                 }
             }
             // テンプレート (横スクロール相当に複数行で表示)
@@ -184,15 +186,13 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                     onClick = {
                         working = true
                         scope.launch {
-                            val key = prefs.openRouterApiKey
-                            if (key.isNullOrBlank()) {
-                                genError = "OpenRouter キーが未設定です"
+                            val api = AiConfig.api()
+                            if (api == null) {
+                                genError = "このビルドでは AI 生成を使えません"
                                 working = false
                                 return@launch
                             }
-                            val spec = NotificationRuleGenerator(
-                                OpenRouterApi(apiKey = key, model = prefs.openRouterModel),
-                            ).generate(text)
+                            val spec = NotificationRuleGenerator(api).generate(text)
                             working = false
                             if (spec == null) genError = "生成に失敗しました"
                             else { editDraft = spec; aiText = null }

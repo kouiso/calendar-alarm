@@ -17,6 +17,12 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // AI のキーは利用者に入力させず、ビルドする側が渡す (局長決定 2026-10-17 で入力欄を廃止)。
+        // 渡さないビルドでは AI の入口を出さない
+        val openRouterKey = providers.gradleProperty("openrouterApiKey")
+            .orElse(providers.environmentVariable("OPENROUTER_API_KEY"))
+            .getOrElse("")
+        buildConfigField("String", "OPENROUTER_API_KEY", "\"${openRouterKey.replace("\"", "")}\"")
     }
 
     buildTypes {
@@ -33,6 +39,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     testOptions {

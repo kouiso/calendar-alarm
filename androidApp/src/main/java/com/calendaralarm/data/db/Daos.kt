@@ -46,11 +46,13 @@ interface ScheduledInstanceDao {
      * アラームが無鳴動で終わる。トランザクションが丸ごと戻った場合は先行が
      * FIRED のまま残るので、復旧は先行を再鳴動する (無鳴動より安全側)。
      */
-    @Transaction
-    suspend fun supersede(predecessorId: String, successorId: String): Int {
-        setFiredIfPending(successorId)
-        return setDismissedIfLive(predecessorId)
-    }
+    /** 鳴動中だった行 (FIRED) だけを鳴動待ち (PENDING) に戻す。停止・スヌーズ済みの終端は戻さない (更新行数を返す)。 */
+    @Query("UPDATE scheduled_instances SET state = 'PENDING' WHERE id = :id AND state = 'FIRED'")
+    suspend fun setPendingIfFired(id: String): Int
+
+    /** 鳴ったが片付いていない行 (FIRED)。途中で途切れた鳴動の鳴らし直しに使う。 */
+    @Query("SELECT * FROM scheduled_instances WHERE state = 'FIRED' AND triggerAtMillis > :since AND triggerAtMillis <= :now ORDER BY triggerAtMillis ASC")
+    suspend fun firedBetween(since: Long, now: Long): List<ScheduledInstanceEntity>
 
     /** 鳴動猶予内の最新 FIRED 行。鳴動中プロセスキル後の再起動が拾う。 */
     @Query("SELECT * FROM scheduled_instances WHERE state = 'FIRED' AND triggerAtMillis > :since ORDER BY triggerAtMillis DESC LIMIT 1")
