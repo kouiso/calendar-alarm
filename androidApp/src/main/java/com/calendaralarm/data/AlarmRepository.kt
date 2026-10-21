@@ -136,6 +136,10 @@ class AlarmRepository(
 
     fun auditFlow(limit: Int = 100) = db.auditLog().recentFlow(limit)
 
+    /** 直近24時間に鳴らせなかった予約の件数 (予定画面と設定の「鳴動の状態」用) */
+    fun recentMissedFlow(nowMillis: Long = Clock.System.now().toEpochMilliseconds()): Flow<Int> =
+        db.scheduledInstances().missedSinceFlow(nowMillis - com.calendaralarm.shared.logic.RingStatus.MISSED_WINDOW_MILLIS)
+
     /** アジェンダ画面用: イベント + 有効な鳴動ルールと解決済みアクション。 */
     data class AgendaItem(
         val event: com.calendaralarm.shared.model.CalendarEvent,

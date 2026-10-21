@@ -118,8 +118,10 @@ struct AgendaView: View {
                     calendarColor: cal?.color ?? 0xFF888888,
                     // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
                     // 予約の展開と同じ判定を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
+                    // 行のスイッチが実際の予約と食い違わないよう、開始とリマインダーの解決後の動作まで見る
                     muted: !rule.enabled
-                        || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter),
+                        || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter)
+                        || resolvedActionsMuted(ev, rule, ov, store.state.titleCodes),
                     effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore
                 )
             }
@@ -171,8 +173,9 @@ struct AgendaView: View {
     /// 鳴動の状態 (#51 PR2)。Android と同じ優先順 (shared `RingStatus`)
     private var ringStatus: RingStatusSummary {
         let missing = center.states.values.filter { $0 != .granted }.count
+        // 監査ログは件数で古い順に消えるので、7日残る予約の行 (MISSED) で数える
         let since = Engine.nowMillis - 24 * 60 * 60 * 1000
-        let missed = store.state.audit.filter { $0.type == "MISSED" && $0.atMillis >= since }.count
+        let missed = store.state.scheduled.values.filter { $0.state == .missed && $0.instance.triggerAtMillis >= since }.count
         return RingStatusSummary(missingPermissions: missing, recentMissed: missed, hasNextAlarm: nextAlarm != nil)
     }
 
@@ -451,4 +454,20 @@ struct EventRow: View {
         let e = f.string(from: Date(timeIntervalSince1970: TimeInterval(ev.endMillis) / 1000))
         return s == "00:00" && e == "00:00" ? "終日" : s
     }
+}
+
+/// 開始とリマインダーの両方が鳴らない (MUTE) か。shared `AlarmExpander.resolveActions` と同じ優先順:
+/// 予定の個別指定 > never コード > always コード > カレンダーの既定
+func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings) -> Bool {
+    func matches(_ list: [String]) -> Bool {
+        list.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty && ev.title.localizedCaseInsensitiveContains($0) }
+    }
+    func resolve(_ apply: Bool, _ fallback: String) -> String {
+        if let a = ov?.action { return a }
+        if apply && matches(codes.neverCodes) { return EventAction.mute.rawValue }
+        if apply && matches(codes.alwaysCodes) { return EventAction.alarm.rawValue }
+        return fallback
+    }
+    let mute = EventAction.mute.rawValue
+    return resolve(codes.applyToStart, rule.startAction) == mute && resolve(codes.applyToReminders, rule.reminderAction) == mute
 }

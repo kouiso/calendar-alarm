@@ -142,12 +142,11 @@ fun AgendaScreen(
     // 鳴動の状態 (#51 PR2): 足りない許可と直近24時間の見逃しから1行にまとめる
     val resumeTick = rememberResumeTick()
     val missingPermissions = remember(resumeTick) { probePermissions(context).count { !it.value } }
-    val audit by repository.auditFlow(200).collectAsState(initial = emptyList())
+    val recentMissedFlow = remember(resumeTick) { repository.recentMissedFlow() }
+    val recentMissed by recentMissedFlow.collectAsState(initial = 0)
     val ringStatus = com.calendaralarm.shared.logic.RingStatus.summarize(
         missingPermissions = missingPermissions,
-        recentMissed = com.calendaralarm.shared.logic.RingStatus.countRecentMissed(
-            audit.map { it.atMillis to it.action }, System.currentTimeMillis(), setOf("MISS"),
-        ),
+        recentMissed = recentMissed,
         hasNextAlarm = nextAlarm != null,
     )
 

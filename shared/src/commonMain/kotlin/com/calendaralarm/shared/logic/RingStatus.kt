@@ -25,7 +25,10 @@ object RingStatus {
         val showMissedBanner: Boolean get() = recentMissed > 0
     }
 
-    /** 直近24時間の見逃しを数える範囲 */
+    /**
+     * 直近24時間の見逃しを数える範囲。数えるのは予約の行 (鳴らせなかった = MISSED、7日残る) で、
+     * 件数で古い順に消える監査ログでは数えない (24時間より前に押し出されて見逃しが消えるため)
+     */
     const val MISSED_WINDOW_MILLIS = 24L * 60 * 60 * 1000
 
     fun summarize(missingPermissions: Int, recentMissed: Int, hasNextAlarm: Boolean): Summary {
@@ -37,8 +40,4 @@ object RingStatus {
         }
         return Summary(kind, missingPermissions.coerceAtLeast(0), recentMissed.coerceAtLeast(0))
     }
-
-    /** 監査ログの時刻と種類から、直近24時間の見逃し件数を数える。[missedTypes] は OS ごとの種類名 */
-    fun countRecentMissed(entries: List<Pair<Long, String>>, nowMillis: Long, missedTypes: Set<String>): Int =
-        entries.count { (at, type) -> type in missedTypes && at >= nowMillis - MISSED_WINDOW_MILLIS && at <= nowMillis }
 }
