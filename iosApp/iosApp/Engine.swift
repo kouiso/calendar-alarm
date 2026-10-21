@@ -192,12 +192,14 @@ final class Engine: ObservableObject {
             .filter { terminalIds.contains($0.instance.id) }
             .compactMap { $0.instance.standaloneAlarmId })
 
+        // アカウント単位の設定 (#74) を当てはめたルール。展開とスヌーズ親の判定で同じものを使う
+        let effectiveRules = store.effectiveCalendarRules()
         let expandReq = ExpandRequest(
             events: events,
             standalone: s.standaloneAlarms.filter {
                 $0.effectiveRepeatMode != "ONCE" || !consumedAlarmIds.contains($0.id)
             },
-            calendarRules: s.calendarRules,
+            calendarRules: effectiveRules,
             overrides: s.overrides,
             disabledCalendarIds: [],
             nowMillis: now,
@@ -229,7 +231,7 @@ final class Engine: ObservableObject {
         // 読み取り失敗時は空のまま (EVENT 温存経路で保護される)。
         let liveEventKeys: Set<String> = calendarsOk ? Set(events.filter {
             s.overrides[$0.instanceKey]?.action != EventAction.mute.rawValue &&
-            (s.calendarRules[$0.calendarId]?.enabled ?? true)
+            (effectiveRules[$0.calendarId]?.enabled ?? true)
         }.map { $0.instanceKey }) : []
 
         // 展開で再生成されない PENDING 系を理想状態へ持ち越す:

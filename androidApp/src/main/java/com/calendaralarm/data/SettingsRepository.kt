@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.calendaralarm.shared.logic.WeekCalendar
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.EventType
@@ -46,9 +47,11 @@ class SettingsRepository(private val context: Context) {
         /** 招待予定フィルタ。 */
         val inviteFilter: InviteFilter = InviteFilter(),
         val eventTypeFilter: EventTypeFilter = EventTypeFilter(),
-        /** Googleカレンダー連携のアカウントメール。連携済みなら Calendar API の
-         *  eventType を取りに行く。未連携は null (タイトル判定にフォールバック)。 */
-        val googleAccountEmail: String? = null,
+        /** Googleカレンダー連携のアカウントメール (複数可, #74)。連携済みのアカウントごとに
+         *  Calendar API の eventType を取りに行く。空ならタイトル判定にフォールバック。 */
+        val googleAccountEmails: Set<String> = emptySet(),
+        /** アカウント単位の設定 (使う / 鳴らす / 何分前)。キーはカレンダーのアカウント名 (#74) */
+        val accountSettings: Map<String, com.calendaralarm.shared.model.AccountSetting> = emptyMap(),
         /** 予定側リマインダーを鳴動対象にするか。既定は ON —
          *  このアプリは元カレンダー通知の「何分前」を正本として鳴らす仕様。 */
         val importEventReminders: Boolean = true,
@@ -66,8 +69,8 @@ class SettingsRepository(private val context: Context) {
         val defaultSoundUri: String? = null,
         /** 週番号を予定一覧に表示するか。 */
         val showWeekNumbers: Boolean = false,
-        /** 週の開始曜日 (1=月 … 7=日)。 */
-        val firstWeekday: Int = 1,
+        /** 週の開始曜日 (1=月 … 7=日)。既定はこれまでの月表示と同じ日曜。 */
+        val firstWeekday: Int = WeekCalendar.DEFAULT_FIRST_WEEKDAY,
         /** テーマ ID。 */
         val themeId: String = "default",
         /** カスタム背景画像 URI (鳴動画面/テーマ)。 */
@@ -111,7 +114,8 @@ class SettingsRepository(private val context: Context) {
                 declined = (p[KEY_INVITE_MASK] ?: 7) and 8 != 0,
             ),
             eventTypeFilter = eventTypeFilterOf(p),
-            googleAccountEmail = p[KEY_GOOGLE_ACCOUNT],
+            googleAccountEmails = googleAccountsOf(p),
+            accountSettings = accountSettingsOf(p),
             importEventReminders = p[KEY_IMPORT_REMINDERS] ?: true,
             snoozePresets = (p[KEY_SNOOZE_PRESETS] ?: "5,10,15,30,45,60")
                 .toCsvList().mapNotNull { it.toIntOrNull() }.ifEmpty { listOf(10) },
@@ -121,7 +125,7 @@ class SettingsRepository(private val context: Context) {
             muteAll = p[KEY_MUTE_ALL] ?: false,
             defaultSoundUri = p[KEY_SOUND_URI],
             showWeekNumbers = p[KEY_WEEK_NUMBERS] ?: false,
-            firstWeekday = p[KEY_FIRST_WEEKDAY] ?: 1,
+            firstWeekday = WeekCalendar.normalize(p[KEY_FIRST_WEEKDAY] ?: WeekCalendar.DEFAULT_FIRST_WEEKDAY),
             themeId = p[KEY_THEME_ID] ?: "default",
             backgroundImageUri = p[KEY_BG_IMAGE_URI],
             weatherOnAlarmScreen = p[KEY_WEATHER_ALARM] ?: true,
@@ -212,9 +216,27 @@ class SettingsRepository(private val context: Context) {
     suspend fun setVibrateWhileRinging(v: Boolean) = edit { it[KEY_VIBRATE] = v }
     suspend fun setMuteAll(v: Boolean) = edit { it[KEY_MUTE_ALL] = v }
 
-    /** Googleカレンダー連携のアカウントを保存/解除。解除は null。 */
-    suspend fun setGoogleAccount(email: String?) = edit {
-        if (email.isNullOrBlank()) it.remove(KEY_GOOGLE_ACCOUNT) else it[KEY_GOOGLE_ACCOUNT] = email
+    /** Googleカレンダー連携のアカウントを足す。旧版の1アカウントのキーはここで新しいキーへ移す */
+    suspend fun addGoogleAccount(email: String) = edit {
+        if (email.isBlank()) return@edit
+        val current = googleAccountsOf(it)
+        // メールは大文字小文字を区別しない。解除と同じ比べ方にし、同じアカウントを2回連携しない
+        val next = if (current.any { e -> e.equals(email, ignoreCase = true) }) current else current + email
+        it[KEY_GOOGLE_ACCOUNTS] = next.sorted().joinToString(",")
+        it.remove(KEY_GOOGLE_ACCOUNT)
+    }
+
+    /** Googleカレンダー連携を1アカウントだけ外す (端末のアカウントは消さない) */
+    suspend fun removeGoogleAccount(email: String) = edit {
+        val next = googleAccountsOf(it).filterNot { e -> e.equals(email, ignoreCase = true) }
+        if (next.isEmpty()) it.remove(KEY_GOOGLE_ACCOUNTS) else it[KEY_GOOGLE_ACCOUNTS] = next.sorted().joinToString(",")
+        it.remove(KEY_GOOGLE_ACCOUNT)
+    }
+
+    /** アカウント単位の設定を1件書き換える (#74) */
+    suspend fun setAccountSetting(accountName: String, setting: com.calendaralarm.shared.model.AccountSetting) = edit {
+        val next = accountSettingsOf(it) + (accountName to setting)
+        it[KEY_ACCOUNT_SETTINGS] = rulesJson.encodeToString(accountSettingsSerializer, next)
     }
     suspend fun setDefaultSoundUri(v: String?) = edit {
         if (v == null) it.remove(KEY_SOUND_URI) else it[KEY_SOUND_URI] = v
@@ -249,6 +271,17 @@ class SettingsRepository(private val context: Context) {
             v,
         )
     }
+
+    /** 連携アカウントの集合。新しいキーが無ければ旧版の1アカウントのキーを読む (移行前の端末) */
+    private fun googleAccountsOf(p: androidx.datastore.preferences.core.Preferences): Set<String> =
+        p[KEY_GOOGLE_ACCOUNTS]?.toCsvList()?.toSet()
+            ?: setOfNotNull(p[KEY_GOOGLE_ACCOUNT]?.takeIf { it.isNotBlank() })
+
+    /** 壊れた保存値は空として読む (設定画面とエンジンを落とさない) */
+    private fun accountSettingsOf(p: androidx.datastore.preferences.core.Preferences) =
+        p[KEY_ACCOUNT_SETTINGS]?.let {
+            runCatching { rulesJson.decodeFromString(accountSettingsSerializer, it) }.getOrNull()
+        } ?: emptyMap()
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.settingsDataStore.edit(block)
@@ -307,7 +340,14 @@ class SettingsRepository(private val context: Context) {
                 free = p[KEY_RING_FREE] ?: true,
             )
         }
+        /** 旧版 (1アカウントだけ) の連携キー。読むだけで、書く時は [KEY_GOOGLE_ACCOUNTS] へ移す */
         val KEY_GOOGLE_ACCOUNT = stringPreferencesKey("google_account_email")
+        val KEY_GOOGLE_ACCOUNTS = stringPreferencesKey("google_account_emails")
+        val KEY_ACCOUNT_SETTINGS = stringPreferencesKey("account_settings")
+        private val accountSettingsSerializer = kotlinx.serialization.builtins.MapSerializer(
+            kotlinx.serialization.serializer<String>(),
+            com.calendaralarm.shared.model.AccountSetting.serializer(),
+        )
         val KEY_IMPORT_REMINDERS = booleanPreferencesKey("import_event_reminders")
         val KEY_SNOOZE_PRESETS = stringPreferencesKey("snooze_presets")
         val KEY_ALARM_VOLUME = intPreferencesKey("alarm_volume_percent")

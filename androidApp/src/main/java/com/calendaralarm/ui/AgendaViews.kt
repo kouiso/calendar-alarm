@@ -37,12 +37,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.data.AlarmRepository
+import com.calendaralarm.shared.logic.WeekCalendar
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
@@ -52,7 +52,7 @@ private val viewTz = TimeZone.currentSystemDefault()
 internal fun eventDateOf(item: AlarmRepository.AgendaItem): LocalDate =
     eventDate(item.event)
 
-/** 月表示: 7列グリッド + ISO週番号列 + 日のイベントドット。日タップで focusDate が変わる。 */
+/** 月表示: 7列グリッド + 日のイベントドット。日タップで focusDate が変わる。列は設定の週の開始曜日から並ぶ。 */
 @Composable
 fun MonthView(
     month: LocalDate,
@@ -60,10 +60,11 @@ fun MonthView(
     focusDate: LocalDate?,
     onSelectDay: (LocalDate) -> Unit,
     onSelectEvent: (AlarmRepository.AgendaItem) -> Unit,
+    firstWeekday: Int = WeekCalendar.DEFAULT_FIRST_WEEKDAY,
 ) {
     val today = Clock.System.now().toLocalDateTime(viewTz).date
     val first = LocalDate(month.year, month.month, 1)
-    val gridStart = first.minus(DatePeriod(days = first.dayOfWeek.isoDayNumber % 7))
+    val gridStart = WeekCalendar.monthGridStart(first, firstWeekday)
     val byDay = items.groupBy { eventDateOf(it) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {
@@ -71,15 +72,15 @@ fun MonthView(
         val sundayRed = if (isSystemInDarkTheme()) Color(0xFFFF8F8F) else Color(0xFFC62828)
         val saturdayBlue = if (isSystemInDarkTheme()) Color(0xFF7D88FF) else Color(0xFF1F6FD1)
         Row {
-            listOf("日", "月", "火", "水", "木", "金", "土").forEachIndexed { i, w ->
+            WeekCalendar.weekdayOrder(firstWeekday).forEach { day ->
                 Text(
-                    w,
+                    day.jaShort(),
                     Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.labelSmall,
-                    color = when (i) {
-                        0 -> sundayRed
-                        6 -> saturdayBlue
+                    color = when (day) {
+                        DayOfWeek.SUNDAY -> sundayRed
+                        DayOfWeek.SATURDAY -> saturdayBlue
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
@@ -354,12 +355,4 @@ private fun minuteOfDay(millis: Long): Int {
 private fun hm(millis: Long): String {
     val t = kotlinx.datetime.Instant.fromEpochMilliseconds(millis).toLocalDateTime(viewTz)
     return "%d:%02d".format(t.hour, t.minute)
-}
-
-/** ISO-8601 週番号 (月曜始まり)。その週の木曜が属する年の第1週起点で数える。 */
-internal fun isoWeekNumber(date: LocalDate): Int {
-    val thursday = date + DatePeriod(days = 4 - date.dayOfWeek.isoDayNumber)
-    val jan4 = LocalDate(thursday.year, 1, 4)
-    val week1Monday = jan4 - DatePeriod(days = (jan4.dayOfWeek.isoDayNumber + 6) % 7)
-    return ((thursday.toEpochDays() - week1Monday.toEpochDays()) / 7) + 1
 }

@@ -50,11 +50,11 @@ struct AgendaView: View {
                     switch viewMode {
                     case .list:
                         ForEach(groupedDays, id: \.0) { day, events in
-                            DayCard(dayLabel: dayLabel(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev })
+                            DayCard(dayLabel: dayLabel(day), weekNumber: weekNumber(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev })
                         }
                         if groupedDays.isEmpty { emptyState }
                     case .month:
-                        MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 })
+                        MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 }, firstWeekday: store.state.firstWeekday)
                     case .threeDay:
                         ThreeDayColumnsView(startDate: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
                     case .timeline:
@@ -96,6 +96,8 @@ struct AgendaView: View {
         let horizon = now + 14 * 86_400_000
         return store.state.lastEvents
             .filter { $0.endMillis >= now && $0.startMillis < horizon }
+            // このアプリで使わないアカウントの予定は出さない (#74)
+            .filter { !store.isHiddenCalendar($0.calendarId) }
             .sorted { $0.startMillis < $1.startMillis }
             .map { ev in
                 let ov = store.state.overrides[ev.instanceKey]
@@ -107,7 +109,7 @@ struct AgendaView: View {
                     calendarColor: cal?.color ?? 0xFF888888,
                     // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
                     // 予約の展開と同じ判定を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
-                    muted: !rule.enabled
+                    muted: !rule.enabled || !store.accountAllowsRing(ev.calendarId)
                         || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter),
                     effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore
                 )
@@ -155,6 +157,15 @@ struct AgendaView: View {
         out.dateFormat = "M/d (E)"
         out.locale = Locale(identifier: "ja_JP")
         return out.string(from: d)
+    }
+
+    /// 週番号を出す設定の時だけ、その日の ISO 週番号を返す (#106)
+    private func weekNumber(_ key: String) -> Int? {
+        guard store.state.showWeekNumbers else { return nil }
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        guard let d = df.date(from: key) else { return nil }
+        return WeekDisplay.isoWeekNumber(d)
     }
 
     private var emptyState: some View {
@@ -259,16 +270,25 @@ struct NextAlarmBanner: View {
 
 struct DayCard: View {
     let dayLabel: String
+    var weekNumber: Int? = nil
     let events: [DisplayEvent]
     let calendarColor: (DisplayEvent) -> Color
     let onTap: (DisplayEvent) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(dayLabel)
-                .font(NightTheme.font(13, weight: .medium))
-                .foregroundStyle(NightTheme.indigo)
-                .padding(.bottom, 6)
+            HStack {
+                Text(dayLabel)
+                    .font(NightTheme.font(13, weight: .medium))
+                    .foregroundStyle(NightTheme.indigo)
+                Spacer()
+                if let weekNumber {
+                    Text("第\(weekNumber)週")
+                        .font(NightTheme.font(12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.bottom, 6)
             VStack(spacing: 0) {
                 ForEach(events) { ev in
                     EventRow(ev: ev, accent: calendarColor(ev))

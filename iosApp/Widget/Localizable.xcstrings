@@ -1,0 +1,56 @@
+{
+  "sourceLanguage": "ja",
+  "version": "1.0",
+  "strings": {
+    "なし": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None"
+          }
+        }
+      }
+    },
+    "アラーム": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alarm"
+          }
+        }
+      }
+    },
+    "次に鳴るアラームを表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows the next alarm to ring"
+          }
+        }
+      }
+    },
+    "次のアラーム": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next alarm"
+          }
+        }
+      }
+    },
+    "次のアラームなし": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No next alarm"
+          }
+        }
+      }
+    }
+  }
+}
