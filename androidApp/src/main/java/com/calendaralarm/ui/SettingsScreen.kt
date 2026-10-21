@@ -70,6 +70,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -264,7 +265,9 @@ fun SettingsScreen(
                                 }
                             },
                         )
-                        if (accountSetting.use) cals.forEach { cal ->
+                        // 行の開閉状態は位置でなくカレンダーに結び付ける。アカウントの「使う」で行の数が変わると、
+                        // 位置のままでは別のカレンダーが開いた状態を引き継ぎ、別アカウントの設定を触れてしまう
+                        if (accountSetting.use) cals.forEach { cal -> key(cal.id) {
                             CalendarRow(
                                 cal = cal,
                                 pref = calPrefs[cal.id],
@@ -281,7 +284,7 @@ fun SettingsScreen(
                                     }
                                 },
                             )
-                        }
+                        } }
                     }
                     AddGoogleAccountRow()
                 }

@@ -384,11 +384,15 @@ struct SettingsView: View {
 
     // MARK: - カレンダー行
 
-    /// アカウント名の順、同じアカウントは主カレンダーを先に (Android の `AccountRules.groupByAccount` と同じ並び)
+    /// アカウント名の順、同じアカウントは主カレンダーを先に (Android の `AccountRules.groupByAccount` と同じ並び)。
+    /// キー (accountKey) は EventKit の識別子で名前順にならないので、表示名で並べ、同名の時だけキーで決める
     private var accountGroups: [(String, [CalendarSource])] {
         Dictionary(grouping: store.state.calendars, by: \.accountKey)
             .map { ($0.key, $0.value.sorted { ($0.isPrimary ? 0 : 1, $0.name) < ($1.isPrimary ? 0 : 1, $1.name) }) }
-            .sorted { ($0.0.isEmpty ? 1 : 0, $0.0.lowercased()) < ($1.0.isEmpty ? 1 : 0, $1.0.lowercased()) }
+            .sorted { a, b in
+                let an = a.1.first?.accountName ?? "", bn = b.1.first?.accountName ?? ""
+                return (an.isEmpty ? 1 : 0, an.lowercased(), a.0) < (bn.isEmpty ? 1 : 0, bn.lowercased(), b.0)
+            }
     }
 
     /// アカウントの見出し: 使う / 鳴らす / 何分前 (アカウントの既定)
