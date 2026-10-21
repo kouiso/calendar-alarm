@@ -386,7 +386,7 @@ struct SettingsView: View {
 
     /// アカウント名の順、同じアカウントは主カレンダーを先に (Android の `AccountRules.groupByAccount` と同じ並び)
     private var accountGroups: [(String, [CalendarSource])] {
-        Dictionary(grouping: store.state.calendars, by: \.accountName)
+        Dictionary(grouping: store.state.calendars, by: \.accountKey)
             .map { ($0.key, $0.value.sorted { ($0.isPrimary ? 0 : 1, $0.name) < ($1.isPrimary ? 0 : 1, $1.name) }) }
             .sorted { ($0.0.isEmpty ? 1 : 0, $0.0.lowercased()) < ($1.0.isEmpty ? 1 : 0, $1.0.lowercased()) }
     }
@@ -397,7 +397,9 @@ struct SettingsView: View {
         let set: (AccountSettingDTO) -> Void = { store.setAccountSetting(account, $0); resync("account setting") }
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(account.isEmpty ? "端末のカレンダー" : account)
+                // キーは識別子なので、見出しには表示名を出す
+                let title = store.state.calendars.first { $0.accountKey == account }?.accountName ?? account
+                Text(title.isEmpty ? "端末のカレンダー" : title)
                     .font(NightTheme.font(14, weight: .semibold)).lineLimit(1)
                 Spacer()
                 Text("使う").font(NightTheme.font(12)).foregroundStyle(.secondary)

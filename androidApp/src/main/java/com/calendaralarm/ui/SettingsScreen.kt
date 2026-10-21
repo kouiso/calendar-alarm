@@ -126,7 +126,9 @@ fun SettingsScreen(
     }
     val audit by repository.auditFlow(50).collectAsState(initial = emptyList())
 
-    androidx.compose.runtime.LaunchedEffect(Unit) {
+    // 端末の設定でアカウントを足して戻った時も新しいカレンダーが並ぶよう、画面に戻るたびに読み直す
+    val resumeTick = rememberResumeTick()
+    androidx.compose.runtime.LaunchedEffect(resumeTick) {
         calendars = repository.calendarSources()
         calPrefs = repository.calendarPrefsFlowList().associateBy { it.calendarId }
     }

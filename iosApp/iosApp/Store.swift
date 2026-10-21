@@ -36,7 +36,7 @@ final class Store: ObservableObject {
         /// OpenRouter APIキー (AI機能用)
         // calendar_prefs: calendarId -> AlarmRuleDTO
         var calendarRules: [String: AlarmRuleDTO] = [:]
-        // accountName -> AccountSettingDTO (#74)
+        // CalendarSource.accountKey (EventKit のソース識別子) -> AccountSettingDTO (#74)
         var accountSettings: [String: AccountSettingDTO] = [:]
         // event_overrides: instanceKey -> EventOverrideDTO
         var overrides: [String: EventOverrideDTO] = [:]
@@ -169,12 +169,12 @@ final class Store: ObservableObject {
     // MARK: - account settings (#74)
 
     func accountSetting(forCalendar calendarId: String) -> AccountSettingDTO {
-        let account = state.calendars.first { $0.id == calendarId }?.accountName ?? ""
+        let account = state.calendars.first { $0.id == calendarId }?.accountKey ?? ""
         return state.accountSettings[account] ?? AccountSettingDTO()
     }
 
-    func setAccountSetting(_ accountName: String, _ setting: AccountSettingDTO) {
-        mutate { $0.accountSettings[accountName] = setting }
+    func setAccountSetting(_ accountKey: String, _ setting: AccountSettingDTO) {
+        mutate { $0.accountSettings[accountKey] = setting }
     }
 
     /// アカウントの「使う」「鳴らす」が両方 ON か
@@ -191,7 +191,7 @@ final class Store: ObservableObject {
     func effectiveCalendarRules() -> [String: AlarmRuleDTO] {
         var out = state.calendarRules
         for cal in state.calendars {
-            let account = state.accountSettings[cal.accountName] ?? AccountSettingDTO()
+            let account = state.accountSettings[cal.accountKey] ?? AccountSettingDTO()
             let allows = account.use && account.ring
             if allows && account.minutesBefore == nil { continue }
             // 何も決めていないカレンダーはアプリ既定の動作 (開始/リマインダーの既定アクション) を引き継ぐ

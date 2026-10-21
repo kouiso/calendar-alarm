@@ -390,9 +390,30 @@ struct AccountSettingDTO: Codable, Hashable {
 struct CalendarSource: Codable, Identifiable, Hashable {
     var id: String
     var name: String
+    /// 表示用のアカウント名 (EventKit のソースの表示名)
     var accountName: String
     var color: Int
     var isPrimary: Bool = false
+    /// アカウント設定のキー (EventKit のソース識別子)。表示名は重なり得るので、こちらで区別する (#74)
+    var accountId: String = ""
+
+    /// アカウント設定とまとめ表示に使うキー。旧データ (識別子なし) は表示名で代用する
+    var accountKey: String { accountId.isEmpty ? accountName : accountId }
+
+    init(id: String, name: String, accountName: String, color: Int, isPrimary: Bool = false, accountId: String = "") {
+        self.id = id; self.name = name; self.accountName = accountName
+        self.color = color; self.isPrimary = isPrimary; self.accountId = accountId
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        accountName = try c.decode(String.self, forKey: .accountName)
+        color = try c.decode(Int.self, forKey: .color)
+        isPrimary = try c.decodeIfPresent(Bool.self, forKey: .isPrimary) ?? false
+        accountId = try c.decodeIfPresent(String.self, forKey: .accountId) ?? ""
+    }
 }
 
 /// 予定一覧に並べる表示用イベント (Kotlin 側は expand 済み occurrence を期待するので
