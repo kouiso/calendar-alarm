@@ -467,6 +467,13 @@ final class Engine: ObservableObject {
         }
         var count = 0
         for rec in targets {
+            // 入れ直しは await を挟むので、その間に鳴り始めた予約を消して止めないよう直前に確かめ直す
+            guard let current = store.state.scheduled[rec.instance.id], current.state == .pending,
+                  current.instance.triggerAtMillis > Self.nowMillis + 5_000 else { continue }
+            if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler,
+               ak.state(of: AlarmKitScheduler.uuid(from: rec.instance.id)) == .alerting {
+                continue
+            }
             do {
                 let rid = try await scheduler.schedule(rec.instance)
                 store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending, alarmKitId: rid ?? rec.alarmKitId))

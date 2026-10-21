@@ -7,8 +7,9 @@ import AVFoundation
 /// 音は `AlertConfiguration.AlertSound.named(_:)` に渡すため Library/Sounds に置く
 /// (通知で鳴らす iOS 26 未満も `UNNotificationSoundName` で同じ場所を読む)。
 enum AlarmSoundLibrary {
-    /// 通知音と同じ上限。これを超える音は OS が既定音に差し替えるので、取り込み時に切る
-    static let maxSeconds: Double = 30
+    /// 通知音は「30秒未満」でないと OS が既定音に差し替える (UNNotificationSound の文書)。
+    /// ちょうど30秒も駄目なので、少し手前で切る
+    static let maxSeconds: Double = 29.5
     /// 取り込んだ音のファイル名の頭。Library/Sounds の他のファイルと区別する
     static let prefix = "alarm-custom-"
 
