@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.sync.SyncWorker
+import com.calendaralarm.shared.logic.WeekCalendar
 import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.DailyForecast
@@ -295,6 +296,7 @@ fun AgendaScreen(
                             refreshKey++
                         }
                     },
+                    showWeekNumbers = settings?.showWeekNumbers == true,
                 )
                 ViewMode.MONTH -> MonthView(
                     month = focusDate,
@@ -302,6 +304,7 @@ fun AgendaScreen(
                     focusDate = focusDate,
                     onSelectDay = { focusDate = it },
                     onSelectEvent = { selected = it },
+                    firstWeekday = settings?.firstWeekday ?: WeekCalendar.DEFAULT_FIRST_WEEKDAY,
                 )
                 ViewMode.THREE_DAY -> ThreeDayView(
                     startDate = focusDate,
@@ -425,13 +428,14 @@ private fun AgendaList(
     items: List<AlarmRepository.AgendaItem>,
     onSelect: (AlarmRepository.AgendaItem) -> Unit,
     onToggle: ((AlarmRepository.AgendaItem, Boolean) -> Unit)? = null,
+    showWeekNumbers: Boolean = false,
 ) {
     val grouped = items.groupBy { eventDate(it.event) }
     LazyColumn {
         grouped.forEach { (date, dayItems) ->
             item(key = "d$date") {
                 Column(Modifier.padding(horizontal = 16.dp)) {
-                    DayHeader(date)
+                    DayHeader(date, showWeekNumbers)
                     Card(
                         Modifier.fillMaxWidth(),
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
@@ -455,7 +459,7 @@ private fun AgendaList(
 }
 
 @Composable
-private fun DayHeader(date: LocalDate) {
+private fun DayHeader(date: LocalDate, showWeekNumber: Boolean = false) {
     val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(tz).date
     val rel = when (date) {
         today -> "今日"
@@ -485,6 +489,14 @@ private fun DayHeader(date: LocalDate) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
+        }
+        if (showWeekNumber) {
+            Spacer(Modifier.weight(1f))
+            Text(
+                "第${WeekCalendar.isoWeekNumber(date)}週",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -590,7 +602,7 @@ internal fun EventRow(
         }
         if (onToggle != null) {
             Spacer(Modifier.width(6.dp))
-            // カレンダーごと・終日の予定を鳴らさない設定・すべてミュート中の鳴らない行は、スイッチを入れても鳴らないので押せなくする
+            // カレンダーごと・アカウントごと・終日の予定を鳴らさない設定・すべてミュート中の鳴らない行は、スイッチを入れても鳴らないので押せなくする
             // (すべてミュート中でも通知で鳴る行は切れる)
             Switch(
                 checked = !item.muted,
@@ -599,6 +611,7 @@ internal fun EventRow(
                 modifier = Modifier.semantics {
                     contentDescription = when {
                         item.calendarOff -> "カレンダーが鳴らさない設定です。設定のカレンダー欄で変えられます"
+                        item.accountOff -> "このアカウントは鳴らさない設定です。設定のカレンダー欄のアカウントで変えられます"
                         item.allDayOff -> "このカレンダーは終日の予定を鳴らさない設定です。設定のカレンダー欄で変えられます"
                         item.muteAll && item.muted -> "アラームをすべてミュート中です。設定で解除できます"
                         else -> "${ev.title.ifBlank { "予定" }}で鳴らす"

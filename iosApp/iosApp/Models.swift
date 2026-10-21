@@ -376,12 +376,44 @@ struct PlanResult: Codable {
 
 // MARK: - アプリ内永続化モデル
 
+/// アカウント (EventKit のソース。Gmail・iCloud など) 単位の設定 (局長決定6, #74)。
+/// Android の `AccountSetting` と同じ意味。キーは `CalendarSource.accountName`
+struct AccountSettingDTO: Codable, Hashable {
+    /// このアプリで使うか。OFF なら配下の予定を一覧にも出さない (端末からは消さない)
+    var use: Bool = true
+    /// このアカウントの予定で鳴らすか
+    var ring: Bool = true
+    /// 配下カレンダーの既定の「何分前」。nil ならアプリ全体の既定
+    var minutesBefore: Int? = nil
+}
+
 struct CalendarSource: Codable, Identifiable, Hashable {
     var id: String
     var name: String
+    /// 表示用のアカウント名 (EventKit のソースの表示名)
     var accountName: String
     var color: Int
     var isPrimary: Bool = false
+    /// アカウント設定のキー (EventKit のソース識別子)。表示名は重なり得るので、こちらで区別する (#74)
+    var accountId: String = ""
+
+    /// アカウント設定とまとめ表示に使うキー。旧データ (識別子なし) は表示名で代用する
+    var accountKey: String { accountId.isEmpty ? accountName : accountId }
+
+    init(id: String, name: String, accountName: String, color: Int, isPrimary: Bool = false, accountId: String = "") {
+        self.id = id; self.name = name; self.accountName = accountName
+        self.color = color; self.isPrimary = isPrimary; self.accountId = accountId
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        accountName = try c.decode(String.self, forKey: .accountName)
+        color = try c.decode(Int.self, forKey: .color)
+        isPrimary = try c.decodeIfPresent(Bool.self, forKey: .isPrimary) ?? false
+        accountId = try c.decodeIfPresent(String.self, forKey: .accountId) ?? ""
+    }
 }
 
 /// 予定一覧に並べる表示用イベント (Kotlin 側は expand 済み occurrence を期待するので
@@ -395,10 +427,16 @@ struct DisplayEvent: Identifiable, Hashable {
     var effectiveMinutes: Int
     /// カレンダーを鳴らさない設定にしている (予定ごとの指定より強い)
     var calendarOff: Bool = false
+    /// アカウントを鳴らさない設定にしている (#74。展開が予定ごとの指定より先に外す)
+    var accountOff: Bool = false
     /// 終日の予定で、カレンダーが終日を鳴らさない設定 (予定ごとの指定より強い)
     var allDayOff: Bool = false
     /// 設定の「アラームをすべてミュート」中 (展開がアラームを全部外すので、鳴らない行はスイッチで入れても鳴らない)
     var muteAll: Bool = false
+
+    /// 行のスイッチを押せなくする (Android の `AgendaItem.switchLocked` と同じ規則)。
+    /// すべてミュート中でも通知で鳴る行は切れるように残す
+    var switchLocked: Bool { calendarOff || accountOff || allDayOff || (muteAll && muted) }
 }
 
 struct AuditEntry: Codable, Identifiable, Hashable {

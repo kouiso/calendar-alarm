@@ -22,8 +22,8 @@ object EventNotifier {
     fun post(context: Context, instance: AlarmInstance) {
         val mgr = context.getSystemService(NotificationManager::class.java)
         mgr.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "予定の通知", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "通知のみアクションで配信される予定通知"
+            NotificationChannel(CHANNEL_ID, context.getString(R.string.event_channel), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = context.getString(R.string.event_channel_desc)
             },
         )
         val open = PendingIntent.getActivity(
@@ -48,8 +48,12 @@ object EventNotifier {
                 .setContentTitle(instance.title)
                 .setContentText(
                     when {
-                        instance.minutesBefore <= 0 -> "開始時刻です"
-                        else -> "${instance.minutesBefore}分前です"
+                        instance.minutesBefore <= 0 -> context.getString(R.string.event_starts_now)
+                        else -> context.resources.getQuantityString(
+                            R.plurals.event_minutes_before,
+                            instance.minutesBefore,
+                            instance.minutesBefore,
+                        )
                     },
                 )
                 .setCategory(NotificationCompat.CATEGORY_EVENT)

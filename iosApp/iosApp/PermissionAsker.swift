@@ -78,9 +78,12 @@ struct PermissionAskSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(retry ? "まだオフのまま" : permission.askTitle)
+            // 頼む文言は AppPermission が日本語の文字列で持つので、その文字列を鍵にして訳を引く
+            Text(retry ? "まだオフのまま" : LocalizedStringKey(permission.askTitle))
                 .font(NightTheme.font(20, weight: .semibold))
-            Text(retry ? "設定の「\(permission.label)」をオンにすると、\(permission.reason)。" : permission.askBody)
+            Text(retry
+                 ? "設定の「\(NSLocalizedString(permission.label, comment: ""))」をオンにすると、\(NSLocalizedString(permission.reason, comment: ""))。"
+                 : LocalizedStringKey(permission.askBody))
                 .font(NightTheme.font(14)).foregroundStyle(.secondary)
             Spacer(minLength: 8)
             Button { onAction(.cta) } label: {

@@ -21,20 +21,20 @@ object MissedNotifier {
     fun post(context: Context, alarmTitle: String?) {
         val mgr = context.getSystemService(NotificationManager::class.java) ?: return
         mgr.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "鳴らせなかったアラーム", NotificationManager.IMPORTANCE_HIGH),
+            NotificationChannel(CHANNEL_ID, context.getString(R.string.missed_channel), NotificationManager.IMPORTANCE_HIGH),
         )
         val openApp = context.packageManager.getLaunchIntentForPackage(context.packageName)
             ?.let { PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE) }
         val text = if (alarmTitle.isNullOrBlank()) {
-            "鳴動サービスを起動できなかったため、アラームを鳴らせませんでした"
+            context.getString(R.string.missed_service_failed)
         } else {
-            "「$alarmTitle」を鳴らせませんでした"
+            context.getString(R.string.missed_one, alarmTitle)
         }
         mgr.notify(
             NOTIFICATION_ID,
             NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alarm)
-                .setContentTitle("鳴らせなかったアラーム")
+                .setContentTitle(context.getString(R.string.missed_channel))
                 .setContentText(text)
                 .setAutoCancel(true)
                 .apply { openApp?.let(::setContentIntent) }
@@ -47,7 +47,7 @@ object MissedNotifier {
         if (count <= 0) return
         val mgr = context.getSystemService(NotificationManager::class.java) ?: return
         mgr.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "鳴らせなかったアラーム", NotificationManager.IMPORTANCE_HIGH),
+            NotificationChannel(CHANNEL_ID, context.getString(R.string.missed_channel), NotificationManager.IMPORTANCE_HIGH),
         )
         val openApp = context.packageManager.getLaunchIntentForPackage(context.packageName)
             ?.let { PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE) }
@@ -55,8 +55,8 @@ object MissedNotifier {
             NOTIFICATION_ID,
             NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alarm)
-                .setContentTitle("鳴らせなかったアラーム")
-                .setContentText("端末の停止等により ${count}件のアラームを鳴らせませんでした")
+                .setContentTitle(context.getString(R.string.missed_channel))
+                .setContentText(context.resources.getQuantityString(R.plurals.missed_count, count, count))
                 .setAutoCancel(true)
                 .apply { openApp?.let(::setContentIntent) }
                 .build(),
