@@ -459,6 +459,9 @@ final class Engine: ObservableObject {
     func markNotificationDelivered(_ instanceId: String) {
         guard !usesRealAlarms, let rec = store.state.scheduled[instanceId], rec.state == .pending else { return }
         store.markState(instanceId, .fired)
+        // .fired は見逃し判定を通らないので、ここで消費を反映しないと「1回のみ」が ON のまま残り、
+        // 終端行が 7 日で掃除された後の resync で次の日付に展開されて再び鳴る
+        if let aid = rec.instance.standaloneAlarmId { disableConsumedOneShots([aid]) }
         store.audit("FIRED", "\(rec.instance.title) (通知)")
     }
 
