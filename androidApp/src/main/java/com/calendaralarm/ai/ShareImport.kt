@@ -1,6 +1,7 @@
 package com.calendaralarm.ai
 
 import android.content.Intent
+import android.os.Bundle
 import com.calendaralarm.shared.model.ExtractedEvent
 
 /**
@@ -11,6 +12,14 @@ object ShareImport {
     /** 取り込みに渡す本文の上限。抽出側 (MailEventExtractor) も 6000 文字で切る */
     private const val MAX_TEXT = 6000
     private const val MAX_TITLE = 60
+
+    /**
+     * 画面が新しく開かれた時だけ true。作り直し (退避あり) と履歴からの再開は、
+     * 一度受け取って閉じた共有を元の intent から読み直してしまうので false にする
+     */
+    fun isFreshLaunch(savedInstanceState: Bundle?, intent: Intent?): Boolean =
+        savedInstanceState == null &&
+            ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
 
     /** 共有で届いた件名と本文を1つの本文にする。テキストの共有でなければ null */
     fun textFrom(intent: Intent?): String? {

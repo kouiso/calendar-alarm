@@ -42,6 +42,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.calendaralarm.ai.ShareImport
 import com.calendaralarm.ui.AgendaScreen
 import com.calendaralarm.ui.AlarmEditScreen
 import com.calendaralarm.ui.AlarmsScreen
@@ -65,6 +66,12 @@ class MainActivity : ComponentActivity() {
     /** 共有の読み取りで予定にできなかった時の理由。取り込み画面に出す */
     private val extractedNote = androidx.compose.runtime.mutableStateOf<String?>(null)
 
+    @androidx.annotation.VisibleForTesting
+    internal val pendingSharedText: String? get() = sharedText.value
+
+    @androidx.annotation.VisibleForTesting
+    internal val pendingExtractedJson: String? get() = extractedJson.value
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         intent.getStringExtra(EXTRA_EXTRACTED_EVENT)?.let {
@@ -74,7 +81,7 @@ class MainActivity : ComponentActivity() {
         takeSharedText(intent)
     }
 
-    /** 共有の本文を一度だけ受け取る。画面の作り直しで同じ共有を二度読み取らないよう intent から外す */
+    /** 共有の本文を一度だけ受け取る。同じプロセス内の作り直しで二度読み取らないよう intent から外す */
     private fun takeSharedText(intent: android.content.Intent?) {
         com.calendaralarm.ai.ShareImport.textFrom(intent)?.let {
             sharedText.value = it
@@ -110,11 +117,16 @@ class MainActivity : ComponentActivity() {
             extractedJson.value = s.getString(STATE_EXTRACTED_JSON)
             extractedNote.value = s.getString(STATE_EXTRACTED_NOTE)
         }
-        intent?.getStringExtra(EXTRA_EXTRACTED_EVENT)?.let {
-            extractedJson.value = it
-            intent?.removeExtra(EXTRA_EXTRACTED_EVENT)
+        // プロセスが落ちた後の作り直しや履歴からの再開では、外したはずの最初の intent が
+        // そのまま戻る。読み取り直すと閉じた・追加済みの取り込みが再び出て予定が二重になるため、
+        // 新しく開かれた時だけ intent を読む (続きは上の退避分から戻す)
+        if (ShareImport.isFreshLaunch(savedInstanceState, intent)) {
+            intent?.getStringExtra(EXTRA_EXTRACTED_EVENT)?.let {
+                extractedJson.value = it
+                intent?.removeExtra(EXTRA_EXTRACTED_EVENT)
+            }
+            takeSharedText(intent)
         }
-        takeSharedText(intent)
         setContent {
             // recomposition 毎に Flow を作り直すと collectAsState が
             // リセットされるため remember で固定する
