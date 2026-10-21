@@ -12,6 +12,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -521,6 +524,7 @@ private fun SlideToStop(
     val scope = rememberCoroutineScope()
     val progress = remember { Animatable(0f) }
     var trackWidthPx by remember { mutableStateOf(0f) }
+    var downX by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
     val thumbPx = with(density) { 64.dp.toPx() }
     val padPx = with(density) { 8.dp.toPx() }
@@ -537,12 +541,19 @@ private fun SlideToStop(
                 contentDescription = "スライドして停止"
                 onClick(label = "停止", action = { onStop(); true })
             }
+            .pointerInput(Unit) {
+                // onDragStart はタッチスロップを越えた後の位置しか渡さない。速いスワイプだと
+                // 丸の上で触れても判定幅の外になるので、指を置いた位置を先に覚えておく
+                awaitEachGesture {
+                    downX = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial).position.x
+                }
+            }
             .pointerInput(trackWidthPx) {
                 // 掴み始めが丸の範囲内の時だけ受理: トラック右側からの横スワイプで
                 // 止まってしまうと誤停止になるため起点を縛る (iOS と同じ閾値式)
                 var grabbed = false
                 detectDragGestures(
-                    onDragStart = { start -> grabbed = start.x <= thumbPx + padPx * 3 },
+                    onDragStart = { grabbed = downX <= thumbPx + padPx * 3 },
                     onDragEnd = {
                         if (grabbed) {
                             scope.launch {
