@@ -25,6 +25,8 @@ import com.calendaralarm.shared.model.StandaloneAlarm
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DayOfWeek
@@ -389,8 +391,29 @@ class EngineTest {
         assertEquals(1, repository.recentMissedFlow().first())
         // 窓の端: ちょうど24時間前は数え、それより1ミリ秒でも古ければ数えない
         val edge = stale.triggerAtMillis + 24 * 3_600_000L
-        assertEquals(1, repository.recentMissedFlow(edge).first())
-        assertEquals(0, repository.recentMissedFlow(edge + 1).first())
+        assertEquals(1, repository.recentMissedFlow(nowMillis = { edge }).first())
+        assertEquals(0, repository.recentMissedFlow(nowMillis = { edge + 1 }).first())
+    }
+
+    @Test
+    fun `見逃しの件数は画面を開いたままでも時間が進めば24時間を過ぎた分を外す`() = runBlocking {
+        val now = System.currentTimeMillis()
+        db.scheduledInstances().upsert(
+            listOf(
+                ScheduledInstanceEntity.of(
+                    AlarmInstance("ev:c1:e9:9:b0", now - 2 * 3_600_000L, "会議", AlarmKind.EVENT),
+                    AlarmState.MISSED,
+                ),
+            ),
+        )
+        // 1回目は今、2回目は23時間後 (見逃しから25時間後) の時計で数える
+        val clocks = ArrayDeque(listOf(now, now + 23 * 3_600_000L))
+        var last = now
+        val counts = repository.recentMissedFlow(
+            nowMillis = { clocks.removeFirstOrNull()?.also { last = it } ?: last },
+            refreshMillis = 300L,
+        ).take(2).toList()
+        assertEquals(listOf(1, 0), counts)
     }
 
     @Test
