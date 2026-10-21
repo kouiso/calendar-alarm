@@ -59,6 +59,8 @@
 	<array>
 		<string>processing</string>
 	</array>
+	<key>UILaunchScreen</key>
+	<dict/>
 	<key>UILaunchScreen_Generation</key>
 	<true/>
 	<key>UISupportedInterfaceOrientations</key>
