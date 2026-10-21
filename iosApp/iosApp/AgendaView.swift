@@ -22,7 +22,7 @@ struct AgendaView: View {
                         .font(NightTheme.font(30, weight: .semibold))
                         .padding(.top, 6)
                     // 次のアラーム欄は小さくし、その下に鳴動の状態を1行出す (#51 PR2)
-                    NextAlarmBanner(instance: nextAlarm, accent: accent, statusLine: ringStatus.line)
+                    AgendaNextAlarmCard(instance: nextAlarm, accent: accent, statusLine: ringStatus.line)
                     if ringStatus.missingPermissions > 0 {
                         NavigationLink { PermissionsView() } label: {
                             StatusBanner(message: "許可が\(ringStatus.missingPermissions)つ足りません。鳴らない・止められないことがあります", action: "直す")
@@ -258,8 +258,9 @@ struct WeatherHeaderRow: View {
 
 // MARK: - 部品
 
-/// 次のアラーム欄 (#51 PR2 で小さくした): タイトルと時刻を1段に、下に鳴動の状態を1行
-struct NextAlarmBanner: View {
+/// 予定画面の次のアラーム欄 (#51 PR2 で小さくした): タイトルと時刻を1段に、下に鳴動の状態を1行。
+/// アラーム一覧の大きい欄 (NextAlarmBanner) はそのまま
+struct AgendaNextAlarmCard: View {
     let instance: AlarmInstanceDTO?
     let accent: Color
     let statusLine: String
@@ -293,6 +294,11 @@ struct NextAlarmBanner: View {
         .padding(.horizontal, 18).padding(.vertical, 12)
         .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 22))
     }
+
+    static func timeStr(_ millis: Int64) -> String {
+        let f = DateFormatter(); f.dateFormat = "H:mm"
+        return f.string(from: Date(timeIntervalSince1970: TimeInterval(millis) / 1000))
+    }
 }
 
 /// 許可が足りない時・鳴らせなかった時のバナー (#51 PR2)
@@ -324,6 +330,38 @@ struct RingStatusSummary {
         if recentMissed > 0 { return "直近24時間に鳴らせなかったアラームが\(recentMissed)件あります" }
         if !hasNextAlarm { return "予約中のアラームはありません" }
         return "鳴る準備ができています"
+    }
+}
+
+/// Night UI hero card: accent-soft 背景 r28 + Outfit 64 時刻 + ドット+タイトル
+struct NextAlarmBanner: View {
+    let instance: AlarmInstanceDTO
+    let accent: Color
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("次のアラーム")
+                .font(NightTheme.font(12, weight: .semibold))
+                .tracking(1)
+                .foregroundStyle(accent)
+            Text(Self.timeStr(instance.triggerAtMillis))
+                .font(NightTheme.numFont(64, weight: .light))
+                .tracking(-2)
+                .foregroundStyle(NightTheme.onNight)
+            HStack(spacing: 8) {
+                Circle().fill(accent).frame(width: 8, height: 8)
+                Text(instance.title)
+                    .font(NightTheme.font(15))
+                    .foregroundStyle(NightTheme.muted)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 22).padding(.vertical, 18)
+        .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 28))
+    }
+    static func timeStr(_ millis: Int64) -> String {
+        let f = DateFormatter(); f.dateFormat = "H:mm"
+        return f.string(from: Date(timeIntervalSince1970: TimeInterval(millis) / 1000))
     }
 }
 
