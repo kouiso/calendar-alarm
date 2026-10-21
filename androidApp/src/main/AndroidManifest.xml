@@ -44,6 +44,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 共有シートの「予定に変換」(#102)。iOS の共有拡張と同じ入口 -->
+            <intent-filter android:label="@string/share_to_event">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <!-- 鳴動画面。ロック画面・スリープ上に全面表示 -->

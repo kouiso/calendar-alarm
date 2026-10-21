@@ -44,6 +44,7 @@ fun ExtractedEventDialog(
     event: ExtractedEvent,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
+    note: String? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -75,6 +76,12 @@ fun ExtractedEventDialog(
         title = { Text("予定に追加") },
         text = {
             Column {
+                // 共有から来て AI で読めなかった時など、なぜ空欄があるかを先に伝える
+                note?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                }
                 OutlinedTextField(
                     value = title, onValueChange = { title = it },
                     label = { Text("タイトル") }, singleLine = true,
