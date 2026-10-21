@@ -1,0 +1,19 @@
+volume before run (saved): {'system': 0, 'ring': 0, 'music': 0, 'alarm': 0, 'notification': 0}
+volume now (media_session, dumpsys streamVolume): {'system': (0, None), 'ring': (0, 0), 'music': (0, 0), 'alarm': (0, 0), 'notification': (0, 0)}
+uimode at start: Night mode: no
+com.calendaralarm.r121m Success
+before light : 開始時 | 5分 | 10分 | 15分 | 9:00 の予定 | 9:00 に鳴る | ＋ カレンダーの通知（重なれば1回） | 5分 | 10分 | 15分
+com.calendaralarm.r121 Success
+after-light default: ['鳴る時刻', 'Google カレンダーの通知の時刻に鳴ります。アプリで選ぶと、その時刻にも足して鳴ります。同じ時刻なら1回だけです。', '8:55（Google）・9:00（アプリ）', '＋ カレンダーの通知（重なれば1回）']
+after-light app 15: ['鳴る時刻', 'Google カレンダーの通知の時刻に鳴ります。アプリで選ぶと、その時刻にも足して鳴ります。同じ時刻なら1回だけです。', '8:45（アプリ）・8:55（Google）', '＋ カレンダーの通知（重なれば1回）']
+after-light same 5: ['鳴る時刻', 'Google カレンダーの通知の時刻に鳴ります。アプリで選ぶと、その時刻にも足して鳴ります。同じ時刻なら1回だけです。', '8:55（アプリ・Google）', '＋ カレンダーの通知（重なれば1回）']
+after-light reminders off: ['鳴る時刻', 'アプリで選んだ時刻に鳴ります。「カレンダーの通知設定を使う」がオフなので、Google カレンダーの通知では鳴りません。', '8:55（アプリ）']
+com.calendaralarm.r121m Success
+before dark : 開始時 | 5分 | 10分 | 15分 | 9:00 の予定 | 9:00 に鳴る | ＋ カレンダーの通知（重なれば1回） | 5分 | 10分 | 15分
+com.calendaralarm.r121 Success
+after-dark default: ['鳴る時刻', 'Google カレンダーの通知の時刻に鳴ります。アプリで選ぶと、その時刻にも足して鳴ります。同じ時刻なら1回だけです。', '8:55（Google）・9:00（アプリ）', '＋ カレンダーの通知（重なれば1回）']
+after-dark app 15: ['鳴る時刻', 'Google カレンダーの通知の時刻に鳴ります。アプリで選ぶと、その時刻にも足して鳴ります。同じ時刻なら1回だけです。', '8:45（アプリ）・8:55（Google）', '＋ カレンダーの通知（重なれば1回）']
+after-dark same 5: ['鳴る時刻', 'Google カレンダーの通知の時刻に鳴ります。アプリで選ぶと、その時刻にも足して鳴ります。同じ時刻なら1回だけです。', '8:55（アプリ・Google）', '＋ カレンダーの通知（重なれば1回）']
+after-dark reminders off: ['鳴る時刻', 'アプリで選んだ時刻に鳴ります。「カレンダーの通知設定を使う」がオフなので、Google カレンダーの通知では鳴りません。', '8:55（アプリ）']
+test packages left: []
+volume restored: {'system': 0, 'ring': 0, 'music': 0, 'alarm': 0, 'notification': 0} uimode: Night mode: no
