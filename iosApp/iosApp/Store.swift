@@ -56,6 +56,8 @@ final class Store: ObservableObject {
     @Published private(set) var state = Persisted()
 
     private let fileURL: URL
+    /// いまの state をディスクから読んだ時刻。これより後に置かれたファイルを、この写しは知らない
+    private(set) var loadedAt = Date()
     /// 保存は直列キューに流す。並列 detached だと古いスナップショットが後勝ちで残る
     /// (書き込み順序が呼び出し順と逆転する) のを防ぐため FIFO にする。
     private let saveQueue = DispatchQueue(label: "calendaralarm.store.save")
@@ -70,6 +72,7 @@ final class Store: ObservableObject {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             self.fileURL = dir.appendingPathComponent("store.json")
         }
+        loadedAt = Date()
         if let data = try? Data(contentsOf: self.fileURL),
            let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = loaded
@@ -88,11 +91,19 @@ final class Store: ObservableObject {
     /// 保存キューの未完了書き込みを先に flush してから読む。
     func reload() {
         saveQueue.sync {}
+        loadedAt = Date()
         if let data = try? Data(contentsOf: fileURL),
            let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = loaded
             AlarmSoundLibrary.currentDefault = loaded.alarmSoundFile
         }
+    }
+
+    /// ディスクに保存済みの状態。別の Store (バックグラウンドの Engine) が書いた分も入る。手元の state は変えない
+    func savedState() -> Persisted? {
+        saveQueue.sync {}
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        return try? JSONDecoder().decode(Persisted.self, from: data)
     }
 
     /// 書き出しは直列キューで原子的に (tmp → rename)。呼び出し順=書き込み順なので最後の保存が常に最新。

@@ -22,8 +22,9 @@ final class Engine: ObservableObject {
     @Published var alertingIds: Set<String> = []
 
     /// OS へ予約を渡している最中の取り込み音 (名前 → 本数)。予約が記録に載る前に
-    /// 音の片付けが走っても、これから鳴る音を消さないために数える
-    private var inFlightSounds: [String: Int] = [:]
+    /// 音の片付けが走っても、これから鳴る音を消さないために数える。
+    /// バックグラウンドの resync は別の Engine で走るので、エンジンごとでなくアプリ全体で数える
+    private static var inFlightSounds: [String: Int] = [:]
 
     /// 予約を書き換える処理 (resync・音の入れ直し) を1本ずつ流すための列の末尾。
     /// どちらも途中で await するので、並んで走ると片方が古い写しで相手の予約を上書きする
@@ -539,7 +540,8 @@ final class Engine: ObservableObject {
     }
 
     /// AlarmKit は予約の前に同じ id の予約を取り消すので、予約が失敗すると前の予約も消えている。
-    /// 前の音で予約し直し、それも駄目なら記録を外して一覧に予約ありと出さない (タイマーは残して拾い直させる)
+    /// 前の音で予約し直し、それも駄目なら記録を外して一覧に予約ありと出さない
+    /// (展開で作り直せないタイマーとスヌーズ子は残して拾い直させる)
     /// @returns false = OS に予約が無いまま (resync で取り直す)
     private func restoreAfterFailedSoundChange(_ rec: ScheduledRecord) async -> Bool {
         let id = rec.instance.id
@@ -551,8 +553,8 @@ final class Engine: ObservableObject {
             store.audit("SOUND_RESTORE", "\(id): 前の音で予約し直し")
             return true
         } catch {
-            if rec.instance.kind == "TIMER" {
-                // タイマーは展開で作り直せないので記録を残す。予約 id を空にして、次の resync で拾い直させる
+            if !Self.isRegeneratedByExpand(rec.instance) {
+                // 展開で作り直せない行は、記録を消すと二度と鳴らない。予約 id を空にして、次の resync で拾い直させる
                 store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending,
                                                    alarmKitId: nil, soundFile: rec.soundFile))
             } else {
@@ -563,17 +565,22 @@ final class Engine: ObservableObject {
         }
     }
 
+    /// 展開 (SharedDomain.expand) が毎回作り直す行か。タイマーとスヌーズ子は今ある記録からしか持ち越されない
+    static func isRegeneratedByExpand(_ inst: AlarmInstanceDTO) -> Bool {
+        inst.kind != "TIMER" && inst.snoozeSeq == 0
+    }
+
     /// OS へ予約し、その予約に渡した音を一緒に返す。音はここで1回だけ決め、記録に残す
     private func reserve(_ inst: AlarmInstanceDTO) async throws -> (id: String?, sound: String?) {
         try await reserve(inst, sound: AlarmSoundLibrary.soundName(for: inst))
     }
 
     private func reserve(_ inst: AlarmInstanceDTO, sound: String?) async throws -> (id: String?, sound: String?) {
-        if let sound { inFlightSounds[sound, default: 0] += 1 }
+        if let sound { Self.inFlightSounds[sound, default: 0] += 1 }
         defer {
             if let sound {
-                let left = (inFlightSounds[sound] ?? 1) - 1
-                inFlightSounds[sound] = left > 0 ? left : nil
+                let left = (Self.inFlightSounds[sound] ?? 1) - 1
+                Self.inFlightSounds[sound] = left > 0 ? left : nil
             }
         }
         let id = try await scheduler.schedule(inst, sound: sound)
@@ -582,15 +589,24 @@ final class Engine: ObservableObject {
 
     /// 取り込んだ音のうち、もう鳴らす予定の無いものを消す (#101)。
     /// 待機中・鳴動中・スヌーズ中の記録が指す音、予約を渡している最中の音、既定と個別指定の音は残す。
-    /// 入れ直しに失敗して前の音で予約し直した記録も前の音を指すので残る
-    private func removeUnusedSounds() {
-        var keep = Set(store.state.scheduled.values
+    /// 入れ直しに失敗して前の音で予約し直した記録も前の音を指すので残る。
+    /// バックグラウンドの resync は前景と別の Engine・Store で走り、手元の写しは古いことがある。
+    /// 写しだけで決めると前景で取り込んだばかりの音を消すので、保存済みの状態が指す音と、
+    /// 写しを読んだ後に置かれたファイルも残す
+    func removeUnusedSounds() {
+        var keep = Self.soundsInUse(store.state)
+        if let saved = store.savedState() { keep.formUnion(Self.soundsInUse(saved)) }
+        keep.formUnion(Self.inFlightSounds.keys)
+        AlarmSoundLibrary.removeAll(except: keep, createdBefore: store.loadedAt)
+    }
+
+    private static func soundsInUse(_ s: Store.Persisted) -> Set<String> {
+        var keep = Set(s.scheduled.values
             .filter { [.pending, .fired, .snoozed].contains($0.state) }
             .compactMap { $0.soundFile })
-        keep.formUnion(inFlightSounds.keys)
-        if let current = store.state.alarmSoundFile { keep.insert(current) }
-        keep.formUnion(store.state.standaloneAlarms.compactMap { $0.soundUri })
-        AlarmSoundLibrary.removeAll(except: keep)
+        if let current = s.alarmSoundFile { keep.insert(current) }
+        keep.formUnion(s.standaloneAlarms.compactMap { $0.soundUri })
+        return keep
     }
 
     // MARK: - ユーティリティ

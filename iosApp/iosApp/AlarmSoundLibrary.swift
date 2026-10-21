@@ -81,10 +81,15 @@ enum AlarmSoundLibrary {
         return name
     }
 
-    /// 取り込んだ音のうち [keep] に無いものを消す。取り込み以外のファイルは消さない
-    static func removeAll(except keep: Set<String>) {
+    /// 取り込んだ音のうち [keep] に無いものを消す。取り込み以外のファイルは消さない。
+    /// [createdBefore] より後に作られたファイルは、[keep] を作った写しが知らない音なので消さない
+    static func removeAll(except keep: Set<String>, createdBefore: Date = .distantFuture) {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: soundsDirectory.path)) ?? []
-        for name in names where name.hasPrefix(prefix) && !keep.contains(name) { remove(name) }
+        for name in names where name.hasPrefix(prefix) && !keep.contains(name) {
+            let attrs = try? FileManager.default.attributesOfItem(atPath: soundsDirectory.appendingPathComponent(name).path)
+            if let created = attrs?[.creationDate] as? Date, created >= createdBefore { continue }
+            remove(name)
+        }
     }
 
     /// 取り込んだ音を消す。取り込み以外のファイルは消さない

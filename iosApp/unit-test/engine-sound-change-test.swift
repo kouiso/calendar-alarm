@@ -218,4 +218,86 @@ final class EngineSoundChangeTests: XCTestCase {
         XCTAssertEqual(rec.state, .pending)
         XCTAssertNil(rec.alarmKitId, "OS に予約が無いのに予約ありになっている")
     }
+
+    /// スヌーズ子も展開で作り直せない。新しい音でも前の音でも予約できなかった時に記録を消すと、二度と鳴らない
+    func testLostSnoozeChildIsKeptForRecovery() async throws {
+        let (aid, parentId) = try await bookAlarm(hoursAhead: 3)
+        let parent = try XCTUnwrap(engine.store.state.scheduled[parentId]?.instance)
+        var child = parent
+        child.id = "\(parentId):snz1"
+        child.snoozeSeq = 1
+        child.triggerAtMillis = Engine.nowMillis + 10 * 60_000
+        engine.store.markState(parentId, .snoozed)
+        engine.store.putScheduled(ScheduledRecord(instance: child, state: .pending, alarmKitId: "fake-\(child.id)"))
+        fake.booked[child.id] = (child, nil)
+        engine.store.setAlarmSound(file: sound, label: "test")
+        fake.failures = 3
+
+        await engine.rescheduleForSoundChange()
+
+        let rec = try XCTUnwrap(engine.store.state.scheduled[child.id], "スヌーズ子の記録が消えた")
+        XCTAssertEqual(rec.state, .pending)
+        XCTAssertNil(rec.alarmKitId, "OS に予約が無いのに予約ありになっている")
+        XCTAssertEqual(rec.instance.standaloneAlarmId, aid)
+    }
+
+    private func soundFile(_ name: String) -> String {
+        AlarmSoundLibrary.soundsDirectory.appendingPathComponent(name).path
+    }
+
+    private func placeSound() -> String {
+        let name = "\(AlarmSoundLibrary.prefix)test-\(UUID().uuidString.lowercased()).caf"
+        FileManager.default.createFile(atPath: soundFile(name), contents: Data([0]))
+        return name
+    }
+
+    /// 同じ保存先を使う2つ目の Engine (バックグラウンドの resync と同じ作り)
+    private func backgroundEngine() -> Engine {
+        Engine(scheduler: FakeScheduler(), store: Store(fileURL: storeURL))
+    }
+
+    private var storeURL: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("shared-store-\(name.hashValue).json")
+    }
+
+    /// 古い写しのバックグラウンド Engine が片付けても、写しを読んだ後に取り込んだ音は消さない
+    func testStaleEngineKeepsSoundImportedAfterItLoaded() async throws {
+        let foreground = Engine(scheduler: FakeScheduler(), store: Store(fileURL: storeURL))
+        let background = backgroundEngine()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        let fresh = placeSound()
+        defer { AlarmSoundLibrary.remove(fresh); try? FileManager.default.removeItem(at: storeURL) }
+
+        background.removeUnusedSounds()
+
+        XCTAssertTrue(AlarmSoundLibrary.exists(fresh), "前景で取り込んだばかりの音を消した")
+        _ = foreground
+    }
+
+    /// 写しより前からある音でも、前景が後から既定にして保存していれば消さない
+    func testStaleEngineKeepsSoundTheOtherEngineSaved() async throws {
+        let older = placeSound()
+        defer { AlarmSoundLibrary.remove(older); try? FileManager.default.removeItem(at: storeURL) }
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        let foreground = Engine(scheduler: FakeScheduler(), store: Store(fileURL: storeURL))
+        let background = backgroundEngine()
+        foreground.store.setAlarmSound(file: older, label: "test")
+        _ = foreground.store.savedState()
+
+        background.removeUnusedSounds()
+
+        XCTAssertTrue(AlarmSoundLibrary.exists(older), "前景の既定の音を古い写しで消した")
+    }
+
+    /// 片付け自体は止めていない: どこからも指されていない古い音は消える
+    func testUnusedOldSoundIsStillRemoved() async throws {
+        let unused = placeSound()
+        defer { AlarmSoundLibrary.remove(unused); try? FileManager.default.removeItem(at: storeURL) }
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        let background = backgroundEngine()
+
+        background.removeUnusedSounds()
+
+        XCTAssertFalse(AlarmSoundLibrary.exists(unused), "使われていない音が残った")
+    }
 }
