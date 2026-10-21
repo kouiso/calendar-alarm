@@ -42,6 +42,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.calendaralarm.ai.ShareImport
 import com.calendaralarm.ui.AgendaScreen
 import com.calendaralarm.ui.AlarmEditScreen
 import com.calendaralarm.ui.AlarmsScreen
@@ -59,11 +60,33 @@ class MainActivity : ComponentActivity() {
     /** メール→予定の通知から来た抽出結果 (JSON)。null でダイアログ非表示。 */
     private val extractedJson = androidx.compose.runtime.mutableStateOf<String?>(null)
 
+    /** 共有シートで受けた本文 (#102)。読み取りが終わると null に戻す。 */
+    private val sharedText = androidx.compose.runtime.mutableStateOf<String?>(null)
+
+    /** 共有の読み取りで予定にできなかった時の理由。取り込み画面に出す */
+    private val extractedNote = androidx.compose.runtime.mutableStateOf<String?>(null)
+
+    @androidx.annotation.VisibleForTesting
+    internal val pendingSharedText: String? get() = sharedText.value
+
+    @androidx.annotation.VisibleForTesting
+    internal val pendingExtractedJson: String? get() = extractedJson.value
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         intent.getStringExtra(EXTRA_EXTRACTED_EVENT)?.let {
             extractedJson.value = it
             this.intent.removeExtra(EXTRA_EXTRACTED_EVENT)
+        }
+        takeSharedText(intent)
+    }
+
+    /** 共有の本文を一度だけ受け取る。同じプロセス内の作り直しで二度読み取らないよう intent から外す */
+    private fun takeSharedText(intent: android.content.Intent?) {
+        com.calendaralarm.ai.ShareImport.textFrom(intent)?.let {
+            sharedText.value = it
+            intent?.action = null
+            intent?.removeExtra(android.content.Intent.EXTRA_TEXT)
         }
     }
 
@@ -78,11 +101,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // 回転などで作り直されても、読み取り中・確認中の取り込みを失わないよう退避する。
+    // 共有の intent は受け取った時点で外しているので、ここで持ち越さないと消える
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        sharedText.value?.let { outState.putString(STATE_SHARED_TEXT, it) }
+        extractedJson.value?.let { outState.putString(STATE_EXTRACTED_JSON, it) }
+        extractedNote.value?.let { outState.putString(STATE_EXTRACTED_NOTE, it) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        intent?.getStringExtra(EXTRA_EXTRACTED_EVENT)?.let {
-            extractedJson.value = it
-            intent?.removeExtra(EXTRA_EXTRACTED_EVENT)
+        savedInstanceState?.let { s ->
+            sharedText.value = s.getString(STATE_SHARED_TEXT)
+            extractedJson.value = s.getString(STATE_EXTRACTED_JSON)
+            extractedNote.value = s.getString(STATE_EXTRACTED_NOTE)
+        }
+        // プロセスが落ちた後の作り直しや履歴からの再開では、外したはずの最初の intent が
+        // そのまま戻る。読み取り直すと閉じた・追加済みの取り込みが再び出て予定が二重になるため、
+        // 新しく開かれた時だけ intent を読む (続きは上の退避分から戻す)
+        if (ShareImport.isFreshLaunch(savedInstanceState, intent)) {
+            intent?.getStringExtra(EXTRA_EXTRACTED_EVENT)?.let {
+                extractedJson.value = it
+                intent?.removeExtra(EXTRA_EXTRACTED_EVENT)
+            }
+            takeSharedText(intent)
         }
         setContent {
             // recomposition 毎に Flow を作り直すと collectAsState が
@@ -122,6 +165,20 @@ class MainActivity : ComponentActivity() {
                             lifecycleScope.launch { app.container.repository.resync("calendar granted") }
                         }
                     }
+                    // 共有→予定 (#102): 本文を読み取ってから、印刷経路と同じ確認ダイアログへ進める
+                    sharedText.value?.let { text ->
+                        com.calendaralarm.ui.SharedTextImportDialog(
+                            text = text,
+                            onResult = { ev, note ->
+                                sharedText.value = null
+                                extractedNote.value = note
+                                extractedJson.value = kotlinx.serialization.json.Json.encodeToString(
+                                    com.calendaralarm.shared.model.ExtractedEvent.serializer(), ev,
+                                )
+                            },
+                            onCancel = { sharedText.value = null },
+                        )
+                    }
                     // メール→予定: 抽出結果が届いていれば確認ダイアログを最前面に出す
                     extractedJson.value?.let { json ->
                         val ev = runCatching {
@@ -132,9 +189,14 @@ class MainActivity : ComponentActivity() {
                         if (ev != null) {
                             com.calendaralarm.ui.ExtractedEventDialog(
                                 event = ev,
-                                onDismiss = { extractedJson.value = null },
+                                note = extractedNote.value,
+                                onDismiss = {
+                                    extractedJson.value = null
+                                    extractedNote.value = null
+                                },
                                 onSaved = {
                                     extractedJson.value = null
+                                    extractedNote.value = null
                                     // 新しい予定を即時取り込んでアラーム化する
                                     lifecycleScope.launch {
                                         app.container.repository.resync("event inserted")
@@ -152,6 +214,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** MailPrintService が結果を渡す extra キー (ExtractedEvent の JSON)。 */
         const val EXTRA_EXTRACTED_EVENT = "com.calendaralarm.extra.EXTRACTED_EVENT"
+        private const val STATE_SHARED_TEXT = "shared_text"
+        private const val STATE_EXTRACTED_JSON = "extracted_json"
+        private const val STATE_EXTRACTED_NOTE = "extracted_note"
     }
 }
 

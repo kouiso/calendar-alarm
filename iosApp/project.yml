@@ -66,6 +66,9 @@ targets:
         CFBundleDisplayName: Calendar Alarm
         CFBundleIdentifier: com.calendaralarm.ios
         OpenRouterAPIKey: $(OPENROUTER_API_KEY)
+        # Info.plist を自前で持つ (GENERATE_INFOPLIST_FILE: NO) ので、*_Generation の鍵は効かない。
+        # UILaunchScreen が無いと古い画面サイズ扱いになり、上下が黒い帯の縮小表示になる
+        UILaunchScreen: {}
         UILaunchScreen_Generation: YES
         UIApplicationSceneManifest_Generation: YES
         UISupportedInterfaceOrientations:
