@@ -1,0 +1,8 @@
+volume saved: {'system': 0, 'ring': 0, 'music': 0, 'alarm': 0, 'notification': 0} now: {'system': 0, 'ring': 0, 'music': 0, 'alarm': 0, 'notification': 0}
+r1 ask: 予定に合わせて、前もって鳴らすために
+r1 os dialog -> 許可
+r1 ask: 鳴ったことを知らせるために
+r1 os dialog -> 許可
+r1 ready sheet reached after 4 steps; buttons: ['一度鳴らして、止まるか確かめておくと安心。', '10秒後に鳴らしてみる', '閉じる']
+ROUTE1 PASS
+volume restored: {'system': 0, 'ring': 0, 'music': 0, 'alarm': 0, 'notification': 0}
