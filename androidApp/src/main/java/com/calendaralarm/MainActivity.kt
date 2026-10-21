@@ -94,8 +94,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // 回転などで作り直されても、読み取り中・確認中の取り込みを失わないよう退避する。
+    // 共有の intent は受け取った時点で外しているので、ここで持ち越さないと消える
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        sharedText.value?.let { outState.putString(STATE_SHARED_TEXT, it) }
+        extractedJson.value?.let { outState.putString(STATE_EXTRACTED_JSON, it) }
+        extractedNote.value?.let { outState.putString(STATE_EXTRACTED_NOTE, it) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        savedInstanceState?.let { s ->
+            sharedText.value = s.getString(STATE_SHARED_TEXT)
+            extractedJson.value = s.getString(STATE_EXTRACTED_JSON)
+            extractedNote.value = s.getString(STATE_EXTRACTED_NOTE)
+        }
         intent?.getStringExtra(EXTRA_EXTRACTED_EVENT)?.let {
             extractedJson.value = it
             intent?.removeExtra(EXTRA_EXTRACTED_EVENT)
@@ -188,6 +202,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** MailPrintService が結果を渡す extra キー (ExtractedEvent の JSON)。 */
         const val EXTRA_EXTRACTED_EVENT = "com.calendaralarm.extra.EXTRACTED_EVENT"
+        private const val STATE_SHARED_TEXT = "shared_text"
+        private const val STATE_EXTRACTED_JSON = "extracted_json"
+        private const val STATE_EXTRACTED_NOTE = "extracted_note"
     }
 }
 
