@@ -68,6 +68,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
+import com.calendaralarm.shared.logic.SlideToStopRule
 import com.calendaralarm.shared.model.CurrentWeather
 import com.calendaralarm.ui.WeatherBackdrop
 import com.calendaralarm.ui.theme.OutfitFontFamily
@@ -550,14 +551,14 @@ private fun SlideToStop(
             }
             .pointerInput(trackWidthPx) {
                 // 掴み始めが丸の範囲内の時だけ受理: トラック右側からの横スワイプで
-                // 止まってしまうと誤停止になるため起点を縛る (iOS と同じ閾値式)
+                // 止まってしまうと誤停止になるため起点を縛る。幅と閾値は iOS と共通の SlideToStopRule
                 var grabbed = false
                 detectDragGestures(
-                    onDragStart = { grabbed = downX <= thumbPx + padPx * 3 },
+                    onDragStart = { grabbed = SlideToStopRule.isGrab(downX, thumbPx, padPx) },
                     onDragEnd = {
                         if (grabbed) {
                             scope.launch {
-                                if (progress.value >= SLIDE_STOP_THRESHOLD) {
+                                if (SlideToStopRule.shouldStop(progress.value)) {
                                     progress.snapTo(1f)
                                     onStop()
                                 } else {

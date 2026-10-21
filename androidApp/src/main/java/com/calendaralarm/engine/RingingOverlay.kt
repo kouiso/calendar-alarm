@@ -17,13 +17,11 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.calendaralarm.shared.logic.SlideToStopRule
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.launch
-
-/** スライド停止の閾値 (RingingActivity/iOS の3実装で同じ値に揃える) */
-internal const val SLIDE_STOP_THRESHOLD = 0.8f
 
 /**
  * 鳴動中の「停止UIが1つも画面に出ない」事故への最終防衛オーバーレイ。
@@ -377,13 +375,13 @@ object RingingOverlay {
 
         var downX = 0f
         // 掴み始めが丸の範囲内の時だけドラッグを受理: トラック上の任意スワイプで
-        // 止まってしまうと誤停止になるため起点を縛る (RingingActivity と同じ判定)
+        // 止まってしまうと誤停止になるため起点を縛る。幅と閾値は鳴動画面・iOS と共通の SlideToStopRule
         var grabbed = false
         slider.setOnTouchListener { v, ev ->
             val travel = (v.width - thumbSize - pad * 2).coerceAtLeast(1).toFloat()
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    grabbed = ev.x <= thumbSize + pad * 3
+                    grabbed = SlideToStopRule.isGrab(ev.x, thumbSize.toFloat(), pad.toFloat())
                     downX = ev.x
                     true
                 }
@@ -397,7 +395,7 @@ object RingingOverlay {
                 MotionEvent.ACTION_UP -> {
                     if (!grabbed) return@setOnTouchListener true
                     grabbed = false
-                    if ((ev.x - downX) >= travel * SLIDE_STOP_THRESHOLD) {
+                    if (SlideToStopRule.shouldStop((ev.x - downX) / travel)) {
                         thumb.translationX = travel
                         dismiss()
                     } else {
