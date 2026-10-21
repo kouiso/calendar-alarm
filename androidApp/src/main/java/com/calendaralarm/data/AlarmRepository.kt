@@ -184,9 +184,10 @@ class AlarmRepository(
         val lockedByCalendar: Boolean get() = calendarOff || allDayOff
 
         /**
-         * 行のスイッチを押せなくする。すべてミュート中は、スイッチで入れるアラームの指定も展開で外れて鳴らないため
+         * 行のスイッチを押せなくする。すべてミュート中は、スイッチで入れるアラームの指定も展開で外れて鳴らないので、
+         * 鳴らない側の行は入れられない。通知で鳴る側の行は切れるように残す
          */
-        val switchLocked: Boolean get() = lockedByCalendar || muteAll
+        val switchLocked: Boolean get() = lockedByCalendar || (muteAll && muted)
 
         /**
          * 何も鳴らない状態 (UI のグレー化と行のスイッチ)。展開 (AlarmExpander.expandEvents) と同じく、

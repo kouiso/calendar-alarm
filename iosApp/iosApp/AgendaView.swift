@@ -490,13 +490,14 @@ struct EventRow: View {
                 }
             }
             if let onToggle {
-                // カレンダーごと・終日の予定を鳴らさない設定・すべてミュート中は、予定のスイッチを入れても鳴らないので押せなくする
+                // カレンダーごと・終日の予定を鳴らさない設定・すべてミュート中の鳴らない行は、スイッチを入れても鳴らないので押せなくする
+                // (すべてミュート中でも通知で鳴る行は切れる)
                 Toggle("", isOn: Binding(get: { !ev.muted }, set: { onToggle($0) }))
                     .labelsHidden()
-                    .disabled(ev.calendarOff || ev.allDayOff || ev.muteAll)
+                    .disabled(ev.calendarOff || ev.allDayOff || (ev.muteAll && ev.muted))
                     .accessibilityLabel(ev.calendarOff ? "カレンダーが鳴らさない設定です。設定のカレンダー欄で変えられます"
                         : ev.allDayOff ? "このカレンダーは終日の予定を鳴らさない設定です。設定のカレンダー欄で変えられます"
-                        : ev.muteAll ? "アラームをすべてミュート中です。設定で解除できます"
+                        : ev.muteAll && ev.muted ? "アラームをすべてミュート中です。設定で解除できます"
                         : "\(ev.event.title)で鳴らす")
             }
         }

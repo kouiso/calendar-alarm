@@ -590,7 +590,8 @@ internal fun EventRow(
         }
         if (onToggle != null) {
             Spacer(Modifier.width(6.dp))
-            // カレンダーごと・終日の予定を鳴らさない設定・すべてミュート中は、予定のスイッチを入れても鳴らないので押せなくする
+            // カレンダーごと・終日の予定を鳴らさない設定・すべてミュート中の鳴らない行は、スイッチを入れても鳴らないので押せなくする
+            // (すべてミュート中でも通知で鳴る行は切れる)
             Switch(
                 checked = !item.muted,
                 onCheckedChange = onToggle,
@@ -599,7 +600,7 @@ internal fun EventRow(
                     contentDescription = when {
                         item.calendarOff -> "カレンダーが鳴らさない設定です。設定のカレンダー欄で変えられます"
                         item.allDayOff -> "このカレンダーは終日の予定を鳴らさない設定です。設定のカレンダー欄で変えられます"
-                        item.muteAll -> "アラームをすべてミュート中です。設定で解除できます"
+                        item.muteAll && item.muted -> "アラームをすべてミュート中です。設定で解除できます"
                         else -> "${ev.title.ifBlank { "予定" }}で鳴らす"
                     }
                 },

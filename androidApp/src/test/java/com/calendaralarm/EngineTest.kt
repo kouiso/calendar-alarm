@@ -559,7 +559,7 @@ class EngineTest {
     }
 
     @Test
-    fun `すべてミュート中はアラームの予定を鳴らない側に出してスイッチを押せなくし、通知の予定は鳴る側に残す`() = runBlocking {
+    fun `すべてミュート中はアラームの予定を鳴らない側に出してスイッチを押せなくし、通知の予定は鳴る側に残して切れるようにする`() = runBlocking {
         val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
         fun row(eventId: Long, calId: Long) = mapOf(
             CalendarContract.Instances.EVENT_ID to eventId,
@@ -593,7 +593,8 @@ class EngineTest {
             assertTrue(alarm.switchLocked)
             val notify = items.getValue("2")
             assertEquals(false, notify.muted)
-            assertTrue(notify.switchLocked)
+            // 通知はすべてミュート中も鳴るので、行のスイッチで切れる
+            assertEquals(false, notify.switchLocked)
             // 一覧の表示と実際の予約が一致する: 通知の予定だけ予約される
             repositoryWithCalendar.resync("test")
             val pendingIds = db.scheduledInstances().pending().map { it.id }

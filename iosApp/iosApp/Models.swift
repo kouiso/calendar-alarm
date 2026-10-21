@@ -397,7 +397,7 @@ struct DisplayEvent: Identifiable, Hashable {
     var calendarOff: Bool = false
     /// 終日の予定で、カレンダーが終日を鳴らさない設定 (予定ごとの指定より強い)
     var allDayOff: Bool = false
-    /// 設定の「アラームをすべてミュート」中 (展開がアラームを全部外すので、行のスイッチで入れても鳴らない)
+    /// 設定の「アラームをすべてミュート」中 (展開がアラームを全部外すので、鳴らない行はスイッチで入れても鳴らない)
     var muteAll: Bool = false
 }
 
