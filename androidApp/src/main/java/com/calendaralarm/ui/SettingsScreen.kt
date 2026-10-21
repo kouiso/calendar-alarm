@@ -81,6 +81,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.calendaralarm.data.AlarmRepository
@@ -89,6 +90,7 @@ import com.calendaralarm.data.db.CalendarPrefEntity
 import com.calendaralarm.data.db.AuditLogEntity
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.logic.SettingsPreview
+import com.calendaralarm.shared.logic.WeekCalendar
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventType
@@ -102,6 +104,7 @@ import kotlinx.datetime.Clock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.datetime.isoDayNumber
 
 /**
  * 設定。既定値・カレンダー選択・権限・監査ログ。
@@ -1209,6 +1212,63 @@ private fun AppearanceCard(
                     }) { Text("削除") }
                 }
             }
+            WeekDisplaySettings(
+                showWeekNumbers = p.showWeekNumbers,
+                firstWeekday = p.firstWeekday,
+                onShowWeekNumbers = { scope.launch { settings.setShowWeekNumbers(it) } },
+                onFirstWeekday = { scope.launch { settings.setFirstWeekday(it) } },
+            )
+        }
+    }
+}
+
+/** 週番号と週の始まり (旧版の「Show Calendar Week」「First day of week」, #106)。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WeekDisplaySettings(
+    showWeekNumbers: Boolean,
+    firstWeekday: Int,
+    onShowWeekNumbers: (Boolean) -> Unit,
+    onFirstWeekday: (Int) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "予定一覧に週番号を出す",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = showWeekNumbers, onCheckedChange = onShowWeekNumbers)
+    }
+    Text(
+        "週の始まり",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+    FlowRow(Modifier.fillMaxWidth()) {
+        WeekCalendar.weekdayOrder(1).forEach { day ->
+            FilterChip(
+                selected = WeekCalendar.normalize(firstWeekday) == day.isoDayNumber,
+                onClick = { onFirstWeekday(day.isoDayNumber) },
+                label = { Text(day.jaShort(), maxLines = 1) },
+                modifier = Modifier.padding(end = 4.dp),
+            )
+        }
+    }
+    // 見た目のプレビュー (決定5): 月表示の曜日の並びをそのまま見せる
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        WeekCalendar.weekdayOrder(firstWeekday).forEach { day ->
+            Text(
+                day.jaShort(),
+                Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

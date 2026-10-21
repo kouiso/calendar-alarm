@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.sync.SyncWorker
+import com.calendaralarm.shared.logic.WeekCalendar
 import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.DailyForecast
@@ -244,6 +245,7 @@ fun AgendaScreen(repository: AlarmRepository) {
                 ViewMode.LIST -> AgendaList(
                     items = filtered,
                     onSelect = { selected = it },
+                    showWeekNumbers = settings?.showWeekNumbers == true,
                 )
                 ViewMode.MONTH -> MonthView(
                     month = focusDate,
@@ -251,6 +253,7 @@ fun AgendaScreen(repository: AlarmRepository) {
                     focusDate = focusDate,
                     onSelectDay = { focusDate = it },
                     onSelectEvent = { selected = it },
+                    firstWeekday = settings?.firstWeekday ?: WeekCalendar.DEFAULT_FIRST_WEEKDAY,
                 )
                 ViewMode.THREE_DAY -> ThreeDayView(
                     startDate = focusDate,
@@ -343,13 +346,14 @@ private fun NextAlarmBanner(title: String, triggerAtMillis: Long) {
 private fun AgendaList(
     items: List<AlarmRepository.AgendaItem>,
     onSelect: (AlarmRepository.AgendaItem) -> Unit,
+    showWeekNumbers: Boolean = false,
 ) {
     val grouped = items.groupBy { eventDate(it.event) }
     LazyColumn {
         grouped.forEach { (date, dayItems) ->
             item(key = "d$date") {
                 Column(Modifier.padding(horizontal = 16.dp)) {
-                    DayHeader(date)
+                    DayHeader(date, showWeekNumbers)
                     Card(
                         Modifier.fillMaxWidth(),
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
@@ -369,7 +373,7 @@ private fun AgendaList(
 }
 
 @Composable
-private fun DayHeader(date: LocalDate) {
+private fun DayHeader(date: LocalDate, showWeekNumber: Boolean = false) {
     val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(tz).date
     val rel = when (date) {
         today -> "今日"
@@ -399,6 +403,14 @@ private fun DayHeader(date: LocalDate) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
+        }
+        if (showWeekNumber) {
+            Spacer(Modifier.weight(1f))
+            Text(
+                "第${WeekCalendar.isoWeekNumber(date)}週",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
