@@ -15,6 +15,7 @@ import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.AlarmState
+import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
@@ -189,6 +190,14 @@ class AlarmRepository(
                 (reminderAction == EventAction.MUTE || !hasReminderTriggers)
     }
 
+    /**
+     * Reminders.MINUTES=-1 (MINUTES_DEFAULT) は「システム既定」。実値は端末依存で取得できないため、
+     * 設定画面で変えられる既定分数 defaultMinutesBefore に解決する (代替値を隠さない)。
+     * 予約 (resync) と一覧のスイッチが別々に解決すると、鳴るのに「鳴らない」と出るずれが起きるので、両方ここを通す
+     */
+    private fun CalendarEvent.withResolvedDefaultReminders(appSettings: SettingsRepository.Settings): CalendarEvent =
+        copy(calendarReminderMinutes = calendarReminderMinutes.map { if (it < 0) appSettings.defaultMinutesBefore else it })
+
     suspend fun upcomingEvents(days: Int = 14): List<AgendaItem> = withContext(Dispatchers.IO) {
         if (!hasCalendarPermission()) return@withContext emptyList()
         val now = Clock.System.now()
@@ -200,7 +209,7 @@ class AlarmRepository(
             calendarReader.events(
                 now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
                 (now + days.days).toEpochMilliseconds(),
-            ),
+            ).map { it.withResolvedDefaultReminders(appSettings) },
             appSettings,
             now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
             (now + days.days).toEpochMilliseconds(),
@@ -526,16 +535,7 @@ class AlarmRepository(
                     calendarReader.events(
                         (now - 14.days).toEpochMilliseconds(),
                         horizon.toEpochMilliseconds(),
-                    ).map { ev ->
-                        // Reminders.MINUTES=-1 (MINUTES_DEFAULT) は「システム既定」。
-                        // 実値は端末依存で取得不能なため、ユーザーが設定画面で変えられる
-                        // 既存の既定分数 defaultMinutesBefore に解決する (代替値を隠さない)。
-                        ev.copy(
-                            calendarReminderMinutes = ev.calendarReminderMinutes.map {
-                                if (it < 0) appSettings.defaultMinutesBefore else it
-                            },
-                        )
-                    },
+                    ).map { it.withResolvedDefaultReminders(appSettings) },
                     appSettings,
                     (now - 14.days).toEpochMilliseconds(),
                     horizon.toEpochMilliseconds(),

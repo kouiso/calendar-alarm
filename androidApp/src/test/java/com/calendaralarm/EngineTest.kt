@@ -509,6 +509,56 @@ class EngineTest {
     }
 
     @Test
+    fun `カレンダーの通知がシステム既定 (-1) だけの予定も、鳴るなら行のスイッチを鳴る側に出す`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        FakeCalendarProvider.instanceRows = listOf(
+            mapOf(
+                CalendarContract.Instances.EVENT_ID to 2L,
+                CalendarContract.Instances.CALENDAR_ID to 1L,
+                CalendarContract.Instances.TITLE to "予定2",
+                CalendarContract.Instances.DESCRIPTION to "",
+                CalendarContract.Instances.EVENT_LOCATION to "",
+                CalendarContract.Instances.BEGIN to start,
+                CalendarContract.Instances.END to start + 3_600_000L,
+                CalendarContract.Instances.ALL_DAY to 0,
+                CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                    CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+                CalendarContract.Instances.ORGANIZER to null,
+            ),
+        )
+        // 予約側は -1 を既定分数 (defaultMinutesBefore) に置き換えて鳴らすので、一覧も同じ扱いにする
+        FakeCalendarProvider.reminderRows = listOf(
+            mapOf(
+                CalendarContract.Reminders.EVENT_ID to 2L,
+                CalendarContract.Reminders.MINUTES to CalendarContract.Reminders.MINUTES_DEFAULT,
+                CalendarContract.Reminders.METHOD to CalendarContract.Reminders.METHOD_ALERT,
+            ),
+        )
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        db.calendarPrefs().upsert(
+            CalendarPrefEntity("1", enabled = true, minutesBefore = 0, startAction = "MUTE", reminderAction = "ALARM"),
+        )
+
+        // 既定分数を開始の 0 分と違う値にして、-1 がこの設定に解決されたことを予約の ID で確かめる
+        val settings = SettingsRepository(context)
+        val before = settings.flow.first().defaultMinutesBefore
+        settings.setDefaultMinutesBefore(15)
+        try {
+            val item = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }.getValue("2")
+            repositoryWithCalendar.resync("test")
+            val pendingIds = db.scheduledInstances().pending().map { it.id }
+            assertEquals(listOf("ev:1:2:$start:b15"), pendingIds)
+            // 予約があるので、スイッチは鳴る側 (鳴らないと出して鳴るのが一番まずい)
+            assertEquals(false, item.muted)
+            assertTrue(item.hasReminderTriggers)
+        } finally {
+            // 設定は DataStore に残り他の試験へ漏れるので戻す
+            settings.setDefaultMinutesBefore(before)
+        }
+    }
+
+    @Test
     fun `期限切れ PENDING は MISSED 化される`() = runBlocking {
         val stale = AlarmInstance(
             id = "old", triggerAtMillis = System.currentTimeMillis() - 3_600_000 * 2,
