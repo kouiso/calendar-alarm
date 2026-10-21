@@ -72,15 +72,7 @@ final class Engine: ObservableObject {
                 // AlarmKit から消えた = ユーザーがアラートUIで完全に止めた
                 if rec.state == .fired || rec.state == .snoozed {
                     store.markState(id, .dismissed)
-                    // スヌーズ子が pending で残っている限り単発は消費扱いにしない。
-                    // ここで親を OFF にすると子の温存条件 (sa: 親 enabled) を壊し、
-                    // 次回 resync で子が捨てられてスヌーズが鳴らなくなる。
-                    let snoozeChildPending = rec.state == .snoozed && store.state.scheduled.contains {
-                        $0.key.hasPrefix("\(id):snz") && $0.value.state == .pending
-                    }
-                    if let aid = rec.instance.standaloneAlarmId, !snoozeChildPending {
-                        disableConsumedOneShots([aid])
-                    }
+                    if let aid = rec.instance.standaloneAlarmId { disableConsumedOneShots([aid]) }
                     alertingIds.remove(id)
                 }
                 continue
@@ -402,24 +394,9 @@ final class Engine: ObservableObject {
             store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m (native)")
             return
         }
-        scheduleSnoozeChild(inst, minutes: inst.snoozeMinutes)
-    }
-
-    /// プリセット分数のスヌーズ (鳴動画面の「スヌーズ時間を選ぶ」チップ)。
-    /// AlarmKit の countdown は予約時の分数固定で上書きできないため、
-    /// 既定と異なる分数は常に子インスタンス予約で実現する (Android の
-    /// ACTION_SNOOZE + EXTRA_SNOOZE_MINUTES と同じく子の snoozeMinutes も上書きする)。
-    func snooze(_ inst: AlarmInstanceDTO, minutes: Int) {
-        if minutes == inst.snoozeMinutes {
-            snooze(inst)
-            return
-        }
-        scheduleSnoozeChild(inst, minutes: minutes)
-    }
-
-    /// 子インスタンス予約によるスヌーズ本体。まだ鳴り続けているのに UI だけ閉じると
-    /// 二重鳴動の元を残すので、子予約の前に元を静かにしておく (止められないなら子も足さない)。
-    private func scheduleSnoozeChild(_ inst: AlarmInstanceDTO, minutes: Int) {
+        // countdown が投げた = 元アラームが alerting でない/居ない。
+        // まだ鳴り続けているのに UI だけ閉じると二重鳴動の元を残すので、
+        // 子予約の前に元を静かにしておく (止められないなら子も足さない)。
         if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler,
            !ak.silence(uuid: AlarmKitScheduler.uuid(from: inst.id)) {
             store.audit("ERROR", "スヌーズ失敗(元アラーム鳴動継続): \(inst.id)")
@@ -428,22 +405,18 @@ final class Engine: ObservableObject {
         alertingIds.remove(inst.id)
         let next = AlarmInstanceDTO(
             id: "\(inst.id):snz\(inst.snoozeSeq + 1)",
-            triggerAtMillis: Self.nowMillis + Int64(minutes) * 60_000,
+            triggerAtMillis: Self.nowMillis + Int64(inst.snoozeMinutes) * 60_000,
             title: inst.title,
             kind: inst.kind,
             eventId: inst.eventId,
             standaloneAlarmId: inst.standaloneAlarmId,
-            snoozeMinutes: minutes,
+            snoozeMinutes: inst.snoozeMinutes,
             soundUri: inst.soundUri,
             minutesBefore: inst.minutesBefore,
             eventStartMillis: inst.eventStartMillis,
             snoozeSeq: inst.snoozeSeq + 1
         )
         store.markState(inst.id, .snoozed)
-        // 子レコードは await を挟まずここで先行登録する。親の AlarmKit 予約を
-        // 止めた直後に reconcile が走ると「snoozed + AlarmKit 消滅 + 子なし」と
-        // 誤判定されて単発親が消費OFFになり、登録済みなら温存条件を保てる。
-        store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: nil))
         Task {
             // 予約失敗 (権限剥奪等) でも記録は .pending で残す — 次回 resync の
             // 温存経路で再予約され権限が戻れば自律回復する。ただし失敗は監査に残す
@@ -451,7 +424,7 @@ final class Engine: ObservableObject {
             var rid: String? = nil
             do {
                 rid = try await scheduler.schedule(next)
-                store.audit("SNOOZE", "\(inst.id) +\(minutes)m → \(next.id)")
+                store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m → \(next.id)")
             } catch {
                 store.audit("SCHEDULE_ERR", "snooze \(next.id): \(error.localizedDescription)")
             }
