@@ -36,6 +36,8 @@ final class Store: ObservableObject {
         /// OpenRouter APIキー (AI機能用)
         // calendar_prefs: calendarId -> AlarmRuleDTO
         var calendarRules: [String: AlarmRuleDTO] = [:]
+        // accountName -> AccountSettingDTO (#74)
+        var accountSettings: [String: AccountSettingDTO] = [:]
         // event_overrides: instanceKey -> EventOverrideDTO
         var overrides: [String: EventOverrideDTO] = [:]
         var standaloneAlarms: [StandaloneAlarmDTO] = []
@@ -158,8 +160,49 @@ final class Store: ObservableObject {
 
     // MARK: - calendar prefs
 
+    /// カレンダー単位のルール。カレンダーで決めていなければ、アカウントの「何分前」→ アプリの既定の順
     func rule(for calendarId: String) -> AlarmRuleDTO {
-        state.calendarRules[calendarId] ?? AlarmRuleDTO(minutesBefore: state.defaultMinutesBefore)
+        state.calendarRules[calendarId]
+            ?? AlarmRuleDTO(minutesBefore: accountSetting(forCalendar: calendarId).minutesBefore ?? state.defaultMinutesBefore)
+    }
+
+    // MARK: - account settings (#74)
+
+    func accountSetting(forCalendar calendarId: String) -> AccountSettingDTO {
+        let account = state.calendars.first { $0.id == calendarId }?.accountName ?? ""
+        return state.accountSettings[account] ?? AccountSettingDTO()
+    }
+
+    func setAccountSetting(_ accountName: String, _ setting: AccountSettingDTO) {
+        mutate { $0.accountSettings[accountName] = setting }
+    }
+
+    /// アカウントの「使う」「鳴らす」が両方 ON か
+    func accountAllowsRing(_ calendarId: String) -> Bool {
+        let a = accountSetting(forCalendar: calendarId)
+        return a.use && a.ring
+    }
+
+    /// このアプリで使わないアカウントのカレンダーか (一覧にも出さない)
+    func isHiddenCalendar(_ calendarId: String) -> Bool { !accountSetting(forCalendar: calendarId).use }
+
+    /// 展開に渡すカレンダー単位のルール。アカウント設定を配下カレンダーへ当てはめる
+    /// (Android の `AccountRules.apply` と同じ規則: 鳴らさないアカウントは止め、何分前はカレンダーで決めた値が勝つ)
+    func effectiveCalendarRules() -> [String: AlarmRuleDTO] {
+        var out = state.calendarRules
+        for cal in state.calendars {
+            let account = state.accountSettings[cal.accountName] ?? AccountSettingDTO()
+            let allows = account.use && account.ring
+            if allows && account.minutesBefore == nil { continue }
+            // 何も決めていないカレンダーはアプリ既定の動作 (開始/リマインダーの既定アクション) を引き継ぐ
+            var r = state.calendarRules[cal.id] ?? AlarmRuleDTO(
+                minutesBefore: account.minutesBefore ?? state.defaultMinutesBefore,
+                startAction: state.defaultStartAction,
+                reminderAction: state.defaultReminderAction)
+            if !allows { r.enabled = false }
+            out[cal.id] = r
+        }
+        return out
     }
 
     func setCalendarRule(_ calendarId: String, _ rule: AlarmRuleDTO) {
@@ -296,6 +339,7 @@ extension Store.Persisted {
         weatherOnAlarmScreen = try c.decodeIfPresent(Bool.self, forKey: .weatherOnAlarmScreen) ?? true
         timerPresets = try c.decodeIfPresent([TimerPresetDTO].self, forKey: .timerPresets) ?? TimerPresets.defaults
         calendarRules = try c.decodeIfPresent([String: AlarmRuleDTO].self, forKey: .calendarRules) ?? [:]
+        accountSettings = try c.decodeIfPresent([String: AccountSettingDTO].self, forKey: .accountSettings) ?? [:]
         overrides = try c.decodeIfPresent([String: EventOverrideDTO].self, forKey: .overrides) ?? [:]
         standaloneAlarms = try c.decodeIfPresent([StandaloneAlarmDTO].self, forKey: .standaloneAlarms) ?? []
         scheduled = try c.decodeIfPresent([String: ScheduledRecord].self, forKey: .scheduled) ?? [:]

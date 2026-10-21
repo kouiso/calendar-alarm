@@ -243,9 +243,16 @@ struct SettingsView: View {
                     // カレンダー一覧カード
                     Card {
                         VStack(spacing: 0) {
-                            ForEach(store.state.calendars) { cal in
-                                calendarRow(cal)
-                                if cal.id != store.state.calendars.last?.id { Divider().padding(.leading, 40) }
+                            // アカウントごとにまとめる (局長決定6, #74)。使わないアカウントは見出しだけ残す
+                            ForEach(accountGroups.map { $0.0 }, id: \.self) { account in
+                                let cals = accountGroups.first { $0.0 == account }?.1 ?? []
+                                accountHeader(account)
+                                if (store.state.accountSettings[account] ?? AccountSettingDTO()).use {
+                                    ForEach(cals) { cal in
+                                        calendarRow(cal)
+                                        if cal.id != cals.last?.id { Divider().padding(.leading, 40) }
+                                    }
+                                }
                             }
                             if store.state.calendars.isEmpty {
                                 IconRow("calendar") {
@@ -376,6 +383,46 @@ struct SettingsView: View {
     }
 
     // MARK: - カレンダー行
+
+    /// アカウント名の順、同じアカウントは主カレンダーを先に (Android の `AccountRules.groupByAccount` と同じ並び)
+    private var accountGroups: [(String, [CalendarSource])] {
+        Dictionary(grouping: store.state.calendars, by: \.accountName)
+            .map { ($0.key, $0.value.sorted { ($0.isPrimary ? 0 : 1, $0.name) < ($1.isPrimary ? 0 : 1, $1.name) }) }
+            .sorted { ($0.0.isEmpty ? 1 : 0, $0.0.lowercased()) < ($1.0.isEmpty ? 1 : 0, $1.0.lowercased()) }
+    }
+
+    /// アカウントの見出し: 使う / 鳴らす / 何分前 (アカウントの既定)
+    private func accountHeader(_ account: String) -> some View {
+        let s = store.state.accountSettings[account] ?? AccountSettingDTO()
+        let set: (AccountSettingDTO) -> Void = { store.setAccountSetting(account, $0); resync("account setting") }
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(account.isEmpty ? "端末のカレンダー" : account)
+                    .font(NightTheme.font(14, weight: .semibold)).lineLimit(1)
+                Spacer()
+                Text("使う").font(NightTheme.font(12)).foregroundStyle(.secondary)
+                Toggle("", isOn: Binding(get: { s.use }, set: { var n = s; n.use = $0; set(n) })).labelsHidden()
+            }
+            if !s.use {
+                Text("このアプリでは使っていません（iPhone からは消していません）")
+                    .font(NightTheme.font(11)).foregroundStyle(.secondary)
+            } else {
+                HStack {
+                    Text("このアカウントの予定で鳴らす").font(NightTheme.font(13)).foregroundStyle(.secondary)
+                    Spacer()
+                    Toggle("", isOn: Binding(get: { s.ring }, set: { var n = s; n.ring = $0; set(n) })).labelsHidden()
+                }
+                if s.ring {
+                    Chips(items: [-1] + minutesOptions, current: s.minutesBefore ?? -1) { m in
+                        var n = s; n.minutesBefore = m < 0 ? nil : m; set(n)
+                    } label: { m in
+                        m < 0 ? "既定" : (m == 0 ? "開始時" : "\(m)分前")
+                    }
+                }
+            }
+        }
+        .padding(.top, 10).padding(.bottom, 4)
+    }
 
     private func calendarRow(_ cal: CalendarSource) -> some View {
         let rule = store.rule(for: cal.id)

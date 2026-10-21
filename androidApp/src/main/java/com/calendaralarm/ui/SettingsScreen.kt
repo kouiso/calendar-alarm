@@ -247,24 +247,41 @@ fun SettingsScreen(
                 ),
             ) {
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
-                    calendars.forEach { cal ->
-                        CalendarRow(
-                            cal = cal,
-                            pref = calPrefs[cal.id],
-                            defaultMinutes = prefs?.defaultMinutesBefore ?: 0,
-                            onChange = { enabled, minutes, allDay, startA, reminderA ->
+                    // アカウントごとにまとめる (局長決定6, #74)。使わないアカウントは見出しだけ残す
+                    com.calendaralarm.shared.logic.AccountRules.groupByAccount(calendars).forEach { (account, cals) ->
+                        val accountSetting = prefs?.accountSettings?.get(account)
+                            ?: com.calendaralarm.shared.model.AccountSetting()
+                        AccountHeader(
+                            accountName = account,
+                            setting = accountSetting,
+                            appDefaultMinutes = prefs?.defaultMinutesBefore ?: 0,
+                            onChange = { next ->
                                 scope.launch {
-                                    repository.setCalendarPref(
-                                        cal.id, enabled, minutes,
-                                        allDayMinutes = allDay,
-                                        startAction = startA,
-                                        reminderAction = reminderA,
-                                    )
-                                    calPrefs = repository.calendarPrefsFlowList().associateBy { it.calendarId }
+                                    settings.setAccountSetting(account, next)
+                                    repository.resync("account setting")
                                 }
                             },
                         )
+                        if (accountSetting.use) cals.forEach { cal ->
+                            CalendarRow(
+                                cal = cal,
+                                pref = calPrefs[cal.id],
+                                defaultMinutes = accountSetting.minutesBefore ?: prefs?.defaultMinutesBefore ?: 0,
+                                onChange = { enabled, minutes, allDay, startA, reminderA ->
+                                    scope.launch {
+                                        repository.setCalendarPref(
+                                            cal.id, enabled, minutes,
+                                            allDayMinutes = allDay,
+                                            startAction = startA,
+                                            reminderAction = reminderA,
+                                        )
+                                        calPrefs = repository.calendarPrefsFlowList().associateBy { it.calendarId }
+                                    }
+                                },
+                            )
+                        }
                     }
+                    AddGoogleAccountRow()
                 }
             }
         }
@@ -818,7 +835,7 @@ private fun EventRulesCard(
             EventTypeRingSwitches(
                 filter = prefs.eventTypeFilter,
                 // Google 連携が無い時、種類は予定のタイトルから推定するしかない (OS のカレンダーに種類の列が無い)
-                guessedFromTitle = prefs.googleAccountEmail == null,
+                guessedFromTitle = prefs.googleAccountEmails.isEmpty(),
                 onToggleType = { t -> scope.launch { settings.toggleEventType(t); repository.resync("settings") } },
                 onToggleFree = { v -> scope.launch { settings.setRingFree(v); repository.resync("settings") } },
             )
@@ -831,33 +848,36 @@ private fun EventRulesCard(
                         .getSignedInAccountFromIntent(res.data).result?.email
                 }.getOrNull()?.let { email ->
                     scope.launch {
-                        settings.setGoogleAccount(email)
+                        settings.addGoogleAccount(email)
                         repository.resync("google-link")
                     }
                 }
             }
+            // 連携は複数アカウント持てる (#74)。アカウントごとに解除できる
+            prefs.googleAccountEmails.sorted().forEach { email ->
+                IconSettingRow(Icons.Default.AccountCircle) {
+                    Text(
+                        "連携中: $email",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = {
+                        scope.launch { settings.removeGoogleAccount(email); repository.resync("google-unlink") }
+                    }) { Text("解除") }
+                }
+            }
             IconSettingRow(Icons.Default.AccountCircle) {
                 val localContext = LocalContext.current
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        prefs.googleAccountEmail
-                            ?.let { "連携中: $it" }
-                            ?: "未連携 (種別はタイトル推測)",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                if (prefs.googleAccountEmail != null) {
-                    TextButton(onClick = {
-                        scope.launch { settings.setGoogleAccount(null); repository.resync("google-unlink") }
-                    }) { Text("解除") }
-                } else {
-                    TextButton(onClick = {
-                        googleLauncher.launch(
-                            com.calendaralarm.data.calendar.GoogleCalendarTypes
-                                .signInClient(localContext).signInIntent
-                        )
-                    }) { Text("連携") }
-                }
+                Text(
+                    if (prefs.googleAccountEmails.isEmpty()) "未連携 (種別はタイトル推測)" else "別のアカウントも連携する",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = {
+                    // 別アカウントを選べるよう、前回のサインインを外してから選択画面を出す
+                    val client = com.calendaralarm.data.calendar.GoogleCalendarTypes.signInClient(localContext)
+                    client.signOut().addOnCompleteListener { googleLauncher.launch(client.signInIntent) }
+                }) { Text("連携") }
             }
             // 予定側リマインダーの取込 (既定ON: 元カレンダー通知の「何分前」で鳴らす)
             IconSettingRow(Icons.Default.Email) {
@@ -1311,4 +1331,87 @@ private fun ThemePreview() {
             Switch(checked = true, onCheckedChange = null)
         }
     }
+}
+
+/** アカウントの見出し行: 使う / 鳴らす / 何分前 (アカウントの既定) (局長決定6, #74)。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AccountHeader(
+    accountName: String,
+    setting: com.calendaralarm.shared.model.AccountSetting,
+    appDefaultMinutes: Int,
+    onChange: (com.calendaralarm.shared.model.AccountSetting) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                accountName.ifEmpty { "端末のカレンダー" },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            Text("使う", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Switch(
+                checked = setting.use,
+                onCheckedChange = { onChange(setting.copy(use = it)) },
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+        if (!setting.use) {
+            Text(
+                "このアプリでは使っていません（端末からは消していません）",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@Column
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "このアカウントの予定で鳴らす",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(checked = setting.ring, onCheckedChange = { onChange(setting.copy(ring = it)) })
+        }
+        if (setting.ring) {
+            FlowRow(Modifier.fillMaxWidth()) {
+                val choices = listOf<Int?>(null, 0, 5, 10, 15, 30)
+                choices.forEach { m ->
+                    FilterChip(
+                        selected = setting.minutesBefore == m,
+                        onClick = { onChange(setting.copy(minutesBefore = m)) },
+                        label = {
+                            Text(
+                                when (m) {
+                                    null -> "既定（${if (appDefaultMinutes == 0) "開始時" else "${appDefaultMinutes}分前"}）"
+                                    0 -> "開始時"
+                                    else -> "${m}分前"
+                                },
+                                maxLines = 1,
+                            )
+                        },
+                        modifier = Modifier.padding(end = 4.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 端末の「アカウントを追加」画面を Google に絞って開く (#74)。 */
+@Composable
+private fun AddGoogleAccountRow() {
+    val context = LocalContext.current
+    TextButton(
+        onClick = {
+            val intent = Intent(Settings.ACTION_ADD_ACCOUNT)
+                .putExtra(Settings.EXTRA_ACCOUNT_TYPES, arrayOf("com.google"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            runCatching { context.startActivity(intent) }
+                .onFailure { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        },
+        modifier = Modifier.padding(top = 4.dp),
+    ) { Text("Google アカウントを追加") }
 }

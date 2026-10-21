@@ -376,6 +376,17 @@ struct PlanResult: Codable {
 
 // MARK: - アプリ内永続化モデル
 
+/// アカウント (EventKit のソース。Gmail・iCloud など) 単位の設定 (局長決定6, #74)。
+/// Android の `AccountSetting` と同じ意味。キーは `CalendarSource.accountName`
+struct AccountSettingDTO: Codable, Hashable {
+    /// このアプリで使うか。OFF なら配下の予定を一覧にも出さない (端末からは消さない)
+    var use: Bool = true
+    /// このアカウントの予定で鳴らすか
+    var ring: Bool = true
+    /// 配下カレンダーの既定の「何分前」。nil ならアプリ全体の既定
+    var minutesBefore: Int? = nil
+}
+
 struct CalendarSource: Codable, Identifiable, Hashable {
     var id: String
     var name: String
