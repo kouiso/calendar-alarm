@@ -65,6 +65,9 @@ final class AlarmKitScheduler: AlarmScheduler {
     /// 全アラーム (id, state) のスナップショット。
     var allAlarms: [Alarm] { (try? manager.alarms) ?? [] }
 
+    /// 読めた時だけ全アラームを返す。読めない時に空として扱うと、全部「止められた」と誤判定するため分ける
+    var allAlarmsIfReadable: [Alarm]? { try? manager.alarms }
+
     /// 鳴動中アラームを停止。
     func stop(uuid: UUID) throws { try manager.stop(id: uuid) }
 

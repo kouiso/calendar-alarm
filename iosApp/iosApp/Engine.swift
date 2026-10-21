@@ -129,6 +129,31 @@ final class Engine: ObservableObject {
         // 期限切れ PENDING → MISSED + 通知。Android 同様 resync の先頭で処理する:
         // 終端判定・preserved ・プランは全てこれ以降の状態を見る (逆順だと
         // MISSED 化した行が preserved 経由で desired に復活して鳴り直す)。
+        // アプリが見ていない間に鳴って止められたアラームを先に終端化する (#61)。
+        // 見逃し判定より前にやる: 先に見逃しにすると、止めたのに「見逃し」通知が出る
+        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler, ak.authorizationGranted,
+           let live = ak.allAlarmsIfReadable {
+            let liveIds = Set(live.map { $0.id })
+            let pendingRows = s.scheduled.values.filter { $0.state == .pending }
+                .map { OffAppStopPlan.Row(id: $0.instance.id, triggerAtMillis: $0.instance.triggerAtMillis) }
+            let consumed = OffAppStopPlan.consumedWhileAway(pending: pendingRows, nowMillis: now) {
+                liveIds.contains(AlarmKitScheduler.uuid(from: $0))
+            }
+            var consumedAlarmIds: Set<Int64> = []
+            for id in consumed {
+                guard let rec = store.state.scheduled[id] else { continue }
+                store.markState(id, .dismissed)
+                store.audit("DISMISS_OFFAPP", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis))")
+                // スヌーズ子が待っている単発は消費しない (reconcile と同じ規則)
+                let snoozeChildPending = store.state.scheduled.contains {
+                    $0.key.hasPrefix("\(id):snz") && $0.value.state == .pending
+                }
+                if let aid = rec.instance.standaloneAlarmId, !snoozeChildPending { consumedAlarmIds.insert(aid) }
+            }
+            disableConsumedOneShots(consumedAlarmIds)
+            s = store.state
+        }
+
         let graceMillis = Int64(60 * 60 * 1000)
         var missedAlarmIds: Set<Int64> = []
         for rec in s.scheduled.values where rec.state == .pending && rec.instance.triggerAtMillis < now - graceMillis {
@@ -239,13 +264,18 @@ final class Engine: ObservableObject {
         // AlarmKit 側で予約だけが消えた PENDING 行を拾い直す (再起動や OS 内部の
         // 破棄でストア上は PENDING だが実体は無い → 二度と鳴らない穴を塞ぐ。
         // Android は毎回全件 AlarmManager へ再主張する方式で同じ問題を潰している)。
-        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler, ak.authorizationGranted {
-            let liveIds = Set(ak.allAlarms.map { $0.id })
-            for (id, rec) in store.state.scheduled where rec.state == .pending {
-                if !liveIds.contains(AlarmKitScheduler.uuid(from: id)) {
-                    store.removeScheduled(id)
-                    store.audit("RECOVER", "\(id): AlarmKit予約喪失→再予約")
-                }
+        // 予定時刻を過ぎた行は上で「鳴って止められた」として終端化済み。ここに来るのは未来の行だけ (#61)
+        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler, ak.authorizationGranted,
+           let live = ak.allAlarmsIfReadable {
+            let liveIds = Set(live.map { $0.id })
+            let pendingRows = store.state.scheduled.values.filter { $0.state == .pending }
+                .map { OffAppStopPlan.Row(id: $0.instance.id, triggerAtMillis: $0.instance.triggerAtMillis) }
+            let lost = OffAppStopPlan.lostReservations(pending: pendingRows, nowMillis: now) {
+                liveIds.contains(AlarmKitScheduler.uuid(from: $0))
+            }
+            for id in lost {
+                store.removeScheduled(id)
+                store.audit("RECOVER", "\(id): AlarmKit予約喪失→再予約")
             }
         }
 
