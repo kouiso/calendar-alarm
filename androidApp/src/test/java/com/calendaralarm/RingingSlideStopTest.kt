@@ -154,7 +154,7 @@ class RingingSlideStopTest {
     }
 
     @Test
-    @Config(qualifiers = "+ldrtl")
+    @Config(qualifiers = "+ar-ldrtl")
     fun `RTL の端末でも丸は左端にあり右へ引くと停止を送る`() {
         assertEquals(View.LAYOUT_DIRECTION_RTL, app.resources.configuration.layoutDirection)
         val track = compose.onNodeWithContentDescription(SLIDER).fetchSemanticsNode().boundsInRoot
