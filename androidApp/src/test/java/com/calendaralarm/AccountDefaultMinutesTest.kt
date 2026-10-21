@@ -52,6 +52,8 @@ class AccountDefaultMinutesTest {
     private class OneAccountProvider : ContentProvider() {
         companion object {
             var eventStart = 0L
+            /** false = カレンダー一覧だけ空で返す (一覧の読み取り失敗) */
+            var calendarsReadable = true
         }
         override fun onCreate() = true
         override fun query(
@@ -73,7 +75,7 @@ class AccountDefaultMinutesTest {
                     CalendarContract.Instances.ORGANIZER to null,
                     CalendarContract.Instances.AVAILABILITY to CalendarContract.Events.AVAILABILITY_BUSY,
                 )
-                path.contains("calendars") -> mapOf(
+                path.contains("calendars") && calendarsReadable -> mapOf(
                     CalendarContract.Calendars._ID to 1L,
                     CalendarContract.Calendars.CALENDAR_DISPLAY_NAME to "仕事",
                     CalendarContract.Calendars.ACCOUNT_NAME to "work@example.com",
@@ -101,6 +103,7 @@ class AccountDefaultMinutesTest {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
         settings = SettingsRepository(context)
         OneAccountProvider.eventStart = start
+        OneAccountProvider.calendarsReadable = true
         Robolectric.buildContentProvider(OneAccountProvider::class.java).create(CalendarContract.AUTHORITY)
         repository = AlarmRepository(
             db = db,
@@ -141,6 +144,17 @@ class AccountDefaultMinutesTest {
         settings.setAccountSetting("work@example.com", AccountSetting(minutesBefore = 30))
         repository.resync("account 30")
         assertEquals(setOf(30), pendingOffsets())
+    }
+
+    @Test
+    fun `予定はあるのにカレンダー一覧が空の時は、前回の予約をそのまま残す`() = runBlocking {
+        settings.setAccountSetting("work@example.com", AccountSetting(minutesBefore = 15))
+        repository.resync("account 15")
+        assertEquals(setOf(15), pendingOffsets())
+        // アカウントへ当てはめられないので、既定の分数へ倒したり止めたりしない
+        OneAccountProvider.calendarsReadable = false
+        repository.resync("calendar list unreadable")
+        assertEquals(setOf(15), pendingOffsets())
     }
 
     @Test
