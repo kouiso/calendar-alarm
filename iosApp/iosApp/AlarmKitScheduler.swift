@@ -166,7 +166,9 @@ final class AlarmKitScheduler: AlarmScheduler {
         let config = AlarmManager.AlarmConfiguration<AppAlarmMetadata>(
             countdownDuration: countdown,
             schedule: .fixed(date),
-            attributes: attrs
+            attributes: attrs,
+            // 停止ボタンで「止めた」を書き残す。アプリが見ていない間に止めた行を、予約が消えた行と見分けるため (#61)
+            stopIntent: AlarmStopIntent(instanceId: inst.id)
         )
         _ = try await manager.schedule(id: uuid, configuration: config)
         return uuid.uuidString

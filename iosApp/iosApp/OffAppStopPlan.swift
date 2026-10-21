@@ -6,10 +6,10 @@ import Foundation
 /// アプリは `.alerting` を観測できず記録は PENDING のまま残る。以前はこれを「予約が消えた」とみなして
 /// 再予約していたため、止めたアラームが次の resync で約5秒後にもう一度鳴った (1時間を過ぎると見逃し通知)。
 ///
-/// 決め方: AlarmKit に予約したことがあり (alarmKitId あり)、今は AlarmKit に無く、予定時刻を過ぎた
-/// PENDING 行だけを「鳴って止められた」として扱う。
-/// 予約に失敗したまま残した行 (スヌーズ子の予約失敗など、alarmKitId なし) は鳴りようがないので、
-/// 時刻を過ぎていても従来どおり「予約が消えた」側で拾い直す (グレース内なら即鳴動、過ぎれば見逃し通知)。
+/// 決め方: 停止ボタンの intent (`AlarmStopIntent`) が「止めた」と書き残した行だけを停止済みにする。
+/// AlarmKit から消えたことだけでは決めない。再起動や OS の破棄で予約が本当に消えた行も同じく消えて見えるため、
+/// 消えただけで止めた扱いにすると、鳴らさず通知も出さず、履歴には「止めた」と残ってしまう (仕様 7章)。
+/// 書き残しの無い行は従来どおり「予約が消えた」側で拾い直す (グレース内なら即鳴動、過ぎれば見逃し通知)。
 /// 鳴っている間 (alerting) とスヌーズ中 (countdown) は AlarmKit に残るので、この判定には入らない。
 enum OffAppStopPlan {
     struct Row: Equatable {
@@ -34,18 +34,20 @@ enum OffAppStopPlan {
         let oneShotAlarmIds: Set<Int64>
     }
 
-    /// 鳴って止められたとみなす行の id。[isLive] は AlarmKit に予約が残っているか
-    static func consumedWhileAway(pending: [Row], nowMillis: Int64, isLive: (String) -> Bool) -> [String] {
+    /// 鳴って止められた行の id。[stopped] は停止ボタンの intent が書き残した id、[isLive] は AlarmKit に予約が残っているか
+    static func consumedWhileAway(pending: [Row], nowMillis: Int64, stopped: Set<String>,
+                                  isLive: (String) -> Bool) -> [String] {
         pending
-            .filter { $0.wasReserved && $0.triggerAtMillis <= nowMillis && !isLive($0.id) }
+            .filter { $0.wasReserved && $0.triggerAtMillis <= nowMillis && stopped.contains($0.id) && !isLive($0.id) }
             .map { $0.id }
             .sorted()
     }
 
     /// 停止済みにする行と、それで消費される単発アラームを決める。
     /// スヌーズ子がまだ待っている単発は消費しない (reconcile と同じ規則)
-    static func decide(pending: [Row], nowMillis: Int64, isLive: (String) -> Bool) -> Decision {
-        let consumed = consumedWhileAway(pending: pending, nowMillis: nowMillis, isLive: isLive)
+    static func decide(pending: [Row], nowMillis: Int64, stopped: Set<String>,
+                       isLive: (String) -> Bool) -> Decision {
+        let consumed = consumedWhileAway(pending: pending, nowMillis: nowMillis, stopped: stopped, isLive: isLive)
         let consumedSet = Set(consumed)
         let stillPending = pending.filter { !consumedSet.contains($0.id) }.map { $0.id }
         var oneShot: Set<Int64> = []
@@ -56,11 +58,44 @@ enum OffAppStopPlan {
         return Decision(consumed: consumed, oneShotAlarmIds: oneShot)
     }
 
-    /// 予約が消えたので拾い直す行の id。予定時刻がまだ先の行と、予約に成功していない行
-    static func lostReservations(pending: [Row], nowMillis: Int64, isLive: (String) -> Bool) -> [String] {
-        pending
-            .filter { ($0.triggerAtMillis > nowMillis || !$0.wasReserved) && !isLive($0.id) }
+    /// 予約が消えたので拾い直す行の id。止めた書き残しの無い、AlarmKit に無い行は全部ここに入る
+    static func lostReservations(pending: [Row], nowMillis: Int64, stopped: Set<String>,
+                                 isLive: (String) -> Bool) -> [String] {
+        let consumed = Set(consumedWhileAway(pending: pending, nowMillis: nowMillis, stopped: stopped, isLive: isLive))
+        return pending
+            .filter { !isLive($0.id) && !consumed.contains($0.id) }
             .map { $0.id }
             .sorted()
+    }
+}
+
+/// 停止ボタンの intent が「止めた」を書き残す場所。intent はアプリの外 (ロック画面) から呼ばれ、
+/// Engine が居ないこともあるので、次の resync が読むまでここに置く。
+struct OffAppStopLog {
+    static let key = "offAppStoppedInstances"
+    /// 対応する行が来ないまま残った書き残しを捨てるまでの時間 (展開ホライズンと同じ14日)
+    static let retentionMillis: Int64 = 14 * 86_400_000
+
+    let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    /// instanceId → 止めた時刻 (ms)
+    var entries: [String: Int64] {
+        (defaults.dictionary(forKey: Self.key) ?? [:]).compactMapValues { ($0 as? NSNumber)?.int64Value }
+    }
+
+    func record(_ instanceId: String, atMillis: Int64) {
+        var e = entries
+        e[instanceId] = atMillis
+        defaults.set(e.mapValues { NSNumber(value: $0) }, forKey: Self.key)
+    }
+
+    /// 使い終わった id と、古すぎる書き残しを消す
+    func remove(_ ids: Set<String>, nowMillis: Int64) {
+        let kept = entries.filter { !ids.contains($0.key) && nowMillis - $0.value < Self.retentionMillis }
+        defaults.set(kept.mapValues { NSNumber(value: $0) }, forKey: Self.key)
     }
 }

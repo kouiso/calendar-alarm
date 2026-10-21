@@ -129,12 +129,15 @@ final class Engine: ObservableObject {
         // 期限切れ PENDING → MISSED + 通知。Android 同様 resync の先頭で処理する:
         // 終端判定・preserved ・プランは全てこれ以降の状態を見る (逆順だと
         // MISSED 化した行が preserved 経由で desired に復活して鳴り直す)。
-        // アプリが見ていない間に鳴って止められたアラームを先に終端化する (#61)。
-        // 見逃し判定より前にやる: 先に見逃しにすると、止めたのに「見逃し」通知が出る
+        // アプリが見ていない間に停止ボタンで止められたアラームを先に終端化する (#61)。
+        // 見逃し判定より前にやる: 先に見逃しにすると、止めたのに「見逃し」通知が出る。
+        // 止めたかどうかは停止ボタンの intent の書き残しで決め、AlarmKit から消えたことだけでは決めない
+        let stopLog = OffAppStopLog()
         if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler, ak.authorizationGranted,
            let live = ak.allAlarmsIfReadable {
             let liveIds = Set(live.map { $0.id })
-            let decision = OffAppStopPlan.decide(pending: Self.offAppRows(s), nowMillis: now) {
+            let rows = Self.offAppRows(s)
+            let decision = OffAppStopPlan.decide(pending: rows, nowMillis: now, stopped: Set(stopLog.entries.keys)) {
                 liveIds.contains(AlarmKitScheduler.uuid(from: $0))
             }
             for id in decision.consumed {
@@ -143,6 +146,9 @@ final class Engine: ObservableObject {
                 store.audit("DISMISS_OFFAPP", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis))")
             }
             disableConsumedOneShots(decision.oneShotAlarmIds)
+            // 使った書き残しと、待っている行がもう無い書き残しは消す (同じ id の別の回に効かせないため)
+            let stillPending = Set(rows.map { $0.id }).subtracting(decision.consumed)
+            stopLog.remove(Set(stopLog.entries.keys).subtracting(stillPending), nowMillis: now)
             s = store.state
         }
 
@@ -256,12 +262,13 @@ final class Engine: ObservableObject {
         // AlarmKit 側で予約だけが消えた PENDING 行を拾い直す (再起動や OS 内部の
         // 破棄でストア上は PENDING だが実体は無い → 二度と鳴らない穴を塞ぐ。
         // Android は毎回全件 AlarmManager へ再主張する方式で同じ問題を潰している)。
-        // 予約済みで予定時刻を過ぎた行は上で「鳴って止められた」として終端化済み。
-        // ここで拾うのは未来の行と、予約に失敗したまま残した行 (#61)
+        // 停止ボタンで止めた書き残しのある行は上で終端化済み。書き残しの無い行は、
+        // 予定時刻を過ぎていても止めた証拠が無いので、ここで拾い直して鳴らす (#61)
         if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler, ak.authorizationGranted,
            let live = ak.allAlarmsIfReadable {
             let liveIds = Set(live.map { $0.id })
-            let lost = OffAppStopPlan.lostReservations(pending: Self.offAppRows(store.state), nowMillis: now) {
+            let lost = OffAppStopPlan.lostReservations(pending: Self.offAppRows(store.state), nowMillis: now,
+                                                       stopped: Set(stopLog.entries.keys)) {
                 liveIds.contains(AlarmKitScheduler.uuid(from: $0))
             }
             for id in lost {
