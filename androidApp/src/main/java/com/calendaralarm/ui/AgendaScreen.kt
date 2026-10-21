@@ -142,12 +142,15 @@ fun AgendaScreen(
     // 鳴動の状態 (#51 PR2): 足りない許可と直近24時間の見逃しから1行にまとめる
     val resumeTick = rememberResumeTick()
     val missingPermissions = remember(resumeTick) { probePermissions(context).count { !it.value } }
+    // 設定の「鳴動の状態」と同じ1行にするため、アラーム音量0も同じく拾う
+    val alarmMuted = remember(resumeTick) { !alarmVolumeOk(context) }
     val recentMissedFlow = remember(resumeTick) { repository.recentMissedFlow() }
     val recentMissed by recentMissedFlow.collectAsState(initial = 0)
     val ringStatus = com.calendaralarm.shared.logic.RingStatus.summarize(
         missingPermissions = missingPermissions,
         recentMissed = recentMissed,
         hasNextAlarm = nextAlarm != null,
+        alarmMuted = alarmMuted,
     )
 
     Column(Modifier.fillMaxSize()) {

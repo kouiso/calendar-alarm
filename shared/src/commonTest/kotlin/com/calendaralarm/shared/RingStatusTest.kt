@@ -25,6 +25,17 @@ class RingStatusTest {
     }
 
     @Test
+    fun `許可がそろっていてもアラームの音量が0なら準備OKとは出さない`() {
+        val s = RingStatus.summarize(0, 0, true, alarmMuted = true)
+        assertEquals(RingStatus.Kind.ALARM_MUTED, s.kind)
+        assertEquals("アラームの音量が0です。鳴っても音が出ません", s.line)
+        // 許可が足りない方を先に出す (許可が無いと音量に関係なく鳴らない)
+        assertEquals(RingStatus.Kind.MISSING_PERMISSION, RingStatus.summarize(1, 0, true, alarmMuted = true).kind)
+        // 音量0は見逃しより先に出す (直さない限りこの先も音が出ない)
+        assertEquals(RingStatus.Kind.ALARM_MUTED, RingStatus.summarize(0, 2, true, alarmMuted = true).kind)
+    }
+
+    @Test
     fun `予約が無い時と準備OKの時`() {
         assertEquals(RingStatus.Kind.NO_ALARM, RingStatus.summarize(0, 0, false).kind)
         val ready = RingStatus.summarize(0, 0, true)

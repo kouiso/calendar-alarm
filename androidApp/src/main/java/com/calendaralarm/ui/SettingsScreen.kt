@@ -3,7 +3,6 @@ package com.calendaralarm.ui
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -497,10 +496,7 @@ private fun RingStatusCard(
     val tick = rememberResumeTick()
     val perms = remember(tick) { probePermissions(context) }
     // 許可ではないが「鳴ったはずが無音」「止められて鳴らない」の多い原因なので同じ一覧で見せる
-    val volumeOk = remember(tick) {
-        context.getSystemService(AudioManager::class.java)
-            ?.let { it.getStreamVolume(AudioManager.STREAM_ALARM) > 0 } ?: true
-    }
+    val volumeOk = remember(tick) { alarmVolumeOk(context) }
     val batteryOk = remember(tick) {
         context.getSystemService(PowerManager::class.java)
             ?.isIgnoringBatteryOptimizations(context.packageName) ?: true
@@ -514,6 +510,7 @@ private fun RingStatusCard(
         missingPermissions = perms.count { !it.value },
         recentMissed = recentMissed,
         hasNextAlarm = pending.isNotEmpty(),
+        alarmMuted = !volumeOk,
     )
     val ngCount = perms.count { !it.value } + listOf(volumeOk, batteryOk).count { !it }
     var expanded by remember(ngCount > 0) { mutableStateOf(ngCount > 0) }

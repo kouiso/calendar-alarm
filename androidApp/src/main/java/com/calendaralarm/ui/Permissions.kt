@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -127,6 +128,11 @@ fun probePermissions(context: Context): Map<AppPermission, Boolean> = mapOf(
             (context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() ?: true)
         ),
 )
+
+/** 端末のアラーム音量が0より大きいか。鳴動はアラームの音量で鳴るので、0だと許可がそろっていても音が出ない */
+fun alarmVolumeOk(context: Context): Boolean =
+    context.getSystemService(AudioManager::class.java)
+        ?.let { it.getStreamVolume(AudioManager.STREAM_ALARM) > 0 } ?: true
 
 /** 「1つずつ頼む」の進め方。画面から切り離して単体テストする。 */
 object PermissionPlan {
