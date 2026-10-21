@@ -1,0 +1,18 @@
+launch
+texts f2-01: 20
+tap あとで
+NOT FOUND あとで
+NOT FOUND あとで
+shot f2-01-home-after-later
+tap 設定
+texts f2-settings: 89
+tap 権限画面を開く
+shot f2-02-permissions-none
+texts f2-02: 24
+tap 全部許可する
+shot f2-03-os-dialog-1
+alert -> フルアクセスを許可
+alert -> 許可
+alert -> 許可
+shot f2-04-permissions-all
+texts f2-04: 24

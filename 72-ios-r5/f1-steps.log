@@ -1,0 +1,20 @@
+launch
+shot f1-01-ask-calendar
+texts f1-01: 20
+tap 許可する
+shot f1-02-os-dialog-calendar
+alert -> フルアクセスを許可
+shot f1-03-ask-next
+texts f1-03: 19
+NOT FOUND 許可する
+shot f1-04-os-dialog-next
+alert -> 許可
+shot f1-05-ask-next
+texts f1-05: 26
+tap 許可する
+shot f1-06-os-dialog-next
+alert -> 許可
+shot f1-07-ready
+texts f1-07: 26
+tap 閉じる
+shot f1-08-home
