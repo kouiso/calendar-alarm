@@ -133,7 +133,7 @@ fun SettingsScreen(
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
         // ---- 先頭: 鳴動の状態と最近の鳴動記録 (#51 PR3) ----
-        item { RingStatusCard(repository, audit, onOpenPermissions) }
+        item { RingStatusCard(repository, onOpenPermissions) }
         // ---- 既定値: 🔔通知タイミング / 😴スヌーズ / ☁天気 ----
         item { Spacer(Modifier.height(8.dp)) }
         item {
@@ -1319,22 +1319,23 @@ private fun ThemePreview() {
 @Composable
 private fun RingStatusCard(
     repository: AlarmRepository,
-    audit: List<com.calendaralarm.data.db.AuditLogEntity>,
     onOpenPermissions: () -> Unit,
 ) {
     val context = LocalContext.current
     val tick = rememberResumeTick()
     val missing = remember(tick) { probePermissions(context).count { !it.value } }
     val pending by repository.pendingFlow().collectAsState(initial = emptyList())
+    // 予定画面と同じ数え方 (7日残る予約の行で24時間の見逃しを数える)
+    val missedFlow = remember(tick) { repository.recentMissedFlow() }
+    val recentMissed by missedFlow.collectAsState(initial = 0)
     val status = com.calendaralarm.shared.logic.RingStatus.summarize(
         missingPermissions = missing,
-        recentMissed = com.calendaralarm.shared.logic.RingStatus.countRecentMissed(
-            audit.map { it.atMillis to it.action }, System.currentTimeMillis(), setOf("MISS"),
-        ),
+        recentMissed = recentMissed,
         hasNextAlarm = pending.isNotEmpty(),
     )
-    // 鳴った・止めた・スヌーズ・見逃しだけを拾う (予約や再同期の記録は出さない)
-    val recent = audit.filter { it.action in setOf("FIRE", "DISMISS", "SNOOZE", "MISS") }.take(3)
+    // 鳴った・止めた・スヌーズ・見逃しだけを、種類で絞ってから3件取る
+    val recentFlow = remember { repository.recentRingLogFlow(3) }
+    val recent by recentFlow.collectAsState(initial = emptyList())
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),

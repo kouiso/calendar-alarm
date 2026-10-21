@@ -136,6 +136,10 @@ class AlarmRepository(
 
     fun auditFlow(limit: Int = 100) = db.auditLog().recentFlow(limit)
 
+    /** 鳴った・止めた・スヌーズ・鳴らせなかった の記録だけを新しい順に (設定先頭の「最近の鳴動」用) */
+    fun recentRingLogFlow(limit: Int = 3) =
+        db.auditLog().recentByActionsFlow(listOf("FIRE", "DISMISS", "SNOOZE", "MISS"), limit)
+
     /** 直近24時間に鳴らせなかった予約の件数 (予定画面と設定の「鳴動の状態」用) */
     fun recentMissedFlow(nowMillis: Long = Clock.System.now().toEpochMilliseconds()): Flow<Int> =
         db.scheduledInstances().missedSinceFlow(nowMillis - com.calendaralarm.shared.logic.RingStatus.MISSED_WINDOW_MILLIS)
