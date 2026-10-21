@@ -21,6 +21,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.calendaralarm.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -85,10 +87,10 @@ fun PermissionAsker(repository: AlarmRepository, onGranted: (AppPermission) -> U
         if (askedAny && !readyClosed) {
             ModalBottomSheet(onDismissRequest = { readyClosed = true }) {
                 AskSheetBody(
-                    title = "これで、鳴ってすぐ止められる",
-                    body = "一度鳴らして、止まるか確かめておくと安心。",
-                    cta = "10秒後に鳴らしてみる",
-                    later = "閉じる",
+                    title = stringResource(R.string.ask_ready_title),
+                    body = stringResource(R.string.ask_ready_body),
+                    cta = stringResource(R.string.ask_ready_test),
+                    later = stringResource(R.string.common_close),
                     onCta = {
                         readyClosed = true
                         scope.launch {
@@ -106,14 +108,20 @@ fun PermissionAsker(repository: AlarmRepository, onGranted: (AppPermission) -> U
 
     ModalBottomSheet(onDismissRequest = { stopped = true }) {
         AskSheetBody(
-            title = if (retry) "まだオフのまま" else current.askTitle,
-            body = if (retry) "設定の「${current.label}」をオンにすると、${current.reason}。" else current.askBody,
-            cta = when {
-                retry -> "もう一度設定を開く"
-                current.viaSettings -> "設定でオンにする"
-                else -> "許可する"
+            title = stringResource(if (retry) R.string.ask_still_off else current.askTitle),
+            body = if (retry) {
+                stringResource(R.string.ask_retry_body, stringResource(current.label), stringResource(current.reason))
+            } else {
+                stringResource(current.askBody)
             },
-            later = "あとで",
+            cta = stringResource(
+                when {
+                    retry -> R.string.ask_open_settings_again
+                    current.viaSettings -> R.string.ask_turn_on_in_settings
+                    else -> R.string.ask_allow
+                },
+            ),
+            later = stringResource(R.string.ask_later),
             onCta = {
                 if (retry) awaitingRetry = current.name
                 asked = current.name

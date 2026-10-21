@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,6 +55,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.calendaralarm.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.calendaralarm.data.AlarmRepository
@@ -72,7 +76,7 @@ import kotlinx.datetime.toLocalDateTime
 /**
  * アラーム編集。時刻・曜日繰り返し・休止日・ラベル・音・スヌーズを一画面で。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AlarmEditScreen(
     repository: AlarmRepository,
@@ -157,10 +161,10 @@ fun AlarmEditScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (alarmId == 0L) "アラーム作成" else "アラーム編集") },
+                title = { Text(stringResource(if (alarmId == 0L) R.string.alarm_edit_new else R.string.alarm_edit_title)) },
                 navigationIcon = {
                     IconButton(onClick = onDone) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {
@@ -181,7 +185,7 @@ fun AlarmEditScreen(
             OutlinedTextField(
                 value = label,
                 onValueChange = { label = it },
-                label = { Text("ラベル") },
+                label = { Text(stringResource(R.string.alarm_edit_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -191,38 +195,38 @@ fun AlarmEditScreen(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.Repeat,
-                    contentDescription = "繰り返し",
+                    contentDescription = stringResource(R.string.alarm_edit_repeat),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.width(20.dp),
                 )
             }
             Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // 英語表記では6枚が1行に収まらず末尾が描画されないため、折り返して全部を選べるようにする
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 listOf(
-                    RepeatMode.ONCE to "1回", RepeatMode.WEEKLY to "曜日",
-                    RepeatMode.MONTHLY to "毎月", RepeatMode.INTERVAL_DAYS to "日ごと",
-                    RepeatMode.INTERVAL_WEEKS to "週ごと", RepeatMode.INTERVAL_MONTHS to "月ごと",
-                ).forEach { (m, ja) ->
+                    RepeatMode.ONCE to R.string.repeat_chip_once, RepeatMode.WEEKLY to R.string.repeat_chip_weekly,
+                    RepeatMode.MONTHLY to R.string.repeat_monthly, RepeatMode.INTERVAL_DAYS to R.string.repeat_chip_days,
+                    RepeatMode.INTERVAL_WEEKS to R.string.repeat_chip_weeks, RepeatMode.INTERVAL_MONTHS to R.string.repeat_chip_months,
+                ).forEach { (m, labelRes) ->
                     FilterChip(
                         selected = repeatMode == m,
                         onClick = { repeatMode = m },
-                        label = { Text(ja) },
+                        label = { Text(stringResource(labelRes)) },
                     )
                 }
             }
             if (repeatMode == RepeatMode.WEEKLY) {
                 Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     val order = listOf(
-                        DayOfWeek.SUNDAY to "日", DayOfWeek.MONDAY to "月", DayOfWeek.TUESDAY to "火",
-                        DayOfWeek.WEDNESDAY to "水", DayOfWeek.THURSDAY to "木",
-                        DayOfWeek.FRIDAY to "金", DayOfWeek.SATURDAY to "土",
+                        DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
+                        DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY,
                     )
-                    order.forEach { (d, ja) ->
+                    order.forEach { d ->
                         FilterChip(
                             selected = d in days,
                             onClick = { days = if (d in days) days - d else days + d },
-                            label = { Text(ja) },
+                            label = { Text(weekdayShort(d)) },
                         )
                     }
                 }
@@ -236,13 +240,13 @@ fun AlarmEditScreen(
                 Spacer(Modifier.height(6.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (repeatMode == RepeatMode.MONTHLY) "毎月${anchorDate.dayOfMonth}日"
-                        else "起点: ${anchorDate.monthNumber}/${anchorDate.dayOfMonth}",
+                        if (repeatMode == RepeatMode.MONTHLY) stringResource(R.string.repeat_monthly_day, anchorDate.dayOfMonth)
+                        else stringResource(R.string.alarm_edit_anchor, "${anchorDate.monthNumber}/${anchorDate.dayOfMonth}"),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { showAnchorPicker = true }) { Text("変更") }
+                    TextButton(onClick = { showAnchorPicker = true }) { Text(stringResource(R.string.alarm_edit_change)) }
                 }
             }
             if (repeatMode in setOf(
@@ -251,7 +255,7 @@ fun AlarmEditScreen(
                 )
             ) {
                 Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf(1, 2, 3, 5, 7, 10, 14, 30).forEach { n ->
                         FilterChip(
                             selected = repeatInterval == n,
@@ -266,19 +270,19 @@ fun AlarmEditScreen(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.EventBusy,
-                    contentDescription = "鳴らない日",
+                    contentDescription = stringResource(R.string.alarm_edit_skip_days),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.width(20.dp),
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    "休止日",
+                    stringResource(R.string.alarm_edit_skip_dates),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = { showDatePicker = true }) {
-                    Icon(Icons.Default.Add, contentDescription = "休止日を追加")
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.alarm_edit_add_skip_date))
                 }
             }
             if (exceptions.isNotEmpty()) {
@@ -289,7 +293,7 @@ fun AlarmEditScreen(
                             onClick = { exceptions -= d },
                             label = { Text("${d.monthNumber}/${d.dayOfMonth}") },
                             trailingIcon = {
-                                Icon(Icons.Default.Close, contentDescription = "削除", Modifier.width(16.dp))
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_delete), Modifier.width(16.dp))
                             },
                         )
                     }
@@ -301,7 +305,7 @@ fun AlarmEditScreen(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.Snooze,
-                    contentDescription = "スヌーズ",
+                    contentDescription = stringResource(R.string.alarm_edit_snooze),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.width(20.dp),
                 )
@@ -310,7 +314,7 @@ fun AlarmEditScreen(
                     FilterChip(
                         selected = snooze == m,
                         onClick = { snooze = m },
-                        label = { Text("${m}分") },
+                        label = { Text(stringResource(R.string.unit_minutes_value, m)) },
                         modifier = Modifier.padding(start = 4.dp),
                     )
                 }
@@ -320,13 +324,13 @@ fun AlarmEditScreen(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.MusicNote,
-                    contentDescription = "アラーム音",
+                    contentDescription = stringResource(R.string.alarm_edit_sound),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.width(20.dp),
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    if (soundUri == null) "標準" else "選択中",
+                    stringResource(if (soundUri == null) R.string.alarm_edit_sound_default else R.string.alarm_edit_sound_selected),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -335,7 +339,7 @@ fun AlarmEditScreen(
                     IconButton(onClick = { soundUri = null }) {
                         Icon(
                             Icons.Default.Close,
-                            contentDescription = "標準に戻す",
+                            contentDescription = stringResource(R.string.alarm_edit_sound_reset),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -345,7 +349,7 @@ fun AlarmEditScreen(
                 }) {
                     Icon(
                         Icons.Default.Add,
-                        contentDescription = "音を選ぶ",
+                        contentDescription = stringResource(R.string.alarm_edit_sound_pick),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }
@@ -362,7 +366,7 @@ fun AlarmEditScreen(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    "ロック解除まで鳴らさない",
+                    stringResource(R.string.alarm_edit_mute_until_unlock),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -399,7 +403,7 @@ fun AlarmEditScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-            ) { Text("保存") }
+            ) { Text(stringResource(R.string.common_save)) }
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -418,10 +422,10 @@ fun AlarmEditScreen(
                             .toLocalDateTime(TimeZone.UTC).date
                     }
                     showAnchorPicker = false
-                }) { Text("決定") }
+                }) { Text(stringResource(R.string.common_ok)) }
             },
             dismissButton = {
-                TextButton(onClick = { showAnchorPicker = false }) { Text("キャンセル") }
+                TextButton(onClick = { showAnchorPicker = false }) { Text(stringResource(R.string.common_cancel)) }
             },
         ) {
             DatePicker(state = state)
@@ -440,10 +444,10 @@ fun AlarmEditScreen(
                         exceptions += d
                     }
                     showDatePicker = false
-                }) { Text("追加") }
+                }) { Text(stringResource(R.string.common_add)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("キャンセル") }
+                TextButton(onClick = { showDatePicker = false }) { Text(stringResource(R.string.common_cancel)) }
             },
         ) {
             DatePicker(state = state)
