@@ -78,6 +78,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -560,7 +561,7 @@ private fun RingStatusCard(
             if (expanded) {
                 Column(Modifier.padding(start = 14.dp, end = 14.dp)) {
                     perms.forEach { (p, ok) ->
-                        HealthRow(p.label, ok) {
+                        HealthRow(stringResource(p.label), ok) {
                             val pkg = Uri.parse("package:${context.packageName}")
                             when (p) {
                                 AppPermission.NOTIFY -> activity?.startActivity(
