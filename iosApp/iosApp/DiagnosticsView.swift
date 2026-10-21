@@ -41,7 +41,11 @@ struct DiagnosisInput {
     var backgroundRefreshAvailable: Bool
     var lowPowerMode: Bool
     var nextAlarm: AlarmInstanceDTO?
+    /// 時刻は先だが OS に予約できておらず、次の resync で入れ直しを待っている行の件数
+    var unreservedCount: Int = 0
     var lastFired: AuditEntry?
+    /// 直近24時間で、届いたか確かめられなかった通知の件数 (通知で鳴らす iOS だけ)
+    var unconfirmedCount: Int = 0
     /// 設定の一番下に出る記録の件数
     var auditCount: Int
     /// 残っている記録の中の予約失敗と、直近24時間の見逃し (7日残る予約の行で数える) の件数
@@ -57,6 +61,9 @@ enum DiagnosisPlan {
         return f.string(from: Date(timeIntervalSince1970: TimeInterval(millis) / 1000))
     }
 
+    /// 通知で鳴らす iOS で、予約から消えたが届いた証拠の無い通知の記録の種類
+    static let unconfirmedType = "FIRED_UNCONFIRMED"
+
     /// 失敗とみなす監査ログの種類
     static let failureTypes: Set<String> = ["SCHEDULE_ERR", "RESYNC_FAIL", "MISSED", "CAPACITY_SKIP"]
 
@@ -70,8 +77,27 @@ enum DiagnosisPlan {
     }
 
     static func lastFired(_ audit: [AuditEntry]) -> AuditEntry? {
-        // 後から差し込んだ記録や旧版の記録もあるので、並び順ではなく時刻で一番新しいものを取る
-        audit.filter { $0.type == "FIRED" || $0.type == "NOTIFY" }.max { $0.atMillis < $1.atMillis }
+        // 後から差し込んだ記録や旧版の記録もあるので、並び順ではなく時刻で一番新しいものを取る。
+        // NOTIFY は「通知のみ」の予定の通知でアラームではないので入れない
+        audit.filter { $0.type == "FIRED" }.max { $0.atMillis < $1.atMillis }
+    }
+
+    static func unconfirmedCount(_ audit: [AuditEntry], nowMillis: Int64) -> Int {
+        let since = nowMillis - 24 * 60 * 60 * 1000
+        return audit.filter { $0.type == unconfirmedType && $0.atMillis >= since }.count
+    }
+
+    /// OS に予約できた (予約 id がある) 未来の行だけを次のアラームにする。
+    /// スヌーズの予約に失敗した行は入れ直し待ちで残るが、そのままでは鳴らない
+    static func nextAlarm(_ scheduled: [ScheduledRecord], nowMillis: Int64) -> AlarmInstanceDTO? {
+        scheduled
+            .filter { $0.state == .pending && $0.alarmKitId != nil && $0.instance.triggerAtMillis > nowMillis }
+            .map { $0.instance }
+            .min { $0.triggerAtMillis < $1.triggerAtMillis }
+    }
+
+    static func unreservedCount(_ scheduled: [ScheduledRecord], nowMillis: Int64) -> Int {
+        scheduled.filter { $0.state == .pending && $0.alarmKitId == nil && $0.instance.triggerAtMillis > nowMillis }.count
     }
 
     static func items(_ i: DiagnosisInput) -> [DiagnosisItem] {
@@ -124,6 +150,13 @@ enum DiagnosisPlan {
                 detail: "裏での予定の取り込みが止まります。入っているアラームはそのまま鳴ります。",
                 fix: nil))
         }
+        if i.unreservedCount > 0 {
+            out.append(DiagnosisItem(
+                id: "unreserved", state: .ng,
+                title: "予約できていないアラームが\(i.unreservedCount)件あります",
+                detail: "このままでは鳴りません。上の許可を直してアプリを開き直すと、入れ直します。",
+                fix: nil))
+        }
         if let next = i.nextAlarm {
             out.append(DiagnosisItem(
                 id: "next", state: .ok,
@@ -144,6 +177,13 @@ enum DiagnosisPlan {
             } ?? (i.usesRealAlarms ? "まだ鳴った記録がありません" : "まだアラームの通知が届いた記録がありません"),
             detail: i.lastFired?.detail ?? "下の「10秒後に鳴動テスト」で、鳴るか確かめられます。",
             fix: nil))
+        if !i.usesRealAlarms && i.unconfirmedCount > 0 {
+            out.append(DiagnosisItem(
+                id: "unconfirmed", state: .info,
+                title: "届いたか分からない通知が\(i.unconfirmedCount)件あります",
+                detail: "通知センターから消された時や、その時刻に通知がオフだった時はこうなります。鳴らなかった覚えがあれば、通知の設定を確かめてください。",
+                fix: nil))
+        }
         out.append(DiagnosisItem(
             id: "failures", state: i.recentFailures == 0 ? .ok : .ng,
             title: i.recentFailures == 0 ? "直近の記録に予約の失敗・見逃しはありません" : "直近の記録に予約の失敗・見逃しが\(i.recentFailures)件",
@@ -276,10 +316,7 @@ struct DiagnosticsView: View {
         await center.refresh(engine)
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         let now = Engine.nowMillis
-        let next = store.state.scheduled.values
-            .filter { $0.state == .pending && $0.instance.triggerAtMillis > now }
-            .map { $0.instance }
-            .min { $0.triggerAtMillis < $1.triggerAtMillis }
+        let rows = Array(store.state.scheduled.values)
         let input = DiagnosisInput(
             calendar: center.states[.calendar] ?? .notDetermined,
             alarm: center.states[.alarm] ?? .notDetermined,
@@ -291,10 +328,12 @@ struct DiagnosticsView: View {
                 ? Self.switchState(settings.soundSetting) : nil,
             backgroundRefreshAvailable: UIApplication.shared.backgroundRefreshStatus == .available,
             lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
-            nextAlarm: next,
+            nextAlarm: DiagnosisPlan.nextAlarm(rows, nowMillis: now),
+            unreservedCount: DiagnosisPlan.unreservedCount(rows, nowMillis: now),
             lastFired: DiagnosisPlan.lastFired(store.state.audit),
+            unconfirmedCount: DiagnosisPlan.unconfirmedCount(store.state.audit, nowMillis: now),
             auditCount: store.state.audit.count,
-            recentFailures: DiagnosisPlan.recentFailures(store.state.audit, scheduled: Array(store.state.scheduled.values), nowMillis: now),
+            recentFailures: DiagnosisPlan.recentFailures(store.state.audit, scheduled: rows, nowMillis: now),
             nowMillis: now)
         items = DiagnosisPlan.items(input)
     }

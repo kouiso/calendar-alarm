@@ -21,11 +21,14 @@ final class Engine: ObservableObject {
     /// 鳴動中のインスタンス id (RingingView 用)
     @Published var alertingIds: Set<String> = []
 
-    init() {
-        if #available(iOS 26.0, *) {
-            scheduler = AlarmKitScheduler()
+    /// [scheduler] はテストで OS の予約失敗を再現するための差し替え口。アプリは渡さない
+    init(scheduler: AlarmScheduler? = nil) {
+        if let scheduler {
+            self.scheduler = scheduler
+        } else if #available(iOS 26.0, *) {
+            self.scheduler = AlarmKitScheduler()
         } else {
-            scheduler = NotificationScheduler()
+            self.scheduler = NotificationScheduler()
         }
         observeAlarmUpdates()
     }
@@ -126,19 +129,30 @@ final class Engine: ObservableObject {
         }
         var s = store.state
 
-        // 通知で鳴らす iOS (<26) は OS から鳴動の知らせが来ない。時刻を過ぎて OS の予約から
-        // 消えた行は届いた分なので、見逃し判定より先に鳴動済みにする (しないと鳴った分まで MISSED になる)
+        // 通知で鳴らす iOS (<26) は OS から鳴動の知らせが来ない。見逃し判定より先に、
+        // 届いた証拠のある行を鳴動済みにする (しないと鳴った分まで MISSED になる)
         if !usesRealAlarms {
             let center = UNUserNotificationCenter.current()
-            // 通知の許可が無いと予約は出ないので、消えていても届いたとは言えない
-            if await center.notificationSettings().authorizationStatus == .authorized {
-                let pendingIds = Set(await center.pendingNotificationRequests().map { $0.identifier })
-                // 届いた時刻は OS から取れないので予約時刻で残す (resync した時刻だと、閉じている間の分が開いた時刻になる)
-                for id in Self.deliveredIds(Array(s.scheduled.values), pendingRequestIds: pendingIds, nowMillis: now) {
-                    markNotificationDelivered(id, deliveredAtMillis: s.scheduled[id]?.instance.triggerAtMillis)
-                }
-                s = store.state
+            let pendingIds = Set(await center.pendingNotificationRequests().map { $0.identifier })
+            // 通知センターに残っている通知は届いた証拠になり、届いた時刻も取れる
+            var deliveredAt: [String: Int64] = [:]
+            for n in await center.deliveredNotifications() {
+                deliveredAt[n.request.identifier] = Int64(n.date.timeIntervalSince1970 * 1000)
             }
+            let outcome = Self.notificationOutcome(
+                Array(s.scheduled.values), pendingRequestIds: pendingIds,
+                deliveredAtById: deliveredAt, nowMillis: now)
+            for (id, at) in outcome.delivered {
+                markNotificationDelivered(id, deliveredAtMillis: at)
+            }
+            // 予約から消えただけで証拠が無い行。通知センターから消されたのか、時刻に通知がオフで
+            // 出なかったのか区別できない。今も許可が無ければ出なかった側なので、下の見逃し判定に任せる
+            if await center.notificationSettings().authorizationStatus == .authorized {
+                for id in outcome.unconfirmed {
+                    markNotificationUnconfirmed(id)
+                }
+            }
+            s = store.state
         }
 
         // 期限切れ PENDING → MISSED + 通知。Android 同様 resync の先頭で処理する:
@@ -447,14 +461,39 @@ final class Engine: ObservableObject {
         }
     }
 
-    /// 時刻を過ぎたのに OS の通知予約に残っていない PENDING 行。届いた行として扱う。
+    struct NotificationOutcome: Equatable {
+        /// 通知センターに残っていて届いたと分かる行と、その届いた時刻 (予約時刻順)
+        var delivered: [(id: String, at: Int64)]
+        /// 予約から消えたが、届いた証拠が無い行 (予約時刻順)
+        var unconfirmed: [String]
+
+        static func == (a: NotificationOutcome, b: NotificationOutcome) -> Bool {
+            a.delivered.map { "\($0.id)@\($0.at)" } == b.delivered.map { "\($0.id)@\($0.at)" }
+                && a.unconfirmed == b.unconfirmed
+        }
+    }
+
+    /// 時刻を過ぎて OS の通知予約から消えた PENDING 行を、届いた証拠の有無で分ける。
+    /// 予約から消えただけでは届いたと言えない (時刻に通知がオフでも予約は消える)。
     /// 予約できた行 (リクエスト id あり) に限る。スヌーズは予約に失敗しても行を残すので、
     /// それを届いたと数えると見逃しが鳴動済みに化ける
-    nonisolated static func deliveredIds(_ rows: [ScheduledRecord], pendingRequestIds: Set<String>, nowMillis: Int64) -> [String] {
-        rows.filter {
+    nonisolated static func notificationOutcome(
+        _ rows: [ScheduledRecord], pendingRequestIds: Set<String>,
+        deliveredAtById: [String: Int64], nowMillis: Int64
+    ) -> NotificationOutcome {
+        let gone = rows.filter {
             $0.state == .pending && $0.alarmKitId != nil && $0.instance.triggerAtMillis <= nowMillis
                 && !pendingRequestIds.contains($0.instance.id)
-        }.sorted { $0.instance.triggerAtMillis < $1.instance.triggerAtMillis }.map { $0.instance.id }
+        }.sorted { $0.instance.triggerAtMillis < $1.instance.triggerAtMillis }
+        var out = NotificationOutcome(delivered: [], unconfirmed: [])
+        for r in gone {
+            if let at = deliveredAtById[r.instance.id] {
+                out.delivered.append((r.instance.id, at))
+            } else {
+                out.unconfirmed.append(r.instance.id)
+            }
+        }
+        return out
     }
 
     /// 通知で鳴らす iOS (<26) で、アラームの通知が届いた行を鳴動済みにする。
@@ -466,6 +505,15 @@ final class Engine: ObservableObject {
         // 終端行が 7 日で掃除された後の resync で次の日付に展開されて再び鳴る
         if let aid = rec.instance.standaloneAlarmId { disableConsumedOneShots([aid]) }
         store.audit("FIRED", "\(rec.instance.title) (通知)", atMillis: deliveredAtMillis)
+    }
+
+    /// 届いたか確かめられない行。鳴ったとも見逃したとも言えないので、どちらの記録にもしない。
+    /// 時刻は過ぎているので待機からは外し、「1回のみ」は消費する (見逃しの時と同じ)
+    func markNotificationUnconfirmed(_ instanceId: String) {
+        guard !usesRealAlarms, let rec = store.state.scheduled[instanceId], rec.state == .pending else { return }
+        store.markState(instanceId, .fired)
+        if let aid = rec.instance.standaloneAlarmId { disableConsumedOneShots([aid]) }
+        store.audit(DiagnosisPlan.unconfirmedType, "\(rec.instance.title) (通知)", atMillis: rec.instance.triggerAtMillis)
     }
 
     // MARK: - タイマー

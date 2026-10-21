@@ -1,0 +1,142 @@
+import XCTest
+@testable import iosApp
+
+/// 通知で鳴らす iOS (<26) の偽の予約。予約は id を返すだけで、OS には何も入れない
+final class NotificationPathScheduler: AlarmScheduler {
+    var usesRealAlarms: Bool { false }
+    var authorizationGranted: Bool { true }
+    var authorizationUndetermined: Bool { false }
+    func requestAuthorization() async {}
+    func schedule(_ inst: AlarmInstanceDTO) async throws -> String? { inst.id }
+    func cancel(instanceId: String, reservationId: String?) async {}
+}
+
+final class DiagnosisPlanTests: XCTestCase {
+    private let now: Int64 = 1_800_000_000_000
+
+    private func row(_ id: String, at: Int64, state: InstanceState = .pending, rid: String? = "r") -> ScheduledRecord {
+        ScheduledRecord(
+            instance: AlarmInstanceDTO(id: id, triggerAtMillis: at, title: id, kind: "STANDALONE"),
+            state: state, alarmKitId: rid)
+    }
+
+    /// 通知センターに残る行だけが届いた扱いで、時刻も通知の時刻になる。予約から消えただけの行は分からない側
+    func testOutcomeNeedsDeliveryEvidence() {
+        let rows = [
+            row("in-center", at: now - 60_000),
+            row("gone", at: now - 30_000),
+            row("still-pending-in-os", at: now - 10_000),
+            row("future", at: now + 60_000),
+            row("retry-only", at: now - 5_000, rid: nil),
+            row("already-fired", at: now - 90_000, state: .fired),
+        ]
+        let out = Engine.notificationOutcome(
+            rows, pendingRequestIds: ["still-pending-in-os", "future"],
+            deliveredAtById: ["in-center": now - 59_000], nowMillis: now)
+        XCTAssertEqual(out.delivered.map { $0.id }, ["in-center"])
+        XCTAssertEqual(out.delivered.first?.at, now - 59_000)
+        XCTAssertEqual(out.unconfirmed, ["gone"])
+    }
+
+    /// 「通知のみ」の予定の記録 (NOTIFY) は最後に鳴ったアラームにしない
+    func testLastFiredIgnoresNotificationOnlyEvents() {
+        let audit = [
+            AuditEntry(id: 1, atMillis: now - 3_600_000, type: "FIRED", detail: "朝のアラーム"),
+            AuditEntry(id: 2, atMillis: now - 60_000, type: "NOTIFY", detail: "通知だけの予定"),
+            AuditEntry(id: 3, atMillis: now - 30_000, type: DiagnosisPlan.unconfirmedType, detail: "分からない"),
+        ]
+        XCTAssertEqual(DiagnosisPlan.lastFired(audit)?.id, 1)
+        XCTAssertNil(DiagnosisPlan.lastFired([audit[1]]))
+        XCTAssertEqual(DiagnosisPlan.unconfirmedCount(audit, nowMillis: now), 1)
+    }
+
+    /// 予約に失敗して入れ直し待ちの行は次のアラームにせず、予約できていない件数で出す
+    func testRetryOnlyRowIsNotTheNextAlarm() {
+        let rows = [
+            row("retry-only", at: now + 60_000, rid: nil),
+            row("booked", at: now + 120_000),
+        ]
+        XCTAssertEqual(DiagnosisPlan.nextAlarm(rows, nowMillis: now)?.id, "booked")
+        XCTAssertNil(DiagnosisPlan.nextAlarm([rows[0]], nowMillis: now))
+        XCTAssertEqual(DiagnosisPlan.unreservedCount(rows, nowMillis: now), 1)
+
+        var input = baseInput(usesRealAlarms: true)
+        input.nextAlarm = DiagnosisPlan.nextAlarm(rows, nowMillis: now)
+        input.unreservedCount = 1
+        let items = DiagnosisPlan.items(input)
+        XCTAssertEqual(items.first { $0.id == "unreserved" }?.state, .ng)
+        XCTAssertEqual(items.first { $0.id == "next" }?.title.hasPrefix("次のアラーム"), true)
+    }
+
+    /// 分からない件数は通知で鳴らす iOS だけに出す。AlarmKit では起きない
+    func testUnconfirmedItemOnlyOnNotificationPath() {
+        var input = baseInput(usesRealAlarms: false)
+        input.unconfirmedCount = 2
+        XCTAssertEqual(DiagnosisPlan.items(input).first { $0.id == "unconfirmed" }?.state, .info)
+        input.usesRealAlarms = true
+        XCTAssertNil(DiagnosisPlan.items(input).first { $0.id == "unconfirmed" })
+        input.usesRealAlarms = false
+        input.unconfirmedCount = 0
+        XCTAssertNil(DiagnosisPlan.items(input).first { $0.id == "unconfirmed" })
+    }
+
+    private func baseInput(usesRealAlarms: Bool) -> DiagnosisInput {
+        DiagnosisInput(
+            calendar: .granted, alarm: .granted, notify: .granted,
+            usesRealAlarms: usesRealAlarms, timeSensitiveEnabled: nil, notificationSoundEnabled: nil,
+            backgroundRefreshAvailable: true, lowPowerMode: false,
+            nextAlarm: nil, lastFired: nil, auditCount: 0, recentFailures: 0, nowMillis: now)
+    }
+}
+
+@MainActor
+final class EngineNotificationOutcomeTests: XCTestCase {
+    private var engine: Engine!
+
+    override func setUp() async throws {
+        engine = Engine(scheduler: NotificationPathScheduler())
+        engine.store.mutate {
+            $0.scheduled = [:]
+            $0.standaloneAlarms = []
+            $0.audit = []
+        }
+    }
+
+    override func tearDown() async throws {
+        engine.store.mutate {
+            $0.scheduled = [:]
+            $0.standaloneAlarms = []
+            $0.audit = []
+        }
+    }
+
+    private func pendingOneShot() -> (alarmId: Int64, instanceId: String) {
+        let aid = engine.store.upsertAlarm(StandaloneAlarmDTO(hour: 7, minute: 0, repeatMode: "ONCE"))
+        let id = "sa:\(aid):test"
+        let inst = AlarmInstanceDTO(
+            id: id, triggerAtMillis: Engine.nowMillis - 60_000, title: "朝", kind: "STANDALONE",
+            standaloneAlarmId: aid)
+        engine.store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: id))
+        return (aid, id)
+    }
+
+    /// 届いた証拠の無い行は鳴動の記録 (FIRED) にも見逃しにもせず、「1回のみ」は消費する
+    func testUnconfirmedIsNeitherFiredNorMissed() {
+        let (aid, id) = pendingOneShot()
+        engine.markNotificationUnconfirmed(id)
+        XCTAssertEqual(engine.store.state.scheduled[id]?.state, .fired)
+        XCTAssertFalse(engine.store.state.audit.contains { $0.type == "FIRED" })
+        XCTAssertFalse(engine.store.state.audit.contains { $0.type == "MISSED" })
+        XCTAssertTrue(engine.store.state.audit.contains { $0.type == DiagnosisPlan.unconfirmedType })
+        XCTAssertEqual(engine.store.state.standaloneAlarms.first { $0.id == aid }?.enabled, false)
+        XCTAssertNil(DiagnosisPlan.lastFired(engine.store.state.audit))
+    }
+
+    /// 届いた行は届いた時刻で FIRED を残す
+    func testDeliveredKeepsDeliveryTime() {
+        let (_, id) = pendingOneShot()
+        let at = Engine.nowMillis - 30_000
+        engine.markNotificationDelivered(id, deliveredAtMillis: at)
+        XCTAssertEqual(DiagnosisPlan.lastFired(engine.store.state.audit)?.atMillis, at)
+    }
+}

@@ -24,8 +24,24 @@ schemes:
       config: Debug
     test:
       config: Debug
+      targets:
+        - iosAppTests
 
 targets:
+  # 予約エンジンの単体テスト。OS の予約は差し替えた偽物で、失敗や割り込みを再現する
+  iosAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: unit-test
+    dependencies:
+      - target: iosApp
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.calendaralarm.ios.tests
+
   iosApp:
     type: application
     platform: iOS
