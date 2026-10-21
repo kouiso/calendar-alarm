@@ -10,8 +10,6 @@ struct RingingView: View {
     @State private var now = Date()
     @State private var weather: WeatherService.NowForecast? = nil
     @State private var showSnoozePresets = false
-    /// プリセット設定が iOS 側に無いため固定候補 (Android は設定の snoozePresets を使用)
-    private let snoozePresets = [5, 10, 15, 30]
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var accent: Color {
@@ -110,19 +108,23 @@ struct RingingView: View {
                             .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 40))
                     }
                     .padding(.horizontal, 24)
-                    // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) { showSnoozePresets.toggle() }
-                    } label: {
-                        Text(showSnoozePresets ? "スヌーズ時間を選ぶ ▴" : "スヌーズ時間を選ぶ ▾")
-                            .font(NightTheme.font(14))
-                            .foregroundStyle(NightTheme.muted)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
+                    // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開。
+                    // 設定で候補を全部外した時は、押しても何も出ない開閉ボタンを出さない
+                    let presets = Array(store.state.snoozePresets.prefix(SnoozePresets.maxOnRingingScreen))
+                    if !presets.isEmpty {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.15)) { showSnoozePresets.toggle() }
+                        } label: {
+                            Text(showSnoozePresets ? "スヌーズ時間を選ぶ ▴" : "スヌーズ時間を選ぶ ▾")
+                                .font(NightTheme.font(14))
+                                .foregroundStyle(NightTheme.muted)
+                                .padding(.horizontal, 12).padding(.vertical, 8)
+                        }
+                        .padding(.top, 4)
                     }
-                    .padding(.top, 4)
-                    if showSnoozePresets {
+                    if showSnoozePresets && !presets.isEmpty {
                         HStack(spacing: 8) {
-                            ForEach(snoozePresets, id: \.self) { m in
+                            ForEach(presets, id: \.self) { m in
                                 Button { engine.snooze(inst, minutes: m) } label: {
                                     Text("+\(m)分")
                                         .font(NightTheme.font(14))
