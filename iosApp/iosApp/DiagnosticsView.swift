@@ -70,7 +70,8 @@ enum DiagnosisPlan {
     }
 
     static func lastFired(_ audit: [AuditEntry]) -> AuditEntry? {
-        audit.last { $0.type == "FIRED" || $0.type == "NOTIFY" }
+        // 後から差し込んだ記録や旧版の記録もあるので、並び順ではなく時刻で一番新しいものを取る
+        audit.filter { $0.type == "FIRED" || $0.type == "NOTIFY" }.max { $0.atMillis < $1.atMillis }
     }
 
     static func items(_ i: DiagnosisInput) -> [DiagnosisItem] {
@@ -210,7 +211,8 @@ struct DiagnosticsView: View {
         .navigationTitle("鳴らない時の診断")
         .task { await reload() }
         // 開いている間に鳴った・予約が変わった時も、項目を作り直す
-        .onChange(of: store.state.audit.last?.id) { _, _ in Task { await reload() } }
+        // 記録は時刻の位置に差し込まれ末尾が変わらないことがあるので、採番で増えたかを見る
+        .onChange(of: store.state.nextAuditId) { _, _ in Task { await reload() } }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await reload() } }
         }

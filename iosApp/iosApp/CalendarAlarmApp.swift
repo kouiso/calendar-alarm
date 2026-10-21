@@ -70,7 +70,8 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         let id = notification.request.identifier
-        await MainActor.run { engine?.markNotificationDelivered(id) }
+        let at = Int64(notification.date.timeIntervalSince1970 * 1000)
+        await MainActor.run { engine?.markNotificationDelivered(id, deliveredAtMillis: at) }
         return [.banner, .list, .sound]
     }
 
@@ -78,8 +79,10 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
+        // 押された時刻ではなく届いた時刻で残す。通知を後から開いた時に時刻がずれないように
         let id = response.notification.request.identifier
-        await MainActor.run { engine?.markNotificationDelivered(id) }
+        let at = Int64(response.notification.date.timeIntervalSince1970 * 1000)
+        await MainActor.run { engine?.markNotificationDelivered(id, deliveredAtMillis: at) }
     }
 }
 

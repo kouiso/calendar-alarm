@@ -133,8 +133,9 @@ final class Engine: ObservableObject {
             // 通知の許可が無いと予約は出ないので、消えていても届いたとは言えない
             if await center.notificationSettings().authorizationStatus == .authorized {
                 let pendingIds = Set(await center.pendingNotificationRequests().map { $0.identifier })
+                // 届いた時刻は OS から取れないので予約時刻で残す (resync した時刻だと、閉じている間の分が開いた時刻になる)
                 for id in Self.deliveredIds(Array(s.scheduled.values), pendingRequestIds: pendingIds, nowMillis: now) {
-                    markNotificationDelivered(id)
+                    markNotificationDelivered(id, deliveredAtMillis: s.scheduled[id]?.instance.triggerAtMillis)
                 }
                 s = store.state
             }
@@ -451,18 +452,18 @@ final class Engine: ObservableObject {
     nonisolated static func deliveredIds(_ rows: [ScheduledRecord], pendingRequestIds: Set<String>, nowMillis: Int64) -> [String] {
         rows.filter {
             $0.state == .pending && $0.instance.triggerAtMillis <= nowMillis && !pendingRequestIds.contains($0.instance.id)
-        }.map { $0.instance.id }
+        }.sorted { $0.instance.triggerAtMillis < $1.instance.triggerAtMillis }.map { $0.instance.id }
     }
 
     /// 通知で鳴らす iOS (<26) で、アラームの通知が届いた行を鳴動済みにする。
     /// 届いた時の受け口 (NotificationPresenter) と resync の両方から呼ぶ
-    func markNotificationDelivered(_ instanceId: String) {
+    func markNotificationDelivered(_ instanceId: String, deliveredAtMillis: Int64? = nil) {
         guard !usesRealAlarms, let rec = store.state.scheduled[instanceId], rec.state == .pending else { return }
         store.markState(instanceId, .fired)
         // .fired は見逃し判定を通らないので、ここで消費を反映しないと「1回のみ」が ON のまま残り、
         // 終端行が 7 日で掃除された後の resync で次の日付に展開されて再び鳴る
         if let aid = rec.instance.standaloneAlarmId { disableConsumedOneShots([aid]) }
-        store.audit("FIRED", "\(rec.instance.title) (通知)")
+        store.audit("FIRED", "\(rec.instance.title) (通知)", atMillis: deliveredAtMillis)
     }
 
     // MARK: - タイマー
