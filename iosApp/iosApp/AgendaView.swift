@@ -132,10 +132,12 @@ struct AgendaView: View {
                     muted: !rule.enabled || allDayOff
                         || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter)
                         || resolvedActionsMuted(ev, rule, ov, store.state.titleCodes,
-                                                importReminders: store.state.importEventReminders),
+                                                importReminders: store.state.importEventReminders,
+                                                muteAll: store.state.muteAll),
                     effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore,
                     calendarOff: !rule.enabled,
-                    allDayOff: allDayOff
+                    allDayOff: allDayOff,
+                    muteAll: store.state.muteAll
                 )
             }
     }
@@ -488,12 +490,13 @@ struct EventRow: View {
                 }
             }
             if let onToggle {
-                // カレンダーごと、または終日の予定を鳴らさない設定の時は、予定のスイッチを入れても鳴らないので押せなくする
+                // カレンダーごと・終日の予定を鳴らさない設定・すべてミュート中は、予定のスイッチを入れても鳴らないので押せなくする
                 Toggle("", isOn: Binding(get: { !ev.muted }, set: { onToggle($0) }))
                     .labelsHidden()
-                    .disabled(ev.calendarOff || ev.allDayOff)
+                    .disabled(ev.calendarOff || ev.allDayOff || ev.muteAll)
                     .accessibilityLabel(ev.calendarOff ? "カレンダーが鳴らさない設定です。設定のカレンダー欄で変えられます"
                         : ev.allDayOff ? "このカレンダーは終日の予定を鳴らさない設定です。設定のカレンダー欄で変えられます"
+                        : ev.muteAll ? "アラームをすべてミュート中です。設定で解除できます"
                         : "\(ev.event.title)で鳴らす")
             }
         }
@@ -513,9 +516,10 @@ struct EventRow: View {
 
 /// 何も鳴らないか。動作は shared `AlarmExpander.resolveActions` と同じ優先順:
 /// 予定の個別指定 > never コード > always コード > カレンダーの既定。
-/// 展開と同じく、リマインダーの動作はリマインダー側の時刻 (追加の何分前・取り込んだカレンダーの通知) がある時だけ鳴る
+/// 展開と同じく、リマインダーの動作はリマインダー側の時刻 (追加の何分前・取り込んだカレンダーの通知) がある時だけ鳴る。
+/// すべてミュート中のアラームも鳴らない側に数える (展開の emit と同じく通知は残る)
 func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
-                          importReminders: Bool) -> Bool {
+                          importReminders: Bool, muteAll: Bool = false) -> Bool {
     func matches(_ list: [String]) -> Bool {
         list.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty && ev.title.localizedCaseInsensitiveContains($0) }
     }
@@ -528,6 +532,9 @@ func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: Ev
     let mute = EventAction.mute.rawValue
     let hasReminderTriggers = !(ov?.extraOffsets ?? rule.extraOffsets).isEmpty
         || (importReminders && ev.calendarReminderMinutes.contains { $0 >= 0 })
-    return resolve(codes.applyToStart, rule.startAction) == mute
-        && (resolve(codes.applyToReminders, rule.reminderAction) == mute || !hasReminderTriggers)
+    func silenced(_ action: String) -> Bool {
+        action == mute || (muteAll && action == EventAction.alarm.rawValue)
+    }
+    return silenced(resolve(codes.applyToStart, rule.startAction))
+        && (silenced(resolve(codes.applyToReminders, rule.reminderAction)) || !hasReminderTriggers)
 }

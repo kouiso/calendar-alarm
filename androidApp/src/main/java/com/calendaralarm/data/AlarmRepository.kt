@@ -177,17 +177,27 @@ class AlarmRepository(
         val allDayOff: Boolean = false,
         /** リマインダー側の鳴る時刻があるか (追加の何分前か、取り込んだカレンダーの通知)。無ければリマインダーの動作は何も鳴らさない */
         val hasReminderTriggers: Boolean = true,
+        /** 設定の「アラームをすべてミュート」。展開はアラームを全部外し、通知だけ残す */
+        val muteAll: Boolean = false,
     ) {
         /** 予定ごとの指定では鳴るようにできない (スイッチを押せなくする) */
         val lockedByCalendar: Boolean get() = calendarOff || allDayOff
 
         /**
+         * 行のスイッチを押せなくする。すべてミュート中は、スイッチで入れるアラームの指定も展開で外れて鳴らないため
+         */
+        val switchLocked: Boolean get() = lockedByCalendar || muteAll
+
+        /**
          * 何も鳴らない状態 (UI のグレー化と行のスイッチ)。展開 (AlarmExpander.expandEvents) と同じく、
-         * リマインダーの動作はリマインダー側の時刻がある時だけ鳴るので、時刻が無ければ開始の動作だけで決まる
+         * リマインダーの動作はリマインダー側の時刻がある時だけ鳴るので、時刻が無ければ開始の動作だけで決まる。
+         * すべてミュート中のアラームも鳴らない側に数える (通知は残る)
          */
         val muted: Boolean
-            get() = startAction == EventAction.MUTE &&
-                (reminderAction == EventAction.MUTE || !hasReminderTriggers)
+            get() = startAction.silenced() && (reminderAction.silenced() || !hasReminderTriggers)
+
+        private fun EventAction.silenced(): Boolean =
+            this == EventAction.MUTE || (muteAll && this == EventAction.ALARM)
     }
 
     /**
@@ -253,6 +263,7 @@ class AlarmRepository(
                 allDayOff = allDayOff,
                 hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
                     (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
+                muteAll = appSettings.muteAll,
             )
         }
     }

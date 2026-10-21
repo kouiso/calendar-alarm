@@ -559,6 +559,52 @@ class EngineTest {
     }
 
     @Test
+    fun `すべてミュート中はアラームの予定を鳴らない側に出してスイッチを押せなくし、通知の予定は鳴る側に残す`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        fun row(eventId: Long, calId: Long) = mapOf(
+            CalendarContract.Instances.EVENT_ID to eventId,
+            CalendarContract.Instances.CALENDAR_ID to calId,
+            CalendarContract.Instances.TITLE to "予定$eventId",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to start,
+            CalendarContract.Instances.END to start + 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        FakeCalendarProvider.instanceRows = listOf(row(1, 1), row(2, 2))
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        // カレンダー1はアラーム、カレンダー2は通知だけ
+        db.calendarPrefs().upsert(CalendarPrefEntity("1", enabled = true, minutesBefore = 0, startAction = "ALARM"))
+        db.calendarPrefs().upsert(CalendarPrefEntity("2", enabled = true, minutesBefore = 0, startAction = "NOTIFY"))
+        // スイッチを一度 OFF→ON した後と同じ: 予定ごとの ALARM 指定があってもすべてミュートで外れる
+        db.eventOverrides().upsert(EventOverrideEntity("1:1:$start", action = "ALARM", minutesBefore = null))
+
+        val settings = SettingsRepository(context)
+        settings.setMuteAll(true)
+        try {
+            val items = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }
+            val alarm = items.getValue("1")
+            assertTrue(alarm.muted)
+            assertTrue(alarm.switchLocked)
+            val notify = items.getValue("2")
+            assertEquals(false, notify.muted)
+            assertTrue(notify.switchLocked)
+            // 一覧の表示と実際の予約が一致する: 通知の予定だけ予約される
+            repositoryWithCalendar.resync("test")
+            val pendingIds = db.scheduledInstances().pending().map { it.id }
+            assertEquals(listOf("ev:2:2:$start:b0"), pendingIds)
+        } finally {
+            // 設定は DataStore に残り他の試験へ漏れるので戻す
+            settings.setMuteAll(false)
+        }
+    }
+
+    @Test
     fun `期限切れ PENDING は MISSED 化される`() = runBlocking {
         val stale = AlarmInstance(
             id = "old", triggerAtMillis = System.currentTimeMillis() - 3_600_000 * 2,
