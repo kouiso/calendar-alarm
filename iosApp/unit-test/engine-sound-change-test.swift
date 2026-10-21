@@ -54,7 +54,8 @@ final class EngineSoundChangeTests: XCTestCase {
 
     override func setUp() async throws {
         fake = FakeScheduler()
-        engine = Engine(scheduler: fake)
+        // 端末の保存データを上書きしないよう、一時ファイルの Store を渡す
+        engine = Engine(scheduler: fake, store: Store(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("store-\(UUID().uuidString).json")))
         engine.store.mutate {
             $0.scheduled = [:]
             $0.standaloneAlarms = []
@@ -181,5 +182,40 @@ final class EngineSoundChangeTests: XCTestCase {
         let rec = try XCTUnwrap(engine.store.state.scheduled.values.first {
             $0.instance.standaloneAlarmId == aid && $0.state == .pending })
         XCTAssertEqual(rec.instance.triggerAtMillis, mine.first?.inst.triggerAtMillis)
+    }
+
+    /// 入れ直しの途中でタイマーを取り消しても、入れ直しが書き戻して鳴らすことはない
+    func testCancelDuringRebookStaysCancelled() async throws {
+        await engine.scheduleTimer(durationMillis: 3_600_000, label: "test")
+        let id = try XCTUnwrap(engine.store.state.scheduled.values.first { $0.instance.kind == "TIMER" }?.instance.id)
+        importTestSound()
+        engine.store.setAlarmSound(file: sound, label: "test")
+        var cancelTask: Task<Void, Never>?
+        fake.duringSchedule = { [engine] in
+            guard let engine else { return }
+            cancelTask = Task { await engine.cancelInstance(id) }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+
+        await engine.rescheduleForSoundChange()
+        await cancelTask?.value
+
+        XCTAssertNil(fake.booked[id], "取り消したタイマーが OS に残っている")
+        XCTAssertNil(engine.store.state.scheduled[id], "取り消したタイマーの記録が戻っている")
+    }
+
+    /// 新しい音でも前の音でも予約できなかったタイマーは、展開で作り直せないので記録を残して拾い直させる
+    func testLostTimerIsKeptForRecovery() async throws {
+        await engine.scheduleTimer(durationMillis: 3_600_000, label: "test")
+        let id = try XCTUnwrap(engine.store.state.scheduled.values.first { $0.instance.kind == "TIMER" }?.instance.id)
+        importTestSound()
+        engine.store.setAlarmSound(file: sound, label: "test")
+        fake.failures = 3
+
+        await engine.rescheduleForSoundChange()
+
+        let rec = try XCTUnwrap(engine.store.state.scheduled[id], "タイマーの記録が消えた")
+        XCTAssertEqual(rec.state, .pending)
+        XCTAssertNil(rec.alarmKitId, "OS に予約が無いのに予約ありになっている")
     }
 }

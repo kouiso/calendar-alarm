@@ -11,7 +11,7 @@ import AlarmKit
 @MainActor
 final class Engine: ObservableObject {
 
-    let store = Store()
+    let store: Store
     let reader = EventKitReader()
     private let scheduler: AlarmScheduler
 
@@ -29,8 +29,10 @@ final class Engine: ObservableObject {
     /// どちらも途中で await するので、並んで走ると片方が古い写しで相手の予約を上書きする
     private var reservationQueueTail: Task<Void, Never>?
 
-    /// [scheduler] はテストで OS の予約失敗を再現するための差し替え口。アプリは渡さない
-    init(scheduler: AlarmScheduler? = nil) {
+    /// [scheduler] [store] はテストで OS の予約失敗を再現し、端末の保存データを触らないための差し替え口。
+    /// アプリは渡さない
+    init(scheduler: AlarmScheduler? = nil, store: Store? = nil) {
+        self.store = store ?? Store()
         if let scheduler {
             self.scheduler = scheduler
         } else if #available(iOS 26.0, *) {
@@ -480,11 +482,14 @@ final class Engine: ObservableObject {
         }
     }
 
+    /// 音の入れ直しと同じ列で取り消す。列の外だと、入れ直しの途中で取り消したタイマーを入れ直しが書き戻して鳴らす
     func cancelInstance(_ id: String) async {
-        await scheduler.cancel(instanceId: id, reservationId: store.state.scheduled[id]?.alarmKitId)
-        UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: ["notify-\(id)"])
-        store.removeScheduled(id)
+        await runExclusively {
+            await self.scheduler.cancel(instanceId: id, reservationId: self.store.state.scheduled[id]?.alarmKitId)
+            UNUserNotificationCenter.current()
+                .removePendingNotificationRequests(withIdentifiers: ["notify-\(id)"])
+            self.store.removeScheduled(id)
+        }
     }
 
     /// 既定のアラーム音を変えた時に、入っている予約を新しい音で入れ直す (#101)。
@@ -534,8 +539,8 @@ final class Engine: ObservableObject {
     }
 
     /// AlarmKit は予約の前に同じ id の予約を取り消すので、予約が失敗すると前の予約も消えている。
-    /// 前の音で予約し直し、それも駄目なら記録を外して一覧に予約ありと出さない
-    /// @returns false = 記録を外した
+    /// 前の音で予約し直し、それも駄目なら記録を外して一覧に予約ありと出さない (タイマーは残して拾い直させる)
+    /// @returns false = OS に予約が無いまま (resync で取り直す)
     private func restoreAfterFailedSoundChange(_ rec: ScheduledRecord) async -> Bool {
         let id = rec.instance.id
         if await scheduler.hasReservation(instanceId: id) { return true }
@@ -546,7 +551,13 @@ final class Engine: ObservableObject {
             store.audit("SOUND_RESTORE", "\(id): 前の音で予約し直し")
             return true
         } catch {
-            store.removeScheduled(id)
+            if rec.instance.kind == "TIMER" {
+                // タイマーは展開で作り直せないので記録を残す。予約 id を空にして、次の resync で拾い直させる
+                store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending,
+                                                   alarmKitId: nil, soundFile: rec.soundFile))
+            } else {
+                store.removeScheduled(id)
+            }
             store.audit("SCHEDULE_ERR", "sound restore \(id): \(error.localizedDescription)")
             return false
         }
