@@ -87,7 +87,14 @@ struct OffAppStopLog {
         (defaults.dictionary(forKey: Self.key) ?? [:]).compactMapValues { ($0 as? NSNumber)?.int64Value }
     }
 
+    /// 読んで足して書く一連を1本ずつ通す。停止 intent は複数同時に走り、resync の remove とも重なる。
+    /// UserDefaults は1回の読み書きしか守らないので、重なると片方の書き残しが上書きで消え、
+    /// 止めたアラームが「予約が消えた」側に回って鳴り直す
+    private static let lock = NSLock()
+
     func record(_ instanceId: String, atMillis: Int64) {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
         var e = entries
         e[instanceId] = atMillis
         defaults.set(e.mapValues { NSNumber(value: $0) }, forKey: Self.key)
@@ -95,6 +102,8 @@ struct OffAppStopLog {
 
     /// 使い終わった id と、古すぎる書き残しを消す
     func remove(_ ids: Set<String>, nowMillis: Int64) {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
         let kept = entries.filter { !ids.contains($0.key) && nowMillis - $0.value < Self.retentionMillis }
         defaults.set(kept.mapValues { NSNumber(value: $0) }, forKey: Self.key)
     }

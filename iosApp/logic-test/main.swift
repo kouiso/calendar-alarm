@@ -115,6 +115,15 @@ if let defaults = UserDefaults(suiteName: suite) {
     log.remove(["ev:a"], nowMillis: now)
     check(Set(log.entries.keys) == ["ev:c"], "使った id と14日を過ぎた書き残しは消える")
     check(Set(OffAppStopLog(defaults: defaults).entries.keys) == ["ev:c"], "書き残しは別のインスタンスからも読める")
+
+    // 停止 intent が同時に何本も走り、resync の remove とも重なる場合 (Codex P2)
+    log.remove(Set(log.entries.keys), nowMillis: now)
+    let n = 200
+    DispatchQueue.concurrentPerform(iterations: n) { i in
+        OffAppStopLog(defaults: defaults).record("ev:p\(i)", atMillis: now)
+        if i % 10 == 0 { OffAppStopLog(defaults: defaults).remove(["ev:none"], nowMillis: now) }
+    }
+    check(log.entries.count == n, "同時に書き残しても、remove と重なっても1件も消えない (\(log.entries.count)/\(n))")
     defaults.removePersistentDomain(forName: suite)
 } else {
     check(false, "試験用の UserDefaults を作れない")
