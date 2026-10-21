@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -57,12 +58,25 @@ class EnglishChipLayoutTest {
         }
     }
 
+    /**
+     * ラベルが [below] のチップより下にあるチップ。間隔の「1」「2」などは時刻の選択にも同じ文字があるので、
+     * ラベルだけで探すと複数見つかって失敗する (失敗時に意味ツリー全体を文字にして試験が止まった)
+     */
+    private fun chip(label: String, below: String?): SemanticsNodeInteraction {
+        val all = compose.onAllNodesWithText(label)
+        if (below == null) return compose.onNodeWithText(label)
+        val limit = compose.onNodeWithText(below).fetchSemanticsNode().boundsInRoot.bottom
+        val i = all.fetchSemanticsNodes().indexOfFirst { it.boundsInRoot.top >= limit }
+        assertTrue("$below より下に $label のチップが無い", i >= 0)
+        return all[i]
+    }
+
     /** どのチップも画面内に1行の高さで収まり、押せること。 */
-    private fun assertChipsFit(labels: List<String>) {
+    private fun assertChipsFit(labels: List<String>, below: String? = null) {
         val rootRight = compose.onRoot().fetchSemanticsNode().boundsInRoot.right
         val heights = labels.map { label ->
-            compose.onNodeWithText(label).performScrollTo().assertIsDisplayed()
-            val b = compose.onNodeWithText(label).fetchSemanticsNode().boundsInRoot
+            chip(label, below).performScrollTo().assertIsDisplayed()
+            val b = chip(label, below).fetchSemanticsNode().boundsInRoot
             assertTrue("$label の右端 ${b.right} が画面幅 $rootRight を超えた", b.right <= rootRight)
             b.height
         }
@@ -83,6 +97,6 @@ class EnglishChipLayoutTest {
 
         compose.onNodeWithText("Months").performClick()
         compose.waitForIdle()
-        assertChipsFit(listOf("1", "2", "3", "5", "7", "10", "14", "30"))
+        assertChipsFit(listOf("1", "2", "3", "5", "7", "10", "14", "30"), below = "Months")
     }
 }
