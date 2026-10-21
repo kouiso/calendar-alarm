@@ -17,6 +17,7 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.annotation.VisibleForTesting
 import com.calendaralarm.shared.logic.SlideToStopRule
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -131,7 +132,9 @@ object RingingOverlay {
         }
     }
 
-    private fun buildView(
+    // 停止スライダーの操作契約を単体テストで固定するため、WindowManager を通さずに組めるようにする
+    @VisibleForTesting
+    internal fun buildView(
         context: Context,
         instanceId: String,
         title: String,
