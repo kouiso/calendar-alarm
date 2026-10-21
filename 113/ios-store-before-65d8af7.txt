@@ -1,0 +1,6 @@
+FAIL toggled calendar follows account 30 (engine): Optional(15)
+FAIL toggled calendar follows account 30 (screen): 15
+PASS toggled calendar stays enabled
+PASS home account ring off disables home calendar
+PASS work calendar still rings
+FAILURES: 2

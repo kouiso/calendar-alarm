@@ -1,0 +1,9 @@
+PASS toggled calendar follows account 30 (engine): Optional(30)
+PASS toggled calendar follows account 30 (screen): 30
+PASS toggled calendar stays enabled
+PASS chosen 5 wins over account 30
+PASS back to default follows account 30
+PASS home account ring off disables home calendar
+PASS work calendar still rings
+PASS legacy rows: only non-default minutes count as chosen: ["b"]
+ALL PASS

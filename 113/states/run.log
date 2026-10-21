@@ -1,0 +1,61 @@
+[17:51:55] volumes set to 0 (alarm stream 4: [V] volume is 1 in range [1..7])
+[17:52:00] calendars: work=2 home=3; events start=1792583460000
+Row: 0 _id=1, calendar_id=1, title=RefreshProbe, dtstart=1792597980000
+Row: 1 _id=12, calendar_id=2, title=WorkMeeting, dtstart=1792583400000
+Row: 2 _id=13, calendar_id=3, title=HomeDinner, dtstart=1792583400000
+[17:52:01] installed /Users/kouiso/.claude/jobs/9b132361/tmp/work/logs/pr113/apk/after-eb0fa90.apk
+[17:53:07] states 0-both-ring:
+id	state	title
+ev:1:1:1792597980000:b0	PENDING	RefreshProbe
+ev:2:12:1792583400000:b0	PENDING	WorkMeeting
+ev:3:13:1792583400000:b0	PENDING	HomeDinner
+-- calendar_prefs
+[17:53:07] dumpsys alarm lines for com.calendaralarm: 16
+[17:53:10] NOT FOUND このアカウントの予定で鳴らす after home.taro@example.com
+[17:53:17] states 1-home-ring-off:
+id	state	title
+ev:1:1:1792597980000:b0	PENDING	RefreshProbe
+ev:2:12:1792583400000:b0	PENDING	WorkMeeting
+ev:3:13:1792583400000:b0	PENDING	HomeDinner
+-- calendar_prefs
+[17:53:17] dumpsys alarm lines for com.calendaralarm: 16
+[17:53:19] tapped 15分前 after work.taro@example.com
+[17:53:23] states 2-work-15:
+id	state	title
+ev:1:1:1792597980000:b0	PENDING	RefreshProbe
+ev:2:12:1792583400000:b0	CANCELLED	WorkMeeting
+ev:2:12:1792583400000:b15	PENDING	WorkMeeting
+ev:3:13:1792583400000:b0	PENDING	HomeDinner
+-- calendar_prefs
+[17:53:23] dumpsys alarm lines for com.calendaralarm: 17
+[17:53:26] tapped  after work-cal
+[17:53:30] states 3-work-cal-off:
+id	state	title
+ev:1:1:1792597980000:b0	PENDING	RefreshProbe
+ev:2:12:1792583400000:b0	CANCELLED	WorkMeeting
+ev:2:12:1792583400000:b15	CANCELLED	WorkMeeting
+ev:3:13:1792583400000:b0	PENDING	HomeDinner
+-- calendar_prefs
+2	0	None
+[17:53:31] dumpsys alarm lines for com.calendaralarm: 14
+[17:53:33] tapped  after work-cal
+[17:53:36] states 4-work-cal-on:
+id	state	title
+ev:1:1:1792597980000:b0	PENDING	RefreshProbe
+ev:2:12:1792583400000:b0	CANCELLED	WorkMeeting
+ev:2:12:1792583400000:b15	PENDING	WorkMeeting
+ev:3:13:1792583400000:b0	PENDING	HomeDinner
+-- calendar_prefs
+2	1	None
+[17:53:36] dumpsys alarm lines for com.calendaralarm: 18
+[17:53:41] NOT FOUND 30分前 after work.taro@example.com
+[17:53:48] states 5-work-30:
+id	state	title
+ev:1:1:1792597980000:b0	PENDING	RefreshProbe
+ev:2:12:1792583400000:b0	CANCELLED	WorkMeeting
+ev:2:12:1792583400000:b15	PENDING	WorkMeeting
+ev:3:13:1792583400000:b0	PENDING	HomeDinner
+-- calendar_prefs
+2	1	None
+[17:53:48] dumpsys alarm lines for com.calendaralarm: 18
+[17:55:57] recorded /Users/kouiso/.claude/jobs/9b132361/tmp/work/logs/pr113/emu-after/pr113.mp4
