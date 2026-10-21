@@ -1,0 +1,18 @@
+ROW 1: PASS light mode=Night mode: no, top=com.calendaralarm.pr48/com.calendaralarm.engine.RingingActivity
+ROW 3: PASS chips closed before tap
+ROW 3b: PASS after tap: ['+5分', '+10分', '+15分', '+30分', '+45分', '+60分']
+swipe 168,2030 -> 540,2030 (slider bounds [63, 1925, 1017, 2135], fraction=0.5, on_thumb=True)
+ROW 4: PASS still ringing=True, thumb at (540, 2030)
+swipe 168,2030 -> 889,2030 (slider bounds [63, 1925, 1017, 2135], fraction=0.97, on_thumb=True)
+ROW 5: PASS ringing after full slide=False, top=com.calendaralarm.pr48/com.calendaralarm.MainActivity
+swipe 912,2030 -> 635,2030 (slider bounds [63, 1925, 1017, 2135], fraction=0, on_thumb=False)
+ROW 6: PASS still ringing=True
+swipe 168,2030 -> 889,2030 (slider bounds [63, 1925, 1017, 2135], fraction=0.97, on_thumb=True)
+ROW 6b: PASS stopped by a real slide afterwards
+ROW 2: PASS stopped=True, next ring in [10.1] min
+ROW 2b(+5分): PASS re-rang after 302s
+swipe 168,2030 -> 889,2030 (slider bounds [63, 1925, 1017, 2135], fraction=0.97, on_thumb=True)
+swipe 168,2030 -> 889,2030 (slider bounds [63, 1925, 1017, 2135], fraction=0.97, on_thumb=True)
+ROW 14: FAIL second rang after first stop=False, all stopped=False
+swipe 168,2030 -> 889,2030 (slider bounds [63, 1925, 1017, 2135], fraction=0.97, on_thumb=True)
+ROW 7: PASS one slider (1), stopped=True
