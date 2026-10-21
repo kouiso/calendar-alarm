@@ -126,6 +126,12 @@ struct AgendaView: View {
                 let allDayOff = ev.allDay && rule.allDayMinutes < 0
                 // 鳴らさないアカウント (#74) の予定も、展開 (effectiveCalendarRules で enabled=false) が個別指定より先に外す
                 let accountOff = !store.accountAllowsRing(ev.calendarId)
+                // 展開が予定ごとの指定より先に外す予定 (カレンダー・アカウント・終日・種類と招待のフィルタ)
+                let dropped = !rule.enabled || accountOff || allDayOff
+                    || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter)
+                let actions = resolvedRingActions(ev, rule, ov, store.state.titleCodes,
+                                                  importReminders: store.state.importEventReminders)
+                let notify = EventAction.notify.rawValue
                 return DisplayEvent(
                     event: ev,
                     calendarName: cal?.name ?? "",
@@ -133,8 +139,7 @@ struct AgendaView: View {
                     // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
                     // 予約の展開と同じ判定を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
                     // 行のスイッチが実際の予約と食い違わないよう、開始とリマインダーの解決後の動作まで見る
-                    muted: !rule.enabled || accountOff || allDayOff
-                        || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter)
+                    muted: dropped
                         || resolvedActionsMuted(ev, rule, ov, store.state.titleCodes,
                                                 importReminders: store.state.importEventReminders,
                                                 muteAll: store.state.muteAll),
@@ -142,7 +147,9 @@ struct AgendaView: View {
                     calendarOff: !rule.enabled,
                     accountOff: accountOff,
                     allDayOff: allDayOff,
-                    muteAll: store.state.muteAll
+                    muteAll: store.state.muteAll,
+                    // 始まる前の予定で通知の動作を使うものは、通知の許可が無いと届かない
+                    notifies: !dropped && ev.startMillis > now && (actions.start == notify || actions.reminder == notify)
                 )
             }
     }
@@ -192,11 +199,10 @@ struct AgendaView: View {
 
     /// 鳴動の状態 (#51 PR2)。Android と同じ優先順 (shared `RingStatus`)
     private var ringStatus: RingStatusSummary {
-        // 通知だけで届く予約がこの先にある時だけ、通知の許可も鳴らすのに要る側に数える
-        let notifyAhead = store.state.scheduled.values.contains {
-            $0.instance.delivery == EventAction.notify.rawValue && $0.instance.triggerAtMillis > Engine.nowMillis
-        }
-        let missing = PermissionPlan.missingForRinging(center.states, notifyDeliveryAhead: notifyAhead,
+        // 通知で届く予定がこの先にある時だけ、通知の許可も鳴らすのに要る側に数える。
+        // 予約の行は予定を消しても日数で消えるまで残るので、今の予定一覧から決める
+        let missing = PermissionPlan.missingForRinging(center.states,
+                                                       notifyDeliveryAhead: displayEvents.contains { $0.notifies },
                                                        alarmMirrorsNotify: !engine.usesRealAlarms)
         return RingStatusSummary(missingPermissions: missing, recentMissed: recentMissedRecords.count, hasNextAlarm: nextAlarm != nil)
     }
@@ -543,12 +549,11 @@ struct EventRow: View {
     }
 }
 
-/// 何も鳴らないか。動作は shared `AlarmExpander.resolveActions` と同じ優先順:
+/// 予定が実際に使う動作。優先順は shared `AlarmExpander.resolveActions` と同じ:
 /// 予定の個別指定 > never コード > always コード > カレンダーの既定。
-/// 展開と同じく、リマインダーの動作はリマインダー側の時刻 (追加の何分前・取り込んだカレンダーの通知) がある時だけ鳴る。
-/// すべてミュート中のアラームも鳴らない側に数える (展開の emit と同じく通知は残る)
-func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
-                          importReminders: Bool, muteAll: Bool = false) -> Bool {
+/// 展開と同じく、リマインダーの動作はリマインダー側の時刻 (追加の何分前・取り込んだカレンダーの通知) がある時だけ使う (無ければ nil)
+func resolvedRingActions(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
+                         importReminders: Bool) -> (start: String, reminder: String?) {
     func matches(_ list: [String]) -> Bool {
         list.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty && ev.title.localizedCaseInsensitiveContains($0) }
     }
@@ -558,12 +563,19 @@ func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: Ev
         if apply && matches(codes.alwaysCodes) { return EventAction.alarm.rawValue }
         return fallback
     }
-    let mute = EventAction.mute.rawValue
     let hasReminderTriggers = !(ov?.extraOffsets ?? rule.extraOffsets).isEmpty
         || (importReminders && ev.calendarReminderMinutes.contains { $0 >= 0 })
+    return (resolve(codes.applyToStart, rule.startAction),
+            hasReminderTriggers ? resolve(codes.applyToReminders, rule.reminderAction) : nil)
+}
+
+/// 何も鳴らないか (`resolvedRingActions` の結果で決める)。
+/// すべてミュート中のアラームも鳴らない側に数える (展開の emit と同じく通知は残る)
+func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
+                          importReminders: Bool, muteAll: Bool = false) -> Bool {
+    let actions = resolvedRingActions(ev, rule, ov, codes, importReminders: importReminders)
     func silenced(_ action: String) -> Bool {
-        action == mute || (muteAll && action == EventAction.alarm.rawValue)
+        action == EventAction.mute.rawValue || (muteAll && action == EventAction.alarm.rawValue)
     }
-    return silenced(resolve(codes.applyToStart, rule.startAction))
-        && (silenced(resolve(codes.applyToReminders, rule.reminderAction)) || !hasReminderTriggers)
+    return silenced(actions.start) && (actions.reminder.map(silenced) ?? true)
 }
