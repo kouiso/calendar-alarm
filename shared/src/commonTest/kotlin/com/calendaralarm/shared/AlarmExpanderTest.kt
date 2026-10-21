@@ -165,6 +165,22 @@ class AlarmExpanderTest {
     }
 
     @Test
+    fun `終日の鳴動OFFは予定ごとのアラーム指定があっても展開せず、一覧の判定も外れる側になる`() {
+        val ev = allDayEvent("ad1", Instant.parse("2026-10-08T00:00:00Z").toEpochMilliseconds())
+        val rule = AlarmRule(allDayMinutes = -1)
+        val out = AlarmExpander.expandEvents(
+            listOf(ev), mapOf("c1" to rule),
+            mapOf(ev.instanceKey to EventOverride(action = EventAction.ALARM)),
+            emptySet(), now, horizon, zone = TZ,
+        )
+        assertTrue(out.isEmpty())
+        assertTrue(AlarmExpander.allDaySuppressed(ev, rule))
+        // 時刻のある予定と、終日の時刻が決まっているカレンダーは外さない
+        assertEquals(false, AlarmExpander.allDaySuppressed(event("e1", start = ldt("2026-10-05T10:00:00")), rule))
+        assertEquals(false, AlarmExpander.allDaySuppressed(ev, AlarmRule(allDayMinutes = 540)))
+    }
+
+    @Test
     fun `追加リマインダーが個別インスタンスになる`() {
         val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
         val out = AlarmExpander.expandEvents(

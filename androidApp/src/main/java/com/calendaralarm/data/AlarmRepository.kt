@@ -154,7 +154,12 @@ class AlarmRepository(
         val hasOverride: Boolean,
         /** カレンダーを鳴らさない設定にしている (予定ごとの指定より強い。展開がカレンダー単位で外すため) */
         val calendarOff: Boolean = false,
+        /** 終日の予定で、カレンダーが終日を鳴らさない設定 (予定ごとの指定より強い) */
+        val allDayOff: Boolean = false,
     ) {
+        /** 予定ごとの指定では鳴るようにできない (スイッチを押せなくする) */
+        val lockedByCalendar: Boolean get() = calendarOff || allDayOff
+
         /** 何も鳴らない状態 (UI のグレー化判定用)。 */
         val muted: Boolean
             get() = startAction == EventAction.MUTE && reminderAction == EventAction.MUTE
@@ -193,7 +198,9 @@ class AlarmRepository(
             // 招待フィルタも反映する: 展開側で鳴らない予定が「アラーム」
             // アイコン表示になるのは矛盾
             // 予約の展開と同じ判定関数を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
-            val (start, reminder) = if (pref?.enabled == false ||
+            // 終日を鳴らさないカレンダーの終日予定も、個別指定より先に展開で外れるので鳴らない側に倒す
+            val allDayOff = AlarmExpander.allDaySuppressed(ev, rule)
+            val (start, reminder) = if (pref?.enabled == false || allDayOff ||
                 !AlarmExpander.passesEventFilters(ev, override, appSettings.inviteFilter, appSettings.eventTypeFilter)
             ) {
                 EventAction.MUTE to EventAction.MUTE
@@ -210,6 +217,7 @@ class AlarmRepository(
                 extraOffsets = ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets,
                 hasOverride = ov != null,
                 calendarOff = pref?.enabled == false,
+                allDayOff = allDayOff,
             )
         }
     }
@@ -424,6 +432,7 @@ class AlarmRepository(
                 it.state in setOf(
                     AlarmState.FIRED.name, AlarmState.DISMISSED.name,
                     AlarmState.SNOOZED.name, AlarmState.MISSED.name,
+                    AlarmState.SKIPPED.name,
                 )
             }
             .map { it.id }
@@ -611,12 +620,13 @@ class AlarmRepository(
         for (fire in plan.toFireNow) {
             // 一度も予約していない ev: インスタンスの過去分 (リマインダー取込ONの
             // 初回 resync 等) は「元カレンダー側が既に通知した時刻」。後追いで
-            // 不意に鳴らさず、次回展開からも外れるよう MISSED に倒す。
+            // 不意に鳴らさず、次回展開からも外れるよう終端にする。鳴らせなかったのではなく
+            // わざと鳴らさなかったので、見逃しの件数に入らない SKIPPED にする。
             // setState は UPDATE WHERE id のみで行が無いと更新0になるため、
             // 先に行を作ってから終端化する (残さないと次回 resync で再展開される)。
             if (fire.id !in armedIds && fire.id.startsWith("ev:")) {
                 db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
-                markMissed(fire.id, "予約前に通知時刻が過ぎていた")
+                markSkipped(fire.id, "予約前に通知時刻が過ぎていた")
                 continue
             }
             db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
@@ -645,6 +655,13 @@ class AlarmRepository(
         db.scheduledInstances().byId(id)?.standaloneAlarmId?.let {
             disableConsumedOneShots(setOf(it))
         }
+        onScheduleChanged?.invoke()
+    }
+
+    /** 予約前に時刻が過ぎた行を、見逃しに数えない終端 (SKIPPED) にする。ev: 専用なので単発アラームの消費は見ない */
+    suspend fun markSkipped(id: String, detail: String) {
+        setState(id, AlarmState.SKIPPED)
+        audit("SKIP", "$id: $detail")
         onScheduleChanged?.invoke()
     }
 

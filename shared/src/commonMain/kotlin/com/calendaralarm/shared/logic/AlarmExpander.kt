@@ -76,7 +76,7 @@ object AlarmExpander {
             // 終日イベントは startMillis が UTC 0時。深夜に鳴らさないため
             // イベント日のローカル allDayMinutes (既定9:00) に倒す。負数なら鳴らさない。
             val eventStart = if (event.allDay) {
-                if (rule.allDayMinutes < 0) continue
+                if (allDaySuppressed(event, rule)) continue
                 val day = Instant.fromEpochMilliseconds(event.startMillis)
                     .toLocalDateTime(TimeZone.UTC).date
                 LocalDateTime(
@@ -122,6 +122,13 @@ object AlarmExpander {
         }
         return result
     }
+
+    /**
+     * カレンダーの「終日の予定は鳴らさない」で外れる予定か。予定ごとの個別指定より強い
+     * (展開が個別指定を見る前に外すため)。予定一覧のスイッチもこれで押せなくする
+     */
+    fun allDaySuppressed(event: CalendarEvent, rule: AlarmRule): Boolean =
+        event.allDay && rule.allDayMinutes < 0
 
     /**
      * 予定の絞り込み (招待・種類・予定あり／なし) を通るか。予約の展開と予定一覧の表示が同じ判定を使う (#79)。
