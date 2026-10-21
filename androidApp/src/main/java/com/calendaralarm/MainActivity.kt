@@ -59,11 +59,27 @@ class MainActivity : ComponentActivity() {
     /** メール→予定の通知から来た抽出結果 (JSON)。null でダイアログ非表示。 */
     private val extractedJson = androidx.compose.runtime.mutableStateOf<String?>(null)
 
+    /** 共有シートで受けた本文 (#102)。読み取りが終わると null に戻す。 */
+    private val sharedText = androidx.compose.runtime.mutableStateOf<String?>(null)
+
+    /** 共有の読み取りで予定にできなかった時の理由。取り込み画面に出す */
+    private val extractedNote = androidx.compose.runtime.mutableStateOf<String?>(null)
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         intent.getStringExtra(EXTRA_EXTRACTED_EVENT)?.let {
             extractedJson.value = it
             this.intent.removeExtra(EXTRA_EXTRACTED_EVENT)
+        }
+        takeSharedText(intent)
+    }
+
+    /** 共有の本文を一度だけ受け取る。画面の作り直しで同じ共有を二度読み取らないよう intent から外す */
+    private fun takeSharedText(intent: android.content.Intent?) {
+        com.calendaralarm.ai.ShareImport.textFrom(intent)?.let {
+            sharedText.value = it
+            intent?.action = null
+            intent?.removeExtra(android.content.Intent.EXTRA_TEXT)
         }
     }
 
@@ -84,6 +100,7 @@ class MainActivity : ComponentActivity() {
             extractedJson.value = it
             intent?.removeExtra(EXTRA_EXTRACTED_EVENT)
         }
+        takeSharedText(intent)
         setContent {
             // recomposition 毎に Flow を作り直すと collectAsState が
             // リセットされるため remember で固定する
@@ -122,6 +139,20 @@ class MainActivity : ComponentActivity() {
                             lifecycleScope.launch { app.container.repository.resync("calendar granted") }
                         }
                     }
+                    // 共有→予定 (#102): 本文を読み取ってから、印刷経路と同じ確認ダイアログへ進める
+                    sharedText.value?.let { text ->
+                        com.calendaralarm.ui.SharedTextImportDialog(
+                            text = text,
+                            onResult = { ev, note ->
+                                sharedText.value = null
+                                extractedNote.value = note
+                                extractedJson.value = kotlinx.serialization.json.Json.encodeToString(
+                                    com.calendaralarm.shared.model.ExtractedEvent.serializer(), ev,
+                                )
+                            },
+                            onCancel = { sharedText.value = null },
+                        )
+                    }
                     // メール→予定: 抽出結果が届いていれば確認ダイアログを最前面に出す
                     extractedJson.value?.let { json ->
                         val ev = runCatching {
@@ -132,9 +163,14 @@ class MainActivity : ComponentActivity() {
                         if (ev != null) {
                             com.calendaralarm.ui.ExtractedEventDialog(
                                 event = ev,
-                                onDismiss = { extractedJson.value = null },
+                                note = extractedNote.value,
+                                onDismiss = {
+                                    extractedJson.value = null
+                                    extractedNote.value = null
+                                },
                                 onSaved = {
                                     extractedJson.value = null
+                                    extractedNote.value = null
                                     // 新しい予定を即時取り込んでアラーム化する
                                     lifecycleScope.launch {
                                         app.container.repository.resync("event inserted")
