@@ -168,4 +168,56 @@ final class EngineNotificationOutcomeTests: XCTestCase {
         engine.markNotificationDelivered(id, deliveredAtMillis: at)
         XCTAssertEqual(DiagnosisPlan.lastFired(engine.store.state.audit)?.atMillis, at)
     }
+
+    /// 届いた「1回のみ」はその場で OFF になり、毎週のアラームは ON のまま。
+    /// 終端行が 7 日で掃除された後の resync でも、OFF なので次の日付に展開されて鳴り直さない
+    func testDeliveredOneShotStaysOffAfterPruneAndResync() async {
+        let (onceId, onceRow) = pendingOneShot()
+        let weeklyId = engine.store.upsertAlarm(
+            StandaloneAlarmDTO(hour: 8, minute: 0, daysOfWeek: ["MONDAY"], repeatMode: "WEEKLY"))
+        let weeklyRow = "sa:\(weeklyId):test"
+        engine.store.putScheduled(ScheduledRecord(
+            instance: AlarmInstanceDTO(
+                id: weeklyRow, triggerAtMillis: Engine.nowMillis - 60_000, title: "毎週", kind: "STANDALONE",
+                standaloneAlarmId: weeklyId),
+            state: .pending, alarmKitId: weeklyRow))
+
+        engine.markNotificationDelivered(onceRow)
+        engine.markNotificationDelivered(weeklyRow)
+        XCTAssertEqual(engine.store.state.scheduled[onceRow]?.state, .fired)
+        XCTAssertEqual(engine.store.state.standaloneAlarms.first { $0.id == onceId }?.enabled, false)
+        XCTAssertEqual(engine.store.state.standaloneAlarms.first { $0.id == weeklyId }?.enabled, true)
+
+        engine.store.pruneOldInstances(nowMillis: Engine.nowMillis + 8 * 86_400_000)
+        XCTAssertNil(engine.store.state.scheduled[onceRow])
+        await engine.resync(reason: "test")
+
+        let pendingAlarmIds = engine.store.state.scheduled.values
+            .filter { $0.state == .pending }
+            .compactMap { $0.instance.standaloneAlarmId }
+        // 毎週の方が展開されていれば、resync は展開まで走っている (空振りで通る試験にしない)
+        XCTAssertTrue(pendingAlarmIds.contains(weeklyId))
+        XCTAssertFalse(pendingAlarmIds.contains(onceId))
+        XCTAssertEqual(engine.store.state.standaloneAlarms.first { $0.id == onceId }?.enabled, false)
+    }
+}
+
+@MainActor
+final class StoreAuditOrderTests: XCTestCase {
+    /// 後から分かった出来事 (閉じている間に届いた通知) は、末尾でなく起きた時刻の位置に入る
+    func testAuditWithEarlierTimeLandsInTimeOrder() {
+        let store = Store(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("store-\(UUID().uuidString).json"))
+        store.mutate { $0.audit = [] }
+        store.audit("A", "first", atMillis: 1_000)
+        store.audit("C", "third", atMillis: 3_000)
+        let idBefore = store.state.nextAuditId
+        store.audit("B", "second", atMillis: 2_000)
+        store.audit("Z", "earliest", atMillis: 500)
+        store.audit("C2", "same-time", atMillis: 3_000)
+
+        XCTAssertEqual(store.state.audit.map { $0.type }, ["Z", "A", "B", "C", "C2"])
+        XCTAssertEqual(store.state.audit.map { $0.atMillis }, [500, 1_000, 2_000, 3_000, 3_000])
+        // 差し込んでも採番は増える (診断画面の作り直しの合図に使う)
+        XCTAssertEqual(store.state.nextAuditId, idBefore + 3)
+    }
 }
