@@ -42,6 +42,9 @@ final class Store: ObservableObject {
         // scheduled_instances: id -> ScheduledRecord
         var scheduled: [String: ScheduledRecord] = [:]
         var audit: [AuditEntry] = []
+        /// 鳴った・止めた・スヌーズ・鳴らせなかった の記録 (7日分)。監査ログ (50件) や予約の行
+        /// (単発を使い直すと消える) とは別に持ち、設定先頭の「最近の鳴動」と見逃しの数に使う
+        var ringHistory: [AuditEntry] = []
         var nextAlarmId: Int64 = 1
         var nextAuditId: Int64 = 1
         // 直近に読み取ったカレンダー/イベントのキャッシュ (予定画面表示用)
@@ -241,11 +244,25 @@ final class Store: ObservableObject {
 
     // MARK: - audit
 
+    static let ringHistoryTypes: Set<String> = ["FIRED", "DISMISS", "DISMISS_OFFAPP", "SNOOZE", "MISSED"]
+
+    /// 直近24時間に鳴らせなかった件数 (予定画面と設定の「鳴動の状態」で同じものを使う)
+    func recentMissedCount(nowMillis: Int64) -> Int {
+        let since = nowMillis - 24 * 60 * 60 * 1000
+        return state.ringHistory.filter { $0.type == "MISSED" && $0.atMillis >= since }.count
+    }
+
     func audit(_ type: String, _ detail: String) {
         mutate { s in
-            s.audit.append(AuditEntry(id: s.nextAuditId, atMillis: Int64(Date().timeIntervalSince1970 * 1000), type: type, detail: detail))
+            let entry = AuditEntry(id: s.nextAuditId, atMillis: Int64(Date().timeIntervalSince1970 * 1000), type: type, detail: detail)
+            s.audit.append(entry)
             s.nextAuditId += 1
             if s.audit.count > 50 { s.audit.removeFirst(s.audit.count - 50) }
+            if Self.ringHistoryTypes.contains(type) {
+                s.ringHistory.append(entry)
+                let cutoff = entry.atMillis - 7 * 24 * 60 * 60 * 1000
+                s.ringHistory.removeAll { $0.atMillis < cutoff }
+            }
         }
     }
 
@@ -300,6 +317,7 @@ extension Store.Persisted {
         standaloneAlarms = try c.decodeIfPresent([StandaloneAlarmDTO].self, forKey: .standaloneAlarms) ?? []
         scheduled = try c.decodeIfPresent([String: ScheduledRecord].self, forKey: .scheduled) ?? [:]
         audit = try c.decodeIfPresent([AuditEntry].self, forKey: .audit) ?? []
+        ringHistory = try c.decodeIfPresent([AuditEntry].self, forKey: .ringHistory) ?? []
         nextAlarmId = try c.decodeIfPresent(Int64.self, forKey: .nextAlarmId) ?? 1
         nextAuditId = try c.decodeIfPresent(Int64.self, forKey: .nextAuditId) ?? 1
         calendars = try c.decodeIfPresent([CalendarSource].self, forKey: .calendars) ?? []

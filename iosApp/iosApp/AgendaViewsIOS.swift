@@ -228,8 +228,9 @@ struct DayTimelineViewIOS: View {
                         }
                     }
                     // 今の時刻の線 (#51 PR3)。今日を見ている時だけ。テーマ色は「鳴る/オン」専用なので赤で引く
-                    if cal.isDateInToday(date) {
-                        TimelineView(.periodic(from: .now, by: 60)) { ctx in
+                    TimelineView(.periodic(from: .now, by: 60)) { ctx in
+                        // 日付の判定も1分ごとにやり直す (開いたまま日付が変わったら前日の画面から線を消す)
+                        if cal.isDate(date, inSameDayAs: ctx.date) {
                             HStack(spacing: 0) {
                                 Spacer().frame(width: 44)
                                 Circle().fill(Color.red).frame(width: 8, height: 8)

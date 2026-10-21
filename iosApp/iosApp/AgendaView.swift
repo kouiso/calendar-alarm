@@ -174,9 +174,8 @@ struct AgendaView: View {
     /// 鳴動の状態 (#51 PR2)。Android と同じ優先順 (shared `RingStatus`)
     private var ringStatus: RingStatusSummary {
         let missing = center.states.values.filter { $0 != .granted }.count
-        // 監査ログは件数で古い順に消えるので、7日残る予約の行 (MISSED) で数える
-        let since = Engine.nowMillis - 24 * 60 * 60 * 1000
-        let missed = store.state.scheduled.values.filter { $0.state == .missed && $0.instance.triggerAtMillis >= since }.count
+        // 監査ログ (50件) や予約の行 (単発を使い直すと消える) ではなく、鳴動だけの記録で数える
+        let missed = store.recentMissedCount(nowMillis: Engine.nowMillis)
         return RingStatusSummary(missingPermissions: missing, recentMissed: missed, hasNextAlarm: nextAlarm != nil)
     }
 

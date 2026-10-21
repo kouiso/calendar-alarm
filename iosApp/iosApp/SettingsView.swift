@@ -322,16 +322,12 @@ struct SettingsView: View {
 
     private var ringStatusCard: some View {
         let now = Engine.nowMillis
-        let since = now - 24 * 60 * 60 * 1000
         let status = RingStatusSummary(
             missingPermissions: center.states.values.filter { $0 != .granted }.count,
-            recentMissed: store.state.scheduled.values.filter { $0.state == .missed && $0.instance.triggerAtMillis >= since }.count,
+            recentMissed: store.recentMissedCount(nowMillis: now),
             hasNextAlarm: store.state.scheduled.values.contains { $0.state == .pending && $0.instance.triggerAtMillis > now })
-        // 監査ログは50件で古い順に消えるので、7日残る予約の行の終了状態から新しい3件を出す
-        let recent = store.state.scheduled.values
-            .filter { [.fired, .dismissed, .snoozed, .missed].contains($0.state) && $0.instance.triggerAtMillis <= now }
-            .sorted { $0.instance.triggerAtMillis > $1.instance.triggerAtMillis }
-            .prefix(3)
+        // 予約の行や50件の監査ログに左右されない、鳴動だけの記録から新しい3件
+        let recent = Array(store.state.ringHistory.suffix(3).reversed())
         return Card {
             VStack(alignment: .leading, spacing: 6) {
                 Text("鳴動の状態").font(NightTheme.font(14, weight: .semibold))
@@ -340,8 +336,8 @@ struct SettingsView: View {
                 if recent.isEmpty {
                     Text("まだ記録がありません").font(NightTheme.font(12))
                 }
-                ForEach(Array(recent), id: \.instance.id) { r in
-                    Text("\(Engine.hm(r.instance.triggerAtMillis))  \(Self.ringLogLabel(r.state))  \(r.instance.title)")
+                ForEach(recent) { e in
+                    Text("\(Engine.hm(e.atMillis))  \(Self.ringLogLabel(e.type))  \(e.detail)")
                         .font(NightTheme.font(12)).lineLimit(1)
                 }
             }
@@ -349,13 +345,13 @@ struct SettingsView: View {
         .task { await center.refresh(engine) }
     }
 
-    private static func ringLogLabel(_ state: InstanceState) -> String {
-        switch state {
-        case .fired: return "鳴った"
-        case .dismissed: return "止めた"
-        case .snoozed: return "スヌーズ"
-        case .missed: return "鳴らせなかった"
-        default: return state.rawValue
+    private static func ringLogLabel(_ type: String) -> String {
+        switch type {
+        case "FIRED": return "鳴った"
+        case "DISMISS", "DISMISS_OFFAPP": return "止めた"
+        case "SNOOZE": return "スヌーズ"
+        case "MISSED": return "鳴らせなかった"
+        default: return type
         }
     }
 
