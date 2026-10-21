@@ -20,77 +20,80 @@ struct AgendaView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    // Night UI: 日付 H1
-                    Text(Self.todayLabel)
-                        .font(NightTheme.font(30, weight: .semibold))
-                        .padding(.top, 6)
-                    // 次のアラーム欄は小さくし、その下に鳴動の状態を1行出す (#51 PR2)
-                    AgendaNextAlarmCard(instance: nextAlarm, accent: accent, statusLine: ringStatus.line)
-                    if ringStatus.missingPermissions > 0 {
-                        NavigationLink { PermissionsView() } label: {
-                            StatusBanner(message: "許可が\(ringStatus.missingPermissions)つ足りません。鳴らない・止められないことがあります", action: "直す")
+            ScrollViewReader { pageScroll in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        // Night UI: 日付 H1
+                        Text(Self.todayLabel)
+                            .font(NightTheme.font(30, weight: .semibold))
+                            .padding(.top, 6)
+                        // 次のアラーム欄は小さくし、その下に鳴動の状態を1行出す (#51 PR2)
+                        AgendaNextAlarmCard(instance: nextAlarm, accent: accent, statusLine: ringStatus.line)
+                        if ringStatus.missingPermissions > 0 {
+                            NavigationLink { PermissionsView() } label: {
+                                StatusBanner(message: "許可が\(ringStatus.missingPermissions)つ足りません。鳴らない・止められないことがあります", action: "直す")
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
-                    }
-                    if ringStatus.recentMissed > 0 {
-                        // 行き先は件数と同じ鳴動の記録 (24時間分が必ず残る)。件数で消える監査ログには送らない
-                        NavigationLink { MissedAlarmsView(records: recentMissedRecords) } label: {
-                            StatusBanner(message: "直近24時間に鳴らせなかったアラームが\(ringStatus.recentMissed)件あります", action: "見る")
+                        if ringStatus.recentMissed > 0 {
+                            // 行き先は件数と同じ鳴動の記録 (24時間分が必ず残る)。件数で消える監査ログには送らない
+                            NavigationLink { MissedAlarmsView(records: recentMissedRecords) } label: {
+                                StatusBanner(message: "直近24時間に鳴らせなかったアラームが\(ringStatus.recentMissed)件あります", action: "見る")
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
-                    }
-                    // ヘッダー天気 (元アプリ: 現在気温+時間別予報)。地点設定がある時だけ。
-                    if let nf = nowForecast {
-                        WeatherHeaderRow(forecast: nf)
-                    }
-                    // Night UI: 4-way セグメント (一覧/3日/月/タイムライン) + 検索/同期
-                    HStack(spacing: 10) {
-                        NightSegment(labels: modes.map { $0.label }, selected: Binding(
-                            get: { modes.firstIndex(of: viewMode) ?? 0 },
-                            set: { i in
-                                viewMode = modes[i]
-                                if modes[i] != .list { focusDate = Date() }
-                            }))
-                        Button {
-                            searchOpen.toggle()
-                            if !searchOpen { searchText = "" }
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundStyle(searchOpen ? accent : .secondary)
+                        // ヘッダー天気 (元アプリ: 現在気温+時間別予報)。地点設定がある時だけ。
+                        if let nf = nowForecast {
+                            WeatherHeaderRow(forecast: nf)
                         }
-                        Button { Task { await engine.resync(reason: "manual") } } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .foregroundStyle(.secondary)
+                        // Night UI: 4-way セグメント (一覧/3日/月/タイムライン) + 検索/同期
+                        HStack(spacing: 10) {
+                            NightSegment(labels: modes.map { $0.label }, selected: Binding(
+                                get: { modes.firstIndex(of: viewMode) ?? 0 },
+                                set: { i in
+                                    viewMode = modes[i]
+                                    if modes[i] != .list { focusDate = Date() }
+                                }))
+                            Button {
+                                searchOpen.toggle()
+                                if !searchOpen { searchText = "" }
+                            } label: {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundStyle(searchOpen ? accent : .secondary)
+                            }
+                            Button { Task { await engine.resync(reason: "manual") } } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        switch viewMode {
+                        case .list:
+                            ForEach(groupedDays, id: \.0) { day, events in
+                                DayCard(dayLabel: dayLabel(day), weekNumber: weekNumber(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev },
+                                        onToggle: { ev, on in toggleRing(ev, on) })
+                            }
+                            if groupedDays.isEmpty { emptyState }
+                        case .month:
+                            MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 }, firstWeekday: store.state.firstWeekday)
+                        case .threeDay:
+                            ThreeDayColumnsView(startDate: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
+                        case .timeline:
+                            DayTimelineViewIOS(date: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 },
+                                               pageScroll: pageScroll)
                         }
                     }
-                    switch viewMode {
-                    case .list:
-                        ForEach(groupedDays, id: \.0) { day, events in
-                            DayCard(dayLabel: dayLabel(day), weekNumber: weekNumber(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev },
-                                    onToggle: { ev, on in toggleRing(ev, on) })
-                        }
-                        if groupedDays.isEmpty { emptyState }
-                    case .month:
-                        MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 }, firstWeekday: store.state.firstWeekday)
-                    case .threeDay:
-                        ThreeDayColumnsView(startDate: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
-                    case .timeline:
-                        DayTimelineViewIOS(date: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
-                    }
+                    .padding()
                 }
-                .padding()
-            }
-            .background(Color(uiColor: .systemGroupedBackground))
-            .onReceive(Self.minuteTimer) { clockTick = $0 }
-            .safeAreaInset(edge: .top) {
-                if searchOpen {
-                    TextField("タイトルで絞り込み", text: $searchText)
-                        .textFieldStyle(.roundedBorder)
-                        .padding(.horizontal)
-                        .padding(.vertical, 4)
-                        .background(.bar)
+                .background(Color(uiColor: .systemGroupedBackground))
+                .onReceive(Self.minuteTimer) { clockTick = $0 }
+                .safeAreaInset(edge: .top) {
+                    if searchOpen {
+                        TextField("タイトルで絞り込み", text: $searchText)
+                            .textFieldStyle(.roundedBorder)
+                            .padding(.horizontal)
+                            .padding(.vertical, 4)
+                            .background(.bar)
+                    }
                 }
             }
         }

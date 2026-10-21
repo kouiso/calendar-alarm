@@ -61,10 +61,16 @@ enum PermissionPlan {
     /// iOS 26 未満はアラームの許可が通知の許可を写している (`refresh`) ので、二重に数えない
     static func missingForRinging(_ states: [AppPermission: PermissionState], notifyDeliveryAhead: Bool,
                                   alarmMirrorsNotify: Bool) -> Int {
-        let others = states.filter { $0.key != .notify && $0.value != .granted }.count
-        let notifyNeeded = notifyDeliveryAhead && !alarmMirrorsNotify
-            && states[.notify].map { $0 != .granted } == true
-        return others + (notifyNeeded ? 1 : 0)
+        states.filter {
+            $0.value != .granted
+                && neededForRinging($0.key, notifyDeliveryAhead: notifyDeliveryAhead, alarmMirrorsNotify: alarmMirrorsNotify)
+        }.count
+    }
+
+    /// その許可が今の予約を鳴らすのに要るか。設定の許可一覧で「足りない」と赤く出すのは要る物だけにして、
+    /// 見出しの数と赤い行の数を同じ規則で揃える (#51 PR3)
+    static func neededForRinging(_ p: AppPermission, notifyDeliveryAhead: Bool, alarmMirrorsNotify: Bool) -> Bool {
+        p != .notify || (notifyDeliveryAhead && !alarmMirrorsNotify)
     }
 
     /// 次に頼む許可。断られたものは同じ流れの中で二度頼まない。
@@ -80,10 +86,20 @@ enum PermissionPlan {
     /// 通知だけで届く予約がこの先にあるかを、両方の画面で同じ予約の一覧から決める
     static func missingForRinging(_ states: [AppPermission: PermissionState], scheduled: [String: ScheduledRecord],
                                   nowMillis: Int64, usesRealAlarms: Bool) -> Int {
-        let notifyAhead = scheduled.values.contains {
+        missingForRinging(states, notifyDeliveryAhead: notifyDeliveryAhead(scheduled, nowMillis: nowMillis),
+                          alarmMirrorsNotify: !usesRealAlarms)
+    }
+
+    static func neededForRinging(_ p: AppPermission, scheduled: [String: ScheduledRecord],
+                                 nowMillis: Int64, usesRealAlarms: Bool) -> Bool {
+        neededForRinging(p, notifyDeliveryAhead: notifyDeliveryAhead(scheduled, nowMillis: nowMillis),
+                         alarmMirrorsNotify: !usesRealAlarms)
+    }
+
+    private static func notifyDeliveryAhead(_ scheduled: [String: ScheduledRecord], nowMillis: Int64) -> Bool {
+        scheduled.values.contains {
             $0.instance.delivery == EventAction.notify.rawValue && $0.instance.triggerAtMillis > nowMillis
         }
-        return missingForRinging(states, notifyDeliveryAhead: notifyAhead, alarmMirrorsNotify: !usesRealAlarms)
     }
 }
 

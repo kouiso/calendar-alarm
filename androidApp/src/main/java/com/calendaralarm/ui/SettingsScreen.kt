@@ -136,9 +136,7 @@ fun SettingsScreen(
     }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
-        // ---- 先頭: 鳴動の状態 (前の権限カード) と最近の鳴動記録 (#51 PR3)。許可が欠けると時刻の設定に関係なく鳴らないので先に置く ----
-        item { RingStatusCard(context, repository, onOpenPermissions) }
-        // ---- 鳴る時刻 (決定8, #121): Google の通知とアプリの時刻の両方で鳴ることを見せる ----
+        // ---- 先頭: 鳴る時刻 (決定8, #121): Google の通知とアプリの時刻の両方で鳴ることを見せる ----
         item { Spacer(Modifier.height(8.dp)) }
         item {
             RingTimesCard(
@@ -146,6 +144,9 @@ fun SettingsScreen(
                 useCalendarReminders = prefs?.importEventReminders != false,
             )
         }
+        // ---- 鳴動の状態 (前の権限カード) と最近の鳴動記録 (#51 PR3)。#121 の完了条件で先頭は鳴る時刻なので、その直下に置く ----
+        item { Spacer(Modifier.height(8.dp)) }
+        item { RingStatusCard(context, repository, onOpenPermissions) }
         // ---- 既定値: 🔔通知タイミング / 😴スヌーズ / ☁天気 ----
         item { Spacer(Modifier.height(12.dp)) }
         item {

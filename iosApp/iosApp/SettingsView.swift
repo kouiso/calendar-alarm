@@ -31,12 +31,12 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 16) {
 
-                    // 先頭: 鳴動の状態 (前の権限カード) と最近の鳴動記録 (#51 PR3)。許可が欠けると時刻の設定に関係なく鳴らないので先に置く
-                    ringStatusCard
-
-                    // 鳴る時刻 (決定8, #121): Google の通知とアプリの時刻の両方で鳴ることを見せる
+                    // 先頭: 鳴る時刻 (決定8, #121): Google の通知とアプリの時刻の両方で鳴ることを見せる
                     RingTimesCard(appMinutesBefore: store.state.defaultMinutesBefore,
                                   useCalendarReminders: store.state.importEventReminders)
+
+                    // 鳴動の状態 (前の権限カード) と最近の鳴動記録 (#51 PR3)。#121 の完了条件で先頭は鳴る時刻なので、その直下に置く
+                    ringStatusCard
 
                     // 既定値カード: 🔔タイミング / 😴スヌーズ / ☀天気
                     Card {
@@ -393,14 +393,23 @@ struct SettingsView: View {
                     Divider().padding(.vertical, 8)
                     VStack(spacing: 8) {
                         ForEach(AppPermission.allCases) { p in
+                            let ok = center.states[p] == .granted
+                            // 見出しの数と同じ規則で、鳴らすのに要る許可だけを「足りない」と赤く出す。
+                            // 要らない許可 (通知だけで届く予約が無い時の通知) は、何に使うかを添えて灰色で出す
+                            let needed = PermissionPlan.neededForRinging(p, scheduled: store.state.scheduled,
+                                                                         nowMillis: now, usesRealAlarms: engine.usesRealAlarms)
                             HStack {
                                 Image(systemName: p.icon).frame(width: 22).foregroundStyle(.secondary)
-                                Text(p.label).font(NightTheme.font(13))
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(p.label).font(NightTheme.font(13))
+                                    if !ok && !needed {
+                                        Text(p.reason).font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                    }
+                                }
                                 Spacer()
-                                let ok = center.states[p] == .granted
-                                Text(ok ? "OK" : "足りない")
+                                Text(ok ? "OK" : (needed ? "足りない" : "未許可"))
                                     .font(NightTheme.font(12, weight: .semibold))
-                                    .foregroundStyle(ok ? NightTheme.statusOk : NightTheme.statusWarn)
+                                    .foregroundStyle(ok ? NightTheme.statusOk : (needed ? NightTheme.statusWarn : .secondary))
                             }
                         }
                     }
