@@ -162,7 +162,10 @@ final class Store: ObservableObject {
     // MARK: - calendar prefs
 
     func rule(for calendarId: String) -> AlarmRuleDTO {
-        state.calendarRules[calendarId] ?? AlarmRuleDTO(minutesBefore: state.defaultMinutesBefore)
+        // 保存したルールが無いカレンダーは、展開 (SharedBridge の defaultRule) と同じ全体の既定を使う
+        state.calendarRules[calendarId] ?? AlarmRuleDTO(minutesBefore: state.defaultMinutesBefore,
+                                                        startAction: state.defaultStartAction,
+                                                        reminderAction: state.defaultReminderAction)
     }
 
     func setCalendarRule(_ calendarId: String, _ rule: AlarmRuleDTO) {

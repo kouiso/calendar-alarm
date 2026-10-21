@@ -94,7 +94,7 @@ class RingHistoryTest {
         // 鳴らず以外は数えない
         db.auditLog().insert(AuditLogEntity(atMillis = now, action = "DISMISS", detail = "z", instanceId = "z", triggerAtMillis = now - hour))
 
-        assertEquals(1, repository.recentMissedFlow(now).first())
+        assertEquals(1, repository.recentMissedFlow(nowMillis = { now }).first())
     }
 
     @Test
@@ -104,14 +104,14 @@ class RingHistoryTest {
         repository.upsertStandaloneAlarm(alarm)
         db.scheduledInstances().upsert(listOf(row("sa:7:2020-01-01", now - 2 * hour, alarmId = 7, title = "朝")))
         repository.markMissed("sa:7:2020-01-01", "鳴動時刻から120分経過")
-        assertEquals(1, repository.recentMissedFlow(now).first())
+        assertEquals(1, repository.recentMissedFlow(nowMillis = { now }).first())
 
         // 単発アラームを入れ直すと、消費のリセットで終端の行が消える
         repository.upsertStandaloneAlarm(alarm.copy(enabled = true))
         assertNull(db.scheduledInstances().byId("sa:7:2020-01-01"))
 
         // 直す前は予約の行で数えていたのでここが 0 になり、設定と予定画面が「鳴る準備OK」に戻っていた
-        assertEquals(1, repository.recentMissedFlow(now).first())
+        assertEquals(1, repository.recentMissedFlow(nowMillis = { now }).first())
         val miss = repository.recentRingLogFlow(3).first().first { it.action == "MISS" }
         assertEquals("朝", miss.title)
         assertEquals(now - 2 * hour, miss.triggerAtMillis)
@@ -172,7 +172,7 @@ class RingHistoryTest {
         // 予約の行が既に無い古い行と、鳴動の結果でない行は埋めない
         assertNull(rows.getValue("sa:9:2026-10-01").triggerAtMillis)
         assertNull(rows.getValue("sa:1:2026-10-21").instanceId)
-        assertEquals(1, runBlocking { repository.recentMissedFlow(now).first() })
+        assertEquals(1, runBlocking { repository.recentMissedFlow(nowMillis = { now }).first() })
     }
 
     private fun columns(table: String): List<String> {

@@ -14,6 +14,9 @@ struct AgendaView: View {
     @State private var searchText = ""
     @State private var searchOpen = false
     @State private var focusDate = Date()
+    /// 開いたままでも24時間を過ぎた見逃しを外すため、1分ごとに数え直す
+    @State private var clockTick = Date()
+    private static let minuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
         NavigationStack {
@@ -80,6 +83,7 @@ struct AgendaView: View {
                 .padding()
             }
             .background(Color(uiColor: .systemGroupedBackground))
+            .onReceive(Self.minuteTimer) { clockTick = $0 }
             .safeAreaInset(edge: .top) {
                 if searchOpen {
                     TextField("タイトルで絞り込み", text: $searchText)
@@ -183,14 +187,16 @@ struct AgendaView: View {
 
     /// 鳴動の状態 (#51 PR2)。Android と同じ優先順 (shared `RingStatus`)
     private var ringStatus: RingStatusSummary {
-        let missing = center.states.values.filter { $0 != .granted }.count
+        // 通知の許可は見逃しを知らせるためのもので、鳴らすのには要らない (iOS 26 未満のアラームの許可は通知の許可を写している)
+        let missing = center.states.filter { $0.key != .notify && $0.value != .granted }.count
         return RingStatusSummary(missingPermissions: missing, recentMissed: recentMissedRecords.count, hasNextAlarm: nextAlarm != nil)
     }
 
     /// 直近24時間に鳴らせなかった予約 (件数と一覧の両方の元)。監査ログ (50件) や予約の行 (単発を使い直すと消える)
-    /// ではなく、鳴動の結果だけの記録から鳴動時刻で取る (#51 PR3)
+    /// ではなく、鳴動の結果だけの記録から鳴動時刻で取る (#51 PR3)。clockTick で1分ごとに取り直す
     private var recentMissedRecords: [AuditEntry] {
-        RingHistory.recentMissed(store.state.ringHistory, nowMillis: Engine.nowMillis)
+        _ = clockTick
+        return RingHistory.recentMissed(store.state.ringHistory, nowMillis: Engine.nowMillis)
     }
 
     /// 行のスイッチ: その予定だけ鳴らす／鳴らさない (個別指定は種類などの設定より優先される)

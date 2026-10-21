@@ -25,7 +25,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -147,9 +151,24 @@ class AlarmRepository(
     fun recentRingLogFlow(limit: Int = 3) =
         db.auditLog().recentByActionsFlow(RING_OUTCOME_ACTIONS, limit)
 
-    /** 鳴動時刻が直近24時間の「鳴らず」の件数 (予定画面と設定の「鳴動の状態」用) */
-    fun recentMissedFlow(nowMillis: Long = Clock.System.now().toEpochMilliseconds()): Flow<Int> =
-        db.auditLog().missedSinceFlow(nowMillis - com.calendaralarm.shared.logic.RingStatus.MISSED_WINDOW_MILLIS)
+    /**
+     * 鳴動時刻が直近24時間の「鳴らず」の件数 (予定画面と設定の「鳴動の状態」用)。
+     * 予約の行は単発アラームを使い直すと消えるので、鳴動ログの MISS 行で数える (#51 PR3)。
+     * 画面を開いたままでも24時間を過ぎた見逃しが外れるよう、窓の起点を一定間隔で進め直す
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun recentMissedFlow(
+        nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+        refreshMillis: Long = 60_000L,
+    ): Flow<Int> =
+        flow {
+            while (true) {
+                emit(nowMillis())
+                delay(refreshMillis)
+            }
+        }.flatMapLatest { now ->
+            db.auditLog().missedSinceFlow(now - com.calendaralarm.shared.logic.RingStatus.MISSED_WINDOW_MILLIS)
+        }.distinctUntilChanged()
 
     /** アジェンダ画面用: イベント + 有効な鳴動ルールと解決済みアクション。 */
     data class AgendaItem(
