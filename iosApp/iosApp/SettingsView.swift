@@ -26,6 +26,10 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 16) {
 
+                    // 鳴る時刻 (決定8, #121): Google の通知とアプリの時刻の両方で鳴ることを先頭で見せる
+                    RingTimesCard(appMinutesBefore: store.state.defaultMinutesBefore,
+                                  useCalendarReminders: store.state.importEventReminders)
+
                     // 既定値カード: 🔔タイミング / 😴スヌーズ / ☀天気
                     Card {
                         VStack(spacing: 14) {
@@ -536,9 +540,57 @@ struct PreviewLine: View {
 }
 
 enum PreviewClock {
+    /// 例に使う Google カレンダーの通知 (5分前)。shared の SettingsPreview.SAMPLE_GOOGLE_REMINDER_MINUTES と同じ
+    static let sampleGoogleReminderMinutes = 5
+
     /// 分を 0:00〜23:59 に収めて "8:50" の形にする。日をまたげば前日/翌日の時刻。
     static func clock(_ minuteOfDay: Int) -> String {
         let m = ((minuteOfDay % 1440) + 1440) % 1440
         return "\(m / 60):" + String(format: "%02d", m % 60)
+    }
+
+    /// 例の予定で鳴る時刻の並び。shared の SettingsPreview.ringTimesLabel と同じ規則
+    /// (アプリと Google の両方、同じ時刻は1つにまとめ、早い順)。googleMinutesBefore が nil なら Google では鳴らさない
+    static func ringTimesLabel(eventMinute: Int, appMinutesBefore: Int, googleMinutesBefore: Int?) -> String {
+        var sources: [Int: [String]] = [:]
+        sources[eventMinute - appMinutesBefore, default: []].append("アプリ")
+        if let g = googleMinutesBefore { sources[eventMinute - g, default: []].append("Google") }
+        return sources.keys.sorted()
+            .map { "\(clock($0))（\(sources[$0]!.joined(separator: "・"))）" }
+            .joined(separator: "・")
+    }
+}
+
+/// 設定の先頭カード (決定8, デザイン正本 ⑤)。予定の前に鳴る時刻が2通りあることと、
+/// 同じ時刻なら1回だけ鳴ることを、例の予定の時刻で見せる
+struct RingTimesCard: View {
+    let appMinutesBefore: Int
+    let useCalendarReminders: Bool
+
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("鳴る時刻").font(NightTheme.font(15, weight: .semibold))
+                Text(useCalendarReminders
+                     ? "Google カレンダーの通知の時刻に鳴ります。アプリで選ぶと、その時刻にも足して鳴ります。同じ時刻なら1回だけです。"
+                     : "アプリで選んだ時刻に鳴ります。「カレンダーの通知設定を使う」がオフなので、Google カレンダーの通知では鳴りません。")
+                    .font(NightTheme.font(12)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 6) {
+                    Text("\(PreviewClock.clock(9 * 60)) の予定").foregroundStyle(.secondary)
+                    Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text(PreviewClock.ringTimesLabel(
+                        eventMinute: 9 * 60, appMinutesBefore: appMinutesBefore,
+                        googleMinutesBefore: useCalendarReminders ? PreviewClock.sampleGoogleReminderMinutes : nil))
+                        .fontWeight(.semibold).foregroundStyle(NightTheme.indigo)
+                }
+                .font(NightTheme.font(13))
+                if useCalendarReminders {
+                    Text("例の Google の時刻は「5分前」の通知の場合です。")
+                        .font(NightTheme.font(10)).foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
