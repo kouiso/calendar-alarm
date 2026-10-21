@@ -633,7 +633,7 @@ private fun RingLogRow(log: AuditLogEntity) {
             SimpleDateFormat("M/d H:mm", Locale.JAPAN).format(Date(log.triggerAtMillis ?: log.atMillis)),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(76.dp),
+            modifier = Modifier.width(88.dp),
         )
         Text(
             label,

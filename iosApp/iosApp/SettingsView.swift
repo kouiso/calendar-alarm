@@ -504,7 +504,7 @@ struct RingLogRow: View {
         HStack(spacing: 8) {
             Text(Engine.hm(entry.triggerAtMillis ?? entry.atMillis))
                 .font(NightTheme.font(12)).foregroundStyle(.secondary)
-                .frame(width: 82, alignment: .leading)
+                .frame(width: 92, alignment: .leading)
             Text(label)
                 .font(NightTheme.font(11, weight: .semibold))
                 .foregroundStyle(fg)
