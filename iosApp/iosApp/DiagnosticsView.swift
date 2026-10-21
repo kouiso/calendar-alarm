@@ -36,11 +36,13 @@ struct DiagnosisInput {
     var usesRealAlarms: Bool
     /// 通知の「即時通知」(集中モードを越える) が有効か。読めなければ nil
     var timeSensitiveEnabled: Bool?
+    /// 通知のサウンドが有効か。iOS 26 未満は通知の音で鳴らすので、オフだと無音になる。読めなければ nil
+    var notificationSoundEnabled: Bool?
     var backgroundRefreshAvailable: Bool
     var lowPowerMode: Bool
     var nextAlarm: AlarmInstanceDTO?
     var lastFired: AuditEntry?
-    /// 直近24時間の予約失敗・見逃しの件数
+    /// 残っている記録の中の予約失敗と、直近24時間の見逃し (7日残る予約の行で数える) の件数
     var recentFailures: Int
     var nowMillis: Int64
 }
@@ -56,9 +58,13 @@ enum DiagnosisPlan {
     /// 失敗とみなす監査ログの種類
     static let failureTypes: Set<String> = ["SCHEDULE_ERR", "RESYNC_FAIL", "MISSED", "CAPACITY_SKIP"]
 
-    static func recentFailures(_ audit: [AuditEntry], nowMillis: Int64) -> Int {
+    /// 監査ログは50件で古い順に消えるため、見逃しは予約の行 (7日残る) で数え、
+    /// 予約の失敗は残っている記録の範囲で数える (画面の文言もそう書く)
+    static func recentFailures(_ audit: [AuditEntry], scheduled: [ScheduledRecord], nowMillis: Int64) -> Int {
         let since = nowMillis - 24 * 60 * 60 * 1000
-        return audit.filter { $0.atMillis >= since && failureTypes.contains($0.type) }.count
+        let missed = scheduled.filter { $0.state == .missed && $0.instance.triggerAtMillis >= since }.count
+        let errors = audit.filter { $0.atMillis >= since && failureTypes.contains($0.type) && $0.type != "MISSED" }.count
+        return missed + errors
     }
 
     static func lastFired(_ audit: [AuditEntry]) -> AuditEntry? {
@@ -79,6 +85,14 @@ enum DiagnosisPlan {
                 ? "iPhone のアラーム機能 (AlarmKit) で鳴らします。"
                 : "この iOS では通知で鳴らします。通知の許可がアラームの許可になります。",
             fix: i.alarm == .granted ? nil : .permission(.alarm)))
+        if !i.usesRealAlarms && i.alarm == .granted && i.notificationSoundEnabled == false {
+            // 通知は許可されていても、サウンドを切られていると通知で鳴らすアラームは無音になる
+            out.append(DiagnosisItem(
+                id: "sound", state: .ng,
+                title: "通知のサウンドがオフです",
+                detail: "この iOS では通知の音で鳴らします。設定でこのアプリのサウンドをオンにしてください。",
+                fix: .openSettings))
+        }
         out.append(DiagnosisItem(
             id: "notify", state: i.notify == .granted ? .ok : .ng,
             title: i.notify == .granted ? "見逃しを知らせられます" : "通知が許可されていません",
@@ -126,7 +140,7 @@ enum DiagnosisPlan {
             fix: nil))
         out.append(DiagnosisItem(
             id: "failures", state: i.recentFailures == 0 ? .ok : .ng,
-            title: i.recentFailures == 0 ? "直近24時間の予約の失敗はありません" : "直近24時間に予約の失敗・見逃しが\(i.recentFailures)件",
+            title: i.recentFailures == 0 ? "直近の記録に予約の失敗・見逃しはありません" : "直近の記録に予約の失敗・見逃しが\(i.recentFailures)件",
             detail: i.recentFailures == 0 ? "記録は設定の一番下（直近 ◯ 件）で見られます。" : "上の許可を直してから、設定の一番下の記録で内容を確かめてください。",
             fix: nil))
         return out
@@ -176,6 +190,8 @@ struct DiagnosticsView: View {
                     Task {
                         await engine.scheduleTimer(durationMillis: 10_000, label: "テスト鳴動")
                         testScheduled = true
+                        // テストの予約結果 (失敗の記録や次のアラーム) を項目に反映する
+                        await reload()
                     }
                 } label: {
                     Label("10秒後に鳴動テスト", systemImage: "bell.and.waves.left.and.right")
@@ -186,6 +202,8 @@ struct DiagnosticsView: View {
         }
         .navigationTitle("鳴らない時の診断")
         .task { await reload() }
+        // 開いている間に鳴った・予約が変わった時も、項目を作り直す
+        .onChange(of: store.state.audit.last?.id) { _, _ in Task { await reload() } }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await reload() } }
         }
@@ -256,11 +274,13 @@ struct DiagnosticsView: View {
             usesRealAlarms: engine.usesRealAlarms,
             timeSensitiveEnabled: settings.authorizationStatus == .authorized
                 ? settings.timeSensitiveSetting == .enabled : nil,
+            notificationSoundEnabled: settings.authorizationStatus == .authorized
+                ? settings.soundSetting == .enabled : nil,
             backgroundRefreshAvailable: UIApplication.shared.backgroundRefreshStatus == .available,
             lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
             nextAlarm: next,
             lastFired: DiagnosisPlan.lastFired(store.state.audit),
-            recentFailures: DiagnosisPlan.recentFailures(store.state.audit, nowMillis: now),
+            recentFailures: DiagnosisPlan.recentFailures(store.state.audit, scheduled: Array(store.state.scheduled.values), nowMillis: now),
             nowMillis: now)
         items = DiagnosisPlan.items(input)
     }
