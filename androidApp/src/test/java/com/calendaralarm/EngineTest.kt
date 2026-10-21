@@ -8,6 +8,7 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import android.provider.CalendarContract
+import androidx.datastore.preferences.core.edit
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.AlarmRepository
@@ -17,6 +18,7 @@ import com.calendaralarm.data.db.AppDatabase
 import com.calendaralarm.data.db.CalendarPrefEntity
 import com.calendaralarm.data.db.EventOverrideEntity
 import com.calendaralarm.data.db.ScheduledInstanceEntity
+import com.calendaralarm.data.settingsDataStore
 import com.calendaralarm.engine.AlarmScheduler
 import com.calendaralarm.shared.model.AccountSetting
 import com.calendaralarm.shared.model.AlarmInstance
@@ -662,8 +664,10 @@ class EngineTest {
             val pendingIds = db.scheduledInstances().pending().map { it.id }
             assertEquals(listOf("ev:2:2:$start:b0"), pendingIds)
         } finally {
-            // 設定は DataStore に、カレンダー一覧は companion に残り他の試験へ漏れるので戻す
-            settings.setAccountSetting("off@example.com", AccountSetting())
+            // 設定は DataStore に、カレンダー一覧は companion に残り他の試験へ漏れるので戻す。
+            // 既定値の行を書き戻すだけだとアカウント設定が空でなくなり、カレンダー一覧を返さない他の試験の resync が
+            // 「一覧の読み取り失敗」として前回の予約を残す側に倒れるので、行ごと消す
+            context.settingsDataStore.edit { it.clear() }
             FakeCalendarProvider.calendarRows = emptyList()
         }
     }
