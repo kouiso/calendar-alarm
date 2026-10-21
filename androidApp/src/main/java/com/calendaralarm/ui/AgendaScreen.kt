@@ -590,11 +590,17 @@ internal fun EventRow(
         }
         if (onToggle != null) {
             Spacer(Modifier.width(6.dp))
+            // カレンダーごと鳴らさない設定の時は、予定のスイッチを入れても鳴らないので押せなくする
             Switch(
                 checked = !item.muted,
                 onCheckedChange = onToggle,
+                enabled = !item.calendarOff,
                 modifier = Modifier.semantics {
-                    contentDescription = "${ev.title.ifBlank { "予定" }}で鳴らす"
+                    contentDescription = if (item.calendarOff) {
+                        "カレンダーが鳴らさない設定です。設定のカレンダー欄で変えられます"
+                    } else {
+                        "${ev.title.ifBlank { "予定" }}で鳴らす"
+                    }
                 },
             )
         }

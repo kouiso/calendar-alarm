@@ -393,6 +393,8 @@ struct DisplayEvent: Identifiable, Hashable {
     var calendarColor: Int
     var muted: Bool
     var effectiveMinutes: Int
+    /// カレンダーを鳴らさない設定にしている (予定ごとの指定より強い)
+    var calendarOff: Bool = false
 }
 
 struct AuditEntry: Codable, Identifiable, Hashable {
