@@ -22,8 +22,11 @@ class MultiAccountSettingsTest {
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
     private val repo = SettingsRepository(context)
 
+    // JUnit は @Before に戻り値を許さないので、式本体にせずブロックで書く
     @Before
-    fun clear() = runBlocking { context.settingsDataStore.edit { it.clear() } }
+    fun clear() {
+        runBlocking { context.settingsDataStore.edit { it.clear() } }
+    }
 
     @Test
     fun `旧版で1つだけ連携していたアカウントは複数連携の1件目として読める`() = runBlocking {
