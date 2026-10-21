@@ -1,0 +1,23 @@
+volume 2 [V] volume is 0 in range [0..7]
+volume 3 [V] volume is 0 in range [0..15]
+volume 4 [V] volume is 0 in range [1..7]
+volume 5 [V] volume is 0 in range [0..7]
+Row: 0 title=会議, availability=0, dtstart=1792663200000
+Row: 1 title=不在 午後休, availability=0, dtstart=1792670400000
+Row: 2 title=空き 打ち合わせ候補, availability=1, dtstart=1792677600000
+Row: 3 title=フォーカスタイム, availability=0, dtstart=1792684800000
+Success
+[default] PENDING event alarms by title: ['会議', '空き 打ち合わせ候補']
+   PENDING  会議  ev:1:21:1792663200000:b0
+   PENDING  空き 打ち合わせ候補  ev:1:23:1792677600000:b0
+[default] alarm manager entries for com.calendaralarm: 12
+toggled '不在' (was checked=false)
+toggled '「予定なし」にした予定' (was checked=true)
+[changed] PENDING event alarms by title: ['不在 午後休', '会議']
+   PENDING  不在 午後休  ev:1:22:1792670400000:b0
+   PENDING  会議  ev:1:21:1792663200000:b0
+   CANCELLED 空き 打ち合わせ候補  ev:1:23:1792677600000:b0
+[changed] alarm manager entries for com.calendaralarm: 13
+RESULT default: 会議 True / 不在 False / 予定なし True / フォーカス False
+RESULT changed: 会議 True / 不在 True / 予定なし False / フォーカス False
+cleanup calendars left: No result found.
