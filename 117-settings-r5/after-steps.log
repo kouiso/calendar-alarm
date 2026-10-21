@@ -1,0 +1,23 @@
+launch
+tap あとで
+NOT FOUND あとで
+NOT FOUND あとで
+tap 設定
+shot after-1-default
+texts after-1-default: 110
+tap 選ぶ
+tap ブラウズ
+tap このiPhone内
+shot after-2-picker
+tap(contains) broken [broken, wav, 12:11, 18 バイト]
+shot after-3-error
+texts after-3-error: 111
+tap 選ぶ
+tap ブラウズ
+tap このiPhone内
+tap(contains) silent-3s [アラーム音: silent-3s]
+shot after-4-picked
+texts after-4-picked: 111
+tap 標準に戻す
+shot after-5-reset
+texts after-5-reset: 110
