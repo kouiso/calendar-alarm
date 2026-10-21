@@ -1,4 +1,5 @@
 import SwiftUI
+import SharedKit
 
 /// 鳴動画面 (Night UI スペック): 日付チップ + アクセントリング2重 + Outfit極細112pt時刻
 /// + 残りラベル + 天気チップ + スヌーズ大ボタン (80h) / 開閉式プリセットチップ / スライド停止 (80h)。常時ダーク基調。
@@ -174,6 +175,21 @@ struct RingingView: View {
     }
 }
 
+/// スライド停止の指の判定。閾値と掴める幅は Android と同じ shared の SlideToStopRule を読む
+enum SlideToStopLogic {
+    /// トラック左端から [startX] の所に指を置いた時、丸を掴んだことにするか
+    static func isGrab(startX: CGFloat, thumbSize: CGFloat, pad: CGFloat) -> Bool {
+        SlideToStopRule.shared.isGrab(startX: Float(startX), thumbSize: Float(thumbSize), pad: Float(pad))
+    }
+
+    /// 指を離した後の丸の位置。止める位置まで引けていて、かつ止められた時だけ右端 (1) に残す。
+    /// 止められなかった時は左端 (0) へ戻す: 掴める所は左端なので、右に残すともう一度引けない
+    static func releasedProgress(_ progress: CGFloat, stop: () -> Bool) -> CGFloat {
+        guard SlideToStopRule.shared.shouldStop(progress: Float(progress)) else { return 0 }
+        return stop() ? 1 : 0
+    }
+}
+
 /// 「スライドして停止」トラック。左端の丸を右へドラッグし、トラック幅の80%を
 /// 超えた時点で停止を実行する (誤タップ防止の閾値)。VoiceOver では
 /// accessibilityRepresentation で「停止」ボタンとして公開し、ダブルタップで止まる。
@@ -184,7 +200,6 @@ private struct SlideToStop: View {
     @State private var progress: CGFloat = 0
     private let thumbSize: CGFloat = 64
     private let pad: CGFloat = 8
-    private let stopThreshold: CGFloat = 0.8
 
     var body: some View {
         GeometryReader { geo in
@@ -219,25 +234,17 @@ private struct SlideToStop: View {
                     .onChanged { value in
                         // 掴み始めが丸の外 (トラック右側等) なら無効: 画面のどこでも
                         // 横スワイプが効くと意図しない停止につながるため起点を縛る
-                        guard value.startLocation.x <= thumbSize + pad * 3 else { return }
+                        guard SlideToStopLogic.isGrab(startX: value.startLocation.x, thumbSize: thumbSize, pad: pad) else { return }
                         progress = min(max(value.translation.width / travel, 0), 1)
                     }
                     .onEnded { value in
                         // 掴み始めが丸の外のジェスチャー (取り消しで残った progress を含む) では停止しない
-                        guard value.startLocation.x <= thumbSize + pad * 3 else {
+                        guard SlideToStopLogic.isGrab(startX: value.startLocation.x, thumbSize: thumbSize, pad: pad) else {
                             withAnimation(.easeOut(duration: 0.15)) { progress = 0 }
                             return
                         }
-                        if progress >= stopThreshold {
-                            progress = 1
-                            if !onStop() {
-                                // 停止失敗: 丸が右端に残ると手がかりが消える (掴み判定は
-                                // 左端基準) ので左へ戻し、もう一度スライドで止められるようにする
-                                withAnimation(.easeOut(duration: 0.15)) { progress = 0 }
-                            }
-                        } else {
-                            withAnimation(.easeOut(duration: 0.15)) { progress = 0 }
-                        }
+                        let released = SlideToStopLogic.releasedProgress(progress, stop: onStop)
+                        withAnimation(.easeOut(duration: 0.15)) { progress = released }
                     }
             )
         }

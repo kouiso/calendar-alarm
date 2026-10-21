@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 /// 設定タブ: Android 版のアイコン主導UIと同構成。
 /// 見出し・説明文なし — [アイコン + チップ/スイッチ] の行だけ。
@@ -13,6 +14,8 @@ struct SettingsView: View {
     @State private var showCodes = false
     @State private var photoItem: PhotosPickerItem? = nil
     @State private var weatherLocDraft = ""
+    @State private var showSoundPicker = false
+    @State private var soundError: String? = nil
 
     private let actionOptions: [(EventAction, String)] =
         [(.alarm, "アラーム"), (.notify, "通知"), (.mute, "OFF")]
@@ -80,6 +83,41 @@ struct SettingsView: View {
                                     set: { store.setMuteAll($0); resync("mute all") }
                                 )).labelsHidden()
                             }
+                            // アラーム音 (#101)。AlarmKit で指定できるのは音だけ
+                            IconRow("music.note") {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("アラーム音: \(store.state.alarmSoundLabel ?? "iPhone の標準")")
+                                        .font(NightTheme.font(13)).foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                    if let soundError {
+                                        Text(soundError).font(NightTheme.font(11)).foregroundStyle(.orange)
+                                    }
+                                }
+                                Spacer()
+                                Button("選ぶ") { showSoundPicker = true }
+                                    .font(NightTheme.font(13)).foregroundStyle(NightTheme.indigo)
+                                if store.state.alarmSoundFile != nil {
+                                    Button("標準に戻す") { changeSound(file: nil, label: nil) }
+                                        .font(NightTheme.font(13)).foregroundStyle(.secondary)
+                                }
+                            }
+                            // AlarmKit が受け付けない項目は、出来ないと画面に書く (Android にはある設定)
+                            Text("音量・だんだん大きくする・バイブは、iPhone の「サウンドと触覚」の設定に従います。iPhone のアラーム機能では、アプリから変えられるのは音だけです。")
+                                .font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .fileImporter(isPresented: $showSoundPicker, allowedContentTypes: [.audio]) { result in
+                        switch result {
+                        case .success(let url):
+                            do {
+                                let name = try AlarmSoundLibrary.importSound(from: url)
+                                changeSound(file: name, label: url.deletingPathExtension().lastPathComponent)
+                            } catch {
+                                soundError = "この音声は使えませんでした: \(error.localizedDescription)"
+                            }
+                        case .failure(let error):
+                            soundError = "音声を開けませんでした: \(error.localizedDescription)"
                         }
                     }
 
@@ -139,6 +177,31 @@ struct SettingsView: View {
                                     }
                                 }
                                 Spacer()
+                            }
+                            // 週番号と週の始まり (旧版の「Show Calendar Week」「First day of week」, #106)
+                            IconRow("number") {
+                                Text("予定一覧に週番号を出す")
+                                    .font(NightTheme.font(13)).foregroundStyle(.secondary)
+                                Spacer()
+                                Toggle("", isOn: Binding(get: { store.state.showWeekNumbers },
+                                                         set: { store.setShowWeekNumbers($0) })).labelsHidden()
+                            }
+                            IconRow("calendar") {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("週の始まり")
+                                        .font(NightTheme.font(12)).foregroundStyle(.secondary)
+                                    Chips(items: WeekDisplay.order(1), current: store.state.firstWeekday) { iso in
+                                        store.setFirstWeekday(iso)
+                                    } label: { WeekDisplay.label($0) }
+                                    // 見た目のプレビュー (決定5): 月表示の曜日の並び
+                                    HStack(spacing: 0) {
+                                        ForEach(WeekDisplay.order(store.state.firstWeekday), id: \.self) { iso in
+                                            Text(WeekDisplay.label(iso))
+                                                .font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                                .frame(maxWidth: .infinity)
+                                        }
+                                    }
+                                }
                             }
                             // 天気地点 (空=天気UI非表示) + 表示先
                             IconRow("location.fill") {
@@ -456,6 +519,13 @@ struct SettingsView: View {
     }
 
     private func resync(_ reason: String) { Task { await engine.resync(reason: reason) } }
+
+    /// 既定の音を変え、入っている予約を新しい音で入れ直す (AlarmKit は予約時に音が決まる)
+    private func changeSound(file: String?, label: String?) {
+        soundError = nil
+        store.setAlarmSound(file: file, label: label)
+        Task { await engine.rescheduleForSoundChange() }
+    }
 }
 
 // MARK: - 共通部品

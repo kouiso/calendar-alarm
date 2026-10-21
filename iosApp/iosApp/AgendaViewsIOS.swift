@@ -24,13 +24,14 @@ enum AgendaViewMode: String, CaseIterable, Identifiable {
 
 // MARK: - 月表示
 
-/// 月グリッド + ISO週番号列 + イベントドット。日タップで下にその日の一覧を出す。
+/// 月グリッド + イベントドット。日タップで下にその日の一覧を出す。列は設定の週の始まりから並ぶ。
 struct MonthGridView: View {
     let month: Date
     let events: [DisplayEvent]
     @Binding var focusDate: Date
     let calendarColor: (DisplayEvent) -> Color
     let onSelect: (DisplayEvent) -> Void
+    var firstWeekday: Int = WeekDisplay.defaultFirstWeekday
 
     private var cal: Calendar { Calendar.current }
     private static let df: DateFormatter = {
@@ -39,7 +40,9 @@ struct MonthGridView: View {
 
     var body: some View {
         let first = cal.date(from: cal.dateComponents([.year, .month], from: month))!
-        let weekdayOffset = (cal.component(.weekday, from: first) + 6) % 7 // 日曜始まり
+        // 設定の週の始まりから並べる (#106)
+        let firstIso = WeekDisplay.iso(fromCalendarWeekday: cal.component(.weekday, from: first))
+        let weekdayOffset = (firstIso - WeekDisplay.normalize(firstWeekday) + 7) % 7
         let gridStart = cal.date(byAdding: .day, value: -weekdayOffset, to: first)!
         let byDay = Dictionary(grouping: events) { Self.df.string(from: $0.startDate) }
 
@@ -49,9 +52,9 @@ struct MonthGridView: View {
         let saturdayBlue = dark ? Color(red: 0.49, green: 0.53, blue: 1) : Color(red: 0.12, green: 0.44, blue: 0.82)
         VStack(spacing: 4) {
             HStack(spacing: 0) {
-                ForEach(Array(["日", "月", "火", "水", "木", "金", "土"].enumerated()), id: \.offset) { i, d in
-                    Text(d).font(NightTheme.font(11))
-                        .foregroundStyle(i == 0 ? sundayRed : i == 6 ? saturdayBlue : .secondary)
+                ForEach(WeekDisplay.order(firstWeekday), id: \.self) { iso in
+                    Text(WeekDisplay.label(iso)).font(NightTheme.font(11))
+                        .foregroundStyle(iso == 7 ? sundayRed : iso == 6 ? saturdayBlue : .secondary)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -79,8 +82,9 @@ struct MonthGridView: View {
                                         .foregroundStyle(
                                             isToday ? Color.white
                                             : !inMonth ? Color.secondary.opacity(0.35)
-                                            : d == 0 ? sundayRed
-                                            : d == 6 ? saturdayBlue
+                                            // 列番号ではなく実際の曜日で色を決める (週の始まりを変えても日曜は赤)
+                                            : cal.component(.weekday, from: date) == 1 ? sundayRed
+                                            : cal.component(.weekday, from: date) == 7 ? saturdayBlue
                                             : .primary)
                                 }
                                 HStack(spacing: 3) {
@@ -263,5 +267,34 @@ struct DayTimelineViewIOS: View {
     }
     private func hm(_ d: Date) -> String {
         let f = DateFormatter(); f.dateFormat = "H:mm"; return f.string(from: d)
+    }
+}
+
+// MARK: - 週番号・週の始まり (#106)
+
+/// 週番号と週の開始曜日の計算。Android と同じく曜日は ISO の番号 (1=月 … 7=日) で持つ
+/// (Android の `shared/.../logic/WeekCalendar.kt` と同じ規則)。
+enum WeekDisplay {
+    static let defaultFirstWeekday = 7
+    private static let jaShort = [1: "月", 2: "火", 3: "水", 4: "木", 5: "金", 6: "土", 7: "日"]
+
+    static func normalize(_ v: Int) -> Int { (1...7).contains(v) ? v : defaultFirstWeekday }
+
+    /// 開始曜日から並べた7曜日 (ISO の番号)
+    static func order(_ firstWeekday: Int) -> [Int] {
+        let start = normalize(firstWeekday)
+        return (0..<7).map { (start - 1 + $0) % 7 + 1 }
+    }
+
+    static func label(_ iso: Int) -> String { jaShort[iso] ?? "" }
+
+    /// Foundation の weekday (1=日 … 7=土) を ISO の番号へ
+    static func iso(fromCalendarWeekday w: Int) -> Int { w == 1 ? 7 : w - 1 }
+
+    /// ISO 8601 の週番号。週の開始曜日の設定には左右されない
+    static func isoWeekNumber(_ date: Date) -> Int {
+        var c = Calendar(identifier: .iso8601)
+        c.timeZone = Calendar.current.timeZone
+        return c.component(.weekOfYear, from: date)
     }
 }

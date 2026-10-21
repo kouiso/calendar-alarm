@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.calendaralarm.shared.logic.WeekCalendar
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.EventType
@@ -66,8 +67,8 @@ class SettingsRepository(private val context: Context) {
         val defaultSoundUri: String? = null,
         /** 週番号を予定一覧に表示するか。 */
         val showWeekNumbers: Boolean = false,
-        /** 週の開始曜日 (1=月 … 7=日)。 */
-        val firstWeekday: Int = 1,
+        /** 週の開始曜日 (1=月 … 7=日)。既定はこれまでの月表示と同じ日曜。 */
+        val firstWeekday: Int = WeekCalendar.DEFAULT_FIRST_WEEKDAY,
         /** テーマ ID。 */
         val themeId: String = "default",
         /** カスタム背景画像 URI (鳴動画面/テーマ)。 */
@@ -121,7 +122,7 @@ class SettingsRepository(private val context: Context) {
             muteAll = p[KEY_MUTE_ALL] ?: false,
             defaultSoundUri = p[KEY_SOUND_URI],
             showWeekNumbers = p[KEY_WEEK_NUMBERS] ?: false,
-            firstWeekday = p[KEY_FIRST_WEEKDAY] ?: 1,
+            firstWeekday = WeekCalendar.normalize(p[KEY_FIRST_WEEKDAY] ?: WeekCalendar.DEFAULT_FIRST_WEEKDAY),
             themeId = p[KEY_THEME_ID] ?: "default",
             backgroundImageUri = p[KEY_BG_IMAGE_URI],
             weatherOnAlarmScreen = p[KEY_WEATHER_ALARM] ?: true,
