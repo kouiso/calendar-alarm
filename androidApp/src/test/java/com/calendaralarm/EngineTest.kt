@@ -461,6 +461,49 @@ class EngineTest {
     }
 
     @Test
+    fun `開始が鳴らずリマインダーの時刻も無い予定は、行のスイッチを鳴らない側に出す`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        fun row(eventId: Long) = mapOf(
+            CalendarContract.Instances.EVENT_ID to eventId,
+            CalendarContract.Instances.CALENDAR_ID to 1L,
+            CalendarContract.Instances.TITLE to "予定$eventId",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to start,
+            CalendarContract.Instances.END to start + 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        FakeCalendarProvider.instanceRows = listOf(row(1), row(2))
+        // 予定2だけカレンダー側に 10 分前の通知がある
+        FakeCalendarProvider.reminderRows = listOf(
+            mapOf(
+                CalendarContract.Reminders.EVENT_ID to 2L,
+                CalendarContract.Reminders.MINUTES to 10,
+                CalendarContract.Reminders.METHOD to CalendarContract.Reminders.METHOD_ALERT,
+            ),
+        )
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        // 開始は鳴らさない、リマインダーは鳴らす。追加の何分前は無し
+        db.calendarPrefs().upsert(
+            CalendarPrefEntity("1", enabled = true, minutesBefore = 0, startAction = "MUTE", reminderAction = "ALARM"),
+        )
+
+        val items = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }
+        // 予定1は鳴る時刻が1つも無いので、スイッチは鳴らない側
+        assertTrue(items.getValue("1").muted)
+        // 予定2はカレンダーの通知 (10 分前) で鳴るので、スイッチは鳴る側
+        assertEquals(false, items.getValue("2").muted)
+        // 一覧の表示と実際の予約が一致する
+        repositoryWithCalendar.resync("test")
+        val pendingIds = db.scheduledInstances().pending().map { it.id }
+        assertEquals(listOf("ev:1:2:$start:b10"), pendingIds)
+    }
+
+    @Test
     fun `期限切れ PENDING は MISSED 化される`() = runBlocking {
         val stale = AlarmInstance(
             id = "old", triggerAtMillis = System.currentTimeMillis() - 3_600_000 * 2,
