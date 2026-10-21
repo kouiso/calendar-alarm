@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,6 +26,12 @@ class MultiAccountSettingsTest {
     // JUnit は @Before に戻り値を許さないので、式本体にせずブロックで書く
     @Before
     fun clear() {
+        runBlocking { context.settingsDataStore.edit { it.clear() } }
+    }
+
+    // DataStore は同じ JVM の他の試験クラスと共有される。アカウント設定を残すと再同期の試験が別の条件で走る
+    @After
+    fun clearAfter() {
         runBlocking { context.settingsDataStore.edit { it.clear() } }
     }
 
@@ -48,6 +55,15 @@ class MultiAccountSettingsTest {
         repo.addGoogleAccount("b@example.com")
         repo.removeGoogleAccount("A@example.com")
         assertEquals(setOf("b@example.com"), repo.flow.first().googleAccountEmails)
+    }
+
+    @Test
+    fun `大文字小文字だけ違うメールは同じアカウントとして1件だけ残る`() = runBlocking {
+        repo.addGoogleAccount("a@example.com")
+        repo.addGoogleAccount("A@Example.com")
+        assertEquals(setOf("a@example.com"), repo.flow.first().googleAccountEmails)
+        repo.removeGoogleAccount("A@EXAMPLE.COM")
+        assertEquals(emptySet<String>(), repo.flow.first().googleAccountEmails)
     }
 
     @Test

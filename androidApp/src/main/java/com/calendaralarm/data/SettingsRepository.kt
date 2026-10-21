@@ -218,7 +218,10 @@ class SettingsRepository(private val context: Context) {
     /** Googleカレンダー連携のアカウントを足す。旧版の1アカウントのキーはここで新しいキーへ移す */
     suspend fun addGoogleAccount(email: String) = edit {
         if (email.isBlank()) return@edit
-        it[KEY_GOOGLE_ACCOUNTS] = (googleAccountsOf(it) + email).sorted().joinToString(",")
+        val current = googleAccountsOf(it)
+        // メールは大文字小文字を区別しない。解除と同じ比べ方にし、同じアカウントを2回連携しない
+        val next = if (current.any { e -> e.equals(email, ignoreCase = true) }) current else current + email
+        it[KEY_GOOGLE_ACCOUNTS] = next.sorted().joinToString(",")
         it.remove(KEY_GOOGLE_ACCOUNT)
     }
 

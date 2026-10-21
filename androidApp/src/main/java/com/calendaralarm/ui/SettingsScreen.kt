@@ -628,17 +628,21 @@ private fun HealthRow(label: String, ok: Boolean, onFix: () -> Unit) {
  * カレンダー1行。既定は折り畳み (色・名前・サマリ・スイッチのみ)。
  * タップで鳴動タイミング/終日時刻のチップ群が展開する。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CalendarRow(
     cal: CalendarSource,
     pref: CalendarPrefEntity?,
     defaultMinutes: Int,
-    onChange: (enabled: Boolean, minutesBefore: Int, allDayMinutes: Int?,
+    onChange: (enabled: Boolean, minutesBefore: Int?, allDayMinutes: Int?,
                startAction: EventAction?, reminderAction: EventAction?) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val enabled = pref?.enabled ?: true
-    val minutes = pref?.minutesBefore ?: defaultMinutes
+    // 保存するのはこのカレンダーで選んだ値だけ (null = 既定に従う)。表示は既定で埋めた値を出す。
+    // 埋めた値を保存すると、スイッチを触っただけでアカウントの既定が効かなくなる (#74)
+    val chosenMinutes = pref?.minutesBefore
+    val minutes = chosenMinutes ?: defaultMinutes
     val allDay = pref?.allDayMinutes ?: 540
     val startAction = pref?.startAction.toActionOr(EventAction.ALARM)
     val reminderAction = pref?.reminderAction.toActionOr(EventAction.ALARM)
@@ -672,7 +676,7 @@ private fun CalendarRow(
             }
             Switch(
                 checked = enabled,
-                onCheckedChange = { onChange(it, minutes, null, null, null) },
+                onCheckedChange = { onChange(it, chosenMinutes, null, null, null) },
             )
             Icon(
                 if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
@@ -682,10 +686,19 @@ private fun CalendarRow(
         }
         AnimatedVisibility(enabled && expanded) {
             Column(Modifier.padding(start = 20.dp, top = 6.dp)) {
-                Row {
+                FlowRow(Modifier.fillMaxWidth()) {
+                    // 「既定」はアカウントの既定 (無ければアプリの既定) に戻す
+                    FilterChip(
+                        selected = chosenMinutes == null,
+                        onClick = { onChange(true, null, null, null, null) },
+                        label = {
+                            Text("既定（${if (defaultMinutes == 0) "開始時" else "${defaultMinutes}分"}）", maxLines = 1)
+                        },
+                        modifier = Modifier.padding(end = 4.dp),
+                    )
                     listOf(0, 5, 10, 15, 30).forEach { m ->
                         FilterChip(
-                            selected = minutes == m,
+                            selected = chosenMinutes == m,
                             onClick = { onChange(true, m, null, null, null) },
                             label = { Text(if (m == 0) "開始時" else "${m}分", maxLines = 1) },
                             modifier = Modifier.padding(end = 4.dp),
@@ -702,7 +715,7 @@ private fun CalendarRow(
                     listOf(-1 to "OFF", 480 to "8:00", 540 to "9:00", 720 to "12:00").forEach { (v, label) ->
                         FilterChip(
                             selected = allDay == v,
-                            onClick = { onChange(true, minutes, v, null, null) },
+                            onClick = { onChange(true, chosenMinutes, v, null, null) },
                             label = { Text(label, maxLines = 1) },
                             modifier = Modifier.padding(end = 4.dp),
                         )
@@ -723,7 +736,7 @@ private fun CalendarRow(
                     ).forEach { (a, label) ->
                         FilterChip(
                             selected = startAction == a,
-                            onClick = { onChange(true, minutes, null, a, null) },
+                            onClick = { onChange(true, chosenMinutes, null, a, null) },
                             label = { Text(label, maxLines = 1) },
                             modifier = Modifier.padding(end = 4.dp),
                         )
@@ -743,7 +756,7 @@ private fun CalendarRow(
                     ).forEach { (a, label) ->
                         FilterChip(
                             selected = reminderAction == a,
-                            onClick = { onChange(true, minutes, null, null, a) },
+                            onClick = { onChange(true, chosenMinutes, null, null, a) },
                             label = { Text(label, maxLines = 1) },
                             modifier = Modifier.padding(end = 4.dp),
                         )

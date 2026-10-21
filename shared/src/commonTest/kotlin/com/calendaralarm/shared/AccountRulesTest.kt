@@ -95,6 +95,41 @@ class AccountRulesTest {
     }
 
     @Test
+    fun `スイッチを切って入れ直しただけのカレンダーは、アカウントの何分前を変えると新しい値で鳴る`() {
+        // スイッチ操作で行はできたが、何分前は選んでいない (アプリ既定の 0 で埋めてある)
+        val toggled = mapOf("1" to AlarmRule(enabled = true, minutesBefore = 0, allDayMinutes = 480))
+        val at15 = AccountRules.apply(
+            calendars, mapOf("work@example.com" to AccountSetting(minutesBefore = 15)), toggled, default, setOf("1"),
+        )
+        assertEquals(15, expand(at15).first { it.eventKey == "a" }.minutesBefore)
+        val at30 = AccountRules.apply(
+            calendars, mapOf("work@example.com" to AccountSetting(minutesBefore = 30)), toggled, default, setOf("1"),
+        )
+        assertEquals(30, expand(at30).first { it.eventKey == "a" }.minutesBefore)
+        // カレンダーで決めた他の値 (終日の時刻) は残す
+        assertEquals(480, at30.calendarRules["1"]?.allDayMinutes)
+    }
+
+    @Test
+    fun `カレンダーで切ったまま何分前を選んでいない分は、アカウントの何分前が来ても鳴らさない`() {
+        val applied = AccountRules.apply(
+            calendars, mapOf("work@example.com" to AccountSetting(minutesBefore = 30)),
+            mapOf("1" to AlarmRule(enabled = false)), default, setOf("1"),
+        )
+        assertTrue("1" in applied.disabledCalendarIds)
+        assertEquals(setOf("b", "c"), expand(applied).map { it.eventKey }.toSet())
+    }
+
+    @Test
+    fun `大文字小文字だけ違うアカウント名は別の見出しとして両方残る`() {
+        val upper = CalendarSource("4", "上", "Work@example.com", 0)
+        val groups = AccountRules.groupByAccount(listOf(work, upper, home))
+        assertEquals(listOf("home@example.com", "Work@example.com", "work@example.com"), groups.map { it.first })
+        assertEquals(listOf("4"), groups[1].second.map { it.id })
+        assertEquals(listOf("1"), groups[2].second.map { it.id })
+    }
+
+    @Test
     fun `設定画面ではアカウントごとに主カレンダーを先に並べる`() {
         val groups = AccountRules.groupByAccount(listOf(workShared, home, work))
         assertEquals(listOf("home@example.com", "work@example.com"), groups.map { it.first })

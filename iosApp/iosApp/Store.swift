@@ -36,6 +36,9 @@ final class Store: ObservableObject {
         /// OpenRouter APIキー (AI機能用)
         // calendar_prefs: calendarId -> AlarmRuleDTO
         var calendarRules: [String: AlarmRuleDTO] = [:]
+        // 何分前をカレンダーで選んだ calendarId。含まれないカレンダーの何分前はアカウントの既定、
+        // 無ければアプリの既定に従う (#74)。スイッチ等で calendarRules に行ができても既定は効き続ける
+        var calendarMinutesChosen: Set<String> = []
         // CalendarSource.accountKey (EventKit のソース識別子) -> AccountSettingDTO (#74)
         var accountSettings: [String: AccountSettingDTO] = [:]
         // event_overrides: instanceKey -> EventOverrideDTO
@@ -160,10 +163,30 @@ final class Store: ObservableObject {
 
     // MARK: - calendar prefs
 
-    /// カレンダー単位のルール。カレンダーで決めていなければ、アカウントの「何分前」→ アプリの既定の順
+    /// カレンダー単位のルール。何分前はカレンダーで選んだ値、無ければアカウントの「何分前」→ アプリの既定の順
     func rule(for calendarId: String) -> AlarmRuleDTO {
-        state.calendarRules[calendarId]
-            ?? AlarmRuleDTO(minutesBefore: accountSetting(forCalendar: calendarId).minutesBefore ?? state.defaultMinutesBefore)
+        var r = state.calendarRules[calendarId] ?? AlarmRuleDTO(minutesBefore: state.defaultMinutesBefore)
+        if !state.calendarMinutesChosen.contains(calendarId) {
+            r.minutesBefore = accountSetting(forCalendar: calendarId).minutesBefore ?? state.defaultMinutesBefore
+        }
+        return r
+    }
+
+    /// このカレンダーで何分前を選んだか (false = 既定に従う)
+    func isCalendarMinutesChosen(_ calendarId: String) -> Bool { state.calendarMinutesChosen.contains(calendarId) }
+
+    /// カレンダーの何分前を選ぶ。nil で既定 (アカウント → アプリ) に戻す
+    func setCalendarMinutes(_ calendarId: String, _ minutes: Int?) {
+        mutate {
+            var r = $0.calendarRules[calendarId] ?? AlarmRuleDTO(minutesBefore: $0.defaultMinutesBefore)
+            if let m = minutes {
+                r.minutesBefore = m
+                $0.calendarMinutesChosen.insert(calendarId)
+            } else {
+                $0.calendarMinutesChosen.remove(calendarId)
+            }
+            $0.calendarRules[calendarId] = r
+        }
     }
 
     // MARK: - account settings (#74)
@@ -187,18 +210,23 @@ final class Store: ObservableObject {
     func isHiddenCalendar(_ calendarId: String) -> Bool { !accountSetting(forCalendar: calendarId).use }
 
     /// 展開に渡すカレンダー単位のルール。アカウント設定を配下カレンダーへ当てはめる
-    /// (Android の `AccountRules.apply` と同じ規則: 鳴らさないアカウントは止め、何分前はカレンダーで決めた値が勝つ)
+    /// (Android の `AccountRules.apply` と同じ規則: 鳴らさないアカウントは止め、何分前はカレンダーで選んだ時だけそちらが勝つ)
     func effectiveCalendarRules() -> [String: AlarmRuleDTO] {
+        // 選んでいない行の何分前は、ここでアプリの既定に揃えてからアカウントの既定を重ねる
         var out = state.calendarRules
+        for (id, rule) in state.calendarRules where !state.calendarMinutesChosen.contains(id) {
+            var r = rule; r.minutesBefore = state.defaultMinutesBefore; out[id] = r
+        }
         for cal in state.calendars {
             let account = state.accountSettings[cal.accountKey] ?? AccountSettingDTO()
             let allows = account.use && account.ring
             if allows && account.minutesBefore == nil { continue }
             // 何も決めていないカレンダーはアプリ既定の動作 (開始/リマインダーの既定アクション) を引き継ぐ
-            var r = state.calendarRules[cal.id] ?? AlarmRuleDTO(
-                minutesBefore: account.minutesBefore ?? state.defaultMinutesBefore,
+            var r = out[cal.id] ?? AlarmRuleDTO(
+                minutesBefore: state.defaultMinutesBefore,
                 startAction: state.defaultStartAction,
                 reminderAction: state.defaultReminderAction)
+            if let m = account.minutesBefore, !state.calendarMinutesChosen.contains(cal.id) { r.minutesBefore = m }
             if !allows { r.enabled = false }
             out[cal.id] = r
         }
@@ -339,6 +367,10 @@ extension Store.Persisted {
         weatherOnAlarmScreen = try c.decodeIfPresent(Bool.self, forKey: .weatherOnAlarmScreen) ?? true
         timerPresets = try c.decodeIfPresent([TimerPresetDTO].self, forKey: .timerPresets) ?? TimerPresets.defaults
         calendarRules = try c.decodeIfPresent([String: AlarmRuleDTO].self, forKey: .calendarRules) ?? [:]
+        // キーが無い旧データは、アプリ既定と違う分数の行だけを選んだ値とみなす。旧版はスイッチ等を触っただけでも
+        // その時の既定を書き込んでいたため、既定と同じ値は「選んでいない」と扱う (Android の v5→v6 移行と同じ規則)
+        calendarMinutesChosen = try c.decodeIfPresent(Set<String>.self, forKey: .calendarMinutesChosen)
+            ?? Set(calendarRules.filter { $0.value.minutesBefore != defaultMinutesBefore }.keys)
         accountSettings = try c.decodeIfPresent([String: AccountSettingDTO].self, forKey: .accountSettings) ?? [:]
         overrides = try c.decodeIfPresent([String: EventOverrideDTO].self, forKey: .overrides) ?? [:]
         standaloneAlarms = try c.decodeIfPresent([StandaloneAlarmDTO].self, forKey: .standaloneAlarms) ?? []

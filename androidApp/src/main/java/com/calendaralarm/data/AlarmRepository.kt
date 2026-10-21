@@ -459,10 +459,13 @@ class AlarmRepository(
         // 読み取り失敗時は空のまま (keepPendingEvents 経路で保護される)。
         var liveEventKeys = emptySet<String>()
         if (hasCalendarPermission()) {
-            val prefs = db.calendarPrefs().all().associate {
+            val prefRows = db.calendarPrefs().all()
+            // 何分前を選んでいないカレンダー。アカウントの既定に従わせる (#74)
+            val minutesFollowDefault = prefRows.filter { it.minutesBefore == null }.map { it.calendarId }.toSet()
+            val prefs = prefRows.associate {
                 it.calendarId to AlarmRule(
                     enabled = it.enabled,
-                    minutesBefore = it.minutesBefore,
+                    minutesBefore = it.minutesBefore ?: appSettings.defaultMinutesBefore,
                     allDayMinutes = it.allDayMinutes,
                     extraOffsets = it.extraOffsetsCsv.toOffsets(),
                     startAction = it.startAction.toAction(),
@@ -484,14 +487,10 @@ class AlarmRepository(
                 startAction = appSettings.defaultStartAction,
                 reminderAction = appSettings.defaultReminderAction,
             )
-            // アカウント単位の設定 (使う / 鳴らす / 何分前) を配下カレンダーへ当てはめる (#74)
-            val accountApplied = com.calendaralarm.shared.logic.AccountRules.apply(
-                // 読めない時はアカウント設定を当てない (予定の読み取り失敗と同じく、鳴らない側に倒さない)
-                runCatching { calendarReader.calendars() }.getOrDefault(emptyList()),
-                appSettings.accountSettings, prefs, defaultRule,
-            )
-            val disabledCalIds = accountApplied.disabledCalendarIds
             val expanded = runCatching {
+                // カレンダー一覧の読み取り失敗は予定の読み取り失敗と同じ扱いにする (下の runCatching で前回の予約を維持)。
+                // 鳴らさないアカウントを無視して鳴らすことも、全部止めることもしない
+                val calendarList = calendarReader.calendars()
                 // 過去側はグレース幅ではなく14日に広げる。スヌーズ連鎖が親予定の
                 // 開始から長く伸びても liveEventKeys が親を見失わず、スヌーズ子が
                 // 無言キャンセルされない。in-window 外の予定は展開側で弾かれる。
@@ -513,6 +512,16 @@ class AlarmRepository(
                     (now - 14.days).toEpochMilliseconds(),
                     horizon.toEpochMilliseconds(),
                 )
+                // 予定があるのにカレンダーが1件も読めないのは一覧の読み取り失敗。
+                // アカウント設定があるとアカウントへ当てはめられないので、前回の予約を維持する
+                check(calendarList.isNotEmpty() || events.isEmpty() || appSettings.accountSettings.isEmpty()) {
+                    "calendar list is empty while events exist"
+                }
+                // アカウント単位の設定 (使う / 鳴らす / 何分前) を配下カレンダーへ当てはめる (#74)
+                val accountApplied = com.calendaralarm.shared.logic.AccountRules.apply(
+                    calendarList, appSettings.accountSettings, prefs, defaultRule, minutesFollowDefault,
+                )
+                val disabledCalIds = accountApplied.disabledCalendarIds
                 liveEventKeys = events.asSequence()
                     .filter { overrides[it.instanceKey]?.muted != true }
                     .filter { it.calendarId !in disabledCalIds }
@@ -710,7 +719,8 @@ class AlarmRepository(
     suspend fun setCalendarPref(
         calendarId: String,
         enabled: Boolean,
-        minutesBefore: Int,
+        /** null = このカレンダーでは選ばず、アカウントの既定に従う */
+        minutesBefore: Int?,
         allDayMinutes: Int? = null,
         extraOffsets: List<Int>? = null,
         startAction: EventAction? = null,

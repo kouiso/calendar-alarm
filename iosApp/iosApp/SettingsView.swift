@@ -428,6 +428,8 @@ struct SettingsView: View {
 
     private func calendarRow(_ cal: CalendarSource) -> some View {
         let rule = store.rule(for: cal.id)
+        // 「既定」を選んだ時の分数 (アカウントの既定、無ければアプリの既定)
+        let inherited = store.accountSetting(forCalendar: cal.id).minutesBefore ?? store.state.defaultMinutesBefore
         let expanded = expandedCal == cal.id
         return VStack(spacing: 0) {
             Button { expandedCal = expanded ? nil : cal.id } label: {
@@ -450,10 +452,14 @@ struct SettingsView: View {
             if expanded {
                 VStack(alignment: .leading, spacing: 10) {
                     IconRow("bell.fill") {
-                        Chips(items: minutesOptions, current: rule.minutesBefore) { m in
-                            var r = rule; r.minutesBefore = m
-                            store.setCalendarRule(cal.id, r); resync("cal pref")
-                        } label: { $0 == 0 ? "開始時" : "\($0)分前" }
+                        // -1 = 既定 (アカウントの既定、無ければアプリの既定)。選んだ時だけカレンダーの値として残す (#74)
+                        Chips(items: [-1] + minutesOptions,
+                              current: store.isCalendarMinutesChosen(cal.id) ? rule.minutesBefore : -1) { m in
+                            store.setCalendarMinutes(cal.id, m < 0 ? nil : m); resync("cal pref")
+                        } label: { m in
+                            m < 0 ? "既定（\(inherited == 0 ? "開始時" : "\(inherited)分前")）"
+                                : (m == 0 ? "開始時" : "\(m)分前")
+                        }
                     }
                     IconRow("calendar.badge.clock") {
                         Chips(items: allDayOptions.map(\.1), current: rule.allDayMinutes) { m in
