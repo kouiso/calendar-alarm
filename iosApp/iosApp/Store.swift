@@ -32,6 +32,10 @@ final class Store: ObservableObject {
         var weatherLocation: String = ""
         var weatherHeaderEnabled: Bool = true
         var weatherOnAlarmScreen: Bool = true
+        /// 既定のアラーム音 (Library/Sounds のファイル名)。nil = iPhone の既定音 (#101)
+        var alarmSoundFile: String? = nil
+        /// 取り込んだ時の元のファイル名 (画面表示用)
+        var alarmSoundLabel: String? = nil
         var timerPresets: [TimerPresetDTO] = TimerPresets.defaults
         /// OpenRouter APIキー (AI機能用)
         // calendar_prefs: calendarId -> AlarmRuleDTO
@@ -52,18 +56,27 @@ final class Store: ObservableObject {
     @Published private(set) var state = Persisted()
 
     private let fileURL: URL
+    /// いまの state をディスクから読んだ時刻。これより後に置かれたファイルを、この写しは知らない
+    private(set) var loadedAt = Date()
     /// 保存は直列キューに流す。並列 detached だと古いスナップショットが後勝ちで残る
     /// (書き込み順序が呼び出し順と逆転する) のを防ぐため FIFO にする。
     private let saveQueue = DispatchQueue(label: "calendaralarm.store.save")
 
-    init() {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("CalendarAlarm", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        fileURL = dir.appendingPathComponent("store.json")
-        if let data = try? Data(contentsOf: fileURL),
+    /// [fileURL] はテストで端末の保存データを上書きしないための差し替え口。アプリは渡さない
+    init(fileURL: URL? = nil) {
+        if let fileURL {
+            self.fileURL = fileURL
+        } else {
+            let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("CalendarAlarm", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            self.fileURL = dir.appendingPathComponent("store.json")
+        }
+        loadedAt = Date()
+        if let data = try? Data(contentsOf: self.fileURL),
            let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = loaded
+            AlarmSoundLibrary.currentDefault = loaded.alarmSoundFile
             // 旧版で保存した AI のキーとモデルを端末から消す。読み込みでは落ちるだけで
             // ファイルに残るので、決定7のとおり起動時に書き直す
             if let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -78,10 +91,19 @@ final class Store: ObservableObject {
     /// 保存キューの未完了書き込みを先に flush してから読む。
     func reload() {
         saveQueue.sync {}
+        loadedAt = Date()
         if let data = try? Data(contentsOf: fileURL),
            let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = loaded
+            AlarmSoundLibrary.currentDefault = loaded.alarmSoundFile
         }
+    }
+
+    /// ディスクに保存済みの状態。別の Store (バックグラウンドの Engine) が書いた分も入る。手元の state は変えない
+    func savedState() -> Persisted? {
+        saveQueue.sync {}
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        return try? JSONDecoder().decode(Persisted.self, from: data)
     }
 
     /// 書き出しは直列キューで原子的に (tmp → rename)。呼び出し順=書き込み順なので最後の保存が常に最新。
@@ -105,6 +127,12 @@ final class Store: ObservableObject {
     func setDefaultMinutes(_ v: Int) { mutate { $0.defaultMinutesBefore = v } }
     func setDefaultSnooze(_ v: Int) { mutate { $0.defaultSnoozeMinutes = v } }
     func setWeatherEnabled(_ v: Bool) { mutate { $0.weatherEnabled = v } }
+    /// 既定のアラーム音を変える。前の音のファイルは、どの予約の記録も指さなくなってから Engine が消す
+    /// (鳴る直前・鳴動中・スヌーズ中の予約は前の音のまま鳴るため)
+    func setAlarmSound(file: String?, label: String?) {
+        mutate { $0.alarmSoundFile = file; $0.alarmSoundLabel = label }
+        AlarmSoundLibrary.currentDefault = file
+    }
     func setDefaultStartAction(_ a: EventAction) { mutate { $0.defaultStartAction = a.rawValue } }
     func setDefaultReminderAction(_ a: EventAction) { mutate { $0.defaultReminderAction = a.rawValue } }
     func setTitleCodes(_ v: TitleCodeSettings) { mutate { $0.titleCodes = v } }
@@ -294,6 +322,8 @@ extension Store.Persisted {
         weatherLocation = try c.decodeIfPresent(String.self, forKey: .weatherLocation) ?? ""
         weatherHeaderEnabled = try c.decodeIfPresent(Bool.self, forKey: .weatherHeaderEnabled) ?? true
         weatherOnAlarmScreen = try c.decodeIfPresent(Bool.self, forKey: .weatherOnAlarmScreen) ?? true
+        alarmSoundFile = try c.decodeIfPresent(String.self, forKey: .alarmSoundFile)
+        alarmSoundLabel = try c.decodeIfPresent(String.self, forKey: .alarmSoundLabel)
         timerPresets = try c.decodeIfPresent([TimerPresetDTO].self, forKey: .timerPresets) ?? TimerPresets.defaults
         calendarRules = try c.decodeIfPresent([String: AlarmRuleDTO].self, forKey: .calendarRules) ?? [:]
         overrides = try c.decodeIfPresent([String: EventOverrideDTO].self, forKey: .overrides) ?? [:]
