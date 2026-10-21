@@ -27,6 +27,8 @@ protocol AlarmScheduler {
     /// @returns AlarmKit UUID など予約側の識別子 (通知経路は nil)
     func schedule(_ inst: AlarmInstanceDTO, sound: String?) async throws -> String?
     func cancel(instanceId: String, reservationId: String?) async
+    /// OS にこのインスタンスの予約がまだ残っているか
+    func hasReservation(instanceId: String) async -> Bool
 }
 
 // MARK: - AlarmKit (iOS 26+)
@@ -179,6 +181,10 @@ final class AlarmKitScheduler: AlarmScheduler {
         try? manager.cancel(id: Self.uuid(from: instanceId))
     }
 
+    func hasReservation(instanceId: String) async -> Bool {
+        existingIds.contains(Self.uuid(from: instanceId))
+    }
+
     /// インスタンス id 文字列から決定論的 UUID (AlarmKit は UUID 必須、差分適用のため決定的に)。
     static func uuid(from instanceId: String) -> UUID {
         var bytes = [UInt8](Insecure.MD5.hash(data: Data(instanceId.utf8)))
@@ -228,5 +234,9 @@ final class NotificationScheduler: AlarmScheduler {
 
     func cancel(instanceId: String, reservationId: String?) async {
         center.removePendingNotificationRequests(withIdentifiers: [instanceId])
+    }
+
+    func hasReservation(instanceId: String) async -> Bool {
+        await center.pendingNotificationRequests().contains { $0.identifier == instanceId }
     }
 }
