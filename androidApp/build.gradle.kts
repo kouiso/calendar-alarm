@@ -52,6 +52,9 @@ android {
                     "https://maven-central.storage-download.googleapis.com/maven2",
                 )
                 it.systemProperty("robolectric.dependency.repo.id", "gcs-mirror")
+                // 既定の 512MB だと、実寸で文字を描く NATIVE グラフィックスの試験 (EnglishChipLayoutTest) を
+                // 他の Robolectric 試験の後に同じ JVM で走らせた時に OutOfMemoryError で試験プロセスごと落ちる
+                it.maxHeapSize = "2g"
             }
         }
     }
