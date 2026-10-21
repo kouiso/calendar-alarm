@@ -11,7 +11,7 @@ import AlarmKit
 @MainActor
 final class Engine: ObservableObject {
 
-    let store = Store()
+    let store: Store
     let reader = EventKitReader()
     private let scheduler: AlarmScheduler
 
@@ -21,8 +21,10 @@ final class Engine: ObservableObject {
     /// 鳴動中のインスタンス id (RingingView 用)
     @Published var alertingIds: Set<String> = []
 
-    /// [scheduler] はテストで OS の予約失敗を再現するための差し替え口。アプリは渡さない
-    init(scheduler: AlarmScheduler? = nil) {
+    /// [scheduler] [store] はテストで OS の予約失敗を再現し、端末の保存データを触らないための差し替え口。
+    /// アプリは渡さない
+    init(scheduler: AlarmScheduler? = nil, store: Store? = nil) {
+        self.store = store ?? Store()
         if let scheduler {
             self.scheduler = scheduler
         } else if #available(iOS 26.0, *) {

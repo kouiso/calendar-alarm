@@ -56,12 +56,17 @@ final class Store: ObservableObject {
     /// (書き込み順序が呼び出し順と逆転する) のを防ぐため FIFO にする。
     private let saveQueue = DispatchQueue(label: "calendaralarm.store.save")
 
-    init() {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("CalendarAlarm", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        fileURL = dir.appendingPathComponent("store.json")
-        if let data = try? Data(contentsOf: fileURL),
+    /// [fileURL] はテストで端末の保存データを上書きしないための差し替え口。アプリは渡さない
+    init(fileURL: URL? = nil) {
+        if let fileURL {
+            self.fileURL = fileURL
+        } else {
+            let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("CalendarAlarm", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            self.fileURL = dir.appendingPathComponent("store.json")
+        }
+        if let data = try? Data(contentsOf: self.fileURL),
            let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = loaded
             // 旧版で保存した AI のキーとモデルを端末から消す。読み込みでは落ちるだけで

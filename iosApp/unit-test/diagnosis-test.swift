@@ -122,7 +122,8 @@ final class EngineNotificationOutcomeTests: XCTestCase {
     private var engine: Engine!
 
     override func setUp() async throws {
-        engine = Engine(scheduler: NotificationPathScheduler())
+        // 端末の保存データを上書きしないよう、一時ファイルの Store を渡す
+        engine = Engine(scheduler: NotificationPathScheduler(), store: Store(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("store-\(UUID().uuidString).json")))
         engine.store.mutate {
             $0.scheduled = [:]
             $0.standaloneAlarms = []
