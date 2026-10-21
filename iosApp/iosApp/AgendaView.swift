@@ -68,12 +68,12 @@ struct AgendaView: View {
                     switch viewMode {
                     case .list:
                         ForEach(groupedDays, id: \.0) { day, events in
-                            DayCard(dayLabel: dayLabel(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev },
+                            DayCard(dayLabel: dayLabel(day), weekNumber: weekNumber(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev },
                                     onToggle: { ev, on in toggleRing(ev, on) })
                         }
                         if groupedDays.isEmpty { emptyState }
                     case .month:
-                        MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 })
+                        MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 }, firstWeekday: store.state.firstWeekday)
                     case .threeDay:
                         ThreeDayColumnsView(startDate: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
                     case .timeline:
@@ -118,6 +118,8 @@ struct AgendaView: View {
         let horizon = now + 14 * 86_400_000
         return store.state.lastEvents
             .filter { $0.endMillis >= now && $0.startMillis < horizon }
+            // このアプリで使わないアカウントの予定は出さない (#74)
+            .filter { !store.isHiddenCalendar($0.calendarId) }
             .sorted { $0.startMillis < $1.startMillis }
             .map { ev in
                 let ov = store.state.overrides[ev.instanceKey]
@@ -125,6 +127,8 @@ struct AgendaView: View {
                 let cal = store.state.calendars.first { $0.id == ev.calendarId }
                 // 終日を鳴らさないカレンダーの終日予定は、個別指定より先に展開で外れる (shared `AlarmExpander.allDaySuppressed`)
                 let allDayOff = ev.allDay && rule.allDayMinutes < 0
+                // 鳴らさないアカウント (#74) の予定も、展開 (effectiveCalendarRules で enabled=false) が個別指定より先に外す
+                let accountOff = !store.accountAllowsRing(ev.calendarId)
                 return DisplayEvent(
                     event: ev,
                     calendarName: cal?.name ?? "",
@@ -132,13 +136,16 @@ struct AgendaView: View {
                     // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
                     // 予約の展開と同じ判定を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
                     // 行のスイッチが実際の予約と食い違わないよう、開始とリマインダーの解決後の動作まで見る
-                    muted: !rule.enabled || allDayOff
+                    muted: !rule.enabled || accountOff || allDayOff
                         || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter)
                         || resolvedActionsMuted(ev, rule, ov, store.state.titleCodes,
-                                                importReminders: store.state.importEventReminders),
+                                                importReminders: store.state.importEventReminders,
+                                                muteAll: store.state.muteAll),
                     effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore,
                     calendarOff: !rule.enabled,
-                    allDayOff: allDayOff
+                    accountOff: accountOff,
+                    allDayOff: allDayOff,
+                    muteAll: store.state.muteAll
                 )
             }
     }
@@ -188,7 +195,8 @@ struct AgendaView: View {
 
     /// 鳴動の状態 (#51 PR2)。Android と同じ優先順 (shared `RingStatus`)
     private var ringStatus: RingStatusSummary {
-        let missing = PermissionPlan.missingForRinging(center.states)
+        let missing = PermissionPlan.missingForRinging(center.states, scheduled: store.state.scheduled,
+                                                       nowMillis: Engine.nowMillis, usesRealAlarms: engine.usesRealAlarms)
         return RingStatusSummary(missingPermissions: missing, recentMissed: recentMissedRecords.count, hasNextAlarm: nextAlarm != nil)
     }
 
@@ -205,6 +213,15 @@ struct AgendaView: View {
         store.setOverride(instanceKey: ev.event.instanceKey, action: on ? .alarm : .mute,
                           minutes: ov?.minutesBefore, extras: ov?.extraOffsets)
         Task { await engine.resync(reason: "event toggle") }
+    }
+
+    /// 週番号を出す設定の時だけ、その日の ISO 週番号を返す (#106)
+    private func weekNumber(_ key: String) -> Int? {
+        guard store.state.showWeekNumbers else { return nil }
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        guard let d = df.date(from: key) else { return nil }
+        return WeekDisplay.isoWeekNumber(d)
     }
 
     private var emptyState: some View {
@@ -422,6 +439,7 @@ struct NextAlarmBanner: View {
 
 struct DayCard: View {
     let dayLabel: String
+    var weekNumber: Int? = nil
     let events: [DisplayEvent]
     let calendarColor: (DisplayEvent) -> Color
     let onTap: (DisplayEvent) -> Void
@@ -430,10 +448,18 @@ struct DayCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(dayLabel)
-                .font(NightTheme.font(13, weight: .medium))
-                .foregroundStyle(NightTheme.indigo)
-                .padding(.bottom, 6)
+            HStack {
+                Text(dayLabel)
+                    .font(NightTheme.font(13, weight: .medium))
+                    .foregroundStyle(NightTheme.indigo)
+                Spacer()
+                if let weekNumber {
+                    Text("第\(weekNumber)週")
+                        .font(NightTheme.font(12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.bottom, 6)
             VStack(spacing: 0) {
                 ForEach(events) { ev in
                     EventRow(ev: ev, accent: calendarColor(ev), onToggle: onToggle.map { t in { on in t(ev, on) } })
@@ -489,12 +515,15 @@ struct EventRow: View {
                 }
             }
             if let onToggle {
-                // カレンダーごと、または終日の予定を鳴らさない設定の時は、予定のスイッチを入れても鳴らないので押せなくする
+                // カレンダーごと・アカウントごと・終日の予定を鳴らさない設定・すべてミュート中の鳴らない行は、スイッチを入れても鳴らないので押せなくする
+                // (すべてミュート中でも通知で鳴る行は切れる)
                 Toggle("", isOn: Binding(get: { !ev.muted }, set: { onToggle($0) }))
                     .labelsHidden()
-                    .disabled(ev.calendarOff || ev.allDayOff)
+                    .disabled(ev.switchLocked)
                     .accessibilityLabel(ev.calendarOff ? "カレンダーが鳴らさない設定です。設定のカレンダー欄で変えられます"
+                        : ev.accountOff ? "このアカウントは鳴らさない設定です。設定のカレンダー欄のアカウントで変えられます"
                         : ev.allDayOff ? "このカレンダーは終日の予定を鳴らさない設定です。設定のカレンダー欄で変えられます"
+                        : ev.muteAll && ev.muted ? "アラームをすべてミュート中です。設定で解除できます"
                         : "\(ev.event.title)で鳴らす")
             }
         }
@@ -514,9 +543,10 @@ struct EventRow: View {
 
 /// 何も鳴らないか。動作は shared `AlarmExpander.resolveActions` と同じ優先順:
 /// 予定の個別指定 > never コード > always コード > カレンダーの既定。
-/// 展開と同じく、リマインダーの動作はリマインダー側の時刻 (追加の何分前・取り込んだカレンダーの通知) がある時だけ鳴る
+/// 展開と同じく、リマインダーの動作はリマインダー側の時刻 (追加の何分前・取り込んだカレンダーの通知) がある時だけ鳴る。
+/// すべてミュート中のアラームも鳴らない側に数える (展開の emit と同じく通知は残る)
 func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
-                          importReminders: Bool) -> Bool {
+                          importReminders: Bool, muteAll: Bool = false) -> Bool {
     func matches(_ list: [String]) -> Bool {
         list.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty && ev.title.localizedCaseInsensitiveContains($0) }
     }
@@ -529,6 +559,9 @@ func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: Ev
     let mute = EventAction.mute.rawValue
     let hasReminderTriggers = !(ov?.extraOffsets ?? rule.extraOffsets).isEmpty
         || (importReminders && ev.calendarReminderMinutes.contains { $0 >= 0 })
-    return resolve(codes.applyToStart, rule.startAction) == mute
-        && (resolve(codes.applyToReminders, rule.reminderAction) == mute || !hasReminderTriggers)
+    func silenced(_ action: String) -> Bool {
+        action == mute || (muteAll && action == EventAction.alarm.rawValue)
+    }
+    return silenced(resolve(codes.applyToStart, rule.startAction))
+        && (silenced(resolve(codes.applyToReminders, rule.reminderAction)) || !hasReminderTriggers)
 }

@@ -31,8 +31,12 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 16) {
 
-                    // 先頭: 鳴動の状態 (前の権限カード) と最近の鳴動記録 (#51 PR3)
+                    // 先頭: 鳴動の状態 (前の権限カード) と最近の鳴動記録 (#51 PR3)。許可が欠けると時刻の設定に関係なく鳴らないので先に置く
                     ringStatusCard
+
+                    // 鳴る時刻 (決定8, #121): Google の通知とアプリの時刻の両方で鳴ることを見せる
+                    RingTimesCard(appMinutesBefore: store.state.defaultMinutesBefore,
+                                  useCalendarReminders: store.state.importEventReminders)
 
                     // 既定値カード: 🔔タイミング / 😴スヌーズ / ☀天気
                     Card {
@@ -127,6 +131,31 @@ struct SettingsView: View {
                                     }
                                 }
                                 Spacer()
+                            }
+                            // 週番号と週の始まり (旧版の「Show Calendar Week」「First day of week」, #106)
+                            IconRow("number") {
+                                Text("予定一覧に週番号を出す")
+                                    .font(NightTheme.font(13)).foregroundStyle(.secondary)
+                                Spacer()
+                                Toggle("", isOn: Binding(get: { store.state.showWeekNumbers },
+                                                         set: { store.setShowWeekNumbers($0) })).labelsHidden()
+                            }
+                            IconRow("calendar") {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("週の始まり")
+                                        .font(NightTheme.font(12)).foregroundStyle(.secondary)
+                                    Chips(items: WeekDisplay.order(1), current: store.state.firstWeekday) { iso in
+                                        store.setFirstWeekday(iso)
+                                    } label: { WeekDisplay.label($0) }
+                                    // 見た目のプレビュー (決定5): 月表示の曜日の並び
+                                    HStack(spacing: 0) {
+                                        ForEach(WeekDisplay.order(store.state.firstWeekday), id: \.self) { iso in
+                                            Text(WeekDisplay.label(iso))
+                                                .font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                                .frame(maxWidth: .infinity)
+                                        }
+                                    }
+                                }
                             }
                             // 天気地点 (空=天気UI非表示) + 表示先
                             IconRow("location.fill") {
@@ -248,9 +277,16 @@ struct SettingsView: View {
                     // カレンダー一覧カード
                     Card {
                         VStack(spacing: 0) {
-                            ForEach(store.state.calendars) { cal in
-                                calendarRow(cal)
-                                if cal.id != store.state.calendars.last?.id { Divider().padding(.leading, 40) }
+                            // アカウントごとにまとめる (局長決定6, #74)。使わないアカウントは見出しだけ残す
+                            ForEach(accountGroups.map { $0.0 }, id: \.self) { account in
+                                let cals = accountGroups.first { $0.0 == account }?.1 ?? []
+                                accountHeader(account)
+                                if (store.state.accountSettings[account] ?? AccountSettingDTO()).use {
+                                    ForEach(cals) { cal in
+                                        calendarRow(cal)
+                                        if cal.id != cals.last?.id { Divider().padding(.leading, 40) }
+                                    }
+                                }
                             }
                             if store.state.calendars.isEmpty {
                                 IconRow("calendar") {
@@ -327,7 +363,8 @@ struct SettingsView: View {
     private var ringStatusCard: some View {
         _ = clockTick
         let now = Engine.nowMillis
-        let missingCount = PermissionPlan.missingForRinging(center.states)
+        let missingCount = PermissionPlan.missingForRinging(center.states, scheduled: store.state.scheduled,
+                                                            nowMillis: now, usesRealAlarms: engine.usesRealAlarms)
         let status = RingStatusSummary(
             missingPermissions: missingCount,
             recentMissed: store.recentMissedCount(nowMillis: now),
@@ -431,8 +468,56 @@ struct SettingsView: View {
 
     // MARK: - カレンダー行
 
+    /// アカウント名の順、同じアカウントは主カレンダーを先に (Android の `AccountRules.groupByAccount` と同じ並び)。
+    /// キー (accountKey) は EventKit の識別子で名前順にならないので、表示名で並べ、同名の時だけキーで決める
+    private var accountGroups: [(String, [CalendarSource])] {
+        Dictionary(grouping: store.state.calendars, by: \.accountKey)
+            .map { ($0.key, $0.value.sorted { ($0.isPrimary ? 0 : 1, $0.name) < ($1.isPrimary ? 0 : 1, $1.name) }) }
+            .sorted { a, b in
+                let an = a.1.first?.accountName ?? "", bn = b.1.first?.accountName ?? ""
+                return (an.isEmpty ? 1 : 0, an.lowercased(), a.0) < (bn.isEmpty ? 1 : 0, bn.lowercased(), b.0)
+            }
+    }
+
+    /// アカウントの見出し: 使う / 鳴らす / 何分前 (アカウントの既定)
+    private func accountHeader(_ account: String) -> some View {
+        let s = store.state.accountSettings[account] ?? AccountSettingDTO()
+        let set: (AccountSettingDTO) -> Void = { store.setAccountSetting(account, $0); resync("account setting") }
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                // キーは識別子なので、見出しには表示名を出す
+                let title = store.state.calendars.first { $0.accountKey == account }?.accountName ?? account
+                Text(title.isEmpty ? "端末のカレンダー" : title)
+                    .font(NightTheme.font(14, weight: .semibold)).lineLimit(1)
+                Spacer()
+                Text("使う").font(NightTheme.font(12)).foregroundStyle(.secondary)
+                Toggle("", isOn: Binding(get: { s.use }, set: { var n = s; n.use = $0; set(n) })).labelsHidden()
+            }
+            if !s.use {
+                Text("このアプリでは使っていません（iPhone からは消していません）")
+                    .font(NightTheme.font(11)).foregroundStyle(.secondary)
+            } else {
+                HStack {
+                    Text("このアカウントの予定で鳴らす").font(NightTheme.font(13)).foregroundStyle(.secondary)
+                    Spacer()
+                    Toggle("", isOn: Binding(get: { s.ring }, set: { var n = s; n.ring = $0; set(n) })).labelsHidden()
+                }
+                if s.ring {
+                    Chips(items: [-1] + minutesOptions, current: s.minutesBefore ?? -1) { m in
+                        var n = s; n.minutesBefore = m < 0 ? nil : m; set(n)
+                    } label: { m in
+                        m < 0 ? "既定" : (m == 0 ? "開始時" : "\(m)分前")
+                    }
+                }
+            }
+        }
+        .padding(.top, 10).padding(.bottom, 4)
+    }
+
     private func calendarRow(_ cal: CalendarSource) -> some View {
         let rule = store.rule(for: cal.id)
+        // 「既定」を選んだ時の分数 (アカウントの既定、無ければアプリの既定)
+        let inherited = store.accountSetting(forCalendar: cal.id).minutesBefore ?? store.state.defaultMinutesBefore
         let expanded = expandedCal == cal.id
         return VStack(spacing: 0) {
             Button { expandedCal = expanded ? nil : cal.id } label: {
@@ -455,10 +540,14 @@ struct SettingsView: View {
             if expanded {
                 VStack(alignment: .leading, spacing: 10) {
                     IconRow("bell.fill") {
-                        Chips(items: minutesOptions, current: rule.minutesBefore) { m in
-                            var r = rule; r.minutesBefore = m
-                            store.setCalendarRule(cal.id, r); resync("cal pref")
-                        } label: { $0 == 0 ? "開始時" : "\($0)分前" }
+                        // -1 = 既定 (アカウントの既定、無ければアプリの既定)。選んだ時だけカレンダーの値として残す (#74)
+                        Chips(items: [-1] + minutesOptions,
+                              current: store.isCalendarMinutesChosen(cal.id) ? rule.minutesBefore : -1) { m in
+                            store.setCalendarMinutes(cal.id, m < 0 ? nil : m); resync("cal pref")
+                        } label: { m in
+                            m < 0 ? "既定（\(inherited == 0 ? "開始時" : "\(inherited)分前")）"
+                                : (m == 0 ? "開始時" : "\(m)分前")
+                        }
                     }
                     IconRow("calendar.badge.clock") {
                         Chips(items: allDayOptions.map(\.1), current: rule.allDayMinutes) { m in
@@ -618,9 +707,57 @@ struct PreviewLine: View {
 }
 
 enum PreviewClock {
+    /// 例に使う Google カレンダーの通知 (5分前)。shared の SettingsPreview.SAMPLE_GOOGLE_REMINDER_MINUTES と同じ
+    static let sampleGoogleReminderMinutes = 5
+
     /// 分を 0:00〜23:59 に収めて "8:50" の形にする。日をまたげば前日/翌日の時刻。
     static func clock(_ minuteOfDay: Int) -> String {
         let m = ((minuteOfDay % 1440) + 1440) % 1440
         return "\(m / 60):" + String(format: "%02d", m % 60)
+    }
+
+    /// 例の予定で鳴る時刻の並び。shared の SettingsPreview.ringTimesLabel と同じ規則
+    /// (アプリと Google の両方、同じ時刻は1つにまとめ、早い順)。googleMinutesBefore が nil なら Google では鳴らさない
+    static func ringTimesLabel(eventMinute: Int, appMinutesBefore: Int, googleMinutesBefore: Int?) -> String {
+        var sources: [Int: [String]] = [:]
+        sources[eventMinute - appMinutesBefore, default: []].append("アプリ")
+        if let g = googleMinutesBefore { sources[eventMinute - g, default: []].append("Google") }
+        return sources.keys.sorted()
+            .map { "\(clock($0))（\(sources[$0]!.joined(separator: "・"))）" }
+            .joined(separator: "・")
+    }
+}
+
+/// 設定の先頭カード (決定8, デザイン正本 ⑤)。予定の前に鳴る時刻が2通りあることと、
+/// 同じ時刻なら1回だけ鳴ることを、例の予定の時刻で見せる
+struct RingTimesCard: View {
+    let appMinutesBefore: Int
+    let useCalendarReminders: Bool
+
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("鳴る時刻").font(NightTheme.font(15, weight: .semibold))
+                Text(useCalendarReminders
+                     ? "Google カレンダーの通知の時刻に鳴ります。アプリで選ぶと、その時刻にも足して鳴ります。同じ時刻なら1回だけです。"
+                     : "アプリで選んだ時刻に鳴ります。「カレンダーの通知設定を使う」がオフなので、Google カレンダーの通知では鳴りません。")
+                    .font(NightTheme.font(12)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 6) {
+                    Text("\(PreviewClock.clock(9 * 60)) の予定").foregroundStyle(.secondary)
+                    Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text(PreviewClock.ringTimesLabel(
+                        eventMinute: 9 * 60, appMinutesBefore: appMinutesBefore,
+                        googleMinutesBefore: useCalendarReminders ? PreviewClock.sampleGoogleReminderMinutes : nil))
+                        .fontWeight(.semibold).foregroundStyle(NightTheme.indigo)
+                }
+                .font(NightTheme.font(13))
+                if useCalendarReminders {
+                    Text("例の Google の時刻は「5分前」の通知の場合です。")
+                        .font(NightTheme.font(10)).foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }

@@ -53,7 +53,7 @@ struct MailImportSheet: View {
 
     private func extract() async {
         guard let svc = OpenRouterService.fromBundle() else {
-            error = "このビルドでは AI の読み取りを使えません"
+            error = String(localized: "このビルドでは AI の読み取りを使えません")
             loading = false
             return
         }
@@ -65,10 +65,10 @@ struct MailImportSheet: View {
                 location = ev.location ?? ""
                 allDay = ev.allDay
             } else {
-                error = "本文から予定を抽出できませんでした"
+                error = String(localized: "本文から予定を抽出できませんでした")
             }
         } catch {
-            self.error = "抽出に失敗: \(error.localizedDescription)"
+            self.error = String(localized: "抽出に失敗: \(error.localizedDescription)")
         }
         loading = false
     }
@@ -83,7 +83,7 @@ struct MailImportSheet: View {
             Task { await engine.resync(reason: "mail import") }
             onDone(true)
         } else {
-            error = "カレンダーへの書き込みに失敗しました"
+            error = String(localized: "カレンダーへの書き込みに失敗しました")
         }
     }
 }

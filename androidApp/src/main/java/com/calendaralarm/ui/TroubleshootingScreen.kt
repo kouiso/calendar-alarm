@@ -48,6 +48,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.calendaralarm.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -154,20 +156,20 @@ object TroubleshootChecks {
         return listOf(
             TroubleshootItem(
                 "calendar", s(calendarOk),
-                if (calendarOk) "カレンダー権限あり" else "カレンダー権限がありません",
-                "予定を見つけ、全画面アラーム通知をスケジュールするために必要です。",
+                context.getString(if (calendarOk) R.string.trouble_calendar_ok else R.string.trouble_calendar_ng),
+                context.getString(R.string.trouble_calendar_desc),
                 appDetails,
             ),
             TroubleshootItem(
                 "notifications", s(notifOk),
-                if (notifOk) "通知が有効です" else "通知が無効です",
-                "アラームを表示できるように、アプリ通知を有効にしてアラートを許可してください。",
+                context.getString(if (notifOk) R.string.trouble_notif_ok else R.string.trouble_notif_ng),
+                context.getString(R.string.trouble_notif_desc),
                 appNotif,
             ),
             TroubleshootItem(
                 "channel", if (!notifOk) CheckState.NG else s(channelOk),
-                if (notifOk && channelOk) "アラーム通知が正しく設定されています" else "アラーム通知の設定が不足しています",
-                "チャンネル「$channelId」は重要度が高く、ロック画面に表示される必要があります。",
+                context.getString(if (notifOk && channelOk) R.string.trouble_channel_ok else R.string.trouble_channel_ng),
+                context.getString(R.string.trouble_channel_desc, channelId),
                 Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                     .putExtra(Settings.EXTRA_APP_PACKAGE, pkg)
                     .putExtra(Settings.EXTRA_CHANNEL_ID, channelId),
@@ -176,32 +178,32 @@ object TroubleshootChecks {
             // 最適化の対象でも NG にはしない。端末独自の省電力で遅れる場合の保険として案内だけする
             TroubleshootItem(
                 "battery", if (batteryOk) CheckState.OK else CheckState.INFO,
-                if (batteryOk) "バッテリー最適化の対象外" else "バッテリー最適化の対象です（鳴動には影響しません）",
-                "アラームは最適化の対象でも鳴ります。端末独自の省電力で遅れる場合だけ、対象外にしてください。",
+                context.getString(if (batteryOk) R.string.trouble_battery_ok else R.string.trouble_battery_ng),
+                context.getString(R.string.trouble_battery_desc),
                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkgUri),
             ),
             TroubleshootItem(
                 "background", if (Build.VERSION.SDK_INT < 28) CheckState.NA else s(!bgRestricted),
-                if (!bgRestricted) "バックグラウンド制限なし" else "バックグラウンドが制限されています",
-                "アラームが届くように、このアプリのシステムバックグラウンド制限をオフにしてください。",
+                context.getString(if (!bgRestricted) R.string.trouble_bg_ok else R.string.trouble_bg_ng),
+                context.getString(R.string.trouble_bg_desc),
                 appDetails,
             ),
             TroubleshootItem(
                 "exact", exactState,
-                if (exactState != CheckState.NG) "正確なアラームを設定可能" else "正確なアラームが許可されていません",
-                "アラームを時間どおりに鳴らすには、正確なアラームの権限が必要です。",
+                context.getString(if (exactState != CheckState.NG) R.string.trouble_exact_ok else R.string.trouble_exact_ng),
+                context.getString(R.string.trouble_exact_desc),
                 Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkgUri),
             ),
             TroubleshootItem(
                 "fullscreen", fsiState,
-                if (fsiState != CheckState.NG) "全画面アラーム通知を表示可能" else "全画面アラーム通知が許可されていません",
-                "通常の目覚まし時計と同じようにアラームをロック画面へ全画面表示するには、この許可が必要です。",
+                context.getString(if (fsiState != CheckState.NG) R.string.trouble_fsi_ok else R.string.trouble_fsi_ng),
+                context.getString(R.string.trouble_fsi_desc),
                 Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkgUri),
             ),
             TroubleshootItem(
                 "dnd", s(dndOk),
-                if (dndOk) "おやすみモード中にアラーム可能" else "おやすみモードでアラームが鳴りません",
-                "おやすみモード中でもアラームが鳴るよう、おやすみモードの「アラーム」を許可してください。",
+                context.getString(if (dndOk) R.string.trouble_dnd_ok else R.string.trouble_dnd_ng),
+                context.getString(R.string.trouble_dnd_desc),
                 dndFix,
             ),
         )
@@ -231,15 +233,15 @@ fun TroubleshootingScreen(settings: SettingsRepository, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("トラブルシューティング") },
+                title = { Text(stringResource(R.string.trouble_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { tick++ }, modifier = Modifier.testTag("troubleshoot_refresh")) {
-                        Icon(Icons.Default.Refresh, contentDescription = "再チェック")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.trouble_recheck))
                     }
                 },
             )
@@ -284,9 +286,9 @@ private fun TroubleshootRow(item: TroubleshootItem, onFix: () -> Unit) {
     ) {
         when (item.state) {
             CheckState.OK -> Icon(Icons.Default.CheckCircle, "OK", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-            CheckState.NG -> Icon(Icons.Default.Error, "要対応", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(24.dp))
-            CheckState.NA -> Icon(Icons.Outlined.Circle, "対象外", tint = dim, modifier = Modifier.size(24.dp))
-            CheckState.INFO -> Icon(Icons.Default.Info, "参考", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
+            CheckState.NG -> Icon(Icons.Default.Error, stringResource(R.string.trouble_state_ng), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(24.dp))
+            CheckState.NA -> Icon(Icons.Outlined.Circle, stringResource(R.string.trouble_state_na), tint = dim, modifier = Modifier.size(24.dp))
+            CheckState.INFO -> Icon(Icons.Default.Info, stringResource(R.string.trouble_state_info), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(20.dp))
         Column(Modifier.weight(1f)) {
@@ -297,14 +299,14 @@ private fun TroubleshootRow(item: TroubleshootItem, onFix: () -> Unit) {
                 color = if (na) dim else MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                if (na) "この Android バージョンでは設定不要です。" else item.description,
+                if (na) stringResource(R.string.trouble_not_needed) else item.description,
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (na) dim else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         if ((ng || info) && item.fix != null) {
             Spacer(Modifier.width(12.dp))
-            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = "設定を開く")
+            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = stringResource(R.string.common_open_settings))
         }
     }
 }

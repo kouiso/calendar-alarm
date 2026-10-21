@@ -93,7 +93,8 @@ data class StandaloneAlarmEntity(
 data class CalendarPrefEntity(
     @PrimaryKey val calendarId: String,
     val enabled: Boolean,
-    val minutesBefore: Int,
+    /** null = このカレンダーでは選んでいない。アカウントの既定、無ければアプリの既定に従う (#74) */
+    val minutesBefore: Int?,
     /** 終日イベントを鳴らす現地時刻 (その日0時からの分数)。負数=鳴らさない。 */
     val allDayMinutes: Int = 540,
     /** 追加リマインダーの分数 "15,60" 形式。 */

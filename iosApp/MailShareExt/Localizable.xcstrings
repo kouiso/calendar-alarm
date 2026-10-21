@@ -1,0 +1,46 @@
+{
+  "sourceLanguage": "ja",
+  "version": "1.0",
+  "strings": {
+    "アプリ間の受け渡し領域がありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The shared app container is missing"
+          }
+        }
+      }
+    },
+    "テキストを受け取れませんでした": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not receive the text"
+          }
+        }
+      }
+    },
+    "予定に変換中…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turning into an event…"
+          }
+        }
+      }
+    },
+    "共有データを保存できませんでした": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save the shared data"
+          }
+        }
+      }
+    }
+  }
+}

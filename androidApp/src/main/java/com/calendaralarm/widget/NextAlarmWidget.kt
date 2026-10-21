@@ -18,6 +18,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.calendaralarm.CalendarAlarmApp
+import com.calendaralarm.R
 import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -31,16 +32,18 @@ class NextAlarmWidget : GlanceAppWidget() {
         val next = app.container.repository.pendingFlow().first().firstOrNull()
         provideContent {
             Content(
+                heading = context.getString(R.string.widget_next_alarm),
+                empty = context.getString(R.string.widget_none),
                 title = next?.title,
                 time = next?.triggerAtMillis?.let {
-                    SimpleDateFormat("M/d(E) H:mm", Locale.JAPAN).format(Date(it))
+                    SimpleDateFormat("M/d(E) H:mm", Locale.getDefault()).format(Date(it))
                 },
             )
         }
     }
 
     @Composable
-    private fun Content(title: String?, time: String?) {
+    private fun Content(heading: String, empty: String, title: String?, time: String?) {
         Column(
             modifier = GlanceModifier.fillMaxSize()
                 .background(ColorProvider(androidx.compose.ui.graphics.Color(0xFF1B1B1D)))
@@ -49,7 +52,7 @@ class NextAlarmWidget : GlanceAppWidget() {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "次のアラーム",
+                heading,
                 style = TextStyle(
                     color = ColorProvider(androidx.compose.ui.graphics.Color(0xFF9EC6F5)),
                 ),
@@ -71,7 +74,7 @@ class NextAlarmWidget : GlanceAppWidget() {
                 )
             } else {
                 Text(
-                    "予約なし",
+                    empty,
                     style = TextStyle(
                         color = ColorProvider(androidx.compose.ui.graphics.Color(0xFFBBBBBB)),
                     ),

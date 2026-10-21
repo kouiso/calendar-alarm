@@ -137,6 +137,20 @@ data class EventTypeFilter(
         allows(resolveEventType(event)) && (event.availability != Availability.FREE || free)
 }
 
+/**
+ * アカウント (端末に登録された Google アカウント等) 単位の設定 (局長決定6, #74)。
+ * キーは [CalendarSource.accountName]。
+ */
+@Serializable
+data class AccountSetting(
+    /** このアプリで使うか。OFF なら配下の予定を一覧にも出さない (端末からは消さない) */
+    val use: Boolean = true,
+    /** このアカウントの予定で鳴らすか */
+    val ring: Boolean = true,
+    /** 配下カレンダーの既定の「何分前」。null ならアプリ全体の既定 */
+    val minutesBefore: Int? = null,
+)
+
 /** 端末カレンダープロバイダが返すカレンダー。 */
 @Serializable
 data class CalendarSource(

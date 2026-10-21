@@ -14,11 +14,13 @@
 		29622F303C81E6C8561DA830 /* outfit_extralight.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CF4FE1923E95F87EA8A05028 /* outfit_extralight.ttf */; };
 		2DF8005728D2E0319C73F77B /* plex_sans_jp_medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */; };
 		2E6FBB230347EBF9423F1C52 /* RingingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8688F25F9579677C2080FB0E /* RingingView.swift */; };
+		397AD219F56EB6076068BAD1 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E42B1C06A0E446C3B4F2DCD4 /* Localizable.xcstrings */; };
 		40D1C13EB37C422D85A661DF /* plex_sans_jp_semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D2D9928A082C610D9B0A9D67 /* plex_sans_jp_semibold.ttf */; };
 		4E39CD6EA7BC70A764AACD7A /* Engine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F9472624F7ECEBFD26FF3E /* Engine.swift */; };
 		4E485751888C27D65F6C4ABA /* MailImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B399458D4913DD152149CADA /* MailImportView.swift */; };
 		54E5C67790C94D5298C69492 /* CalendarAlarmWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		56C929D3E057A4F1B62C284A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70278C1DA89E0C3594F39E2A /* SettingsView.swift */; };
+		5D99C358A61DC29A7E4BB564 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 6D6BF153DA3AEE3B1A413B7E /* Localizable.xcstrings */; };
 		60F95E5171F583E80686583F /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBC7C20D6CC306ED12728299 /* Permissions.swift */; };
 		61495687E00D3BDC4E29BB9B /* EventDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */; };
 		626990B5CF8E3DC8C227D393 /* OpenRouterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01AB4C06EB145E37B770350C /* OpenRouterService.swift */; };
@@ -34,6 +36,7 @@
 		A6D274A92BA0F9A706CB3085 /* CalendarAlarmWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */; };
 		A793851C3CD7E4B1FDBE5794 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F8642EDA4CA9194F126132 /* Store.swift */; };
 		AAFC4648F481E8E284EC4F80 /* outfit_light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8DD3A0F17E4F13654090ABE8 /* outfit_light.ttf */; };
+		AEC3BD02501412B8D0E8D7E5 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = BAB229DAF4F036F5841F17AE /* Localizable.xcstrings */; };
 		AFFCC564CECA94EEBC56CA98 /* ring-history.swift in Sources */ = {isa = PBXBuildFile; fileRef = D910DFCFDA9A98A380AC51E6 /* ring-history.swift */; };
 		B35722F57D8E88FD64454F34 /* PermissionAsker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D9FE2D91349946227BD8E55 /* PermissionAsker.swift */; };
 		B419682EEBC47B0FA0D3144C /* AgendaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66A4F7800854676434D761F4 /* AgendaView.swift */; };
@@ -86,6 +89,7 @@
 		3C4B1C1CFBE436D31467257B /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		64370CDCC54B81F0CD76CFAC /* outfit_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_medium.ttf; sourceTree = "<group>"; };
 		66A4F7800854676434D761F4 /* AgendaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaView.swift; sourceTree = "<group>"; };
+		6D6BF153DA3AEE3B1A413B7E /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		70278C1DA89E0C3594F39E2A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7384BC516B1FE4FB2F672E67 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
 		7A3A04452A7A85976807934D /* TitleCodesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleCodesSheet.swift; sourceTree = "<group>"; };
@@ -100,6 +104,7 @@
 		9BC0FA0EA0069BF21E257989 /* iosApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = iosApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerView.swift; sourceTree = "<group>"; };
 		B399458D4913DD152149CADA /* MailImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailImportView.swift; sourceTree = "<group>"; };
+		BAB229DAF4F036F5841F17AE /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		C59894E1200D6FB530B33BED /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		C694CCA1128C6527CB1476DC /* outfit_semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_semibold.ttf; sourceTree = "<group>"; };
 		C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailSheet.swift; sourceTree = "<group>"; };
@@ -109,6 +114,7 @@
 		D910DFCFDA9A98A380AC51E6 /* ring-history.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ring-history.swift"; sourceTree = "<group>"; };
 		DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAlarmWidget.swift; sourceTree = "<group>"; };
 		E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitReader.swift; sourceTree = "<group>"; };
+		E42B1C06A0E446C3B4F2DCD4 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		E4F003771A83A79DB1D7C14D /* AlarmsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmsView.swift; sourceTree = "<group>"; };
 		E77D9C74BAD6E368F79E4264 /* WeatherBackdropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherBackdropView.swift; sourceTree = "<group>"; };
 		EBC7C20D6CC306ED12728299 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
@@ -166,6 +172,7 @@
 				24F9472624F7ECEBFD26FF3E /* Engine.swift */,
 				C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */,
 				E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */,
+				BAB229DAF4F036F5841F17AE /* Localizable.xcstrings */,
 				B399458D4913DD152149CADA /* MailImportView.swift */,
 				3C4B1C1CFBE436D31467257B /* Models.swift */,
 				01AB4C06EB145E37B770350C /* OpenRouterService.swift */,
@@ -191,6 +198,7 @@
 			children = (
 				2F0A11DC2B493DF079DC6BD6 /* CalendarAlarmWidget.entitlements */,
 				DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */,
+				6D6BF153DA3AEE3B1A413B7E /* Localizable.xcstrings */,
 			);
 			path = Widget;
 			sourceTree = "<group>";
@@ -198,6 +206,7 @@
 		D71D74FB5839D64D91D1E891 /* MailShareExt */ = {
 			isa = PBXGroup;
 			children = (
+				E42B1C06A0E446C3B4F2DCD4 /* Localizable.xcstrings */,
 				EE03925928578DE0F3DE47BB /* ShareViewController.swift */,
 			);
 			path = MailShareExt;
@@ -233,6 +242,7 @@
 			buildConfigurationList = 3BD65DAF8C383F6C23058BDE /* Build configuration list for PBXNativeTarget "MailShareExt" */;
 			buildPhases = (
 				BC18BD6298850BFEA340E4AA /* Sources */,
+				805622D38C8CB9E5BCD5BFF2 /* Resources */,
 				1C62A962C16BE77F9E9046A7 /* Hide the share entry without an AI key */,
 			);
 			buildRules = (
@@ -251,6 +261,7 @@
 			buildConfigurationList = 606E8B601FE411688224FCF1 /* Build configuration list for PBXNativeTarget "CalendarAlarmWidget" */;
 			buildPhases = (
 				5C88E3F61E0CE9E9F47A582B /* Sources */,
+				5529D6C9441841987A736A97 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -287,11 +298,12 @@
 				};
 			};
 			buildConfigurationList = 85898F13EC9DF58636BE6F59 /* Build configuration list for PBXProject "CalendarAlarm" */;
-			developmentRegion = en;
+			developmentRegion = ja;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				Base,
 				en,
+				ja,
 			);
 			mainGroup = BE0919C17107C5FCF3FF9118;
 			minimizedProjectReferenceProxies = 1;
@@ -312,6 +324,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AEC3BD02501412B8D0E8D7E5 /* Localizable.xcstrings in Resources */,
 				29622F303C81E6C8561DA830 /* outfit_extralight.ttf in Resources */,
 				AAFC4648F481E8E284EC4F80 /* outfit_light.ttf in Resources */,
 				12F8D12737B1B7401B66CA1E /* outfit_medium.ttf in Resources */,
@@ -321,6 +334,22 @@
 				2DF8005728D2E0319C73F77B /* plex_sans_jp_medium.ttf in Resources */,
 				0EDE4CE8267312F25F224805 /* plex_sans_jp_regular.ttf in Resources */,
 				40D1C13EB37C422D85A661DF /* plex_sans_jp_semibold.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5529D6C9441841987A736A97 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5D99C358A61DC29A7E4BB564 /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		805622D38C8CB9E5BCD5BFF2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				397AD219F56EB6076068BAD1 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

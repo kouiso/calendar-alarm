@@ -8,7 +8,7 @@ import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.calendar.CalendarContractReader
 import com.calendaralarm.data.db.AppDatabase
 import com.calendaralarm.data.db.AuditLogEntity
-import com.calendaralarm.data.db.MIGRATION_5_6
+import com.calendaralarm.data.db.MIGRATION_6_7
 import com.calendaralarm.data.db.ScheduledInstanceEntity
 import com.calendaralarm.engine.AlarmScheduler
 import com.calendaralarm.shared.model.AlarmInstance
@@ -137,7 +137,7 @@ class RingHistoryTest {
         val sql = db.openHelper.writableDatabase
         val now = System.currentTimeMillis()
         val fresh = columns("audit_log")
-        // v5 の audit_log に戻す (scheduled_instances は v5 と v6 で同じ)
+        // v6 の audit_log に戻す (scheduled_instances は v6 と v7 で同じ)
         sql.execSQL("DROP TABLE audit_log")
         sql.execSQL(
             "CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
@@ -159,9 +159,9 @@ class RingHistoryTest {
         sql.execSQL(insert, arrayOf<Any>(now, "MISS", "sa:9:2026-10-01"))
         sql.execSQL(insert, arrayOf<Any>(now, "RESYNC", "sa:1:2026-10-21"))
 
-        MIGRATION_5_6.migrate(sql)
+        MIGRATION_6_7.migrate(sql)
 
-        // Room が v6 で作る表と列の形が一致する (一致しないと起動時に Room が開けない)
+        // Room が v7 で作る表と列の形が一致する (一致しないと起動時に Room が開けない)
         assertEquals(fresh, columns("audit_log"))
         val rows = runBlocking { db.auditLog().recentFlow(10).first() }.associateBy { it.detail }
         assertEquals("sa:1:2026-10-21", rows.getValue("sa:1:2026-10-21: 鳴動時刻から60分経過").instanceId)

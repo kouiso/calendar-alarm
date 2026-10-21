@@ -15,6 +15,7 @@ import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.AlarmState
+import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
@@ -79,10 +80,12 @@ class AlarmRepository(
         beginMillis: Long,
         endMillis: Long,
     ): List<com.calendaralarm.shared.model.CalendarEvent> {
-        val email = appSettings.googleAccountEmail ?: return events
-        val types = com.calendaralarm.data.calendar.GoogleCalendarTypes
-            .fetchEventTypes(calendarReader.appContext(), email, beginMillis, endMillis)
-            ?: return events
+        if (appSettings.googleAccountEmails.isEmpty()) return events
+        // 連携したアカウントごとに引いて合わせる (#74)。1アカウントの失敗で他を捨てない
+        val types = appSettings.googleAccountEmails.mapNotNull { email ->
+            com.calendaralarm.data.calendar.GoogleCalendarTypes
+                .fetchEventTypes(calendarReader.appContext(), email, beginMillis, endMillis)
+        }.fold(emptyMap<String, String>()) { acc, m -> acc + m }
         if (types.isEmpty()) return events
         return events.map { ev ->
             types[ev.iCalUID]?.let { ev.copy(googleEventType = it) } ?: ev
@@ -184,45 +187,72 @@ class AlarmRepository(
         val hasOverride: Boolean,
         /** カレンダーを鳴らさない設定にしている (予定ごとの指定より強い。展開がカレンダー単位で外すため) */
         val calendarOff: Boolean = false,
+        /** アカウントを鳴らさない設定にしている (#74。カレンダーを鳴らさない時と同じく展開が予定ごとの指定より先に外す) */
+        val accountOff: Boolean = false,
         /** 終日の予定で、カレンダーが終日を鳴らさない設定 (予定ごとの指定より強い) */
         val allDayOff: Boolean = false,
         /** リマインダー側の鳴る時刻があるか (追加の何分前か、取り込んだカレンダーの通知)。無ければリマインダーの動作は何も鳴らさない */
         val hasReminderTriggers: Boolean = true,
+        /** 設定の「アラームをすべてミュート」。展開はアラームを全部外し、通知だけ残す */
+        val muteAll: Boolean = false,
     ) {
         /** 予定ごとの指定では鳴るようにできない (スイッチを押せなくする) */
-        val lockedByCalendar: Boolean get() = calendarOff || allDayOff
+        val lockedByCalendar: Boolean get() = calendarOff || accountOff || allDayOff
+
+        /**
+         * 行のスイッチを押せなくする。すべてミュート中は、スイッチで入れるアラームの指定も展開で外れて鳴らないので、
+         * 鳴らない側の行は入れられない。通知で鳴る側の行は切れるように残す
+         */
+        val switchLocked: Boolean get() = lockedByCalendar || (muteAll && muted)
 
         /**
          * 何も鳴らない状態 (UI のグレー化と行のスイッチ)。展開 (AlarmExpander.expandEvents) と同じく、
-         * リマインダーの動作はリマインダー側の時刻がある時だけ鳴るので、時刻が無ければ開始の動作だけで決まる
+         * リマインダーの動作はリマインダー側の時刻がある時だけ鳴るので、時刻が無ければ開始の動作だけで決まる。
+         * すべてミュート中のアラームも鳴らない側に数える (通知は残る)
          */
         val muted: Boolean
-            get() = startAction == EventAction.MUTE &&
-                (reminderAction == EventAction.MUTE || !hasReminderTriggers)
+            get() = startAction.silenced() && (reminderAction.silenced() || !hasReminderTriggers)
+
+        private fun EventAction.silenced(): Boolean =
+            this == EventAction.MUTE || (muteAll && this == EventAction.ALARM)
     }
+
+    /**
+     * Reminders.MINUTES=-1 (MINUTES_DEFAULT) は「システム既定」。実値は端末依存で取得できないため、
+     * 設定画面で変えられる既定分数 defaultMinutesBefore に解決する (代替値を隠さない)。
+     * 予約 (resync) と一覧のスイッチが別々に解決すると、鳴るのに「鳴らない」と出るずれが起きるので、両方ここを通す
+     */
+    private fun CalendarEvent.withResolvedDefaultReminders(appSettings: SettingsRepository.Settings): CalendarEvent =
+        copy(calendarReminderMinutes = calendarReminderMinutes.map { if (it < 0) appSettings.defaultMinutesBefore else it })
 
     suspend fun upcomingEvents(days: Int = 14): List<AgendaItem> = withContext(Dispatchers.IO) {
         if (!hasCalendarPermission()) return@withContext emptyList()
         val now = Clock.System.now()
-        val sources = calendarReader.calendars().associateBy { it.id }
+        val calendarList = calendarReader.calendars()
+        val sources = calendarList.associateBy { it.id }
         val prefs = db.calendarPrefs().all().associateBy { it.calendarId }
         val overrides = db.eventOverrides().all().associateBy { it.instanceKey }
         val appSettings = settings.flow.first()
+        // アカウント単位の設定 (#74): 使わないアカウントの予定は一覧に出さず、鳴らさない分は鳴らない表示にする
+        val accountApplied = com.calendaralarm.shared.logic.AccountRules.apply(
+            calendarList, appSettings.accountSettings, emptyMap(), AlarmRule(minutesBefore = appSettings.defaultMinutesBefore),
+        )
         val events = enrichWithGoogleTypes(
             calendarReader.events(
                 now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
                 (now + days.days).toEpochMilliseconds(),
-            ),
+            ).map { it.withResolvedDefaultReminders(appSettings) },
             appSettings,
             now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
             (now + days.days).toEpochMilliseconds(),
         )
-        events.map { ev ->
+        events.filter { it.calendarId !in accountApplied.hiddenCalendarIds }.map { ev ->
             val pref = prefs[ev.calendarId]
             val ov = overrides[ev.instanceKey]
             val rule = AlarmRule(
                 enabled = pref?.enabled != false,
                 minutesBefore = pref?.minutesBefore
+                    ?: accountApplied.calendarRules[ev.calendarId]?.minutesBefore
                     ?: appSettings.defaultMinutesBefore,
                 allDayMinutes = pref?.allDayMinutes ?: 540,
                 extraOffsets = pref?.extraOffsetsCsv.toOffsets(),
@@ -236,7 +266,9 @@ class AlarmRepository(
             // 予約の展開と同じ判定関数を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
             // 終日を鳴らさないカレンダーの終日予定も、個別指定より先に展開で外れるので鳴らない側に倒す
             val allDayOff = AlarmExpander.allDaySuppressed(ev, rule)
-            val (start, reminder) = if (pref?.enabled == false || allDayOff ||
+            // 鳴らさないアカウント (#74) の予定も展開が個別指定より先に外すので、スイッチで入れても鳴らない
+            val accountOff = ev.calendarId in accountApplied.disabledCalendarIds
+            val (start, reminder) = if (pref?.enabled == false || allDayOff || accountOff ||
                 !AlarmExpander.passesEventFilters(ev, override, appSettings.inviteFilter, appSettings.eventTypeFilter)
             ) {
                 EventAction.MUTE to EventAction.MUTE
@@ -253,9 +285,11 @@ class AlarmRepository(
                 extraOffsets = ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets,
                 hasOverride = ov != null,
                 calendarOff = pref?.enabled == false,
+                accountOff = accountOff,
                 allDayOff = allDayOff,
                 hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
                     (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
+                muteAll = appSettings.muteAll,
             )
         }
     }
@@ -504,10 +538,13 @@ class AlarmRepository(
         // 読み取り失敗時は空のまま (keepPendingEvents 経路で保護される)。
         var liveEventKeys = emptySet<String>()
         if (hasCalendarPermission()) {
-            val prefs = db.calendarPrefs().all().associate {
+            val prefRows = db.calendarPrefs().all()
+            // 何分前を選んでいないカレンダー。アカウントの既定に従わせる (#74)
+            val minutesFollowDefault = prefRows.filter { it.minutesBefore == null }.map { it.calendarId }.toSet()
+            val prefs = prefRows.associate {
                 it.calendarId to AlarmRule(
                     enabled = it.enabled,
-                    minutesBefore = it.minutesBefore,
+                    minutesBefore = it.minutesBefore ?: appSettings.defaultMinutesBefore,
                     allDayMinutes = it.allDayMinutes,
                     extraOffsets = it.extraOffsetsCsv.toOffsets(),
                     startAction = it.startAction.toAction(),
@@ -521,7 +558,6 @@ class AlarmRepository(
                     extraOffsets = it.extraOffsetsCsv?.toOffsets(),
                 )
             }
-            val disabledCalIds = prefs.filterValues { !it.enabled }.keys
             val snoozeDefault = appSettings.defaultSnoozeMinutes
             // calendar_prefs 行が無いカレンダーはグローバル既定が効く。
             // アジェンダ表示も同じ既定を読むため、UIとエンジンを一致させる。
@@ -531,6 +567,9 @@ class AlarmRepository(
                 reminderAction = appSettings.defaultReminderAction,
             )
             val expanded = runCatching {
+                // カレンダー一覧の読み取り失敗は予定の読み取り失敗と同じ扱いにする (下の runCatching で前回の予約を維持)。
+                // 鳴らさないアカウントを無視して鳴らすことも、全部止めることもしない
+                val calendarList = calendarReader.calendars()
                 // 過去側はグレース幅ではなく14日に広げる。スヌーズ連鎖が親予定の
                 // 開始から長く伸びても liveEventKeys が親を見失わず、スヌーズ子が
                 // 無言キャンセルされない。in-window 外の予定は展開側で弾かれる。
@@ -538,28 +577,29 @@ class AlarmRepository(
                     calendarReader.events(
                         (now - 14.days).toEpochMilliseconds(),
                         horizon.toEpochMilliseconds(),
-                    ).map { ev ->
-                        // Reminders.MINUTES=-1 (MINUTES_DEFAULT) は「システム既定」。
-                        // 実値は端末依存で取得不能なため、ユーザーが設定画面で変えられる
-                        // 既存の既定分数 defaultMinutesBefore に解決する (代替値を隠さない)。
-                        ev.copy(
-                            calendarReminderMinutes = ev.calendarReminderMinutes.map {
-                                if (it < 0) appSettings.defaultMinutesBefore else it
-                            },
-                        )
-                    },
+                    ).map { it.withResolvedDefaultReminders(appSettings) },
                     appSettings,
                     (now - 14.days).toEpochMilliseconds(),
                     horizon.toEpochMilliseconds(),
                 )
+                // 予定があるのにカレンダーが1件も読めないのは一覧の読み取り失敗。
+                // アカウント設定があるとアカウントへ当てはめられないので、前回の予約を維持する
+                check(calendarList.isNotEmpty() || events.isEmpty() || appSettings.accountSettings.isEmpty()) {
+                    "calendar list is empty while events exist"
+                }
+                // アカウント単位の設定 (使う / 鳴らす / 何分前) を配下カレンダーへ当てはめる (#74)
+                val accountApplied = com.calendaralarm.shared.logic.AccountRules.apply(
+                    calendarList, appSettings.accountSettings, prefs, defaultRule, minutesFollowDefault,
+                )
+                val disabledCalIds = accountApplied.disabledCalendarIds
                 liveEventKeys = events.asSequence()
                     .filter { overrides[it.instanceKey]?.muted != true }
-                    .filter { prefs[it.calendarId]?.enabled != false }
+                    .filter { it.calendarId !in disabledCalIds }
                     .map { it.instanceKey }
                     .toSet()
                 AlarmExpander.expandEvents(
                     events = events,
-                    calendarRules = prefs,
+                    calendarRules = accountApplied.calendarRules,
                     overrides = overrides,
                     disabledCalendarIds = disabledCalIds,
                     now = now, horizon = horizon,
@@ -758,7 +798,8 @@ class AlarmRepository(
     suspend fun setCalendarPref(
         calendarId: String,
         enabled: Boolean,
-        minutesBefore: Int,
+        /** null = このカレンダーでは選ばず、アカウントの既定に従う */
+        minutesBefore: Int?,
         allDayMinutes: Int? = null,
         extraOffsets: List<Int>? = null,
         startAction: EventAction? = null,
