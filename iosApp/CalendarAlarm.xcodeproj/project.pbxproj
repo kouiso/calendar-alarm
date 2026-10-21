@@ -33,6 +33,7 @@
 		88AD950DD0441ABF8DBADCAE /* AlarmsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4F003771A83A79DB1D7C14D /* AlarmsView.swift */; };
 		8DA98EC782D9732A40A26D31 /* outfit_regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9B5EFAB358775E656E932A66 /* outfit_regular.ttf */; };
 		8F780525F00F3096C5364349 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE03925928578DE0F3DE47BB /* ShareViewController.swift */; };
+		966320DEE11E9E181F326ACE /* engine-snooze-minutes-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AC8EE707421AED144DFAD38 /* engine-snooze-minutes-test.swift */; };
 		A18B776969A5B61C602C3D89 /* outfit_semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C694CCA1128C6527CB1476DC /* outfit_semibold.ttf */; };
 		A6D274A92BA0F9A706CB3085 /* CalendarAlarmWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */; };
 		A793851C3CD7E4B1FDBE5794 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F8642EDA4CA9194F126132 /* Store.swift */; };
@@ -89,6 +90,7 @@
 /* Begin PBXFileReference section */
 		01AB4C06EB145E37B770350C /* OpenRouterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterService.swift; sourceTree = "<group>"; };
 		1664780F463A19E9DA0C56BA /* CalendarAlarmApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAlarmApp.swift; sourceTree = "<group>"; };
+		1AC8EE707421AED144DFAD38 /* engine-snooze-minutes-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "engine-snooze-minutes-test.swift"; sourceTree = "<group>"; };
 		218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = CalendarAlarmWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		24F9472624F7ECEBFD26FF3E /* Engine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Engine.swift; sourceTree = "<group>"; };
 		2F0A11DC2B493DF079DC6BD6 /* CalendarAlarmWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CalendarAlarmWidget.entitlements; sourceTree = "<group>"; };
@@ -162,6 +164,7 @@
 			isa = PBXGroup;
 			children = (
 				A22FA71EC8E0871C65511A60 /* alarm-sound-import-test.swift */,
+				1AC8EE707421AED144DFAD38 /* engine-snooze-minutes-test.swift */,
 				6AD851BAB943D3DB6E272879 /* engine-sound-change-test.swift */,
 			);
 			path = "unit-test";
@@ -425,6 +428,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				86B15B16E50DEF7BDFC0FC23 /* alarm-sound-import-test.swift in Sources */,
+				966320DEE11E9E181F326ACE /* engine-snooze-minutes-test.swift in Sources */,
 				00FE057011931AD95770F145 /* engine-sound-change-test.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
