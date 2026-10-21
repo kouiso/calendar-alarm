@@ -1,0 +1,68 @@
+== boot 2026年 10月21日 水曜日 16時40分54秒 JST
+== boot_completed=1 sdk=35
+== install
+Success
+    lastUpdateTime=2026-10-21 16:41:15
+Row: 0 _id=1, name=t
+Row: 1 _id=2, name=check114
+Row: 2 _id=3, name=off114
+== cal1=2 cal2=3
+No result found.
+== shot a-empty-light
+== shot a-empty-dark
+  mCurrentFocus=Window{59a2ab8 u0 com.calendaralarm/com.calendaralarm.MainActivity}
+== shot b-list-light
+== shot b-list-dark
+FOUND meetingAで鳴らす: checked=true enabled=true bounds=[864,1290][1001,1416]
+FOUND soonDで鳴らす: checked=true enabled=true bounds=[864,1100][1001,1226]
+FOUND カレンダーが鳴らさない設定: checked=false enabled=false bounds=[864,1480][1001,1606]
+FOUND 終日の予定を鳴らさない設定: checked=false enabled=false bounds=[864,1786][1001,1912]
+== shot b-list-scrolled-light
+== shot b-list-scrolled-dark
+== rows after first sync (rel = triggerAt - seed time, ms)
+ev:seed114:missed:b0|missed-seed|MISSED|-10800000
+ev:2:11:1792569718947:b30|soonD|SKIPPED|-600000
+ev:2:11:1792569718947:b0|soonD|CANCELLED|1200000
+ev:2:8:1792579318947:b30|meetingA|PENDING|9000000
+ev:2:8:1792579318947:b0|meetingA|CANCELLED|10800000
+ev:3:10:1792579918947:b0|calOffC|CANCELLED|11400000
+ev:2:9:1792627200000:b0|allDayB|CANCELLED|58681053
+missed24=1
+SKIP|ev:2:11:1792569718947:b30: 予約前に通知時刻が過ぎていた
+SKIP|ev:2:11:1792569718947:b30: 予約前に通知時刻が過ぎていた
+== C toggle meetingA off
+FOUND meetingAで鳴らす: checked=true enabled=true bounds=[864,1290][1001,1416]
+FOUND meetingAで鳴らす: checked=false enabled=true bounds=[864,1290][1001,1416]
+== shot c-toggle-off-light
+== shot c-toggle-off-dark
+alarmmanager-entries=6
+2:8:1792579318947|MUTE
+ev:2:8:1792579318947:b0|CANCELLED
+ev:2:8:1792579318947:b30|CANCELLED
+== C toggle meetingA on
+FOUND meetingAで鳴らす: checked=false enabled=true bounds=[864,1290][1001,1416]
+FOUND meetingAで鳴らす: checked=true enabled=true bounds=[864,1290][1001,1416]
+== shot c-toggle-on-light
+== shot c-toggle-on-dark
+alarmmanager-entries=14
+2:8:1792579318947|ALARM
+ev:2:8:1792579318947:b0|CANCELLED
+ev:2:8:1792579318947:b30|PENDING
+== D tap locked switches
+FOUND カレンダーが鳴らさない設定: checked=false enabled=false bounds=[864,1480][1001,1606]
+FOUND カレンダーが鳴らさない設定: checked=false enabled=false bounds=[864,1480][1001,1606]
+FOUND 終日の予定を鳴らさない設定: checked=false enabled=false bounds=[864,1786][1001,1912]
+FOUND 終日の予定を鳴らさない設定: checked=false enabled=false bounds=[864,1786][1001,1912]
+overrides|2:8:1792579318947|ALARM
+pending-allDayB-or-calOffC|2
+== F missed banner action
+FOUND 原因を見る: checked=false enabled=true bounds=[796,682][979,737]
+== shot f-missed-destination-light
+== shot f-missed-destination-dark
+== E revoke notifications
+== shot e-permission-ask
+== denied via あとで
+== shot e-permission-light
+== shot e-permission-dark
+== end 2026年 10月21日 水曜日 16時45分10秒 JST
+== kill emulator
