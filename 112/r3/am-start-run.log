@@ -1,0 +1,38 @@
+=== 2026-10-21 18:52:33 JST apk=160da53 CI build
+stream 2 [V] volume is 0 in range [0..7]
+stream 3 [V] volume is 0 in range [0..15]
+stream 4 [V] volume is 0 in range [1..7]
+stream 5 [V] volume is 0 in range [0..7]
+--- 1) share text
+Starting: Intent { act=android.intent.action.SEND typ=text/plain cmp=com.calendaralarm/.MainActivity (has extras) }
+Status: ok
+Activity: com.calendaralarm/.MainActivity
+[s1-import] text="予定に追加" text="このビルドでは AI の読み取りを使えません。日時を入れて追加してください" text="歯医者の予約 10月23日 15時から" text="タイトル" text="開始 (YYYY-MM-DDTHH:mm)" text="終了 (空=1時間)" text="場所" text="戻る" text="追加" 
+--- 2) back (dismiss)
+tap '^戻る$' at 648 1723
+[s2-dismissed] text="予定に合わせて、前もって鳴らすために" text="カレンダーをつなぐと、予定の前に自動でアラームが入る。" text="許可する" text="あとで" 
+--- 3) home + kill process
+pidof after kill: []
+--- 4) return to the task (activity recreated from the original SEND intent; this start has no extras)
+Starting: Intent { act=android.intent.action.SEND typ=text/plain flg=0x10000000 cmp=com.calendaralarm/.MainActivity }
+Warning: Activity not started, its current task has been brought to the front
+Status: ok
+Activity: com.calendaralarm/.MainActivity
+new pid: [18863]
+[s3-after-return] text="予定に合わせて、前もって鳴らすために" text="カレンダーをつなぐと、予定の前に自動でアラームが入る。" text="許可する" text="あとで" 
+--- 5) home, kill, start with FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY (as from recents)
+Starting: Intent { act=android.intent.action.SEND typ=text/plain flg=0x10100000 cmp=com.calendaralarm/.MainActivity (has extras) }
+Warning: Activity not started, its current task has been brought to the front
+Status: ok
+Activity: com.calendaralarm/.MainActivity
+[s4-from-history] text="予定に合わせて、前もって鳴らすために" text="カレンダーをつなぐと、予定の前に自動でアラームが入る。" text="許可する" text="あとで" 
+--- 6) a new share is still imported
+Starting: Intent { act=android.intent.action.SEND typ=text/plain cmp=com.calendaralarm/.MainActivity (has extras) }
+Warning: Activity not started, intent has been delivered to currently running top-most instance.
+Status: ok
+Activity: com.calendaralarm/.MainActivity
+[s5-new-share] text="予定に合わせて、前もって鳴らすために" text="カレンダーをつなぐと、予定の前に自動でアラームが入る。" text="許可する" text="あとで" 
+NOT FOUND: ^戻る$
+/sdcard/e112.mp4: 1 file pulled, 0 skipped. 222.8 MB/s (5859687 bytes in 0.025s)
+app alarms in dumpsys alarm: 0
+done
