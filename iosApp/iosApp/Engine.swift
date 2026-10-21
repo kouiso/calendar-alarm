@@ -457,6 +457,27 @@ final class Engine: ObservableObject {
         store.removeScheduled(id)
     }
 
+    /// 既定のアラーム音を変えた時に、入っている予約を新しい音で入れ直す (#101)。
+    /// AlarmKit は音を予約の時に決めるため、入れ直さないと変更前の音で鳴る
+    func rescheduleForSoundChange() async {
+        let now = Self.nowMillis
+        let targets = store.state.scheduled.values.filter {
+            $0.state == .pending && $0.instance.triggerAtMillis > now + 5_000
+                && $0.instance.delivery != EventAction.notify.rawValue
+        }
+        var count = 0
+        for rec in targets {
+            do {
+                let rid = try await scheduler.schedule(rec.instance)
+                store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending, alarmKitId: rid ?? rec.alarmKitId))
+                count += 1
+            } catch {
+                store.audit("SCHEDULE_ERR", "sound \(rec.instance.id): \(error.localizedDescription)")
+            }
+        }
+        store.audit("SOUND", "\(AlarmSoundLibrary.currentDefault ?? "default"): \(count)件を入れ直し")
+    }
+
     // MARK: - ユーティリティ
 
     static var nowMillis: Int64 { Int64(Date().timeIntervalSince1970 * 1000) }

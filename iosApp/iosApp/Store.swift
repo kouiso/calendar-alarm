@@ -32,6 +32,10 @@ final class Store: ObservableObject {
         var weatherLocation: String = ""
         var weatherHeaderEnabled: Bool = true
         var weatherOnAlarmScreen: Bool = true
+        /// 既定のアラーム音 (Library/Sounds のファイル名)。nil = iPhone の既定音 (#101)
+        var alarmSoundFile: String? = nil
+        /// 取り込んだ時の元のファイル名 (画面表示用)
+        var alarmSoundLabel: String? = nil
         var timerPresets: [TimerPresetDTO] = TimerPresets.defaults
         /// OpenRouter APIキー (AI機能用)
         // calendar_prefs: calendarId -> AlarmRuleDTO
@@ -64,6 +68,7 @@ final class Store: ObservableObject {
         if let data = try? Data(contentsOf: fileURL),
            let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = loaded
+            AlarmSoundLibrary.currentDefault = loaded.alarmSoundFile
             // 旧版で保存した AI のキーとモデルを端末から消す。読み込みでは落ちるだけで
             // ファイルに残るので、決定7のとおり起動時に書き直す
             if let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -81,6 +86,7 @@ final class Store: ObservableObject {
         if let data = try? Data(contentsOf: fileURL),
            let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = loaded
+            AlarmSoundLibrary.currentDefault = loaded.alarmSoundFile
         }
     }
 
@@ -105,6 +111,13 @@ final class Store: ObservableObject {
     func setDefaultMinutes(_ v: Int) { mutate { $0.defaultMinutesBefore = v } }
     func setDefaultSnooze(_ v: Int) { mutate { $0.defaultSnoozeMinutes = v } }
     func setWeatherEnabled(_ v: Bool) { mutate { $0.weatherEnabled = v } }
+    /// 既定のアラーム音を変える。前に取り込んだ音のファイルは消す
+    func setAlarmSound(file: String?, label: String?) {
+        let old = state.alarmSoundFile
+        mutate { $0.alarmSoundFile = file; $0.alarmSoundLabel = label }
+        AlarmSoundLibrary.currentDefault = file
+        if let old, old != file { AlarmSoundLibrary.remove(old) }
+    }
     func setDefaultStartAction(_ a: EventAction) { mutate { $0.defaultStartAction = a.rawValue } }
     func setDefaultReminderAction(_ a: EventAction) { mutate { $0.defaultReminderAction = a.rawValue } }
     func setTitleCodes(_ v: TitleCodeSettings) { mutate { $0.titleCodes = v } }
@@ -294,6 +307,8 @@ extension Store.Persisted {
         weatherLocation = try c.decodeIfPresent(String.self, forKey: .weatherLocation) ?? ""
         weatherHeaderEnabled = try c.decodeIfPresent(Bool.self, forKey: .weatherHeaderEnabled) ?? true
         weatherOnAlarmScreen = try c.decodeIfPresent(Bool.self, forKey: .weatherOnAlarmScreen) ?? true
+        alarmSoundFile = try c.decodeIfPresent(String.self, forKey: .alarmSoundFile)
+        alarmSoundLabel = try c.decodeIfPresent(String.self, forKey: .alarmSoundLabel)
         timerPresets = try c.decodeIfPresent([TimerPresetDTO].self, forKey: .timerPresets) ?? TimerPresets.defaults
         calendarRules = try c.decodeIfPresent([String: AlarmRuleDTO].self, forKey: .calendarRules) ?? [:]
         overrides = try c.decodeIfPresent([String: EventOverrideDTO].self, forKey: .overrides) ?? [:]

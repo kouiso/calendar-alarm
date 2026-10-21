@@ -3,6 +3,7 @@ import SwiftUI
 import CryptoKit
 import UserNotifications
 import AlarmKit
+import ActivityKit
 
 /// 鳴動予約の抽象。実体は AlarmKit (iOS26+) または UNUserNotificationCenter。
 
@@ -160,10 +161,14 @@ final class AlarmKitScheduler: AlarmScheduler {
             preAlert: nil,
             postAlert: TimeInterval(inst.snoozeMinutes) * 60
         )
+        // AlarmKit で指定できるのは音だけ (音量・だんだん大きく・バイブは iPhone の設定に従う)
+        let sound: AlertConfiguration.AlertSound =
+            AlarmSoundLibrary.soundName(for: inst).map { .named($0) } ?? .default
         let config = AlarmManager.AlarmConfiguration<AppAlarmMetadata>(
             countdownDuration: countdown,
             schedule: .fixed(date),
-            attributes: attrs
+            attributes: attrs,
+            sound: sound
         )
         _ = try await manager.schedule(id: uuid, configuration: config)
         return uuid.uuidString
@@ -211,7 +216,8 @@ final class NotificationScheduler: AlarmScheduler {
     func schedule(_ inst: AlarmInstanceDTO) async throws -> String? {
         let content = UNMutableNotificationContent()
         content.title = inst.title
-        content.sound = .default
+        content.sound = AlarmSoundLibrary.soundName(for: inst)
+            .map { UNNotificationSound(named: UNNotificationSoundName($0)) } ?? .default
         content.interruptionLevel = .timeSensitive
         let date = Date(timeIntervalSince1970: TimeInterval(inst.triggerAtMillis) / 1000)
         let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
