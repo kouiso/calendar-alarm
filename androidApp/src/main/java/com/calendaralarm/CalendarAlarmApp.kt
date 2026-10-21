@@ -22,6 +22,7 @@ import com.calendaralarm.shared.weather.WeatherApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
@@ -45,6 +46,12 @@ class AppContainer(val app: Application) {
                     }
                 },
                 *AppDatabase.MIGRATIONS,
+                // 移行は DB を開く裏スレッドで1回だけ走る。その時点のアプリ既定の分数で旧行を見分ける
+                com.calendaralarm.data.db.Migration5To6 {
+                    kotlinx.coroutines.runBlocking {
+                        settings.flow.first().defaultMinutesBefore
+                    }
+                },
             )
             .build()
     }

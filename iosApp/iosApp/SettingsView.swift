@@ -268,9 +268,16 @@ struct SettingsView: View {
                     // カレンダー一覧カード
                     Card {
                         VStack(spacing: 0) {
-                            ForEach(store.state.calendars) { cal in
-                                calendarRow(cal)
-                                if cal.id != store.state.calendars.last?.id { Divider().padding(.leading, 40) }
+                            // アカウントごとにまとめる (局長決定6, #74)。使わないアカウントは見出しだけ残す
+                            ForEach(accountGroups.map { $0.0 }, id: \.self) { account in
+                                let cals = accountGroups.first { $0.0 == account }?.1 ?? []
+                                accountHeader(account)
+                                if (store.state.accountSettings[account] ?? AccountSettingDTO()).use {
+                                    ForEach(cals) { cal in
+                                        calendarRow(cal)
+                                        if cal.id != cals.last?.id { Divider().padding(.leading, 40) }
+                                    }
+                                }
                             }
                             if store.state.calendars.isEmpty {
                                 IconRow("calendar") {
@@ -402,8 +409,56 @@ struct SettingsView: View {
 
     // MARK: - カレンダー行
 
+    /// アカウント名の順、同じアカウントは主カレンダーを先に (Android の `AccountRules.groupByAccount` と同じ並び)。
+    /// キー (accountKey) は EventKit の識別子で名前順にならないので、表示名で並べ、同名の時だけキーで決める
+    private var accountGroups: [(String, [CalendarSource])] {
+        Dictionary(grouping: store.state.calendars, by: \.accountKey)
+            .map { ($0.key, $0.value.sorted { ($0.isPrimary ? 0 : 1, $0.name) < ($1.isPrimary ? 0 : 1, $1.name) }) }
+            .sorted { a, b in
+                let an = a.1.first?.accountName ?? "", bn = b.1.first?.accountName ?? ""
+                return (an.isEmpty ? 1 : 0, an.lowercased(), a.0) < (bn.isEmpty ? 1 : 0, bn.lowercased(), b.0)
+            }
+    }
+
+    /// アカウントの見出し: 使う / 鳴らす / 何分前 (アカウントの既定)
+    private func accountHeader(_ account: String) -> some View {
+        let s = store.state.accountSettings[account] ?? AccountSettingDTO()
+        let set: (AccountSettingDTO) -> Void = { store.setAccountSetting(account, $0); resync("account setting") }
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                // キーは識別子なので、見出しには表示名を出す
+                let title = store.state.calendars.first { $0.accountKey == account }?.accountName ?? account
+                Text(title.isEmpty ? "端末のカレンダー" : title)
+                    .font(NightTheme.font(14, weight: .semibold)).lineLimit(1)
+                Spacer()
+                Text("使う").font(NightTheme.font(12)).foregroundStyle(.secondary)
+                Toggle("", isOn: Binding(get: { s.use }, set: { var n = s; n.use = $0; set(n) })).labelsHidden()
+            }
+            if !s.use {
+                Text("このアプリでは使っていません（iPhone からは消していません）")
+                    .font(NightTheme.font(11)).foregroundStyle(.secondary)
+            } else {
+                HStack {
+                    Text("このアカウントの予定で鳴らす").font(NightTheme.font(13)).foregroundStyle(.secondary)
+                    Spacer()
+                    Toggle("", isOn: Binding(get: { s.ring }, set: { var n = s; n.ring = $0; set(n) })).labelsHidden()
+                }
+                if s.ring {
+                    Chips(items: [-1] + minutesOptions, current: s.minutesBefore ?? -1) { m in
+                        var n = s; n.minutesBefore = m < 0 ? nil : m; set(n)
+                    } label: { m in
+                        m < 0 ? "既定" : (m == 0 ? "開始時" : "\(m)分前")
+                    }
+                }
+            }
+        }
+        .padding(.top, 10).padding(.bottom, 4)
+    }
+
     private func calendarRow(_ cal: CalendarSource) -> some View {
         let rule = store.rule(for: cal.id)
+        // 「既定」を選んだ時の分数 (アカウントの既定、無ければアプリの既定)
+        let inherited = store.accountSetting(forCalendar: cal.id).minutesBefore ?? store.state.defaultMinutesBefore
         let expanded = expandedCal == cal.id
         return VStack(spacing: 0) {
             Button { expandedCal = expanded ? nil : cal.id } label: {
@@ -426,10 +481,14 @@ struct SettingsView: View {
             if expanded {
                 VStack(alignment: .leading, spacing: 10) {
                     IconRow("bell.fill") {
-                        Chips(items: minutesOptions, current: rule.minutesBefore) { m in
-                            var r = rule; r.minutesBefore = m
-                            store.setCalendarRule(cal.id, r); resync("cal pref")
-                        } label: { $0 == 0 ? "開始時" : "\($0)分前" }
+                        // -1 = 既定 (アカウントの既定、無ければアプリの既定)。選んだ時だけカレンダーの値として残す (#74)
+                        Chips(items: [-1] + minutesOptions,
+                              current: store.isCalendarMinutesChosen(cal.id) ? rule.minutesBefore : -1) { m in
+                            store.setCalendarMinutes(cal.id, m < 0 ? nil : m); resync("cal pref")
+                        } label: { m in
+                            m < 0 ? "既定（\(inherited == 0 ? "開始時" : "\(inherited)分前")）"
+                                : (m == 0 ? "開始時" : "\(m)分前")
+                        }
                     }
                     IconRow("calendar.badge.clock") {
                         Chips(items: allDayOptions.map(\.1), current: rule.allDayMinutes) { m in
