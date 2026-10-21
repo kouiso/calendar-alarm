@@ -63,7 +63,24 @@ struct CalendarAlarmApp: App {
 /// 音も表示も出ない (診断画面の鳴動テストも鳴らない)。届いた行はここで鳴動済みにする
 final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationPresenter()
-    @MainActor weak var engine: Engine?
+    @MainActor weak var engine: Engine? {
+        didSet { flushWaiting() }
+    }
+    /// engine が付く前 (通知を開いて起動した直後) に来た知らせ。付いた時に流す。
+    /// 捨てると、resync で拾えない時 (通知の許可が外れた等) に届いた分が見逃しになる
+    @MainActor private var waiting: [(id: String, at: Int64)] = []
+
+    @MainActor private func deliver(_ id: String, at: Int64) {
+        guard let engine else { waiting.append((id, at)); return }
+        engine.markNotificationDelivered(id, deliveredAtMillis: at)
+    }
+
+    @MainActor private func flushWaiting() {
+        guard let engine, !waiting.isEmpty else { return }
+        let items = waiting
+        waiting = []
+        for item in items { engine.markNotificationDelivered(item.id, deliveredAtMillis: item.at) }
+    }
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -71,7 +88,7 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     ) async -> UNNotificationPresentationOptions {
         let id = notification.request.identifier
         let at = Int64(notification.date.timeIntervalSince1970 * 1000)
-        await MainActor.run { engine?.markNotificationDelivered(id, deliveredAtMillis: at) }
+        await MainActor.run { deliver(id, at: at) }
         return [.banner, .list, .sound]
     }
 
@@ -82,7 +99,7 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         // 押された時刻ではなく届いた時刻で残す。通知を後から開いた時に時刻がずれないように
         let id = response.notification.request.identifier
         let at = Int64(response.notification.date.timeIntervalSince1970 * 1000)
-        await MainActor.run { engine?.markNotificationDelivered(id, deliveredAtMillis: at) }
+        await MainActor.run { deliver(id, at: at) }
     }
 }
 

@@ -447,11 +447,13 @@ final class Engine: ObservableObject {
         }
     }
 
-    /// 時刻を過ぎたのに OS の通知予約に残っていない PENDING 行。届いた行として扱う
-    /// (この経路の予約は失敗すると行を作らないので、消えている = OS が出した)
+    /// 時刻を過ぎたのに OS の通知予約に残っていない PENDING 行。届いた行として扱う。
+    /// 予約できた行 (リクエスト id あり) に限る。スヌーズは予約に失敗しても行を残すので、
+    /// それを届いたと数えると見逃しが鳴動済みに化ける
     nonisolated static func deliveredIds(_ rows: [ScheduledRecord], pendingRequestIds: Set<String>, nowMillis: Int64) -> [String] {
         rows.filter {
-            $0.state == .pending && $0.instance.triggerAtMillis <= nowMillis && !pendingRequestIds.contains($0.instance.id)
+            $0.state == .pending && $0.alarmKitId != nil && $0.instance.triggerAtMillis <= nowMillis
+                && !pendingRequestIds.contains($0.instance.id)
         }.sorted { $0.instance.triggerAtMillis < $1.instance.triggerAtMillis }.map { $0.instance.id }
     }
 
@@ -468,7 +470,9 @@ final class Engine: ObservableObject {
 
     // MARK: - タイマー
 
-    func scheduleTimer(durationMillis: Int64, label: String) async {
+    /// 予約できたかを返す。診断画面のテストが、失敗したのに「10秒後に鳴ります」と出さないため
+    @discardableResult
+    func scheduleTimer(durationMillis: Int64, label: String) async -> Bool {
         let inst = AlarmInstanceDTO(
             id: "tm:\(Self.nowMillis)",
             triggerAtMillis: Self.nowMillis + durationMillis,
@@ -479,8 +483,10 @@ final class Engine: ObservableObject {
             let rid = try await scheduler.schedule(inst)
             store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: rid))
             store.audit("TIMER_SET", "\(durationMillis / 1000)s")
+            return true
         } catch {
             store.audit("SCHEDULE_ERR", "timer: \(error.localizedDescription)")
+            return false
         }
     }
 

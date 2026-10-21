@@ -184,7 +184,8 @@ struct DiagnosticsView: View {
     @EnvironmentObject var center: PermissionCenter
     @Environment(\.scenePhase) private var scenePhase
     @State private var items: [DiagnosisItem] = []
-    @State private var testScheduled = false
+    /// nil = まだ押していない、true = 予約できた、false = 予約できなかった
+    @State private var testScheduled: Bool? = nil
 
     var body: some View {
         List {
@@ -196,8 +197,7 @@ struct DiagnosticsView: View {
             Section {
                 Button {
                     Task {
-                        await engine.scheduleTimer(durationMillis: 10_000, label: "テスト鳴動")
-                        testScheduled = true
+                        testScheduled = await engine.scheduleTimer(durationMillis: 10_000, label: "テスト鳴動")
                         // テストの予約結果 (失敗の記録や次のアラーム) を項目に反映する
                         await reload()
                     }
@@ -205,7 +205,11 @@ struct DiagnosticsView: View {
                     Label("10秒後に鳴動テスト", systemImage: "bell.and.waves.left.and.right")
                 }
             } footer: {
-                Text(testScheduled ? "10秒後に鳴ります。鳴らなければ上の項目を直してください。" : "実際に鳴らして、予約から鳴動までを確かめます。")
+                switch testScheduled {
+                case true?: Text("10秒後に鳴ります。鳴らなければ上の項目を直してください。")
+                case false?: Text("テストを予約できませんでした。上の要対応の項目を直してから、もう一度押してください。")
+                case nil: Text("実際に鳴らして、予約から鳴動までを確かめます。")
+                }
             }
         }
         .navigationTitle("鳴らない時の診断")

@@ -217,7 +217,8 @@ final class NotificationScheduler: AlarmScheduler {
         let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
         let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
         try await center.add(UNNotificationRequest(identifier: inst.id, content: content, trigger: trigger))
-        return nil
+        // 予約できた印として返す。届いたかを後から推定する時に、予約に失敗した行と見分ける
+        return inst.id
     }
 
     func cancel(instanceId: String, reservationId: String?) async {
