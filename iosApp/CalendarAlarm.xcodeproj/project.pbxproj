@@ -43,10 +43,18 @@
 		C85633A926A38048ACF31244 /* WeatherBackdropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E77D9C74BAD6E368F79E4264 /* WeatherBackdropView.swift */; };
 		D00DDF3835BD77953502752A /* CalendarAlarmApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1664780F463A19E9DA0C56BA /* CalendarAlarmApp.swift */; };
 		D5FE40480C851F233EFBA4B6 /* plex_sans_jp_light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 93E52D4230819F38EC3DE33A /* plex_sans_jp_light.ttf */; };
+		E710C0FCC3752DD55B30D5BC /* engine-off-app-stop-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3DB907D283B90CDEE0E5F06 /* engine-off-app-stop-test.swift */; };
 		FD5F5F9529EEDE44FE18F446 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4B1C1CFBE436D31467257B /* Models.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		14511A4D0D896D7350F7D593 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DE0179BC75C1681044CE6A86 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 519A56C55D325CCF69337FF6;
+			remoteInfo = iosApp;
+		};
 		3AD70F7A16702DCF24845DAF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = DE0179BC75C1681044CE6A86 /* Project object */;
@@ -88,6 +96,7 @@
 		3C4B1C1CFBE436D31467257B /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		64370CDCC54B81F0CD76CFAC /* outfit_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_medium.ttf; sourceTree = "<group>"; };
 		66A4F7800854676434D761F4 /* AgendaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaView.swift; sourceTree = "<group>"; };
+		677F076778749AB892413A64 /* iosAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = iosAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		70278C1DA89E0C3594F39E2A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		718CE6D806B5B18E35707156 /* AlarmStopIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmStopIntent.swift; sourceTree = "<group>"; };
 		7384BC516B1FE4FB2F672E67 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
@@ -103,6 +112,7 @@
 		9BC0FA0EA0069BF21E257989 /* iosApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = iosApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerView.swift; sourceTree = "<group>"; };
 		B399458D4913DD152149CADA /* MailImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailImportView.swift; sourceTree = "<group>"; };
+		C3DB907D283B90CDEE0E5F06 /* engine-off-app-stop-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "engine-off-app-stop-test.swift"; sourceTree = "<group>"; };
 		C59894E1200D6FB530B33BED /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		C694CCA1128C6527CB1476DC /* outfit_semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_semibold.ttf; sourceTree = "<group>"; };
 		C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailSheet.swift; sourceTree = "<group>"; };
@@ -142,9 +152,18 @@
 			children = (
 				218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */,
 				9BC0FA0EA0069BF21E257989 /* iosApp.app */,
+				677F076778749AB892413A64 /* iosAppTests.xctest */,
 				90ED19FA826B4A1503E171A1 /* MailShareExt.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		58C4D55CDF63CCF2265CE5D6 /* unit-test */ = {
+			isa = PBXGroup;
+			children = (
+				C3DB907D283B90CDEE0E5F06 /* engine-off-app-stop-test.swift */,
+			);
+			path = "unit-test";
 			sourceTree = "<group>";
 		};
 		BE0919C17107C5FCF3FF9118 = {
@@ -152,6 +171,7 @@
 			children = (
 				CE3DB46906063622E3F3C390 /* iosApp */,
 				D71D74FB5839D64D91D1E891 /* MailShareExt */,
+				58C4D55CDF63CCF2265CE5D6 /* unit-test */,
 				D1824F3F0DF979B1DAEC4174 /* Widget */,
 				2B3FE666FD202320B4348FCD /* Products */,
 			);
@@ -209,6 +229,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		466F91B54CF74978AEEAD7D3 /* iosAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A65824BE40E303ECEADE64B1 /* Build configuration list for PBXNativeTarget "iosAppTests" */;
+			buildPhases = (
+				B110E2B59AD690D31E9C0357 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FFF59E3E1E9DF74A6B944BC7 /* PBXTargetDependency */,
+			);
+			name = iosAppTests;
+			packageProductDependencies = (
+			);
+			productName = iosAppTests;
+			productReference = 677F076778749AB892413A64 /* iosAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		519A56C55D325CCF69337FF6 /* iosApp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4B8885203DD20A373E007B0A /* Build configuration list for PBXNativeTarget "iosApp" */;
@@ -275,6 +313,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					466F91B54CF74978AEEAD7D3 = {
+						DevelopmentTeam = ZZ4FA7NLUY;
+						ProvisioningStyle = Automatic;
+					};
 					519A56C55D325CCF69337FF6 = {
 						DevelopmentTeam = ZZ4FA7NLUY;
 						ProvisioningStyle = Automatic;
@@ -303,6 +345,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				466F91B54CF74978AEEAD7D3 /* iosAppTests */,
 				519A56C55D325CCF69337FF6 /* iosApp */,
 				CF9949E44635BD9D5B3AD451 /* CalendarAlarmWidget */,
 				7620626984EAA58FC20789E4 /* MailShareExt */,
@@ -377,6 +420,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B110E2B59AD690D31E9C0357 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E710C0FCC3752DD55B30D5BC /* engine-off-app-stop-test.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BC18BD6298850BFEA340E4AA /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -429,9 +480,32 @@
 			target = 7620626984EAA58FC20789E4 /* MailShareExt */;
 			targetProxy = 3AD70F7A16702DCF24845DAF /* PBXContainerItemProxy */;
 		};
+		FFF59E3E1E9DF74A6B944BC7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 519A56C55D325CCF69337FF6 /* iosApp */;
+			targetProxy = 14511A4D0D896D7350F7D593 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		0068179081C0026FD6872C3A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iosApp.app/iosApp";
+			};
+			name = Release;
+		};
 		0E83680DF276A7E0A6B9622F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -465,6 +539,24 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.ios;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		48E16D3567AFD3ACBCEE1DE2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.calendaralarm.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iosApp.app/iosApp";
 			};
 			name = Debug;
 		};
@@ -702,6 +794,15 @@
 			buildConfigurations = (
 				9A525BFF8273FF3623566D62 /* Debug */,
 				80467D985FF0C4B7F51C5ECD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A65824BE40E303ECEADE64B1 /* Build configuration list for PBXNativeTarget "iosAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				48E16D3567AFD3ACBCEE1DE2 /* Debug */,
+				0068179081C0026FD6872C3A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

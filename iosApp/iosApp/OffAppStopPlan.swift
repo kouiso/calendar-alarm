@@ -44,7 +44,8 @@ enum OffAppStopPlan {
     }
 
     /// 停止済みにする行と、それで消費される単発アラームを決める。
-    /// スヌーズ子がまだ待っている単発は消費しない (reconcile と同じ規則)
+    /// スヌーズ子がまだ待っている単発は消費しない。アプリ内で止めた時 (dismiss / reconcileAlarmKitState) は
+    /// すぐ無効化するので、この経路だけの新しい規則。単発を無効化すると、待っているスヌーズ子が resync で持ち越されず鳴らなくなるため
     static func decide(pending: [Row], nowMillis: Int64, stopped: Set<String>,
                        isLive: (String) -> Bool) -> Decision {
         let consumed = consumedWhileAway(pending: pending, nowMillis: nowMillis, stopped: stopped, isLive: isLive)
