@@ -24,7 +24,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -45,6 +45,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -570,7 +571,8 @@ private fun SlideToStop(
                     }
                 }
             },
-        contentAlignment = Alignment.CenterStart,
+        // 掴み判定とドラッグ量は左端起点・右向きの物理座標なので、丸の配置も RTL で反転させない
+        contentAlignment = AbsoluteAlignment.CenterLeft,
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
@@ -582,7 +584,7 @@ private fun SlideToStop(
         }
         Box(
             modifier = Modifier
-                .offset { IntOffset((padPx + progress.value * travel).toInt(), 0) }
+                .absoluteOffset { IntOffset((padPx + progress.value * travel).toInt(), 0) }
                 .testTag(SLIDE_THUMB_TAG)
                 .size(64.dp)
                 .clip(CircleShape)
