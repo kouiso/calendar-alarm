@@ -132,8 +132,16 @@ fun SettingsScreen(
     }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
-        // ---- 既定値: 🔔通知タイミング / 😴スヌーズ / ☁天気 ----
+        // ---- 鳴る時刻 (決定8, #121): Google の通知とアプリの時刻の両方で鳴ることを先頭で見せる ----
         item { Spacer(Modifier.height(8.dp)) }
+        item {
+            RingTimesCard(
+                appMinutesBefore = prefs?.defaultMinutesBefore ?: 0,
+                useCalendarReminders = prefs?.importEventReminders != false,
+            )
+        }
+        // ---- 既定値: 🔔通知タイミング / 😴スヌーズ / ☁天気 ----
+        item { Spacer(Modifier.height(12.dp)) }
         item {
             Card(
                 Modifier.fillMaxWidth(),
@@ -1208,6 +1216,66 @@ private fun AppearanceCard(
                         scope.launch { settings.setBackgroundImageUri(null) }
                     }) { Text("削除") }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * 設定の先頭カード (決定8, デザイン正本 ⑤)。予定の前に鳴る時刻が2通りあることと、
+ * 同じ時刻なら1回だけ鳴ることを、例の予定の時刻で見せる。
+ */
+@Composable
+private fun RingTimesCard(appMinutesBefore: Int, useCalendarReminders: Boolean) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text("鳴る時刻", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                if (useCalendarReminders) {
+                    "Google カレンダーの通知の時刻に鳴ります。アプリで選ぶと、その時刻にも足して鳴ります。同じ時刻なら1回だけです。"
+                } else {
+                    "アプリで選んだ時刻に鳴ります。「カレンダーの通知設定を使う」がオフなので、Google カレンダーの通知では鳴りません。"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${SettingsPreview.clock(SettingsPreview.SAMPLE_EVENT_MINUTE)} の予定",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 6.dp).size(14.dp),
+                )
+                Text(
+                    SettingsPreview.ringTimesLabel(
+                        SettingsPreview.SAMPLE_EVENT_MINUTE,
+                        appMinutesBefore,
+                        SettingsPreview.SAMPLE_GOOGLE_REMINDER_MINUTES.takeIf { useCalendarReminders },
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            if (useCalendarReminders) {
+                Text(
+                    "例の Google の時刻は「5分前」の通知の場合です。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
             }
         }
     }
