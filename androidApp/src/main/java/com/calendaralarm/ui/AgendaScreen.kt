@@ -625,8 +625,14 @@ private fun EventDetailSheet(
     }
 
     Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
-        Text(ev.title.ifBlank { "(タイトルなし)" }, style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(4.dp))
+        // 予定詳細はタイトルを主役にする (#51 PR3)
+        Text(
+            ev.title.ifBlank { "(タイトルなし)" },
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 3,
+        )
+        Spacer(Modifier.height(6.dp))
         Text(
             "${eventDate(ev).let { "${it.monthNumber}/${it.dayOfMonth}(${it.dayOfWeek.jaShort()})" }}  ${timeLabel(ev.startMillis, ev.allDay)}" +
                 (if (ev.allDay) "" else "〜${timeLabel(ev.endMillis, false)}") +

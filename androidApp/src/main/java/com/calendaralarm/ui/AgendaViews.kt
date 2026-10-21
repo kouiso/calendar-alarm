@@ -28,9 +28,16 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -100,18 +107,19 @@ fun MonthView(
                             .clickable { onSelectDay(date) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        // 34px 日付サークル: 今日=accent塗り, 選択=accentリング
+                        // 34px 日付サークル: 今日=塗り, 選択=リング。テーマ色は「鳴る/オン」だけに使うので、
+                                // ここは中立色にする (#51 PR3)
                         Box(
                             Modifier.size(34.dp)
                                 .background(
-                                    if (date == today) MaterialTheme.colorScheme.primary
+                                    if (date == today) MaterialTheme.colorScheme.inverseSurface
                                     else Color.Transparent,
                                     CircleShape,
                                 )
                                 .border(
                                     width = if (date == focusDate && date != today) 1.5.dp else 0.dp,
                                     color = if (date == focusDate && date != today) {
-                                        MaterialTheme.colorScheme.primary
+                                        MaterialTheme.colorScheme.outline
                                     } else Color.Transparent,
                                     shape = CircleShape,
                                 ),
@@ -125,7 +133,7 @@ fun MonthView(
                                     FontWeight.SemiBold
                                 } else FontWeight.Normal,
                                 color = when {
-                                    date == today -> MaterialTheme.colorScheme.onPrimary
+                                    date == today -> MaterialTheme.colorScheme.inverseOnSurface
                                     !inMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
                                     date.dayOfWeek == DayOfWeek.SUNDAY -> sundayRed
                                     date.dayOfWeek == DayOfWeek.SATURDAY -> saturdayBlue
@@ -304,6 +312,28 @@ fun DayTimelineView(
                         Modifier.weight(1f).height(1.dp)
                             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
                     )
+                }
+            }
+            // 今の時刻の線 (#51 PR3)。今日を見ている時だけ、1分ごとに動かす。
+            // テーマ色は「鳴る/オン」専用なので、線は警告色で引く
+            val today = Clock.System.now().toLocalDateTime(viewTz).date
+            if (date == today) {
+                var nowMinute by remember { mutableIntStateOf(minuteOfDay(System.currentTimeMillis())) }
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        kotlinx.coroutines.delay(60_000L - System.currentTimeMillis() % 60_000L)
+                        nowMinute = minuteOfDay(System.currentTimeMillis())
+                    }
+                }
+                val lineColor = MaterialTheme.colorScheme.error
+                Row(
+                    Modifier.fillMaxWidth().offset(y = hourHeight * (nowMinute / 60f) - 4.dp)
+                        .semantics { contentDescription = "今の時刻" },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Spacer(Modifier.width(40.dp))
+                    Box(Modifier.size(8.dp).background(lineColor, CircleShape))
+                    Box(Modifier.weight(1f).height(2.dp).background(lineColor))
                 }
             }
             // イベントブロック (開始分→高さ)

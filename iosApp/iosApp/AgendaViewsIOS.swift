@@ -69,16 +69,16 @@ struct MonthGridView: View {
                             VStack(spacing: 2) {
                                 ZStack {
                                     Circle()
-                                        .fill(isToday ? Color.accentColor : Color.clear)
+                                        .fill(isToday ? Color.primary : Color.clear)
                                         .frame(width: 34, height: 34)
                                     Circle()
-                                        .stroke(Color.accentColor, lineWidth: isFocus ? 1.5 : 0)
+                                        .stroke(Color.secondary, lineWidth: isFocus ? 1.5 : 0)
                                         .frame(width: 34, height: 34)
                                     Text("\(cal.component(.day, from: date))")
                                         .font(NightTheme.numFont(17,
                                             weight: isToday ? .semibold : .regular))
                                         .foregroundStyle(
-                                            isToday ? Color.white
+                                            isToday ? Color(uiColor: .systemBackground)
                                             : !inMonth ? Color.secondary.opacity(0.35)
                                             : d == 0 ? sundayRed
                                             : d == 6 ? saturdayBlue
@@ -225,6 +225,18 @@ struct DayTimelineViewIOS: View {
                                 Rectangle().fill(Color.secondary.opacity(0.15)).frame(height: 1)
                             }
                             .frame(height: hourH, alignment: .top)
+                        }
+                    }
+                    // 今の時刻の線 (#51 PR3)。今日を見ている時だけ。テーマ色は「鳴る/オン」専用なので赤で引く
+                    if cal.isDateInToday(date) {
+                        TimelineView(.periodic(from: .now, by: 60)) { ctx in
+                            HStack(spacing: 0) {
+                                Spacer().frame(width: 44)
+                                Circle().fill(Color.red).frame(width: 8, height: 8)
+                                Rectangle().fill(Color.red).frame(height: 2)
+                            }
+                            .offset(y: hourH * CGFloat(minutesOfDay(ctx.date)) / 60 - 4)
+                            .accessibilityLabel("今の時刻")
                         }
                     }
                     // イベントブロック

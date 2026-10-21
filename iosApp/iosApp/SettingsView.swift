@@ -6,6 +6,7 @@ import PhotosUI
 struct SettingsView: View {
     @EnvironmentObject var engine: Engine
     @EnvironmentObject var store: Store
+    @EnvironmentObject var center: PermissionCenter
     @State private var expandedCal: String? = nil
     @State private var showPerms = false
     @State private var showLog = false
@@ -25,6 +26,9 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+
+                    // 先頭: 鳴動の状態と最近の鳴動記録 (#51 PR3)
+                    ringStatusCard
 
                     // 既定値カード: 🔔タイミング / 😴スヌーズ / ☀天気
                     Card {
@@ -311,6 +315,44 @@ struct SettingsView: View {
             } message: {
                 Text("アプリは端末に登録された全カレンダーを読みます。Microsoft (Outlook/Exchange) の予定は、iPhone の設定 → カレンダー → アカウント から追加すると自動で取り込まれます。")
             }
+        }
+    }
+
+    // MARK: - 鳴動の状態カード (#51 PR3)
+
+    private var ringStatusCard: some View {
+        let now = Engine.nowMillis
+        let since = now - 24 * 60 * 60 * 1000
+        let status = RingStatusSummary(
+            missingPermissions: center.states.values.filter { $0 != .granted }.count,
+            recentMissed: store.state.audit.filter { $0.type == "MISSED" && $0.atMillis >= since }.count,
+            hasNextAlarm: store.state.scheduled.values.contains { $0.state == .pending && $0.instance.triggerAtMillis > now })
+        // 鳴った・止めた・スヌーズ・見逃しだけを拾う (予約や再同期の記録は出さない)
+        let recent = store.state.audit.filter { ["FIRED", "DISMISS", "SNOOZE", "MISSED"].contains($0.type) }.suffix(3).reversed()
+        return Card {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("鳴動の状態").font(NightTheme.font(14, weight: .semibold))
+                Text(status.line).font(NightTheme.font(13)).foregroundStyle(.secondary)
+                Text("最近の鳴動").font(NightTheme.font(11)).foregroundStyle(.secondary).padding(.top, 4)
+                if recent.isEmpty {
+                    Text("まだ記録がありません").font(NightTheme.font(12))
+                }
+                ForEach(Array(recent)) { e in
+                    Text("\(Engine.hm(e.atMillis))  \(Self.ringLogLabel(e.type))  \(e.detail)")
+                        .font(NightTheme.font(12)).lineLimit(1)
+                }
+            }
+        }
+        .task { await center.refresh(engine) }
+    }
+
+    private static func ringLogLabel(_ type: String) -> String {
+        switch type {
+        case "FIRED": return "鳴った"
+        case "DISMISS": return "止めた"
+        case "SNOOZE": return "スヌーズ"
+        case "MISSED": return "鳴らせなかった"
+        default: return type
         }
     }
 

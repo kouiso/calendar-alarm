@@ -132,6 +132,8 @@ fun SettingsScreen(
     }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
+        // ---- 先頭: 鳴動の状態と最近の鳴動記録 (#51 PR3) ----
+        item { RingStatusCard(repository, audit, onOpenPermissions) }
         // ---- 既定値: 🔔通知タイミング / 😴スヌーズ / ☁天気 ----
         item { Spacer(Modifier.height(8.dp)) }
         item {
@@ -1311,4 +1313,73 @@ private fun ThemePreview() {
             Switch(checked = true, onCheckedChange = null)
         }
     }
+}
+
+/** 設定の先頭: 鳴動の状態 (予定画面と同じ1行) と、最近の鳴動記録3件 (#51 PR3)。 */
+@Composable
+private fun RingStatusCard(
+    repository: AlarmRepository,
+    audit: List<com.calendaralarm.data.db.AuditLogEntity>,
+    onOpenPermissions: () -> Unit,
+) {
+    val context = LocalContext.current
+    val tick = rememberResumeTick()
+    val missing = remember(tick) { probePermissions(context).count { !it.value } }
+    val pending by repository.pendingFlow().collectAsState(initial = emptyList())
+    val status = com.calendaralarm.shared.logic.RingStatus.summarize(
+        missingPermissions = missing,
+        recentMissed = com.calendaralarm.shared.logic.RingStatus.countRecentMissed(
+            audit.map { it.atMillis to it.action }, System.currentTimeMillis(), setOf("MISS"),
+        ),
+        hasNextAlarm = pending.isNotEmpty(),
+    )
+    // 鳴った・止めた・スヌーズ・見逃しだけを拾う (予約や再同期の記録は出さない)
+    val recent = audit.filter { it.action in setOf("FIRE", "DISMISS", "SNOOZE", "MISS") }.take(3)
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text("鳴動の状態", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    status.line,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                if (status.showPermissionBanner) {
+                    TextButton(onClick = onOpenPermissions) { Text("直す") }
+                }
+            }
+            Text(
+                "最近の鳴動",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            if (recent.isEmpty()) {
+                Text("まだ記録がありません", style = MaterialTheme.typography.bodySmall)
+            }
+            recent.forEach { e ->
+                Text(
+                    "${java.text.SimpleDateFormat("M/d H:mm", java.util.Locale.JAPAN).format(java.util.Date(e.atMillis))}  " +
+                        "${ringLogLabel(e.action)}  ${e.detail}",
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+private fun ringLogLabel(action: String): String = when (action) {
+    "FIRE" -> "鳴った"
+    "DISMISS" -> "止めた"
+    "SNOOZE" -> "スヌーズ"
+    "MISS" -> "鳴らせなかった"
+    else -> action
 }

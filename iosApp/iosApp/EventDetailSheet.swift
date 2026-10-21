@@ -54,7 +54,8 @@ struct EventDetailSheet: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(ev.title).font(NightTheme.font(20, weight: .semibold))
+            // 予定詳細はタイトルを主役にする (#51 PR3)
+            Text(ev.title).font(NightTheme.font(26, weight: .semibold)).lineLimit(3)
             Text(Self.dateStr(ev)).font(NightTheme.font(14)).foregroundStyle(.secondary)
             if !display.calendarName.isEmpty {
                 HStack(spacing: 6) {
