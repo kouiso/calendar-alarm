@@ -32,6 +32,10 @@ final class Store: ObservableObject {
         var weatherLocation: String = ""
         var weatherHeaderEnabled: Bool = true
         var weatherOnAlarmScreen: Bool = true
+        /// 予定一覧に週番号を出すか (旧版の「Show Calendar Week」)
+        var showWeekNumbers: Bool = false
+        /// 週の開始曜日 (ISO: 1=月 … 7=日)。既定はこれまでの月表示と同じ日曜
+        var firstWeekday: Int = WeekDisplay.defaultFirstWeekday
         var timerPresets: [TimerPresetDTO] = TimerPresets.defaults
         /// OpenRouter APIキー (AI機能用)
         // calendar_prefs: calendarId -> AlarmRuleDTO
@@ -105,6 +109,8 @@ final class Store: ObservableObject {
     func setDefaultMinutes(_ v: Int) { mutate { $0.defaultMinutesBefore = v } }
     func setDefaultSnooze(_ v: Int) { mutate { $0.defaultSnoozeMinutes = v } }
     func setWeatherEnabled(_ v: Bool) { mutate { $0.weatherEnabled = v } }
+    func setShowWeekNumbers(_ v: Bool) { mutate { $0.showWeekNumbers = v } }
+    func setFirstWeekday(_ v: Int) { mutate { $0.firstWeekday = WeekDisplay.normalize(v) } }
     func setDefaultStartAction(_ a: EventAction) { mutate { $0.defaultStartAction = a.rawValue } }
     func setDefaultReminderAction(_ a: EventAction) { mutate { $0.defaultReminderAction = a.rawValue } }
     func setTitleCodes(_ v: TitleCodeSettings) { mutate { $0.titleCodes = v } }
@@ -294,6 +300,8 @@ extension Store.Persisted {
         weatherLocation = try c.decodeIfPresent(String.self, forKey: .weatherLocation) ?? ""
         weatherHeaderEnabled = try c.decodeIfPresent(Bool.self, forKey: .weatherHeaderEnabled) ?? true
         weatherOnAlarmScreen = try c.decodeIfPresent(Bool.self, forKey: .weatherOnAlarmScreen) ?? true
+        showWeekNumbers = try c.decodeIfPresent(Bool.self, forKey: .showWeekNumbers) ?? false
+        firstWeekday = WeekDisplay.normalize(try c.decodeIfPresent(Int.self, forKey: .firstWeekday) ?? WeekDisplay.defaultFirstWeekday)
         timerPresets = try c.decodeIfPresent([TimerPresetDTO].self, forKey: .timerPresets) ?? TimerPresets.defaults
         calendarRules = try c.decodeIfPresent([String: AlarmRuleDTO].self, forKey: .calendarRules) ?? [:]
         overrides = try c.decodeIfPresent([String: EventOverrideDTO].self, forKey: .overrides) ?? [:]

@@ -50,11 +50,11 @@ struct AgendaView: View {
                     switch viewMode {
                     case .list:
                         ForEach(groupedDays, id: \.0) { day, events in
-                            DayCard(dayLabel: dayLabel(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev })
+                            DayCard(dayLabel: dayLabel(day), weekNumber: weekNumber(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev })
                         }
                         if groupedDays.isEmpty { emptyState }
                     case .month:
-                        MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 })
+                        MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 }, firstWeekday: store.state.firstWeekday)
                     case .threeDay:
                         ThreeDayColumnsView(startDate: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
                     case .timeline:
@@ -155,6 +155,15 @@ struct AgendaView: View {
         out.dateFormat = "M/d (E)"
         out.locale = Locale(identifier: "ja_JP")
         return out.string(from: d)
+    }
+
+    /// 週番号を出す設定の時だけ、その日の ISO 週番号を返す (#106)
+    private func weekNumber(_ key: String) -> Int? {
+        guard store.state.showWeekNumbers else { return nil }
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        guard let d = df.date(from: key) else { return nil }
+        return WeekDisplay.isoWeekNumber(d)
     }
 
     private var emptyState: some View {
@@ -259,16 +268,25 @@ struct NextAlarmBanner: View {
 
 struct DayCard: View {
     let dayLabel: String
+    var weekNumber: Int? = nil
     let events: [DisplayEvent]
     let calendarColor: (DisplayEvent) -> Color
     let onTap: (DisplayEvent) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(dayLabel)
-                .font(NightTheme.font(13, weight: .medium))
-                .foregroundStyle(NightTheme.indigo)
-                .padding(.bottom, 6)
+            HStack {
+                Text(dayLabel)
+                    .font(NightTheme.font(13, weight: .medium))
+                    .foregroundStyle(NightTheme.indigo)
+                Spacer()
+                if let weekNumber {
+                    Text("第\(weekNumber)週")
+                        .font(NightTheme.font(12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.bottom, 6)
             VStack(spacing: 0) {
                 ForEach(events) { ev in
                     EventRow(ev: ev, accent: calendarColor(ev))

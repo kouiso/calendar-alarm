@@ -66,7 +66,7 @@ SBI GitHub Issue #76（決定4）。対象は `doc/spec/kmp-replacement.md` の 
 | 同時刻イベントの衝突処理 | あり | 未確認 | A `engine/AlarmService.kt:218-224` 座席確保 / I 同時刻の記述なし。AlarmKit 側の挙動は未確認 |
 | 取りこぼし通知（missed） | あり | あり | A `engine/MissedNotifier.kt` / I `Engine.swift:38` |
 | 日本語・英語のローカライズ | なし | なし | A `res/values/strings.xml` のみで `values-en` なし / I `.strings`・`.xcstrings`・`.lproj` が見つからない |
-| 週番号・週の開始曜日 | 未配線 | なし | A 設定値 `SettingsRepository.kt:68,70` と setter はあるが、画面側の参照なし（`isoWeekNumber` は `ui/AgendaViews.kt:360` で定義のみ）/ I 一致なし |
+| 週番号・週の開始曜日 | あり（#106） | あり（#106） | 旧版（`com.app_by_LZ.calendar_alarm_clock`）の文言に「Show Calendar Week」「First day of week」がある。A `ui/SettingsScreen.kt` `WeekDisplaySettings`、計算は S `logic/WeekCalendar.kt` / I `SettingsView.swift`、`AgendaViewsIOS.swift` `WeekDisplay` |
 
 ## 4. 欠け（片方のOSにない）
 
@@ -77,7 +77,7 @@ SBI GitHub Issue #76（決定4）。対象は `doc/spec/kmp-replacement.md` の 
 | G3 | 通知アラーム | iOS | OS に同等 API があるかは未確認 |
 | G4 | 自己診断・トラブルシュート画面 | iOS | 電池最適化は iOS に該当しない。権限・次回予定・最後の鳴動の一覧はない（仕様 §6） |
 | G5 | 日本語・英語のローカライズ | 両方 | 仕様 §9 は日英。現状は日本語固定 |
-| G6 | 週番号・週開始曜日が画面に出ない | Android（設定値だけ存在）/ iOS（なし） | 旧版機能かは未確認 |
+| G6 | 週番号・週開始曜日が画面に出ない | 解消（#106） | 旧版にあった機能。両 OS で予定一覧の週番号（ISO 8601）と月表示の週の始まりを設定できる |
 | G7 | スヌーズ間隔の選択肢が 5/10/15 だけ | iOS | Android は 5〜60 の6択 |
 | G8 | 再起動・TZ変更後の再登録、同時刻衝突の処理 | iOS（未確認） | コード上の根拠が見つからないため要実機確認 |
 
