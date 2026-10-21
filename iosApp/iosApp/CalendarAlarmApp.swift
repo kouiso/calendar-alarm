@@ -1,5 +1,6 @@
 import SwiftUI
 import BackgroundTasks
+import UserNotifications
 import WidgetKit
 
 @main
@@ -10,6 +11,8 @@ struct CalendarAlarmApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        // 起動処理が終わる前に受け口を置かないと、通知を開いて起動した時の知らせを取りこぼす
+        UNUserNotificationCenter.current().delegate = NotificationPresenter.shared
         registerBackgroundTask()
     }
 
@@ -21,6 +24,7 @@ struct CalendarAlarmApp: App {
                 .environmentObject(permissions)
                 .nightFont()
                 .task {
+                    NotificationPresenter.shared.engine = engine
                     await engine.resync(reason: "app start")
                 }
                 .onChange(of: scenePhase) { _, phase in
@@ -52,6 +56,30 @@ struct CalendarAlarmApp: App {
         let req = BGProcessingTaskRequest(identifier: "com.calendaralarm.resync")
         req.earliestBeginDate = Date(timeIntervalSinceNow: 6 * 3600)
         try? BGTaskScheduler.shared.submit(req)
+    }
+}
+
+/// 通知の受け口。iOS 26 未満のアラームは通知で鳴らすため、受け口が無いとアプリを開いている間は
+/// 音も表示も出ない (診断画面の鳴動テストも鳴らない)。届いた行はここで鳴動済みにする
+final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = NotificationPresenter()
+    @MainActor weak var engine: Engine?
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        let id = notification.request.identifier
+        await MainActor.run { engine?.markNotificationDelivered(id) }
+        return [.banner, .list, .sound]
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let id = response.notification.request.identifier
+        await MainActor.run { engine?.markNotificationDelivered(id) }
     }
 }
 

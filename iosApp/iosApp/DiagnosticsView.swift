@@ -42,6 +42,8 @@ struct DiagnosisInput {
     var lowPowerMode: Bool
     var nextAlarm: AlarmInstanceDTO?
     var lastFired: AuditEntry?
+    /// 設定の一番下に出る記録の件数
+    var auditCount: Int
     /// 残っている記録の中の予約失敗と、直近24時間の見逃し (7日残る予約の行で数える) の件数
     var recentFailures: Int
     var nowMillis: Int64
@@ -135,13 +137,16 @@ enum DiagnosisPlan {
         }
         out.append(DiagnosisItem(
             id: "last", state: .info,
-            title: i.lastFired.map { "最後に鳴ったのは \(hm($0.atMillis))" } ?? "まだ鳴った記録がありません",
+            // 通知で鳴らす iOS で分かるのは通知が届いたことまで (集中モードやサイレントで音が出ない場合がある)
+            title: i.lastFired.map {
+                i.usesRealAlarms ? "最後に鳴ったのは \(hm($0.atMillis))" : "最後にアラームの通知が届いたのは \(hm($0.atMillis))"
+            } ?? (i.usesRealAlarms ? "まだ鳴った記録がありません" : "まだアラームの通知が届いた記録がありません"),
             detail: i.lastFired?.detail ?? "下の「10秒後に鳴動テスト」で、鳴るか確かめられます。",
             fix: nil))
         out.append(DiagnosisItem(
             id: "failures", state: i.recentFailures == 0 ? .ok : .ng,
             title: i.recentFailures == 0 ? "直近の記録に予約の失敗・見逃しはありません" : "直近の記録に予約の失敗・見逃しが\(i.recentFailures)件",
-            detail: i.recentFailures == 0 ? "記録は設定の一番下（直近 ◯ 件）で見られます。" : "上の許可を直してから、設定の一番下の記録で内容を確かめてください。",
+            detail: i.recentFailures == 0 ? "記録は設定の一番下（直近 \(i.auditCount) 件）で見られます。" : "上の許可を直してから、設定の一番下の記録で内容を確かめてください。",
             fix: nil))
         return out
     }
@@ -154,6 +159,7 @@ enum DiagnosisPlan {
                 detail: "アラーム機能 (AlarmKit) は集中モードとサイレントスイッチを越えて鳴ります。",
                 fix: nil)
         }
+        // 「即時通知」のスイッチは設定に出ている時 (.disabled) だけ直せる。出ていない時は nil で来る
         if i.timeSensitiveEnabled == false {
             return DiagnosisItem(
                 id: "focus", state: .ng,
@@ -161,11 +167,12 @@ enum DiagnosisPlan {
                 detail: "通知の「即時通知」がオフです。設定でオンにすると集中モードでも届きます。",
                 fix: .openSettings)
         }
+        // 集中モードの許可は「設定 > 集中モード」にあり、アプリの設定画面からは開けないので案内だけにする
         return DiagnosisItem(
             id: "focus", state: .info,
             title: "集中モードの設定を確かめてください",
-            detail: "通知で鳴らしているため、集中モードでこのアプリを許可していないと届かないことがあります。",
-            fix: .openSettings)
+            detail: "通知で鳴らしているため、集中モード中は届かないことがあります。「設定 > 集中モード」でこのアプリを許可してください。",
+            fix: nil)
     }
 }
 
@@ -273,15 +280,25 @@ struct DiagnosticsView: View {
             notify: center.states[.notify] ?? .notDetermined,
             usesRealAlarms: engine.usesRealAlarms,
             timeSensitiveEnabled: settings.authorizationStatus == .authorized
-                ? settings.timeSensitiveSetting == .enabled : nil,
+                ? Self.switchState(settings.timeSensitiveSetting) : nil,
             notificationSoundEnabled: settings.authorizationStatus == .authorized
-                ? settings.soundSetting == .enabled : nil,
+                ? Self.switchState(settings.soundSetting) : nil,
             backgroundRefreshAvailable: UIApplication.shared.backgroundRefreshStatus == .available,
             lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
             nextAlarm: next,
             lastFired: DiagnosisPlan.lastFired(store.state.audit),
+            auditCount: store.state.audit.count,
             recentFailures: DiagnosisPlan.recentFailures(store.state.audit, scheduled: Array(store.state.scheduled.values), nowMillis: now),
             nowMillis: now)
         items = DiagnosisPlan.items(input)
+    }
+
+    /// 設定のスイッチが出ていない (.notSupported) 時は、オフではなく「分からない」として扱う
+    static func switchState(_ s: UNNotificationSetting) -> Bool? {
+        switch s {
+        case .enabled: return true
+        case .disabled: return false
+        default: return nil
+        }
     }
 }

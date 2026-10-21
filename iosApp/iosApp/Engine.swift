@@ -126,6 +126,20 @@ final class Engine: ObservableObject {
         }
         var s = store.state
 
+        // 通知で鳴らす iOS (<26) は OS から鳴動の知らせが来ない。時刻を過ぎて OS の予約から
+        // 消えた行は届いた分なので、見逃し判定より先に鳴動済みにする (しないと鳴った分まで MISSED になる)
+        if !usesRealAlarms {
+            let center = UNUserNotificationCenter.current()
+            // 通知の許可が無いと予約は出ないので、消えていても届いたとは言えない
+            if await center.notificationSettings().authorizationStatus == .authorized {
+                let pendingIds = Set(await center.pendingNotificationRequests().map { $0.identifier })
+                for id in Self.deliveredIds(Array(s.scheduled.values), pendingRequestIds: pendingIds, nowMillis: now) {
+                    markNotificationDelivered(id)
+                }
+                s = store.state
+            }
+        }
+
         // 期限切れ PENDING → MISSED + 通知。Android 同様 resync の先頭で処理する:
         // 終端判定・preserved ・プランは全てこれ以降の状態を見る (逆順だと
         // MISSED 化した行が preserved 経由で desired に復活して鳴り直す)。
@@ -430,6 +444,22 @@ final class Engine: ObservableObject {
             }
             store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: rid))
         }
+    }
+
+    /// 時刻を過ぎたのに OS の通知予約に残っていない PENDING 行。届いた行として扱う
+    /// (この経路の予約は失敗すると行を作らないので、消えている = OS が出した)
+    nonisolated static func deliveredIds(_ rows: [ScheduledRecord], pendingRequestIds: Set<String>, nowMillis: Int64) -> [String] {
+        rows.filter {
+            $0.state == .pending && $0.instance.triggerAtMillis <= nowMillis && !pendingRequestIds.contains($0.instance.id)
+        }.map { $0.instance.id }
+    }
+
+    /// 通知で鳴らす iOS (<26) で、アラームの通知が届いた行を鳴動済みにする。
+    /// 届いた時の受け口 (NotificationPresenter) と resync の両方から呼ぶ
+    func markNotificationDelivered(_ instanceId: String) {
+        guard !usesRealAlarms, let rec = store.state.scheduled[instanceId], rec.state == .pending else { return }
+        store.markState(instanceId, .fired)
+        store.audit("FIRED", "\(rec.instance.title) (通知)")
     }
 
     // MARK: - タイマー
