@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
@@ -503,6 +504,8 @@ private fun RingingScreen(
     }
 }
 
+internal const val SLIDE_THUMB_TAG = "slide-stop-thumb"
+
 /**
  * 「スライドして停止」トラック。左端の丸を右へドラッグし、トラック幅の80%を
  * 超えた時点で停止を実行する (誤タップ防止の閾値)。TalkBack ではトラックの
@@ -580,6 +583,7 @@ private fun SlideToStop(
         Box(
             modifier = Modifier
                 .offset { IntOffset((padPx + progress.value * travel).toInt(), 0) }
+                .testTag(SLIDE_THUMB_TAG)
                 .size(64.dp)
                 .clip(CircleShape)
                 .background(accent),

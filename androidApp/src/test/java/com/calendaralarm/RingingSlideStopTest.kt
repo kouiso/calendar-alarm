@@ -1,6 +1,7 @@
 package com.calendaralarm
 
 import android.content.Intent
+import android.view.View
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.Lifecycle
 import androidx.compose.ui.semantics.SemanticsActions
@@ -8,6 +9,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
@@ -17,6 +19,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.db.ScheduledInstanceEntity
 import com.calendaralarm.engine.AlarmService
 import com.calendaralarm.engine.RingingActivity
+import com.calendaralarm.engine.SLIDE_THUMB_TAG
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import kotlinx.coroutines.runBlocking
@@ -147,6 +150,18 @@ class RingingSlideStopTest {
     @Test
     fun `閾値を超えた90パーセントのドラッグで停止を送る`() {
         slideTo(progress = 0.9f)
+        assertEquals(1, dismissIntents().size)
+    }
+
+    @Test
+    @Config(qualifiers = "+ldrtl")
+    fun `RTL の端末でも丸は左端にあり右へ引くと停止を送る`() {
+        assertEquals(View.LAYOUT_DIRECTION_RTL, app.resources.configuration.layoutDirection)
+        val track = compose.onNodeWithContentDescription(SLIDER).fetchSemanticsNode().boundsInRoot
+        val thumb = compose.onNodeWithTag(SLIDE_THUMB_TAG, useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue("丸がトラックの左半分に無い: thumb=$thumb track=$track", thumb.center.x < track.center.x)
+        slideTo(progress = 0.97f)
         assertEquals(1, dismissIntents().size)
     }
 
