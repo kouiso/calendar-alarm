@@ -1,0 +1,95 @@
+launch
+tap 許可する
+alert -> フルアクセスを許可
+NOT FOUND 許可する
+alert -> 許可
+tap 許可する
+alert -> 許可
+expect 10秒後に鳴らしてみる: found
+tap 10秒後に鳴らしてみる
+waitfor 停止: found
+shot a1-ringing-default
+texts a1: 30
+tap スヌーズ時間を選ぶ ▾
+shot a2-chips-default
+texts a2: 36
+tapexact +45分: 1 match(es), using last
+tap button +45分
+shot a3-after-snooze45
+texts a3: 22
+copystore a3 from 92AC6008-A08C-425E-84A7-CAEE4F552A64
+tap 設定
+tapexact 45分: 1 match(es), using last
+tap button 45分
+tapexact 90分: 1 match(es), using last
+tap button 90分
+shot b1-settings-45off-90on
+texts b1: 113
+copystore b1 from 92AC6008-A08C-425E-84A7-CAEE4F552A64
+reset calendar authorization
+launch
+tap 許可する
+alert -> フルアクセスを許可
+expect 10秒後に鳴らしてみる: found
+tap 10秒後に鳴らしてみる
+waitfor 停止: found
+tap スヌーズ時間を選ぶ ▾
+shot b2-ringing-chips
+texts b2: 36
+drag 停止 to 0.97 frame=(0.0, 726.0, 402.0, 80.0)
+tap 設定
+tapexact 1分: 1 match(es), using last
+tap button 1分
+tapexact 20分: 1 match(es), using last
+tap button 20分
+tapexact 45分: 1 match(es), using last
+tap button 45分
+shot c1-settings-all9
+texts c1: 113
+copystore c1 from 92AC6008-A08C-425E-84A7-CAEE4F552A64
+reset calendar authorization
+launch
+tap 許可する
+alert -> フルアクセスを許可
+expect 10秒後に鳴らしてみる: found
+tap 10秒後に鳴らしてみる
+waitfor 停止: found
+tap スヌーズ時間を選ぶ ▾
+shot c2-ringing-first6
+texts c2: 36
+drag 停止 to 0.97 frame=(0.0, 726.0, 402.0, 80.0)
+tap 設定
+tapexact 1分: 1 match(es), using last
+tap button 1分
+tapexact 5分: 2 match(es), using last
+tap button 5分
+tapexact 10分: 2 match(es), using last
+tap button 10分
+tapexact 15分: 2 match(es), using last
+tap button 15分
+tapexact 20分: 1 match(es), using last
+tap button 20分
+tapexact 30分: 1 match(es), using last
+tap button 30分
+tapexact 45分: 1 match(es), using last
+tap button 45分
+tapexact 60分: 1 match(es), using last
+tap button 60分
+tapexact 90分: 1 match(es), using last
+tap button 90分
+shot d1-settings-none
+texts d1: 113
+copystore d1 from 92AC6008-A08C-425E-84A7-CAEE4F552A64
+reset calendar authorization
+launch
+tap 許可する
+alert -> フルアクセスを許可
+expect 10秒後に鳴らしてみる: found
+tap 10秒後に鳴らしてみる
+waitfor 停止: found
+expect スヌーズ時間を選ぶ ▾: MISSING
+shot d2-ringing-no-toggle
+texts d2: 29
+drag 停止 to 0.97 frame=(0.0, 726.0, 402.0, 80.0)
+copystore d3 from 92AC6008-A08C-425E-84A7-CAEE4F552A64
+terminate

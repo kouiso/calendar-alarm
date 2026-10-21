@@ -1,0 +1,12 @@
+== ci.sh ios  HEAD 76aa490ec9f1b2a3a7c9822ce6393aa038e03c31  2026-10-22 03:49:24 JST  free 14G
+ci.sh ios rc=0  2026-10-22 03:52:56 JST
+SwiftCompile lines: 80
+SwiftCompile normal x86_64 iosApp/iosApp/Store.swift (in target 'iosApp' from project 'CalendarAlarm')
+SwiftCompile normal x86_64 iosApp/iosApp/RingingView.swift (in target 'iosApp' from project 'CalendarAlarm')
+SwiftCompile normal x86_64 iosApp/iosApp/Engine.swift (in target 'iosApp' from project 'CalendarAlarm')
+SwiftCompile normal x86_64 iosApp/iosApp/SettingsView.swift (in target 'iosApp' from project 'CalendarAlarm')
+SwiftCompile normal arm64 iosApp/iosApp/Store.swift (in target 'iosApp' from project 'CalendarAlarm')
+SwiftCompile normal arm64 iosApp/iosApp/RingingView.swift (in target 'iosApp' from project 'CalendarAlarm')
+SwiftCompile normal arm64 iosApp/iosApp/Engine.swift (in target 'iosApp' from project 'CalendarAlarm')
+SwiftCompile normal arm64 iosApp/iosApp/SettingsView.swift (in target 'iosApp' from project 'CalendarAlarm')
+** BUILD SUCCEEDED **

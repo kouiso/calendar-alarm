@@ -1,0 +1,11 @@
+# store.json (Library/Application Support/CalendarAlarm) right after tapping +45分, HEAD 76aa490
+snoozePresets: [5, 10, 15, 30, 45, 60]
+audit 8 2026-10-22 03:57:15 JST TIMER_SET 10s
+audit 9 2026-10-22 03:57:25 JST FIRED テスト鳴動 (alerting)
+audit 10 2026-10-22 03:57:37 JST SNOOZE tm:1792609035575 +45m → tm:1792609035575:snz1
+scheduled tm:1792609035575:snz1 state=PENDING triggerAtMillis=1792611757766 (2026-10-22 04:42:37 JST) snoozeMinutes=45 snoozeSeq=1
+scheduled tm:1792609035575 state=DISMISSED triggerAtMillis=1792609045575 (2026-10-22 03:57:25 JST) snoozeMinutes=10 snoozeSeq=0
+child trigger - SNOOZE audit time = 45.00 min
+b1 snoozePresets: [5, 10, 15, 30, 60, 90]
+c1 snoozePresets: [1, 5, 10, 15, 20, 30, 45, 60, 90]
+d1 snoozePresets: []
