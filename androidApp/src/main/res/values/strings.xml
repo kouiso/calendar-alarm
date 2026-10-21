@@ -128,6 +128,7 @@
     <string name="rules_target_apps">対象アプリ (空=全アプリ)</string>
     <string name="rules_title">通知アラーム</string>
     <string name="rules_title_needs_permission">通知アラーム (要権限)</string>
+    <string name="share_to_event">予定に変換</string>
     <string name="sync_channel">同期</string>
     <string name="sync_running">カレンダーを同期しています</string>
     <string name="timer_lap">ラップ</string>

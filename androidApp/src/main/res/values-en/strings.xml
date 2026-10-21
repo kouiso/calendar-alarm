@@ -131,6 +131,7 @@
     <string name="rules_target_apps">Apps (empty = all apps)</string>
     <string name="rules_title">Notification alarms</string>
     <string name="rules_title_needs_permission">Notification alarms (needs permission)</string>
+    <string name="share_to_event">Turn into an event</string>
     <string name="sync_channel">Sync</string>
     <string name="sync_running">Syncing your calendar</string>
     <string name="timer_lap">Lap</string>
