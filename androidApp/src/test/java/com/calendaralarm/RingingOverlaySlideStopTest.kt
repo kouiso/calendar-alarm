@@ -4,13 +4,16 @@ import android.content.Intent
 import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.graphics.PixelFormat
 import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.engine.AlarmReceiver
 import com.calendaralarm.engine.AlarmService
 import com.calendaralarm.engine.RingingOverlay
 import com.calendaralarm.shared.logic.SlideToStopRule
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -30,6 +33,7 @@ import org.robolectric.annotation.Config
 class RingingOverlaySlideStopTest {
 
     private lateinit var app: CalendarAlarmApp
+    private lateinit var root: View
     private lateinit var slider: View
 
     private companion object {
@@ -44,7 +48,19 @@ class RingingOverlaySlideStopTest {
     @Before
     fun setup() {
         app = ApplicationProvider.getApplicationContext()
-        val root = RingingOverlay.buildView(app, ID, "OverlaySlideTest", 10, listOf(5, 10, 15))
+        root = RingingOverlay.buildView(app, ID, "OverlaySlideTest", 10, listOf(5, 10, 15))
+        // 窓に載っていない View はアクセシビリティ操作を受け付けないので、本番と同じく WindowManager に載せる
+        wm().addView(
+            root,
+            WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                0,
+                PixelFormat.TRANSLUCENT,
+            ),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
         root.measure(
             View.MeasureSpec.makeMeasureSpec(360, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(740, View.MeasureSpec.EXACTLY),
@@ -56,6 +72,14 @@ class RingingOverlaySlideStopTest {
         slider = found.single()
         assertTrue("掴める幅より広いトラックが要る: width=${slider.width}", slider.width > grabLimit() + 40f)
     }
+
+    @After
+    fun tearDown() {
+        wm().removeView(root)
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    private fun wm() = app.getSystemService(WindowManager::class.java)
 
     private fun grabLimit() = THUMB + PAD * SlideToStopRule.GRAB_PAD_MULTIPLIER
 
