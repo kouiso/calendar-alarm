@@ -64,6 +64,12 @@ enum PermissionPlan {
     static func allGranted(_ states: [AppPermission: PermissionState]) -> Bool {
         AppPermission.allCases.allSatisfy { states[$0] == .granted }
     }
+
+    /// 「鳴動の状態」で足りないと数える許可の数 (予定画面と設定で同じ数にする)。
+    /// 通知の許可は見逃しを知らせるためのもので、鳴らすのには要らない (iOS 26 未満のアラームの許可は通知の許可を写している)
+    static func missingForRinging(_ states: [AppPermission: PermissionState]) -> Int {
+        states.filter { $0.key != .notify && $0.value != .granted }.count
+    }
 }
 
 /// 端末の許可状態を読み、頼む。設定アプリから戻った時は refresh で取り直す。

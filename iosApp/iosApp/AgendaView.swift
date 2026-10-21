@@ -187,8 +187,7 @@ struct AgendaView: View {
 
     /// 鳴動の状態 (#51 PR2)。Android と同じ優先順 (shared `RingStatus`)
     private var ringStatus: RingStatusSummary {
-        // 通知の許可は見逃しを知らせるためのもので、鳴らすのには要らない (iOS 26 未満のアラームの許可は通知の許可を写している)
-        let missing = center.states.filter { $0.key != .notify && $0.value != .granted }.count
+        let missing = PermissionPlan.missingForRinging(center.states)
         return RingStatusSummary(missingPermissions: missing, recentMissed: recentMissedRecords.count, hasNextAlarm: nextAlarm != nil)
     }
 

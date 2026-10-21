@@ -11,6 +11,9 @@ struct SettingsView: View {
     @State private var showPerms = false
     @State private var showLog = false
     @State private var showRingLog = false
+    /// 見逃しの24時間の窓を、設定を開いたままでも1分ごとに進める (予定画面と同じ)
+    @State private var clockTick = Date()
+    private static let minuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     @State private var showAccountHelp = false
     @State private var showCodes = false
     @State private var photoItem: PhotosPickerItem? = nil
@@ -322,13 +325,14 @@ struct SettingsView: View {
     /// 予定画面と同じ1行の状態、許可の一覧、テストで鳴らす、最近の鳴動3件を1枚に置く。
     /// テストで鳴らすは全部 OK の時も押せる (前は足りない許可がある時しか開けず押せなかった)。
     private var ringStatusCard: some View {
+        _ = clockTick
         let now = Engine.nowMillis
-        let missing = AppPermission.allCases.filter { center.states[$0] != .granted }
+        let missingCount = PermissionPlan.missingForRinging(center.states)
         let status = RingStatusSummary(
-            missingPermissions: missing.count,
+            missingPermissions: missingCount,
             recentMissed: store.recentMissedCount(nowMillis: now),
             hasNextAlarm: store.state.scheduled.values.contains { $0.state == .pending && $0.instance.triggerAtMillis > now })
-        let statusColor: Color = missing.isEmpty && status.recentMissed == 0
+        let statusColor: Color = missingCount == 0 && status.recentMissed == 0
             ? (status.hasNextAlarm ? NightTheme.statusOk : .secondary)
             : NightTheme.statusWarn
         let recent = RingHistory.newestFirst(store.state.ringHistory, limit: 3)
@@ -401,6 +405,7 @@ struct SettingsView: View {
                 ForEach(recent) { RingLogRow(entry: $0) }
             }
         }
+        .onReceive(Self.minuteTimer) { clockTick = $0 }
         .task {
             await center.refresh(engine)
             // 足りない許可がある時だけ一覧を開いておく
