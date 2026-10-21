@@ -1,0 +1,185 @@
+import XCTest
+@testable import iosApp
+
+/// OS の予約の偽物。AlarmKit と同じく、予約の前に同じ id の予約を取り消す
+final class FakeScheduler: AlarmScheduler {
+    var usesRealAlarms: Bool { false }
+    var authorizationGranted: Bool { true }
+    var authorizationUndetermined: Bool { false }
+    func requestAuthorization() async {}
+
+    /// id → OS に入っている予約と、その予約に渡した音
+    var booked: [String: (inst: AlarmInstanceDTO, sound: String?)] = [:]
+    /// この回数だけ予約を失敗させる
+    var failures = 0
+    /// false = 取り消す前に失敗する (権限切れなど)
+    var cancelBeforeFailing = true
+    /// 予約の途中で一度だけ走らせる処理 (await の間の割り込みを再現する)
+    var duringSchedule: (() async -> Void)?
+
+    struct Failure: Error {}
+
+    func schedule(_ inst: AlarmInstanceDTO, sound: String?) async throws -> String? {
+        if failures > 0 && !cancelBeforeFailing {
+            failures -= 1
+            throw Failure()
+        }
+        booked.removeValue(forKey: inst.id)
+        if let hook = duringSchedule {
+            duringSchedule = nil
+            await hook()
+        }
+        if failures > 0 {
+            failures -= 1
+            throw Failure()
+        }
+        booked[inst.id] = (inst, sound)
+        return "fake-\(inst.id)"
+    }
+
+    func cancel(instanceId: String, reservationId: String?) async {
+        booked.removeValue(forKey: instanceId)
+    }
+
+    func hasReservation(instanceId: String) async -> Bool {
+        booked[instanceId] != nil
+    }
+}
+
+@MainActor
+final class EngineSoundChangeTests: XCTestCase {
+    private var engine: Engine!
+    private var fake: FakeScheduler!
+    private var sound: String!
+
+    override func setUp() async throws {
+        fake = FakeScheduler()
+        engine = Engine(scheduler: fake)
+        engine.store.mutate {
+            $0.scheduled = [:]
+            $0.standaloneAlarms = []
+            $0.alarmSoundFile = nil
+        }
+        AlarmSoundLibrary.currentDefault = nil
+        try FileManager.default.createDirectory(at: AlarmSoundLibrary.soundsDirectory,
+                                                withIntermediateDirectories: true)
+        sound = "\(AlarmSoundLibrary.prefix)test-\(UUID().uuidString.lowercased()).caf"
+    }
+
+    /// 取り込んだ直後の音のファイルを置く。resync の最後の片付けはどの記録も指さない音を消すので、
+    /// アプリと同じく「取り込み → すぐ既定に設定」の順にするため、予約を作った後に置く
+    private func importTestSound() {
+        FileManager.default.createFile(
+            atPath: AlarmSoundLibrary.soundsDirectory.appendingPathComponent(sound).path, contents: Data([0]))
+    }
+
+    override func tearDown() async throws {
+        engine.store.mutate {
+            $0.scheduled = [:]
+            $0.standaloneAlarms = []
+            $0.alarmSoundFile = nil
+        }
+        AlarmSoundLibrary.currentDefault = nil
+        AlarmSoundLibrary.remove(sound)
+    }
+
+    /// 今から [hours] 時間後の単発アラームを作り、resync で既定音のまま予約させる
+    private func bookAlarm(hoursAhead hours: Int) async throws -> (alarmId: Int64, instanceId: String) {
+        let at = Date().addingTimeInterval(TimeInterval(hours) * 3600)
+        let c = Calendar.current.dateComponents([.hour, .minute], from: at)
+        let aid = engine.store.upsertAlarm(StandaloneAlarmDTO(hour: c.hour!, minute: c.minute!, repeatMode: "ONCE"))
+        await engine.resync(reason: "test setup")
+        let rec = try XCTUnwrap(engine.store.state.scheduled.values.first { $0.instance.standaloneAlarmId == aid })
+        XCTAssertNotNil(fake.booked[rec.instance.id])
+        XCTAssertNil(rec.soundFile)
+        importTestSound()
+        return (aid, rec.instance.id)
+    }
+
+    /// 入れ直しが取り消しの後に失敗しても、前の音で予約し直して予約を失わない
+    func testFailedRebookRestoresPreviousSound() async throws {
+        let (_, id) = try await bookAlarm(hoursAhead: 3)
+        engine.store.setAlarmSound(file: sound, label: "test")
+        fake.failures = 1
+
+        await engine.rescheduleForSoundChange()
+
+        XCTAssertNotNil(fake.booked[id], "OS に予約が残っていない")
+        XCTAssertNil(fake.booked[id]?.sound, "前の音 (既定音) で予約し直していない")
+        XCTAssertEqual(engine.store.state.scheduled[id]?.state, .pending)
+        XCTAssertNil(engine.store.state.scheduled[id]?.soundFile)
+        XCTAssertTrue(engine.store.state.audit.contains { $0.type == "SOUND_RESTORE" })
+    }
+
+    /// 前の音での予約し直しも失敗したら、記録を外して resync で取り直す
+    func testLostReservationIsBookedAgainByResync() async throws {
+        let (_, id) = try await bookAlarm(hoursAhead: 3)
+        engine.store.setAlarmSound(file: sound, label: "test")
+        fake.failures = 2
+
+        await engine.rescheduleForSoundChange()
+
+        XCTAssertTrue(engine.store.state.audit.contains { $0.detail.hasPrefix("sound restore \(id)") })
+        XCTAssertEqual(fake.booked[id]?.sound, sound, "resync が新しい音で取り直していない")
+        XCTAssertEqual(engine.store.state.scheduled[id]?.soundFile, sound)
+        XCTAssertEqual(engine.store.state.scheduled[id]?.state, .pending)
+    }
+
+    /// OS に予約がもう無い時は、一覧に予約ありと出さない (resync でも取れない時)
+    func testLostReservationIsNotListedWhenResyncAlsoFails() async throws {
+        let (_, id) = try await bookAlarm(hoursAhead: 3)
+        engine.store.setAlarmSound(file: sound, label: "test")
+        fake.failures = 3
+
+        await engine.rescheduleForSoundChange()
+
+        XCTAssertNil(fake.booked[id])
+        XCTAssertNil(engine.store.state.scheduled[id], "OS に無い予約が一覧に残っている")
+    }
+
+    /// 取り消す前に失敗した時は前の予約が OS に残るので、記録もそのまま残す
+    func testFailureBeforeCancelKeepsRecord() async throws {
+        let (_, id) = try await bookAlarm(hoursAhead: 3)
+        engine.store.setAlarmSound(file: sound, label: "test")
+        fake.cancelBeforeFailing = false
+        fake.failures = 1
+
+        await engine.rescheduleForSoundChange()
+
+        XCTAssertNotNil(fake.booked[id])
+        XCTAssertNil(fake.booked[id]?.sound)
+        XCTAssertEqual(engine.store.state.scheduled[id]?.state, .pending)
+        XCTAssertNil(engine.store.state.scheduled[id]?.soundFile)
+    }
+
+    /// 入れ直しの途中で時刻を変えて resync が走っても、古い時刻で予約し直さない
+    func testTimeEditDuringRebookKeepsNewTime() async throws {
+        let (aid, id) = try await bookAlarm(hoursAhead: 3)
+        let oldTrigger = try XCTUnwrap(engine.store.state.scheduled[id]?.instance.triggerAtMillis)
+        engine.store.setAlarmSound(file: sound, label: "test")
+        let later = Date().addingTimeInterval(4 * 3600)
+        let c = Calendar.current.dateComponents([.hour, .minute], from: later)
+        var resyncTask: Task<Void, Never>?
+        fake.duringSchedule = { [engine] in
+            guard let engine else { return }
+            var a = engine.store.state.standaloneAlarms.first { $0.id == aid }!
+            a.hour = c.hour!
+            a.minute = c.minute!
+            _ = engine.store.upsertAlarm(a)
+            // 画面の保存と同じく、待たずに resync を投げる
+            resyncTask = Task { await engine.resync(reason: "alarm save") }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+
+        await engine.rescheduleForSoundChange()
+        await resyncTask?.value
+
+        let mine = fake.booked.values.filter { $0.inst.standaloneAlarmId == aid }
+        XCTAssertEqual(mine.count, 1, "同じアラームの予約が OS に複数ある")
+        XCTAssertNotEqual(mine.first?.inst.triggerAtMillis, oldTrigger, "古い時刻で鳴る")
+        XCTAssertEqual(mine.first?.sound, sound)
+        let rec = try XCTUnwrap(engine.store.state.scheduled.values.first {
+            $0.instance.standaloneAlarmId == aid && $0.state == .pending })
+        XCTAssertEqual(rec.instance.triggerAtMillis, mine.first?.inst.triggerAtMillis)
+    }
+}

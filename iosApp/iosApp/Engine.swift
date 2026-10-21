@@ -29,11 +29,14 @@ final class Engine: ObservableObject {
     /// どちらも途中で await するので、並んで走ると片方が古い写しで相手の予約を上書きする
     private var reservationQueueTail: Task<Void, Never>?
 
-    init() {
-        if #available(iOS 26.0, *) {
-            scheduler = AlarmKitScheduler()
+    /// [scheduler] はテストで OS の予約失敗を再現するための差し替え口。アプリは渡さない
+    init(scheduler: AlarmScheduler? = nil) {
+        if let scheduler {
+            self.scheduler = scheduler
+        } else if #available(iOS 26.0, *) {
+            self.scheduler = AlarmKitScheduler()
         } else {
-            scheduler = NotificationScheduler()
+            self.scheduler = NotificationScheduler()
         }
         observeAlarmUpdates()
     }
