@@ -134,23 +134,15 @@ final class Engine: ObservableObject {
         if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler, ak.authorizationGranted,
            let live = ak.allAlarmsIfReadable {
             let liveIds = Set(live.map { $0.id })
-            let pendingRows = s.scheduled.values.filter { $0.state == .pending }
-                .map { OffAppStopPlan.Row(id: $0.instance.id, triggerAtMillis: $0.instance.triggerAtMillis) }
-            let consumed = OffAppStopPlan.consumedWhileAway(pending: pendingRows, nowMillis: now) {
+            let decision = OffAppStopPlan.decide(pending: Self.offAppRows(s), nowMillis: now) {
                 liveIds.contains(AlarmKitScheduler.uuid(from: $0))
             }
-            var consumedAlarmIds: Set<Int64> = []
-            for id in consumed {
+            for id in decision.consumed {
                 guard let rec = store.state.scheduled[id] else { continue }
                 store.markState(id, .dismissed)
                 store.audit("DISMISS_OFFAPP", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis))")
-                // スヌーズ子が待っている単発は消費しない (reconcile と同じ規則)
-                let snoozeChildPending = store.state.scheduled.contains {
-                    $0.key.hasPrefix("\(id):snz") && $0.value.state == .pending
-                }
-                if let aid = rec.instance.standaloneAlarmId, !snoozeChildPending { consumedAlarmIds.insert(aid) }
             }
-            disableConsumedOneShots(consumedAlarmIds)
+            disableConsumedOneShots(decision.oneShotAlarmIds)
             s = store.state
         }
 
@@ -264,13 +256,12 @@ final class Engine: ObservableObject {
         // AlarmKit 側で予約だけが消えた PENDING 行を拾い直す (再起動や OS 内部の
         // 破棄でストア上は PENDING だが実体は無い → 二度と鳴らない穴を塞ぐ。
         // Android は毎回全件 AlarmManager へ再主張する方式で同じ問題を潰している)。
-        // 予定時刻を過ぎた行は上で「鳴って止められた」として終端化済み。ここに来るのは未来の行だけ (#61)
+        // 予約済みで予定時刻を過ぎた行は上で「鳴って止められた」として終端化済み。
+        // ここで拾うのは未来の行と、予約に失敗したまま残した行 (#61)
         if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler, ak.authorizationGranted,
            let live = ak.allAlarmsIfReadable {
             let liveIds = Set(live.map { $0.id })
-            let pendingRows = store.state.scheduled.values.filter { $0.state == .pending }
-                .map { OffAppStopPlan.Row(id: $0.instance.id, triggerAtMillis: $0.instance.triggerAtMillis) }
-            let lost = OffAppStopPlan.lostReservations(pending: pendingRows, nowMillis: now) {
+            let lost = OffAppStopPlan.lostReservations(pending: Self.offAppRows(store.state), nowMillis: now) {
                 liveIds.contains(AlarmKitScheduler.uuid(from: $0))
             }
             for id in lost {
@@ -383,6 +374,14 @@ final class Engine: ObservableObject {
     }
 
     // MARK: - 鳴動/停止/スヌーズ
+
+    private static func offAppRows(_ state: Store.Persisted) -> [OffAppStopPlan.Row] {
+        state.scheduled.values.filter { $0.state == .pending }.map {
+            OffAppStopPlan.Row(id: $0.instance.id, triggerAtMillis: $0.instance.triggerAtMillis,
+                               wasReserved: $0.alarmKitId != nil,
+                               standaloneAlarmId: $0.instance.standaloneAlarmId)
+        }
+    }
 
     /// 単発アラームの終端到達をアラーム本体の OFF に反映する (Android 側と同じ)。
     /// 「1回のみ」は鳴らし切った/見逃した時点で消費済み。再有効化は消費リセットで復活できる。
