@@ -156,6 +156,8 @@ class AlarmRepository(
         val minutesBefore: Int,
         val extraOffsets: List<Int>,
         val hasOverride: Boolean,
+        /** カレンダーを鳴らさない設定にしている (予定ごとの指定より強い。展開がカレンダー単位で外すため) */
+        val calendarOff: Boolean = false,
     ) {
         /** 何も鳴らない状態 (UI のグレー化判定用)。 */
         val muted: Boolean
@@ -211,6 +213,7 @@ class AlarmRepository(
                 minutesBefore = ov?.minutesBefore ?: rule.minutesBefore,
                 extraOffsets = ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets,
                 hasOverride = ov != null,
+                calendarOff = pref?.enabled == false,
             )
         }
     }

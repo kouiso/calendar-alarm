@@ -122,7 +122,8 @@ struct AgendaView: View {
                     muted: !rule.enabled
                         || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter)
                         || resolvedActionsMuted(ev, rule, ov, store.state.titleCodes),
-                    effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore
+                    effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore,
+                    calendarOff: !rule.enabled
                 )
             }
     }
@@ -437,9 +438,11 @@ struct EventRow: View {
                 }
             }
             if let onToggle {
+                // カレンダーごと鳴らさない設定の時は、予定のスイッチを入れても鳴らないので押せなくする
                 Toggle("", isOn: Binding(get: { !ev.muted }, set: { onToggle($0) }))
                     .labelsHidden()
-                    .accessibilityLabel("\(ev.event.title)で鳴らす")
+                    .disabled(ev.calendarOff)
+                    .accessibilityLabel(ev.calendarOff ? "カレンダーが鳴らさない設定です。設定のカレンダー欄で変えられます" : "\(ev.event.title)で鳴らす")
             }
         }
         .padding(.horizontal, 14)
