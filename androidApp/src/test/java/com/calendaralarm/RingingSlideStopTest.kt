@@ -154,6 +154,20 @@ class RingingSlideStopTest {
     }
 
     @Test
+    fun `丸の右端から素早く引いても停止を送る`() {
+        // 最初の move でタッチスロップと掴み判定の幅 (丸64 + 余白8*3 = 88) を一気に越える速いスワイプ
+        compose.onNodeWithContentDescription(SLIDER).performTouchInput {
+            down(Offset(70f, centerY))
+            moveTo(Offset(100f, centerY))
+            moveTo(Offset(width - 10f, centerY))
+            up()
+        }
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+        assertEquals(1, dismissIntents().size)
+    }
+
+    @Test
     @Config(qualifiers = "+ar-ldrtl")
     fun `RTL の端末でも丸は左端にあり右へ引くと停止を送る`() {
         assertEquals(View.LAYOUT_DIRECTION_RTL, app.resources.configuration.layoutDirection)
