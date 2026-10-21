@@ -1,0 +1,21 @@
+launch
+tap 許可する
+alert -> フルアクセスを許可
+tap 許可する
+alert -> 許可
+tap 許可する
+alert -> 許可
+expect 10秒後に鳴らしてみる: found
+tap 10秒後に鳴らしてみる
+waitfor 停止: found
+shot 01-ringing
+texts 01: 23
+NOT FOUND any of スヌーズ時間を選ぶ ▾
+shot 02-chips-open
+texts 02: 23
+drag 停止 to 0.4 frame=(24.0, 720.0, 354.0, 72.0)
+shot 03-after-short-drag
+texts 03: 16
+NOT FOUND drag 停止
+shot 04-after-full-drag
+texts 04: 16
