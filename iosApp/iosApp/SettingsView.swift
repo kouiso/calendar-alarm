@@ -46,6 +46,26 @@ struct SettingsView: View {
                             PreviewLine(sample: "6:30 に鳴ってスヌーズ",
                                         result: "\(PreviewClock.clock(6 * 60 + 30 + store.state.defaultSnoozeMinutes)) にもう一度",
                                         note: nil)
+                            // 鳴動画面の「スヌーズ時間を選ぶ」に並ぶ分数 (Android の snoozePresets と同じ選択肢)
+                            IconRow("list.bullet") {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("鳴動画面で選べるスヌーズ")
+                                        .font(NightTheme.font(12)).foregroundStyle(.secondary)
+                                    FlowChips(items: SnoozePresets.choices) { m in
+                                        let on = store.state.snoozePresets.contains(m)
+                                        Button { store.toggleSnoozePreset(m) } label: {
+                                            Text("\(m)分")
+                                                .font(NightTheme.font(11, weight: .medium))
+                                                .padding(.horizontal, 9).padding(.vertical, 6)
+                                                .background(on ? NightTheme.indigo.opacity(0.2) : Color(uiColor: .tertiarySystemGroupedBackground), in: Capsule())
+                                                .foregroundStyle(on ? NightTheme.indigo : .secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityAddTraits(on ? .isSelected : [])
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
                             IconRow("sun.max.fill") {
                                 Toggle("", isOn: Binding(get: { store.state.weatherEnabled },
                                                          set: { store.setWeatherEnabled($0) })).labelsHidden()
