@@ -174,13 +174,19 @@ class AlarmRepository(
         val calendarOff: Boolean = false,
         /** 終日の予定で、カレンダーが終日を鳴らさない設定 (予定ごとの指定より強い) */
         val allDayOff: Boolean = false,
+        /** リマインダー側の鳴る時刻があるか (追加の何分前か、取り込んだカレンダーの通知)。無ければリマインダーの動作は何も鳴らさない */
+        val hasReminderTriggers: Boolean = true,
     ) {
         /** 予定ごとの指定では鳴るようにできない (スイッチを押せなくする) */
         val lockedByCalendar: Boolean get() = calendarOff || allDayOff
 
-        /** 何も鳴らない状態 (UI のグレー化判定用)。 */
+        /**
+         * 何も鳴らない状態 (UI のグレー化と行のスイッチ)。展開 (AlarmExpander.expandEvents) と同じく、
+         * リマインダーの動作はリマインダー側の時刻がある時だけ鳴るので、時刻が無ければ開始の動作だけで決まる
+         */
         val muted: Boolean
-            get() = startAction == EventAction.MUTE && reminderAction == EventAction.MUTE
+            get() = startAction == EventAction.MUTE &&
+                (reminderAction == EventAction.MUTE || !hasReminderTriggers)
     }
 
     suspend fun upcomingEvents(days: Int = 14): List<AgendaItem> = withContext(Dispatchers.IO) {
@@ -236,6 +242,8 @@ class AlarmRepository(
                 hasOverride = ov != null,
                 calendarOff = pref?.enabled == false,
                 allDayOff = allDayOff,
+                hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
+                    (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
             )
         }
     }

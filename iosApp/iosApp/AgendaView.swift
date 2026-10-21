@@ -131,7 +131,8 @@ struct AgendaView: View {
                     // 行のスイッチが実際の予約と食い違わないよう、開始とリマインダーの解決後の動作まで見る
                     muted: !rule.enabled || allDayOff
                         || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter)
-                        || resolvedActionsMuted(ev, rule, ov, store.state.titleCodes),
+                        || resolvedActionsMuted(ev, rule, ov, store.state.titleCodes,
+                                                importReminders: store.state.importEventReminders),
                     effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore,
                     calendarOff: !rule.enabled,
                     allDayOff: allDayOff
@@ -510,9 +511,11 @@ struct EventRow: View {
     }
 }
 
-/// 開始とリマインダーの両方が鳴らない (MUTE) か。shared `AlarmExpander.resolveActions` と同じ優先順:
-/// 予定の個別指定 > never コード > always コード > カレンダーの既定
-func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings) -> Bool {
+/// 何も鳴らないか。動作は shared `AlarmExpander.resolveActions` と同じ優先順:
+/// 予定の個別指定 > never コード > always コード > カレンダーの既定。
+/// 展開と同じく、リマインダーの動作はリマインダー側の時刻 (追加の何分前・取り込んだカレンダーの通知) がある時だけ鳴る
+func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
+                          importReminders: Bool) -> Bool {
     func matches(_ list: [String]) -> Bool {
         list.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty && ev.title.localizedCaseInsensitiveContains($0) }
     }
@@ -523,5 +526,8 @@ func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: Ev
         return fallback
     }
     let mute = EventAction.mute.rawValue
-    return resolve(codes.applyToStart, rule.startAction) == mute && resolve(codes.applyToReminders, rule.reminderAction) == mute
+    let hasReminderTriggers = !(ov?.extraOffsets ?? rule.extraOffsets).isEmpty
+        || (importReminders && ev.calendarReminderMinutes.contains { $0 >= 0 })
+    return resolve(codes.applyToStart, rule.startAction) == mute
+        && (resolve(codes.applyToReminders, rule.reminderAction) == mute || !hasReminderTriggers)
 }
