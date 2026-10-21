@@ -1,0 +1,30 @@
+[23:15:37.657] saved volumes {2: 0, 3: 0, 4: 0, 5: 0} | zen 2 | vibration {'alarm_vibration_intensity': 'null', 'ring_vibration_intensity': 'null', 'notification_vibration_intensity': 'null', 'media_vibration_intensity': 'null', 'haptic_feedback_intensity': 'null'} | Night mode: no
+[23:15:38.610] volumes now {2: 0, 3: 0, 4: 0, 5: 0} | zen_mode 2 | vibration now {'alarm_vibration_intensity': '0', 'ring_vibration_intensity': '0', 'notification_vibration_intensity': '0', 'media_vibration_intensity': '0', 'haptic_feedback_intensity': '0'}
+[23:15:42.453] Success
+[23:15:54.832] schedule P48-E1 in 10s -> tm:1792592155633
+[23:15:54.911] schedule P48-E2 in 10s -> tm:1792592155720
+[23:16:07.796] ringing after 12.9s
+[23:16:10.579] first on screen: P48-E2 | states {'tm:1792592155633': 'FIRED', 'tm:1792592155720': 'FIRED'} | top com.calendaralarm.pr48/com.calendaralarm.engine.RingingActivity
+[23:16:13.797] swipe 168,2030 -> 889,2030 (slider [63, 1925, 1017, 2135], fraction=0.97, on_thumb=True)
+[23:16:15.132] after first slide: states {'tm:1792592155633': 'PENDING', 'tm:1792592155720': 'DISMISSED'} | ringing False
+[23:16:17.492] screen shows P48-E1 after 2.4s
+[23:16:24.049] second screen thumb at left: True (168, 1978) {'left': (255, 184, 112), 'mid': (29, 31, 36), 'right': (29, 31, 36)} | states {'tm:1792592155633': 'FIRED', 'tm:1792592155720': 'DISMISSED'}
+[23:16:27.242] swipe 168,2030 -> 889,2030 (slider [63, 1925, 1017, 2135], fraction=0.97, on_thumb=True)
+[23:16:28.527] ROW 14: PASS second (P48-E1) shown=True, its thumb at left=True, all stopped=True, states={'tm:1792592155633': 'DISMISSED', 'tm:1792592155720': 'DISMISSED'}
+[23:16:30.794] --- audit_log (row 14)
+[23:16:31.137]     23:15:55.647 SCHEDULE adhoc tm:1792592155633 @1792592165633
+[23:16:31.137]     23:15:55.727 SCHEDULE adhoc tm:1792592155720 @1792592165720
+[23:16:31.137]     23:16:05.749 FIRE tm:1792592155633
+[23:16:31.137]     23:16:05.769 FIRE tm:1792592155720
+[23:16:31.137]     23:16:05.821 DISPLACED tm:1792592155633 → tm:1792592155720: 後発が片付いた後に鳴らし直す
+[23:16:31.137]     23:16:05.829 WARN tm:1792592155720: オーバーレイ未許可 (FSI=可): ロック解除中は通知シェードからのみ停止可能
+[23:16:31.137]     23:16:14.620 STOP_TAP 画面: tm:1792592155720
+[23:16:31.137]     23:16:14.652 DISMISS tm:1792592155720
+[23:16:31.137]     23:16:14.684 REARM tm:1792592155633: 押し出された鳴動を鳴らし直す
+[23:16:31.137]     23:16:19.757 FIRE tm:1792592155633
+[23:16:31.137]     23:16:19.794 WARN tm:1792592155633: オーバーレイ未許可 (FSI=可): ロック解除中は通知シェードからのみ停止可能
+[23:16:31.137]     23:16:28.061 STOP_TAP 画面: tm:1792592155633
+[23:16:31.137]     23:16:28.097 DISMISS tm:1792592155633
+[23:16:33.619] restored volumes {2: 0, 3: 0, 4: 0, 5: 0} | zen: 2 | vibration: {'alarm_vibration_intensity': 'null', 'ring_vibration_intensity': 'null', 'notification_vibration_intensity': 'null', 'media_vibration_intensity': 'null', 'haptic_feedback_intensity': 'null'}
+[23:16:33.619] RESULTS
+[23:16:33.619]    14 PASS second (P48-E1) shown=True, its thumb at left=True, all stopped=True, states={'tm:1792592155633': 'DISMISSED', 'tm:1792592155720': 'DISMISSED'}
