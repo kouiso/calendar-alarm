@@ -466,12 +466,14 @@ final class Engine: ObservableObject {
                 && $0.instance.delivery != EventAction.notify.rawValue
         }
         var count = 0
+        var skipped = 0
         for rec in targets {
             // 入れ直しは await を挟むので、その間に鳴り始めた予約を消して止めないよう直前に確かめ直す
             guard let current = store.state.scheduled[rec.instance.id], current.state == .pending,
-                  current.instance.triggerAtMillis > Self.nowMillis + 5_000 else { continue }
+                  current.instance.triggerAtMillis > Self.nowMillis + 5_000 else { skipped += 1; continue }
             if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler,
                ak.state(of: AlarmKitScheduler.uuid(from: rec.instance.id)) == .alerting {
+                skipped += 1
                 continue
             }
             do {
@@ -482,6 +484,8 @@ final class Engine: ObservableObject {
                 store.audit("SCHEDULE_ERR", "sound \(rec.instance.id): \(error.localizedDescription)")
             }
         }
+        // 入れ直せなかった予約は前の音のファイルを指したままなので、その時は消さず次の変更で片付ける
+        if skipped == 0 { AlarmSoundLibrary.removeAll(except: AlarmSoundLibrary.currentDefault) }
         store.audit("SOUND", "\(AlarmSoundLibrary.currentDefault ?? "default"): \(count)件を入れ直し")
     }
 

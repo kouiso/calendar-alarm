@@ -80,6 +80,12 @@ enum AlarmSoundLibrary {
         return name
     }
 
+    /// 取り込んだ音のうち [keep] 以外を消す。取り込み以外のファイルは消さない
+    static func removeAll(except keep: String?) {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: soundsDirectory.path)) ?? []
+        for name in names where name.hasPrefix(prefix) && name != keep { remove(name) }
+    }
+
     /// 取り込んだ音を消す。取り込み以外のファイルは消さない
     static func remove(_ name: String) {
         guard name.hasPrefix(prefix), !name.contains("/") else { return }

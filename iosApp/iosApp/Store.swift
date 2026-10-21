@@ -111,12 +111,11 @@ final class Store: ObservableObject {
     func setDefaultMinutes(_ v: Int) { mutate { $0.defaultMinutesBefore = v } }
     func setDefaultSnooze(_ v: Int) { mutate { $0.defaultSnoozeMinutes = v } }
     func setWeatherEnabled(_ v: Bool) { mutate { $0.weatherEnabled = v } }
-    /// 既定のアラーム音を変える。前に取り込んだ音のファイルは消す
+    /// 既定のアラーム音を変える。前の音のファイルは、入れ直しが済んでから Engine が消す
+    /// (直前で入れ直さなかった予約がまだ前の音を指していることがあるため)
     func setAlarmSound(file: String?, label: String?) {
-        let old = state.alarmSoundFile
         mutate { $0.alarmSoundFile = file; $0.alarmSoundLabel = label }
         AlarmSoundLibrary.currentDefault = file
-        if let old, old != file { AlarmSoundLibrary.remove(old) }
     }
     func setDefaultStartAction(_ a: EventAction) { mutate { $0.defaultStartAction = a.rawValue } }
     func setDefaultReminderAction(_ a: EventAction) { mutate { $0.defaultReminderAction = a.rawValue } }
