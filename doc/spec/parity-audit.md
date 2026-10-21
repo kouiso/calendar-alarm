@@ -44,7 +44,7 @@ SBI GitHub Issue #76（決定4）。対象は `doc/spec/kmp-replacement.md` の 
 | 鳴動画面 | あり（アプリ描画） | あり（OS描画 + アプリ内 `RingingView`） | A `engine/RingingActivity.kt` / I `AlarmKitScheduler.swift:121`, `CalendarAlarmApp.swift:72` |
 | カレンダー設定 | あり | あり | A `ui/SettingsScreen.kt:238-260` / I `SettingsView.swift:234-241` |
 | 設定 | あり | あり（項目は少ない） | A `ui/SettingsScreen.kt:134-384` / I `SettingsView.swift:30-270` |
-| 電池最適化ガイド・トラブルシュート | あり | なし | A `ui/TroubleshootingScreen.kt:217`, `:181`, `MainActivity.kt:304` / I 画面なし（`iosApp/iosApp` 配下に troubleshoot・診断の一致なし）。iOS は設定に「10秒後に鳴動テスト」あり（`SettingsView.swift:352`） |
+| 電池最適化ガイド・トラブルシュート | あり | あり（自己診断、#104） | A `ui/TroubleshootingScreen.kt:217` / I `DiagnosticsView.swift`（許可・集中モード・サイレント・裏の更新・低電力・次のアラーム・最後の鳴動・直近の失敗、10秒後テスト）。電池最適化は iOS に無い |
 | アラーム一覧/編集 | あり | あり | A `ui/AlarmsScreen.kt:57`, `AlarmEditScreen.kt:77` / I `AlarmsView.swift:4,140` |
 | 月/週ビュー | あり（月・3日・日タイムライン） | あり（同3種） | A `ui/AgendaScreen.kt:248-261` / I `AgendaView.swift:57-61` |
 | 監査ログ表示 | あり | あり | A `data/db/Entities.kt:122`, `ui/SettingsScreen.kt:384` / I `Store.swift:45,242`, `SettingsView.swift:272` |
@@ -75,7 +75,7 @@ SBI GitHub Issue #76（決定4）。対象は `doc/spec/kmp-replacement.md` の 
 | G1 | 鳴動のバイブ・音量固定・徐々に音量UP・カスタム音 | iOS | AlarmKit で出せる範囲は未確認。仕様 §6 は AlertSound でカスタム MP3 を想定 |
 | G2 | 共有→予定化 | Android | 印刷サービスのみ。`ACTION_SEND` の受け口がない |
 | G3 | 通知アラーム | iOS | OS に同等 API があるかは未確認 |
-| G4 | 自己診断・トラブルシュート画面 | iOS | 電池最適化は iOS に該当しない。権限・次回予定・最後の鳴動の一覧はない（仕様 §6） |
+| G4 | 自己診断・トラブルシュート画面 | 解消（#104） | 設定の権限カードから「鳴らない時の診断」を開く。直せる項目は許可ダイアログか設定アプリへ飛ぶ |
 | G5 | 日本語・英語のローカライズ | 両方 | 仕様 §9 は日英。現状は日本語固定 |
 | G6 | 週番号・週開始曜日が画面に出ない | Android（設定値だけ存在）/ iOS（なし） | 旧版機能かは未確認 |
 | G7 | スヌーズ間隔の選択肢が 5/10/15 だけ | iOS | Android は 5〜60 の6択 |
