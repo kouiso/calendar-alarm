@@ -14,6 +14,8 @@ import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.calendar.CalendarContractReader
 import com.calendaralarm.data.db.AppDatabase
+import com.calendaralarm.data.db.CalendarPrefEntity
+import com.calendaralarm.data.db.EventOverrideEntity
 import com.calendaralarm.data.db.ScheduledInstanceEntity
 import com.calendaralarm.engine.AlarmScheduler
 import com.calendaralarm.shared.model.AlarmInstance
@@ -128,7 +130,7 @@ class EngineTest {
     }
 
     @Test
-    fun `未予約の過去evインスタンスはMISSEDが保存され次回resyncで除外される`() = runBlocking {
+    fun `未予約の過去evインスタンスはSKIPPEDが保存され次回resyncで除外される`() = runBlocking {
         // applyPlan の不意打ち防止と同じ手順: setState は行が無いと更新0なので
         // 先に行を作ってから終端化する。保存されないと次回 resync で再展開される。
         val inst = AlarmInstance(
@@ -137,16 +139,16 @@ class EngineTest {
             "予定", AlarmKind.EVENT,
         )
         db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(inst)))
-        repository.markMissed(inst.id)
-        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(inst.id)?.state)
+        repository.markSkipped(inst.id, "予約前に通知時刻が過ぎていた")
+        assertEquals(AlarmState.SKIPPED.name, db.scheduledInstances().byId(inst.id)?.state)
         // 終端行が残る限り同じ入力の次回 resync でも蘇生しない
         repository.resync("test")
         repository.resync("test")
-        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(inst.id)!!.state)
+        assertEquals(AlarmState.SKIPPED.name, db.scheduledInstances().byId(inst.id)!!.state)
     }
 
     @Test
-    fun `未予約の過去evインスタンスは実resyncでMISSED化され2回目で再処理されない`() = runBlocking {
+    fun `未予約の過去evインスタンスは実resyncでSKIPPED化され2回目で再処理されず見逃しに数えない`() = runBlocking {
         // 本番の applyPlan 分岐を通す回帰: reader(fake provider) → expand → plan →
         // applyPlan。production の upsert+MISSED 分岐が無いと、過去分は
         // AlarmManager に予約され DB は PENDING のまま残るので RED になる。
@@ -176,7 +178,9 @@ class EngineTest {
             .create(CalendarContract.AUTHORITY)
         repositoryWithCalendar.resync("test")
         val pastId = "ev:1:1:$start:b60"
-        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(pastId)?.state)
+        assertEquals(AlarmState.SKIPPED.name, db.scheduledInstances().byId(pastId)?.state)
+        // わざと鳴らさなかった分なので「鳴らせなかった」バナーの件数に入らない
+        assertEquals(0, repositoryWithCalendar.recentMissedFlow().first())
         // 開始分だけが予約され、過去の通知分は鳴動予約を持たない
         val startId = "ev:1:1:$start:b0"
         assertEquals(AlarmState.PENDING.name, db.scheduledInstances().byId(startId)?.state)
@@ -184,7 +188,7 @@ class EngineTest {
         // 同じ入力で2回呼んでも終端行が残るため再処理されない
         repositoryWithCalendar.resync("test")
         repositoryWithCalendar.resync("test")
-        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(pastId)!!.state)
+        assertEquals(AlarmState.SKIPPED.name, db.scheduledInstances().byId(pastId)!!.state)
         assertEquals(1, scheduledCount())
     }
 
@@ -358,6 +362,84 @@ class EngineTest {
         val row = db.scheduledInstances().byId(inst.id)
         assertEquals(AlarmState.DISMISSED.name, row!!.state)
         assertEquals(0, scheduledCount())
+    }
+
+    @Test
+    fun `見逃しの件数は24時間以内に鳴らせなかった予約だけを数える`() = runBlocking {
+        val now = System.currentTimeMillis()
+        // 予約したのに鳴らせなかった (期限切れ PENDING → MISSED) は数える
+        val stale = AlarmInstance("ev:c1:e1:1:b0", now - 2 * 3_600_000L, "会議", AlarmKind.EVENT)
+        repository.scheduleAdhoc(stale)
+        repository.markMissed()
+        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(stale.id)!!.state)
+        assertEquals(1, repository.recentMissedFlow().first())
+        // 24時間より前の見逃しと、わざと鳴らさなかった分 (SKIPPED) は数えない
+        db.scheduledInstances().upsert(
+            listOf(
+                ScheduledInstanceEntity.of(
+                    AlarmInstance("ev:c1:e2:2:b0", now - 25 * 3_600_000L, "昨日", AlarmKind.EVENT),
+                    AlarmState.MISSED,
+                ),
+                ScheduledInstanceEntity.of(
+                    AlarmInstance("ev:c1:e3:3:b30", now - 3_600_000L, "取込", AlarmKind.EVENT),
+                    AlarmState.SKIPPED,
+                ),
+            ),
+        )
+        assertEquals(1, repository.recentMissedFlow().first())
+        // 窓の端: ちょうど24時間前は数え、それより1ミリ秒でも古ければ数えない
+        val edge = stale.triggerAtMillis + 24 * 3_600_000L
+        assertEquals(1, repository.recentMissedFlow(edge).first())
+        assertEquals(0, repository.recentMissedFlow(edge + 1).first())
+    }
+
+    @Test
+    fun `予定一覧のスイッチはカレンダーOFFと終日OFFの予定で押せず、鳴らない側に出る`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        val allDayStart = (Clock.System.now().toEpochMilliseconds() / 86_400_000L + 1) * 86_400_000L
+        fun row(eventId: Long, calId: Long, begin: Long, allDay: Boolean) = mapOf(
+            CalendarContract.Instances.EVENT_ID to eventId,
+            CalendarContract.Instances.CALENDAR_ID to calId,
+            CalendarContract.Instances.TITLE to "予定$eventId",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to begin,
+            CalendarContract.Instances.END to begin + if (allDay) 86_400_000L else 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to if (allDay) 1 else 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        FakeCalendarProvider.instanceRows = listOf(
+            row(1, 1, start, allDay = false),
+            row(2, 1, allDayStart, allDay = true),
+            row(3, 2, start, allDay = false),
+        )
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        // カレンダー1は終日を鳴らさない、カレンダー2は丸ごと鳴らさない
+        db.calendarPrefs().upsert(CalendarPrefEntity("1", enabled = true, minutesBefore = 0, allDayMinutes = -1))
+        db.calendarPrefs().upsert(CalendarPrefEntity("2", enabled = false, minutesBefore = 0))
+        // スイッチを一度 OFF→ON した後と同じ: 予定ごとの ALARM 指定があっても鳴らない
+        db.eventOverrides().upsert(EventOverrideEntity("1:2:$allDayStart", action = "ALARM", minutesBefore = null))
+
+        val items = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }
+        val timed = items.getValue("1")
+        assertEquals(false, timed.muted)
+        assertEquals(false, timed.lockedByCalendar)
+        val allDay = items.getValue("2")
+        assertTrue(allDay.allDayOff)
+        assertTrue(allDay.muted)
+        assertTrue(allDay.lockedByCalendar)
+        val calOff = items.getValue("3")
+        assertTrue(calOff.calendarOff)
+        assertTrue(calOff.muted)
+        assertTrue(calOff.lockedByCalendar)
+        // 一覧の表示と実際の予約が一致する: 終日の予定とカレンダー2の予定は予約されない
+        repositoryWithCalendar.resync("test")
+        val pendingIds = db.scheduledInstances().pending().map { it.id }
+        assertEquals(listOf("ev:1:1:$start:b0"), pendingIds)
     }
 
     @Test

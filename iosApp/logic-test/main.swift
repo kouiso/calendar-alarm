@@ -39,6 +39,8 @@ do {
         entry(4, "DISMISS", at: now, instance: "z", trigger: now - hour),
     ]
     check(RingHistory.recentMissedCount(h, nowMillis: now) == 1, "鳴動時刻で数え、同じ予約は1件")
+    let list = RingHistory.recentMissed(h + [entry(5, "MISSED", at: now, instance: "w", trigger: now - hour)], nowMillis: now)
+    check(list.map { $0.instanceId ?? "" } == ["w", "x"], "バナーの一覧は件数と同じ記録を鳴動時刻の新しい順に出す")
 }
 
 // 前の版の保存データ (記録が無い) から作り直す

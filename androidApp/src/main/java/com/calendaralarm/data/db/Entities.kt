@@ -21,7 +21,7 @@ data class ScheduledInstanceEntity(
     val minutesBefore: Int,
     val eventStartMillis: Long?,
     val snoozeSeq: Int,
-    /** PENDING/FIRED/DISMISSED/SNOOZED/MISSED/CANCELLED */
+    /** PENDING/FIRED/DISMISSED/SNOOZED/MISSED/CANCELLED/SKIPPED */
     val state: String,
     /** ALARM=全画面鳴動 / NOTIFY=通知のみ (MUTEは予約自体を作らない)。 */
     val delivery: String = EventAction.ALARM.name,

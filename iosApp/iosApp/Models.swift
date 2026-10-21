@@ -395,6 +395,8 @@ struct DisplayEvent: Identifiable, Hashable {
     var effectiveMinutes: Int
     /// カレンダーを鳴らさない設定にしている (予定ごとの指定より強い)
     var calendarOff: Bool = false
+    /// 終日の予定で、カレンダーが終日を鳴らさない設定 (予定ごとの指定より強い)
+    var allDayOff: Bool = false
 }
 
 enum InstanceState: String, Codable {

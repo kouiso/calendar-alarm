@@ -31,11 +31,17 @@ enum RingHistory {
     /// 鳴動時刻が直近24時間の「鳴らず」を予約ごとに1件で数える。
     /// 見つけた時刻ではなく鳴るはずだった時刻で数える (何日も後で見つけた見逃しを「直近」と言わない)
     static func recentMissedCount(_ history: [AuditEntry], nowMillis: Int64) -> Int {
+        recentMissed(history, nowMillis: nowMillis).count
+    }
+
+    /// 数えた見逃しそのもの (予定画面のバナーから開く一覧)。予約ごとに最初の記録を残し、鳴動時刻の新しい順
+    static func recentMissed(_ history: [AuditEntry], nowMillis: Int64) -> [AuditEntry] {
         let since = nowMillis - missedWindowMillis
-        let ids = history
+        var seen = Set<String>()
+        return history
             .filter { $0.type == "MISSED" && ($0.triggerAtMillis ?? $0.atMillis) >= since }
-            .map { $0.instanceId ?? "audit:\($0.id)" }
-        return Set(ids).count
+            .filter { seen.insert($0.instanceId ?? "audit:\($0.id)").inserted }
+            .sorted { ($0.triggerAtMillis ?? $0.atMillis) > ($1.triggerAtMillis ?? $1.atMillis) }
     }
 
     /// 新しい順の結果 (設定の「最近の鳴動」と「すべて見る」)
