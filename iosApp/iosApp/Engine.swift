@@ -21,6 +21,10 @@ final class Engine: ObservableObject {
     /// 鳴動中のインスタンス id (RingingView 用)
     @Published var alertingIds: Set<String> = []
 
+    /// OS へ予約を渡している最中の取り込み音 (名前 → 本数)。予約が記録に載る前に
+    /// 音の片付けが走っても、これから鳴る音を消さないために数える
+    private var inFlightSounds: [String: Int] = [:]
+
     init() {
         if #available(iOS 26.0, *) {
             scheduler = AlarmKitScheduler()
@@ -306,8 +310,8 @@ final class Engine: ObservableObject {
                 delivery: inst.delivery
             )
             do {
-                let rid = try await scheduler.schedule(shifted)
-                store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: rid))
+                let r = try await reserve(shifted)
+                store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: r.id, soundFile: r.sound))
                 scheduledCount += 1
             } catch {
                 store.audit("SCHEDULE_ERR", "\(inst.id): \(error.localizedDescription)")
@@ -333,8 +337,8 @@ final class Engine: ObservableObject {
                 continue
             }
             do {
-                let rid = try await scheduler.schedule(inst)
-                store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: rid))
+                let r = try await reserve(inst)
+                store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: r.id, soundFile: r.sound))
                 scheduledCount += 1
             } catch {
                 store.audit("SCHEDULE_ERR", "\(inst.id): \(error.localizedDescription)")
@@ -342,6 +346,8 @@ final class Engine: ObservableObject {
         }
 
         store.pruneOldInstances(nowMillis: now)
+        // 止めた・見逃したで鳴る予約が無くなった音はここで片付く
+        removeUnusedSounds()
         store.writeWidgetSnapshot()
         WidgetCenter.shared.reloadAllTimelines()
         store.audit("RESYNC", "\(reason): desired=\(desired.count) sched=\(plan.toSchedule.count) cancel=\(plan.toCancel.count)")
@@ -422,13 +428,16 @@ final class Engine: ObservableObject {
             // 温存経路で再予約され権限が戻れば自律回復する。ただし失敗は監査に残す
             // (try? で握り潰すとゾンビ予約がサイレントのまま二度と鳴らない)。
             var rid: String? = nil
+            var sound: String? = nil
             do {
-                rid = try await scheduler.schedule(next)
+                let r = try await reserve(next)
+                rid = r.id
+                sound = r.sound
                 store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m → \(next.id)")
             } catch {
                 store.audit("SCHEDULE_ERR", "snooze \(next.id): \(error.localizedDescription)")
             }
-            store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: rid))
+            store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: rid, soundFile: sound))
         }
     }
 
@@ -442,8 +451,8 @@ final class Engine: ObservableObject {
             kind: "TIMER"
         )
         do {
-            let rid = try await scheduler.schedule(inst)
-            store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: rid))
+            let r = try await reserve(inst)
+            store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: r.id, soundFile: r.sound))
             store.audit("TIMER_SET", "\(durationMillis / 1000)s")
         } catch {
             store.audit("SCHEDULE_ERR", "timer: \(error.localizedDescription)")
@@ -461,32 +470,61 @@ final class Engine: ObservableObject {
     /// AlarmKit は音を予約の時に決めるため、入れ直さないと変更前の音で鳴る
     func rescheduleForSoundChange() async {
         let now = Self.nowMillis
+        // 鳴る直前 (5秒以内)・鳴動中・スヌーズ中は入れ直さない。前の音のまま鳴るが、
+        // その音のファイルは記録 (soundFile) が指している間は消さないので既定音には落ちない
         let targets = store.state.scheduled.values.filter {
             $0.state == .pending && $0.instance.triggerAtMillis > now + 5_000
                 && $0.instance.delivery != EventAction.notify.rawValue
+                && $0.soundFile != AlarmSoundLibrary.soundName(for: $0.instance)
         }
         var count = 0
-        var skipped = 0
         for rec in targets {
             // 入れ直しは await を挟むので、その間に鳴り始めた予約を消して止めないよう直前に確かめ直す
             guard let current = store.state.scheduled[rec.instance.id], current.state == .pending,
-                  current.instance.triggerAtMillis > Self.nowMillis + 5_000 else { skipped += 1; continue }
+                  current.instance.triggerAtMillis > Self.nowMillis + 5_000 else { continue }
             if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler,
                ak.state(of: AlarmKitScheduler.uuid(from: rec.instance.id)) == .alerting {
-                skipped += 1
                 continue
             }
             do {
-                let rid = try await scheduler.schedule(rec.instance)
-                store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending, alarmKitId: rid ?? rec.alarmKitId))
+                let r = try await reserve(rec.instance)
+                store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending,
+                                                   alarmKitId: r.id ?? rec.alarmKitId, soundFile: r.sound))
                 count += 1
             } catch {
+                // 失敗した時は OS に前の予約が残るので、記録も前の音のまま残す
                 store.audit("SCHEDULE_ERR", "sound \(rec.instance.id): \(error.localizedDescription)")
             }
         }
-        // 入れ直せなかった予約は前の音のファイルを指したままなので、その時は消さず次の変更で片付ける
-        if skipped == 0 { AlarmSoundLibrary.removeAll(except: AlarmSoundLibrary.currentDefault) }
+        removeUnusedSounds()
         store.audit("SOUND", "\(AlarmSoundLibrary.currentDefault ?? "default"): \(count)件を入れ直し")
+    }
+
+    /// OS へ予約し、その予約に渡した音を一緒に返す。音はここで1回だけ決め、記録に残す
+    private func reserve(_ inst: AlarmInstanceDTO) async throws -> (id: String?, sound: String?) {
+        let sound = AlarmSoundLibrary.soundName(for: inst)
+        if let sound { inFlightSounds[sound, default: 0] += 1 }
+        defer {
+            if let sound {
+                let left = (inFlightSounds[sound] ?? 1) - 1
+                inFlightSounds[sound] = left > 0 ? left : nil
+            }
+        }
+        let id = try await scheduler.schedule(inst, sound: sound)
+        return (id, sound)
+    }
+
+    /// 取り込んだ音のうち、もう鳴らす予定の無いものを消す (#101)。
+    /// 待機中・鳴動中・スヌーズ中の記録が指す音、予約を渡している最中の音、既定と個別指定の音は残す。
+    /// 予約に失敗して OS に前の予約が残った記録も前の音を指したままなので残る
+    private func removeUnusedSounds() {
+        var keep = Set(store.state.scheduled.values
+            .filter { [.pending, .fired, .snoozed].contains($0.state) }
+            .compactMap { $0.soundFile })
+        keep.formUnion(inFlightSounds.keys)
+        if let current = store.state.alarmSoundFile { keep.insert(current) }
+        keep.formUnion(store.state.standaloneAlarms.compactMap { $0.soundUri })
+        AlarmSoundLibrary.removeAll(except: keep)
     }
 
     // MARK: - ユーティリティ

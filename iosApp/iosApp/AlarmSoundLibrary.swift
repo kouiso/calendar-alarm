@@ -37,14 +37,15 @@ enum AlarmSoundLibrary {
 
     /// 選ばれた音声ファイルを Library/Sounds へ caf (リニア PCM) で書き出し、ファイル名を返す。
     /// mp3・m4a などは AVAudioFile が読める形式ならそのまま取り込める。30秒を超える分は切る
-    static func importSound(from source: URL, now: Date = Date()) throws -> String {
+    static func importSound(from source: URL) throws -> String {
         let scoped = source.startAccessingSecurityScopedResource()
         defer { if scoped { source.stopAccessingSecurityScopedResource() } }
         try FileManager.default.createDirectory(at: soundsDirectory, withIntermediateDirectories: true)
 
         let input = try AVAudioFile(forReading: source)
         let format = input.processingFormat
-        let name = "\(prefix)\(Int(now.timeIntervalSince1970)).caf"
+        // 秒単位の名前だと同じ秒に2回選ぶと前の音を上書きし、前の音で予約したアラームが別の音で鳴る
+        let name = "\(prefix)\(UUID().uuidString.lowercased()).caf"
         let dest = soundsDirectory.appendingPathComponent(name)
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatLinearPCM,
@@ -80,10 +81,10 @@ enum AlarmSoundLibrary {
         return name
     }
 
-    /// 取り込んだ音のうち [keep] 以外を消す。取り込み以外のファイルは消さない
-    static func removeAll(except keep: String?) {
+    /// 取り込んだ音のうち [keep] に無いものを消す。取り込み以外のファイルは消さない
+    static func removeAll(except keep: Set<String>) {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: soundsDirectory.path)) ?? []
-        for name in names where name.hasPrefix(prefix) && name != keep { remove(name) }
+        for name in names where name.hasPrefix(prefix) && !keep.contains(name) { remove(name) }
     }
 
     /// 取り込んだ音を消す。取り込み以外のファイルは消さない
