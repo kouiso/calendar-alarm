@@ -7,6 +7,8 @@ struct AgendaView: View {
     @EnvironmentObject var center: PermissionCenter
     @State private var selected: DisplayEvent?
     @State private var weatherByLoc: [String: [WeatherService.Forecast]] = [:]
+    /// 予報を取った時刻 (予定詳細の「地点・HH:mm の予報」)
+    @State private var weatherAtByLoc: [String: Date] = [:]
     @State private var nowForecast: WeatherService.NowForecast? = nil
     @State private var viewMode: AgendaViewMode = .list
     @State private var searchText = ""
@@ -85,7 +87,8 @@ struct AgendaView: View {
             }
         }
         .sheet(item: $selected) { ev in
-            EventDetailSheet(display: ev, weather: weatherByLoc[ev.event.location])
+            EventDetailSheet(display: ev, weather: weatherByLoc[ev.event.location],
+                             weatherAt: weatherAtByLoc[ev.event.location])
         }
         .task { await refreshWeather() }
         .task { await center.refresh(engine) }
@@ -219,6 +222,7 @@ struct AgendaView: View {
         for loc in locs {
             if let f = await svc.forecast(for: loc) {
                 weatherByLoc[loc] = f
+                weatherAtByLoc[loc] = Date()
             }
         }
     }

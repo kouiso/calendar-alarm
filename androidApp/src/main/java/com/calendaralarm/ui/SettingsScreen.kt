@@ -1,11 +1,8 @@
 package com.calendaralarm.ui
 
 import android.app.Activity
-import android.app.AlarmManager
-import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
@@ -82,7 +79,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.db.CalendarPrefEntity
@@ -95,6 +91,7 @@ import com.calendaralarm.shared.model.EventType
 import com.calendaralarm.shared.model.InviteStatus
 import com.calendaralarm.shared.model.TitleCodeSettings
 import com.calendaralarm.ui.theme.AppPalette
+import com.calendaralarm.ui.theme.StatusColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -132,8 +129,8 @@ fun SettingsScreen(
     }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
-        // ---- 先頭: 鳴動の状態と最近の鳴動記録 (#51 PR3) ----
-        item { RingStatusCard(repository, onOpenPermissions) }
+        // ---- 先頭: 鳴動の状態 (前の権限カード) と最近の鳴動記録 (#51 PR3) ----
+        item { RingStatusCard(context, repository, onOpenPermissions) }
         // ---- 既定値: 🔔通知タイミング / 😴スヌーズ / ☁天気 ----
         item { Spacer(Modifier.height(8.dp)) }
         item {
@@ -352,10 +349,8 @@ fun SettingsScreen(
             }
         }
 
-        // ---- 権限 ----
+        // ---- トラブルシューティング (許可と鳴動テストは先頭の「鳴動の状態」へ移した) ----
         item { Spacer(Modifier.height(16.dp)) }
-        item { PermissionHealthCard(context, repository, onOpenPermissions) }
-        item { Spacer(Modifier.height(8.dp)) }
         item {
             Card(
                 Modifier.fillMaxWidth().clickable(onClick = onOpenTroubleshooting),
@@ -452,33 +447,50 @@ internal fun IconSettingRow(icon: ImageVector, content: @Composable () -> Unit) 
     }
 }
 
-/** 権限状態。既定はアイコン+結果だけの1行 — 欠落がある時だけ自動展開して修復導線を出す。 */
+/**
+ * 設定の先頭「鳴動の状態」(#51 PR3)。前の権限カードをここへ移して名前を変えた。
+ * 予定画面と同じ1行の状態、足りない許可と端末の設定、テストで鳴らす、最近の鳴動3件を1枚に置く。
+ * 足りない物がある時だけ項目の一覧を開いておく。テストで鳴らすは全部 OK の時も押せる。
+ */
 @Composable
-private fun PermissionHealthCard(
+private fun RingStatusCard(
     context: Context,
     repository: AlarmRepository,
     onOpenPermissions: () -> Unit,
 ) {
     val activity = context as? Activity
-
-    val notifOk = Build.VERSION.SDK_INT < 33 ||
-        ContextCompat.checkSelfPermission(
-            context, android.Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
-    // canScheduleExactAlarms() は API 31+。それ未満は正確アラームが常時許可なので true。
-    val exactOk = Build.VERSION.SDK_INT < 31 ||
-        (context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() ?: true)
-    val fsiOk = if (Build.VERSION.SDK_INT >= 34) {
-        context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() ?: true
-    } else true
-    val batteryOk = context.getSystemService(PowerManager::class.java)
-        ?.isIgnoringBatteryOptimizations(context.packageName) ?: true
-    // 「鳴ったはずだが無音」の最多因はアラーム音量0 (鳴動音は STREAM_ALARM)。
-    // 権限系と同じく事前検知して案内する。
-    val volumeOk = context.getSystemService(AudioManager::class.java)
-        ?.let { it.getStreamVolume(AudioManager.STREAM_ALARM) > 0 } ?: true
-    val ngCount = listOf(notifOk, exactOk, fsiOk, batteryOk, volumeOk).count { !it }
-    var expanded by remember { mutableStateOf(ngCount > 0) }
+    val tick = rememberResumeTick()
+    val perms = remember(tick) { probePermissions(context) }
+    // 許可ではないが「鳴ったはずが無音」「止められて鳴らない」の多い原因なので同じ一覧で見せる
+    val volumeOk = remember(tick) {
+        context.getSystemService(AudioManager::class.java)
+            ?.let { it.getStreamVolume(AudioManager.STREAM_ALARM) > 0 } ?: true
+    }
+    val batteryOk = remember(tick) {
+        context.getSystemService(PowerManager::class.java)
+            ?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+    }
+    val pendingFlow = remember { repository.pendingFlow() }
+    val pending by pendingFlow.collectAsState(initial = emptyList())
+    // 予定画面と同じ数え方 (鳴動ログの「鳴らず」を鳴動時刻の24時間で数える)
+    val missedFlow = remember(tick) { repository.recentMissedFlow() }
+    val recentMissed by missedFlow.collectAsState(initial = 0)
+    val status = com.calendaralarm.shared.logic.RingStatus.summarize(
+        missingPermissions = perms.count { !it.value },
+        recentMissed = recentMissed,
+        hasNextAlarm = pending.isNotEmpty(),
+    )
+    val ngCount = perms.count { !it.value } + listOf(volumeOk, batteryOk).count { !it }
+    var expanded by remember(ngCount > 0) { mutableStateOf(ngCount > 0) }
+    // 停止・スヌーズ・鳴らずだけを、種類で絞ってから3件取る
+    val recentFlow = remember { repository.recentRingLogFlow(3) }
+    val recent by recentFlow.collectAsState(initial = emptyList())
+    var showAll by remember { mutableStateOf(false) }
+    val statusColor = when (status.kind) {
+        com.calendaralarm.shared.logic.RingStatus.Kind.READY -> StatusColors.ok
+        com.calendaralarm.shared.logic.RingStatus.Kind.NO_ALARM -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> StatusColors.warn
+    }
 
     Card(
         Modifier.fillMaxWidth(),
@@ -497,54 +509,40 @@ private fun PermissionHealthCard(
             ) {
                 Icon(
                     Icons.Default.VerifiedUser,
-                    contentDescription = "権限",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    contentDescription = null,
+                    tint = statusColor,
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(Modifier.width(12.dp))
-                Text(
-                    if (ngCount == 0) "OK" else "要対応 ${ngCount}",
-                    color = if (ngCount == 0) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(Modifier.weight(1f)) {
+                    Text("鳴動の状態", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(status.line, style = MaterialTheme.typography.bodyMedium, color = statusColor)
+                }
                 Icon(
                     if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (expanded) "畳む" else "開く",
+                    contentDescription = if (expanded) "項目を畳む" else "項目を開く",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            // 断った許可を後から直す入口。全部許可と項目ごとのスイッチは権限画面に置く
-            TextButton(
-                onClick = onOpenPermissions,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
-            ) { Text("権限の一覧を開く（全部許可・項目ごとに切替）") }
             if (expanded) {
-                Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp)) {
-                    HealthRow("通知", notifOk) {
-                        activity?.let {
-                            val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                Column(Modifier.padding(start = 14.dp, end = 14.dp)) {
+                    perms.forEach { (p, ok) ->
+                        HealthRow(p.label, ok) {
+                            val pkg = Uri.parse("package:${context.packageName}")
+                            when (p) {
+                                AppPermission.NOTIFY -> activity?.startActivity(
+                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+                                )
+                                AppPermission.EXACT -> if (Build.VERSION.SDK_INT >= 31) {
+                                    activity?.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg))
+                                }
+                                AppPermission.FULL_SCREEN -> if (Build.VERSION.SDK_INT >= 34) {
+                                    activity?.startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg))
+                                }
+                                // カレンダーは OS のダイアログで頼むので、頼む流れのある権限画面へ
+                                AppPermission.CALENDAR -> onOpenPermissions()
                             }
-                            it.startActivity(i)
-                        }
-                    }
-                    HealthRow("正確なアラーム", exactOk) {
-                        activity?.startActivity(
-                            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                                data = Uri.parse("package:${context.packageName}")
-                            },
-                        )
-                    }
-                    HealthRow("フルスクリーン", fsiOk) {
-                        if (Build.VERSION.SDK_INT >= 34) {
-                            activity?.startActivity(
-                                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
-                                    data = Uri.parse("package:${context.packageName}")
-                                },
-                            )
                         }
                     }
                     HealthRow("アラーム音量", volumeOk) {
@@ -552,9 +550,10 @@ private fun PermissionHealthCard(
                     }
                     HealthRow("電池最適化", batteryOk) {
                         activity?.startActivity(
-                            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                data = Uri.parse("package:${context.packageName}")
-                            },
+                            Intent(
+                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                Uri.parse("package:${context.packageName}"),
+                            ),
                         )
                     }
                     if (!batteryOk) {
@@ -565,26 +564,112 @@ private fun PermissionHealthCard(
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }
-                    // 鳴らない時の最終確認: 実際に10秒後に鳴らして経路全体を検証する
-                    val testScope = rememberCoroutineScope()
-                    TextButton(
-                        onClick = {
-                            testScope.launch {
-                                repository.scheduleAdhoc(
-                                    AlarmExpander.timerInstance(
-                                        durationMillis = 10_000L,
-                                        now = Clock.System.now(),
-                                    ).copy(title = "テスト鳴動"),
-                                )
-                            }
-                        },
-                    ) {
-                        Text("10秒後に鳴動テスト", color = MaterialTheme.colorScheme.primary)
-                    }
                 }
+            }
+            // 断った許可を後から直す入口。全部許可と項目ごとのスイッチは権限画面に置く
+            TextButton(
+                onClick = onOpenPermissions,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+            ) { Text("権限の一覧を開く（全部許可・項目ごとに切替）") }
+            // 鳴らない時の最終確認: 実際に10秒後に鳴らして経路全体を確かめる。全部 OK の時も出す
+            val testScope = rememberCoroutineScope()
+            TextButton(
+                onClick = {
+                    testScope.launch {
+                        repository.scheduleAdhoc(
+                            AlarmExpander.timerInstance(
+                                durationMillis = 10_000L,
+                                now = Clock.System.now(),
+                            ).copy(title = "テスト鳴動"),
+                        )
+                    }
+                },
+                modifier = Modifier.padding(horizontal = 6.dp),
+            ) {
+                Icon(Icons.Default.Alarm, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("テストで鳴らす（10秒後）")
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "最近の鳴動",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { showAll = true }) { Text("すべて見る") }
+            }
+            Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp)) {
+                if (recent.isEmpty()) {
+                    Text(
+                        "まだ記録がありません",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                recent.forEach { RingLogRow(it) }
             }
         }
     }
+    if (showAll) RingLogDialog(repository, onDismiss = { showAll = false })
+}
+
+/** 最近の鳴動1行: 鳴るはずだった時刻 + 色付きラベル + 予定名 */
+@Composable
+private fun RingLogRow(log: AuditLogEntity) {
+    val (label, fg, bg) = when (log.action) {
+        "DISMISS" -> Triple("停止", StatusColors.ok, StatusColors.ok.copy(alpha = 0.14f))
+        "MISS" -> Triple("鳴らず", StatusColors.warn, StatusColors.warnBackground)
+        else -> Triple("スヌーズ", MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            SimpleDateFormat("M/d H:mm", Locale.JAPAN).format(Date(log.triggerAtMillis ?: log.atMillis)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(76.dp),
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = fg,
+            modifier = Modifier
+                .background(bg, RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            log.title.orEmpty(),
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** 「すべて見る」: 鳴動ログに残っている (30日分) 停止・スヌーズ・鳴らずを新しい順に全部 */
+@Composable
+private fun RingLogDialog(repository: AlarmRepository, onDismiss: () -> Unit) {
+    val allFlow = remember { repository.recentRingLogFlow(Int.MAX_VALUE) }
+    val all by allFlow.collectAsState(initial = emptyList())
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("閉じる") } },
+        title = { Text("鳴動の記録") },
+        text = {
+            LazyColumn {
+                if (all.isEmpty()) item { Text("まだ記録がありません") }
+                items(all.size) { RingLogRow(all[it]) }
+            }
+        },
+    )
 }
 
 @Composable
@@ -595,11 +680,11 @@ private fun HealthRow(label: String, ok: Boolean, onFix: () -> Unit) {
     ) {
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         if (ok) {
-            Text("OK", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Text("OK", color = StatusColors.ok, fontWeight = FontWeight.Bold)
         } else {
             Text(
                 "設定を開く",
-                color = MaterialTheme.colorScheme.error,
+                color = StatusColors.warn,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.clickable(onClick = onFix),
             )
@@ -1313,74 +1398,4 @@ private fun ThemePreview() {
             Switch(checked = true, onCheckedChange = null)
         }
     }
-}
-
-/** 設定の先頭: 鳴動の状態 (予定画面と同じ1行) と、最近の鳴動記録3件 (#51 PR3)。 */
-@Composable
-private fun RingStatusCard(
-    repository: AlarmRepository,
-    onOpenPermissions: () -> Unit,
-) {
-    val context = LocalContext.current
-    val tick = rememberResumeTick()
-    val missing = remember(tick) { probePermissions(context).count { !it.value } }
-    val pending by repository.pendingFlow().collectAsState(initial = emptyList())
-    // 予定画面と同じ数え方 (7日残る予約の行で24時間の見逃しを数える)
-    val missedFlow = remember(tick) { repository.recentMissedFlow() }
-    val recentMissed by missedFlow.collectAsState(initial = 0)
-    val status = com.calendaralarm.shared.logic.RingStatus.summarize(
-        missingPermissions = missing,
-        recentMissed = recentMissed,
-        hasNextAlarm = pending.isNotEmpty(),
-    )
-    // 鳴った・止めた・スヌーズ・見逃しだけを、種類で絞ってから3件取る
-    val recentFlow = remember { repository.recentRingLogFlow(3) }
-    val recent by recentFlow.collectAsState(initial = emptyList())
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
-    ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Text("鳴動の状態", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    status.line,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                if (status.showPermissionBanner) {
-                    TextButton(onClick = onOpenPermissions) { Text("直す") }
-                }
-            }
-            Text(
-                "最近の鳴動",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-            if (recent.isEmpty()) {
-                Text("まだ記録がありません", style = MaterialTheme.typography.bodySmall)
-            }
-            recent.forEach { e ->
-                Text(
-                    "${java.text.SimpleDateFormat("M/d H:mm", java.util.Locale.JAPAN).format(java.util.Date(e.atMillis))}  " +
-                        "${ringLogLabel(e.action)}  ${e.detail}",
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                )
-            }
-        }
-    }
-}
-
-private fun ringLogLabel(action: String): String = when (action) {
-    "FIRE" -> "鳴った"
-    "DISMISS" -> "止めた"
-    "SNOOZE" -> "スヌーズ"
-    "MISS" -> "鳴らせなかった"
-    else -> action
 }

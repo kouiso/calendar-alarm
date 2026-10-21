@@ -13,6 +13,7 @@ description: calendar-alarm の変更を確かめる時に、どの検査をど�
 | `androidApp/` | `bash scripts/ci.sh all` と `./gradlew :androidApp:lintDebug` |
 | 鳴動・停止の経路（`engine/`） | 上に加えて emulator の停止 E2E（`task ci:emulator:build` → `task ci:emulator`） |
 | `iosApp/` | `bash scripts/ci.sh ios`（Xcode と xcodegen が要る。署名・実機は対象外） |
+| `iosApp/iosApp/ring-history.swift` | 上に加えて `bash scripts/ci.sh ios-logic`（swiftc だけで動く単体テスト） |
 | `AGENTS.md` か `.agents/skills/` | `node scripts/sync-ai-rule.mjs --check` |
 
 - Android の成功を iOS や emulator の成功として扱わない。

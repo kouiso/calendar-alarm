@@ -19,6 +19,12 @@ case "$mode" in
   ios)
     (cd iosApp; xcodegen generate; xcodebuild -project CalendarAlarm.xcodeproj -target iosApp -sdk iphonesimulator -configuration Debug build)
     ;;
+  ios-logic)
+    # なぜ: iOS の XCTest はシミュレータが要る。画面と SharedKit に依存しない計算だけを macOS の swiftc で検査する
+    out="$(mktemp -d)"
+    swiftc iosApp/iosApp/ring-history.swift iosApp/logic-test/main.swift -o "$out/ring-history-test"
+    "$out/ring-history-test"
+    ;;
   emulator-build)
     app_dir="$(from_caller "${2:?An isolated app checkout is required}")"
     app_dir="$(cd "$app_dir" && pwd)"

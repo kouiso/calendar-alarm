@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var expandedCal: String? = nil
     @State private var showPerms = false
     @State private var showLog = false
+    @State private var showRingLog = false
     @State private var showAccountHelp = false
     @State private var showCodes = false
     @State private var photoItem: PhotosPickerItem? = nil
@@ -27,7 +28,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 16) {
 
-                    // 先頭: 鳴動の状態と最近の鳴動記録 (#51 PR3)
+                    // 先頭: 鳴動の状態 (前の権限カード) と最近の鳴動記録 (#51 PR3)
                     ringStatusCard
 
                     // 既定値カード: 🔔タイミング / 😴スヌーズ / ☀天気
@@ -241,9 +242,6 @@ struct SettingsView: View {
                         }
                     }
 
-                    // 権限カード (OKなら1行、不足時のみ展開)
-                    permissionCard
-
                     // カレンダー一覧カード
                     Card {
                         VStack(spacing: 0) {
@@ -320,66 +318,49 @@ struct SettingsView: View {
 
     // MARK: - 鳴動の状態カード (#51 PR3)
 
+    /// 設定の先頭「鳴動の状態」。前の権限カードをここへ移して名前を変えた。
+    /// 予定画面と同じ1行の状態、許可の一覧、テストで鳴らす、最近の鳴動3件を1枚に置く。
+    /// テストで鳴らすは全部 OK の時も押せる (前は足りない許可がある時しか開けず押せなかった)。
     private var ringStatusCard: some View {
         let now = Engine.nowMillis
+        let missing = AppPermission.allCases.filter { center.states[$0] != .granted }
         let status = RingStatusSummary(
-            missingPermissions: center.states.values.filter { $0 != .granted }.count,
+            missingPermissions: missing.count,
             recentMissed: store.recentMissedCount(nowMillis: now),
             hasNextAlarm: store.state.scheduled.values.contains { $0.state == .pending && $0.instance.triggerAtMillis > now })
-        // 予約の行や50件の監査ログに左右されない、鳴動だけの記録から新しい3件
-        let recent = Array(store.state.ringHistory.suffix(3).reversed())
+        let statusColor: Color = missing.isEmpty && status.recentMissed == 0
+            ? (status.hasNextAlarm ? NightTheme.statusOk : .secondary)
+            : NightTheme.statusWarn
+        let recent = RingHistory.newestFirst(store.state.ringHistory, limit: 3)
         return Card {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("鳴動の状態").font(NightTheme.font(14, weight: .semibold))
-                Text(status.line).font(NightTheme.font(13)).foregroundStyle(.secondary)
-                Text("最近の鳴動").font(NightTheme.font(11)).foregroundStyle(.secondary).padding(.top, 4)
-                if recent.isEmpty {
-                    Text("まだ記録がありません").font(NightTheme.font(12))
-                }
-                ForEach(recent) { e in
-                    Text("\(Engine.hm(e.atMillis))  \(Self.ringLogLabel(e.type))  \(e.detail)")
-                        .font(NightTheme.font(12)).lineLimit(1)
-                }
-            }
-        }
-        .task { await center.refresh(engine) }
-    }
-
-    private static func ringLogLabel(_ type: String) -> String {
-        switch type {
-        case "FIRED": return "鳴った"
-        case "DISMISS", "DISMISS_OFFAPP": return "止めた"
-        case "SNOOZE": return "スヌーズ"
-        case "MISSED": return "鳴らせなかった"
-        default: return type
-        }
-    }
-
-    // MARK: - 権限カード
-
-    private var missingPerms: [String] {
-        var missing: [String] = []
-        if !engine.reader.authorizationGranted { missing.append("calendar") }
-        if !engine.schedulerAuthorized { missing.append("alarm") }
-        return missing
-    }
-
-    private var permissionCard: some View {
-        Card {
-            VStack(spacing: 0) {
-                Button { if !missingPerms.isEmpty { showPerms.toggle() } } label: {
-                    HStack {
-                        Image(systemName: "checkmark.shield.fill").frame(width: 22)
-                            .foregroundStyle(missingPerms.isEmpty ? .green : .orange)
-                        if missingPerms.isEmpty {
-                            Text("OK").font(NightTheme.font(13)).foregroundStyle(.secondary)
-                        } else {
-                            Text("要対応 \(missingPerms.count)").font(NightTheme.font(13)).foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 0) {
+                Button { showPerms.toggle() } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.shield.fill").frame(width: 22).foregroundStyle(statusColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("鳴動の状態").font(NightTheme.font(14, weight: .semibold)).foregroundStyle(.primary)
+                            Text(status.line).font(NightTheme.font(13)).foregroundStyle(statusColor)
+                                .multilineTextAlignment(.leading)
                         }
                         Spacer()
-                        if !missingPerms.isEmpty {
-                            Image(systemName: showPerms ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 12)).foregroundStyle(.tertiary)
+                        Image(systemName: showPerms ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 12)).foregroundStyle(.tertiary)
+                    }
+                }
+                .accessibilityLabel("鳴動の状態: \(status.line)")
+                if showPerms {
+                    Divider().padding(.vertical, 8)
+                    VStack(spacing: 8) {
+                        ForEach(AppPermission.allCases) { p in
+                            HStack {
+                                Image(systemName: p.icon).frame(width: 22).foregroundStyle(.secondary)
+                                Text(p.label).font(NightTheme.font(13))
+                                Spacer()
+                                let ok = center.states[p] == .granted
+                                Text(ok ? "OK" : "足りない")
+                                    .font(NightTheme.font(12, weight: .semibold))
+                                    .foregroundStyle(ok ? NightTheme.statusOk : NightTheme.statusWarn)
+                            }
                         }
                     }
                 }
@@ -389,28 +370,55 @@ struct SettingsView: View {
                     PermissionsView()
                 } label: {
                     HStack {
-                        Image(systemName: "checkmark.shield").foregroundStyle(NightTheme.indigo)
+                        Image(systemName: "checkmark.shield").frame(width: 22).foregroundStyle(.secondary)
                         Text("権限画面を開く").font(NightTheme.font(13))
                         Spacer()
                         Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
                     }
                 }
-                if showPerms {
-                    Divider().padding(.vertical, 8)
-                    VStack(spacing: 10) {
-                        // 鳴らない時の最終確認: 10秒後に実際に鳴らして経路全体を検証
-                        Button {
-                            Task {
-                                await engine.scheduleTimer(durationMillis: 10_000, label: "テスト鳴動")
-                            }
-                        } label: {
-                            HStack {
-                                Image(systemName: "bell.and.waves.left.and.right").foregroundStyle(NightTheme.indigo)
-                                Text("10秒後に鳴動テスト").font(NightTheme.font(13))
-                                Spacer()
-                            }
-                        }
+                Divider().padding(.vertical, 8)
+                // 鳴らない時の最終確認: 10秒後に実際に鳴らして経路全体を確かめる。全部 OK の時も出す
+                Button {
+                    Task { await engine.scheduleTimer(durationMillis: 10_000, label: "テスト鳴動") }
+                } label: {
+                    HStack {
+                        Image(systemName: "bell.and.waves.left.and.right").frame(width: 22).foregroundStyle(.secondary)
+                        Text("テストで鳴らす（10秒後）").font(NightTheme.font(13))
+                        Spacer()
                     }
+                }
+                Divider().padding(.vertical, 8)
+                HStack {
+                    Text("最近の鳴動").font(NightTheme.font(11)).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("すべて見る") { showRingLog = true }
+                        .font(NightTheme.font(12, weight: .medium))
+                }
+                if recent.isEmpty {
+                    Text("まだ記録がありません").font(NightTheme.font(12)).foregroundStyle(.secondary)
+                        .padding(.top, 4)
+                }
+                ForEach(recent) { RingLogRow(entry: $0) }
+            }
+        }
+        .task {
+            await center.refresh(engine)
+            // 足りない許可がある時だけ一覧を開いておく
+            if AppPermission.allCases.contains(where: { center.states[$0] != .granted }) { showPerms = true }
+        }
+        .sheet(isPresented: $showRingLog) {
+            NavigationStack {
+                List {
+                    if store.state.ringHistory.isEmpty {
+                        Text("まだ記録がありません").font(NightTheme.font(13)).foregroundStyle(.secondary)
+                    }
+                    // 7日分の停止・スヌーズ・鳴らずを新しい順に全部
+                    ForEach(RingHistory.newestFirst(store.state.ringHistory, limit: Int.max)) { RingLogRow(entry: $0) }
+                }
+                .navigationTitle("鳴動の記録")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) { Button("閉じる") { showRingLog = false } }
                 }
             }
         }
@@ -480,6 +488,34 @@ struct SettingsView: View {
 }
 
 // MARK: - 共通部品
+
+/// 最近の鳴動1行: 鳴るはずだった時刻 + 色付きラベル (停止/スヌーズ/鳴らず) + 予定名 (#51 PR3)
+struct RingLogRow: View {
+    let entry: AuditEntry
+
+    var body: some View {
+        let (label, fg, bg): (String, Color, Color) = {
+            switch entry.type {
+            case "DISMISS", "DISMISS_OFFAPP": return ("停止", NightTheme.statusOk, NightTheme.statusOk.opacity(0.14))
+            case "MISSED": return ("鳴らず", NightTheme.statusWarn, NightTheme.statusWarnBackground)
+            default: return ("スヌーズ", .secondary, NightTheme.surfaceVariant)
+            }
+        }()
+        HStack(spacing: 8) {
+            Text(Engine.hm(entry.triggerAtMillis ?? entry.atMillis))
+                .font(NightTheme.font(12)).foregroundStyle(.secondary)
+                .frame(width: 82, alignment: .leading)
+            Text(label)
+                .font(NightTheme.font(11, weight: .semibold))
+                .foregroundStyle(fg)
+                .padding(.horizontal, 8).padding(.vertical, 2)
+                .background(bg, in: RoundedRectangle(cornerRadius: 8))
+            Text(entry.title ?? "").font(NightTheme.font(12)).lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 3)
+    }
+}
 
 struct Card<Content: View>: View {
     @ViewBuilder let content: Content

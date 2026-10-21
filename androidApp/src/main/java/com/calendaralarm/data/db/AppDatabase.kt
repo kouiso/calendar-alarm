@@ -46,6 +46,32 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+/**
+ * v5 → v6: 鳴動ログに予約の id・鳴動時刻・タイトルを持たせる (#51 PR3)。
+ * 既存の停止・スヌーズ・鳴らずの行は、まだ残っている予約の行から埋める。
+ * 予約の行が既に消えた古い行は埋めない (以前の数え方でも数えていなかった行)。
+ */
+internal val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE audit_log ADD COLUMN instanceId TEXT")
+        db.execSQL("ALTER TABLE audit_log ADD COLUMN triggerAtMillis INTEGER")
+        db.execSQL("ALTER TABLE audit_log ADD COLUMN title TEXT")
+        // detail の書式: MISS は "id" か "id: 理由"、DISMISS は "id"、SNOOZE は "id +N分 → 次の id"
+        val match = "(" +
+            "(audit_log.action IN ('MISS', 'DISMISS') AND audit_log.detail = s.id) OR " +
+            "(audit_log.action = 'MISS' AND substr(audit_log.detail, 1, length(s.id) + 2) = s.id || ': ') OR " +
+            "(audit_log.action = 'SNOOZE' AND substr(audit_log.detail, 1, length(s.id) + 2) = s.id || ' +')" +
+            ")"
+        for (column in listOf("instanceId" to "s.id", "triggerAtMillis" to "s.triggerAtMillis", "title" to "s.title")) {
+            db.execSQL(
+                "UPDATE audit_log SET ${column.first} = " +
+                    "(SELECT ${column.second} FROM scheduled_instances s WHERE $match LIMIT 1) " +
+                    "WHERE action IN ('MISS', 'DISMISS', 'SNOOZE')",
+            )
+        }
+    }
+}
+
 @Database(
     entities = [
         ScheduledInstanceEntity::class,
@@ -54,13 +80,13 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
         EventOverrideEntity::class,
         AuditLogEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     companion object {
         /** Room.databaseBuilder に渡すマイグレーション一覧。 */
-        val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
     }
     abstract fun scheduledInstances(): ScheduledInstanceDao
     abstract fun standaloneAlarms(): StandaloneAlarmDao

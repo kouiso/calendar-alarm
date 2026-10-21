@@ -42,7 +42,7 @@ final class Store: ObservableObject {
         // scheduled_instances: id -> ScheduledRecord
         var scheduled: [String: ScheduledRecord] = [:]
         var audit: [AuditEntry] = []
-        /// 鳴った・止めた・スヌーズ・鳴らせなかった の記録 (7日分)。監査ログ (50件) や予約の行
+        /// 停止・スヌーズ・鳴らずの記録 (7日分)。監査ログ (50件) や予約の行
         /// (単発を使い直すと消える) とは別に持ち、設定先頭の「最近の鳴動」と見逃しの数に使う
         var ringHistory: [AuditEntry] = []
         var nextAlarmId: Int64 = 1
@@ -244,25 +244,21 @@ final class Store: ObservableObject {
 
     // MARK: - audit
 
-    static let ringHistoryTypes: Set<String> = ["FIRED", "DISMISS", "DISMISS_OFFAPP", "SNOOZE", "MISSED"]
-
-    /// 直近24時間に鳴らせなかった件数 (予定画面と設定の「鳴動の状態」で同じものを使う)
+    /// 鳴動時刻が直近24時間の「鳴らず」の件数 (予定画面と設定の「鳴動の状態」で同じものを使う)
     func recentMissedCount(nowMillis: Int64) -> Int {
-        let since = nowMillis - 24 * 60 * 60 * 1000
-        return state.ringHistory.filter { $0.type == "MISSED" && $0.atMillis >= since }.count
+        RingHistory.recentMissedCount(state.ringHistory, nowMillis: nowMillis)
     }
 
-    func audit(_ type: String, _ detail: String) {
+    /// ring には停止・スヌーズ・鳴らずの対象の予約を渡す。予約の行が後で消えても記録に残すため
+    func audit(_ type: String, _ detail: String, ring: AlarmInstanceDTO? = nil) {
         mutate { s in
-            let entry = AuditEntry(id: s.nextAuditId, atMillis: Int64(Date().timeIntervalSince1970 * 1000), type: type, detail: detail)
+            let entry = AuditEntry(id: s.nextAuditId, atMillis: Int64(Date().timeIntervalSince1970 * 1000),
+                                   type: type, detail: detail, instanceId: ring?.id,
+                                   triggerAtMillis: ring?.triggerAtMillis, title: ring?.title)
             s.audit.append(entry)
             s.nextAuditId += 1
             if s.audit.count > 50 { s.audit.removeFirst(s.audit.count - 50) }
-            if Self.ringHistoryTypes.contains(type) {
-                s.ringHistory.append(entry)
-                let cutoff = entry.atMillis - 7 * 24 * 60 * 60 * 1000
-                s.ringHistory.removeAll { $0.atMillis < cutoff }
-            }
+            s.ringHistory = RingHistory.appending(s.ringHistory, entry)
         }
     }
 
@@ -317,7 +313,22 @@ extension Store.Persisted {
         standaloneAlarms = try c.decodeIfPresent([StandaloneAlarmDTO].self, forKey: .standaloneAlarms) ?? []
         scheduled = try c.decodeIfPresent([String: ScheduledRecord].self, forKey: .scheduled) ?? [:]
         audit = try c.decodeIfPresent([AuditEntry].self, forKey: .audit) ?? []
-        ringHistory = try c.decodeIfPresent([AuditEntry].self, forKey: .ringHistory) ?? []
+        if let saved = try c.decodeIfPresent([AuditEntry].self, forKey: .ringHistory) {
+            ringHistory = saved
+        } else {
+            // 前の版の保存データ: 記録が無いので、残っている予約の行と監査ログから作り直す。
+            // detail は Engine の MISSED と同じ書式 (Engine は MainActor なのでここでは自前で整形する)
+            let fmt = DateFormatter()
+            fmt.dateFormat = "M/d HH:mm"
+            ringHistory = RingHistory.seed(
+                audit: audit,
+                missed: scheduled.values.filter { $0.state == .missed }.map {
+                    let at = Date(timeIntervalSince1970: TimeInterval($0.instance.triggerAtMillis) / 1000)
+                    return ($0.instance.id, $0.instance.triggerAtMillis, $0.instance.title,
+                            "\($0.instance.title) @\(fmt.string(from: at))")
+                },
+                nowMillis: Int64(Date().timeIntervalSince1970 * 1000))
+        }
         nextAlarmId = try c.decodeIfPresent(Int64.self, forKey: .nextAlarmId) ?? 1
         nextAuditId = try c.decodeIfPresent(Int64.self, forKey: .nextAuditId) ?? 1
         calendars = try c.decodeIfPresent([CalendarSource].self, forKey: .calendars) ?? []

@@ -125,4 +125,9 @@ data class AuditLogEntity(
     /** SCHEDULE / FIRE / DISMISS / SNOOZE / CANCEL / MISS / RESYNC / ERROR */
     val action: String,
     val detail: String,
+    // 停止・スヌーズ・鳴らずの行だけに入れる。予約の行は単発アラームを使い直すと消えるので、
+    // 見逃しの数と「最近の鳴動」をログだけで出せるように、どの予約の何時の鳴動かを残す
+    val instanceId: String? = null,
+    val triggerAtMillis: Long? = null,
+    val title: String? = null,
 )

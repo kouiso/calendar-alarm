@@ -66,19 +66,22 @@ struct MonthGridView: View {
                             let dayEvents = byDay[Self.df.string(from: date)] ?? []
                             let isToday = cal.isDateInToday(date)
                             let isFocus = cal.isDate(date, inSameDayAs: focusDate)
+                            // テーマ色は「鳴る/オン」専用なので中立色にする (#51 PR3)。
+                            // 今日 = 文字色で塗った丸、選択日 = surfaceVariant の塗りに outline の枠
+                            let selected = isFocus && !isToday
                             VStack(spacing: 2) {
                                 ZStack {
                                     Circle()
-                                        .fill(isToday ? Color.primary : Color.clear)
+                                        .fill(isToday ? NightTheme.onNight : selected ? NightTheme.surfaceVariant : Color.clear)
                                         .frame(width: 34, height: 34)
                                     Circle()
-                                        .stroke(Color.secondary, lineWidth: isFocus ? 1.5 : 0)
+                                        .stroke(NightTheme.outline, lineWidth: selected ? 1.5 : 0)
                                         .frame(width: 34, height: 34)
                                     Text("\(cal.component(.day, from: date))")
                                         .font(NightTheme.numFont(17,
-                                            weight: isToday ? .semibold : .regular))
+                                            weight: isToday || isFocus ? .semibold : .regular))
                                         .foregroundStyle(
-                                            isToday ? Color(uiColor: .systemBackground)
+                                            isToday ? NightTheme.nightSurface
                                             : !inMonth ? Color.secondary.opacity(0.35)
                                             : d == 0 ? sundayRed
                                             : d == 6 ? saturdayBlue
@@ -147,14 +150,14 @@ struct ThreeDayColumnsView: View {
                 let date = cal.date(byAdding: .day, value: i, to: startDate)!
                 let dayEvents = byDay[Self.df.string(from: date)] ?? []
                 VStack(spacing: 6) {
-                    // Night UI: 今日は accent-soft 背景 + Outfit 22
+                    // 今日の見出しは surfaceVariant。テーマ色は「鳴る/オン」専用なので使わない (#51 PR3)
                     Text(Self.wdFmt.string(from: date))
                         .font(NightTheme.numFont(22,
                             weight: cal.isDateInToday(date) ? .semibold : .medium))
-                        .foregroundStyle(cal.isDateInToday(date) ? Color.accentColor : .primary)
+                        .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 4)
-                        .background(cal.isDateInToday(date) ? Color.accentColor.opacity(0.15) : Color.clear,
+                        .background(cal.isDateInToday(date) ? NightTheme.surfaceVariant : Color.clear,
                                     in: RoundedRectangle(cornerRadius: 12))
                     ForEach(dayEvents) { ev in
                         VStack(alignment: .leading, spacing: 2) {
@@ -199,6 +202,7 @@ struct DayTimelineViewIOS: View {
         let allDay = dayEvents.filter { $0.event.allDay || $0.event.endMillis - $0.event.startMillis >= 23 * 3_600_000 }
         let timed = dayEvents.filter { !allDay.contains($0) }
 
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(spacing: 8) {
                 if !allDay.isEmpty {
@@ -225,19 +229,7 @@ struct DayTimelineViewIOS: View {
                                 Rectangle().fill(Color.secondary.opacity(0.15)).frame(height: 1)
                             }
                             .frame(height: hourH, alignment: .top)
-                        }
-                    }
-                    // 今の時刻の線 (#51 PR3)。今日を見ている時だけ。テーマ色は「鳴る/オン」専用なので赤で引く
-                    TimelineView(.periodic(from: .now, by: 60)) { ctx in
-                        // 日付の判定も1分ごとにやり直す (開いたまま日付が変わったら前日の画面から線を消す)
-                        if cal.isDate(date, inSameDayAs: ctx.date) {
-                            HStack(spacing: 0) {
-                                Spacer().frame(width: 44)
-                                Circle().fill(Color.red).frame(width: 8, height: 8)
-                                Rectangle().fill(Color.red).frame(height: 2)
-                            }
-                            .offset(y: hourH * CGFloat(minutesOfDay(ctx.date)) / 60 - 4)
-                            .accessibilityLabel("今の時刻")
+                            .id(h)
                         }
                     }
                     // イベントブロック
@@ -265,12 +257,46 @@ struct DayTimelineViewIOS: View {
                         .padding(.leading, 48)
                         .onTapGesture { onSelect(ev) }
                     }
+                    // 今の時刻の線 (#51 PR3)。予定のブロックより上に描く。今日を見ている時だけ。
+                    // テーマ色は「鳴る/オン」専用なので色表の赤で引く
+                    TimelineView(.periodic(from: .now, by: 60)) { ctx in
+                        // 日付の判定も1分ごとにやり直す (開いたまま日付が変わったら前日の画面から線を消す)
+                        if cal.isDate(date, inSameDayAs: ctx.date) {
+                            let label = "今 \(Self.nowFmt.string(from: ctx.date))"
+                            HStack(spacing: 0) {
+                                // 時刻目盛りの文字に重なるので、面の色で下地を敷いて読めるようにする
+                                Text(label)
+                                    .font(NightTheme.numFont(10, weight: .semibold))
+                                    .foregroundStyle(NightTheme.nowLine)
+                                    .lineLimit(1)
+                                    .frame(width: 44, alignment: .leading)
+                                    .background(Color(uiColor: .systemGroupedBackground))
+                                Circle().fill(NightTheme.nowLine).frame(width: 8, height: 8)
+                                Rectangle().fill(NightTheme.nowLine).frame(height: 2)
+                            }
+                            .frame(height: 16)
+                            .offset(y: hourH * CGFloat(minutesOfDay(ctx.date)) / 60 - 8)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(label)
+                        }
+                    }
                 }
                 .frame(height: hourH * 24)
             }
             .padding(.horizontal, 12)
         }
+        // 今日を開いた時は、今の時刻の1時間前の目盛りが上に来るところまで送る (#51 PR3)
+        .onAppear {
+            if cal.isDateInToday(date) {
+                proxy.scrollTo(max(0, cal.component(.hour, from: Date()) - 1), anchor: .top)
+            }
+        }
+        }
     }
+
+    private static let nowFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
+    }()
 
     private func minutesOfDay(_ d: Date) -> Double {
         Double(cal.component(.hour, from: d) * 60 + cal.component(.minute, from: d))

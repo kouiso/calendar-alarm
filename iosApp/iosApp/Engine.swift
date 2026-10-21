@@ -72,6 +72,7 @@ final class Engine: ObservableObject {
                 // AlarmKit から消えた = ユーザーがアラートUIで完全に止めた
                 if rec.state == .fired || rec.state == .snoozed {
                     store.markState(id, .dismissed)
+                    store.audit("DISMISS_OFFAPP", rec.instance.title, ring: rec.instance)
                     if let aid = rec.instance.standaloneAlarmId { disableConsumedOneShots([aid]) }
                     alertingIds.remove(id)
                 }
@@ -88,7 +89,7 @@ final class Engine: ObservableObject {
                 // postAlert カウントダウン中 = ユーザーがアラートUIでスヌーズを押した
                 if rec.state == .fired {
                     store.markState(id, .snoozed)
-                    store.audit("SNOOZE", "\(id) (native)")
+                    store.audit("SNOOZE", "\(id) (native)", ring: rec.instance)
                 }
                 alertingIds.remove(id)
             default:
@@ -133,7 +134,7 @@ final class Engine: ObservableObject {
         var missedAlarmIds: Set<Int64> = []
         for rec in s.scheduled.values where rec.state == .pending && rec.instance.triggerAtMillis < now - graceMillis {
             store.markState(rec.instance.id, .missed)
-            store.audit("MISSED", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis))")
+            store.audit("MISSED", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis))", ring: rec.instance)
             notifyMissed(rec.instance)
             if let aid = rec.instance.standaloneAlarmId { missedAlarmIds.insert(aid) }
         }
@@ -380,7 +381,7 @@ final class Engine: ObservableObject {
         alertingIds.remove(inst.id)
         store.markState(inst.id, .dismissed)
         if let aid = inst.standaloneAlarmId { disableConsumedOneShots([aid]) }
-        store.audit("DISMISS", inst.title)
+        store.audit("DISMISS", inst.title, ring: inst)
     }
 
     /// スヌーズ: AlarmKit なら countdown() でネイティブスヌーズ (postAlert 後に再アラート)。
@@ -391,7 +392,7 @@ final class Engine: ObservableObject {
            (try? ak.countdown(uuid: AlarmKitScheduler.uuid(from: inst.id))) != nil {
             alertingIds.remove(inst.id)
             store.markState(inst.id, .snoozed)
-            store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m (native)")
+            store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m (native)", ring: inst)
             return
         }
         // countdown が投げた = 元アラームが alerting でない/居ない。
@@ -424,7 +425,7 @@ final class Engine: ObservableObject {
             var rid: String? = nil
             do {
                 rid = try await scheduler.schedule(next)
-                store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m → \(next.id)")
+                store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m → \(next.id)", ring: inst)
             } catch {
                 store.audit("SCHEDULE_ERR", "snooze \(next.id): \(error.localizedDescription)")
             }
