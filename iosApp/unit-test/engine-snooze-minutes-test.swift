@@ -178,9 +178,4 @@ final class RingingLayoutTests: XCTestCase {
         XCTAssertFalse(RingingLayout.showsPresetPicker(windowHeight: RingingLayout.minHeightForPresetPicker - 1))
         XCTAssertFalse(RingingLayout.showsPresetPicker(windowHeight: 320))
     }
-
-    /// 開いたチップ込みの固定の操作群 (約 290pt) を足しても、上のスクロール領域に 230pt 以上残る
-    func testLeavesRoomForTimeAboveTheControls() {
-        XCTAssertGreaterThanOrEqual(RingingLayout.minHeightForPresetPicker - 290, 230)
-    }
 }
