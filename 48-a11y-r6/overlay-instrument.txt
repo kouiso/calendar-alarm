@@ -1,0 +1,61 @@
+INSTRUMENTATION_STATUS: class=com.calendaralarm.emu.A11yClickTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.calendaralarm.emu.A11yClickTest:
+INSTRUMENTATION_STATUS: test=accessibilityClickStopsAlarm
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: scheduled=A11Y-overlay
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: FOUND=after=6376ms window type=3 layer=0 title=null class=android.widget.FrameLayout clickable=true focusable=true actions=[4:null, 8:null, 1:null, 64:null, 16:null, 131072:null, 256:null, 512:null, 16908342:null]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE00=android.widget.LinearLayout text=null desc=null click=false important=true acts=[4,8,64,16908342]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE01=  android.widget.ScrollView text=null desc=null click=false important=true acts=[4,8,1,64,16908342]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE02=    android.widget.LinearLayout text=null desc=null click=false important=false acts=[4,8,64,16908342]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE03=      android.widget.TextView text=14:35 desc=null click=false important=true acts=[4,8,64,16908342,256,512,131072]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE04=      android.widget.TextView text=A11Y-overlay desc=null click=false important=true acts=[4,8,64,16908342,256,512,131072]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE05=      android.view.View text=null desc=null click=false important=false acts=[4,8,64,16908342]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE06=  android.widget.TextView text=スヌーズ 10分 desc=null click=true important=true acts=[4,8,1,64,16,16908342,256,512,131072]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE07=  android.widget.TextView text=スヌーズ時間を選ぶ ▾ desc=null click=true important=true acts=[4,8,1,64,16,16908342,256,512,131072]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE08=  android.widget.FrameLayout text=null desc=スライドして停止 click=true important=true acts=[4,8,1,64,16,131072,256,512,16908342]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE09=    android.widget.TextView text=スライドして停止 › desc=null click=false important=true acts=[4,8,64,16908342,256,512,131072]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE10=    android.widget.FrameLayout text=null desc=null click=false important=false acts=[4,8,64,16908342]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE11=      android.view.View text=null desc=null click=false important=false acts=[4,8,64,16908342]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TREE12=  android.widget.TextView text=Calendar Alarm desc=null click=false important=true acts=[4,8,64,16908342,256,512,131072]
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: CLICKING=now
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: TARGET=clickable ancestor class=android.widget.FrameLayout childCount=2 acts=4,8,1,64,16,131072,256,512,16908342
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: ACTION_CLICK=performAction returned true
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: AFTER=slider still present=false
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.calendaralarm.emu.A11yClickTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=accessibilityClickStopsAlarm
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 12.627
+
+OK (1 test)
+
+
+INSTRUMENTATION_CODE: -1
