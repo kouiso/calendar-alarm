@@ -557,7 +557,12 @@ extension Store {
                     notifies: !dropped && notificationDeliveryAhead(ev, rule, ov, actions: actions, importReminders: state.importEventReminders, muteAll: state.muteAll, nowMillis: now),
                     defaultSilenced: silencedWithoutOverride(ev, rule, ov, state.titleCodes,
                                                              invite: state.inviteFilter, types: state.eventTypeFilter,
-                                                             importReminders: state.importEventReminders)
+                                                             importReminders: state.importEventReminders),
+                    // ON で戻る先がすべてミュートで外れるなら押せなくする (今の muted ではなく戻る先で決める)
+                    restoreSilenced: silencedWithoutOverride(ev, rule, ov, state.titleCodes,
+                                                             invite: state.inviteFilter, types: state.eventTypeFilter,
+                                                             importReminders: state.importEventReminders,
+                                                             muteAll: state.muteAll)
                 )
             }
     }

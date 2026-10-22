@@ -75,6 +75,27 @@ let keptMinutes = overrideAfterRingSwitch(withMinutes, on: true, defaultSilenced
 checkS("ON clears only the action", keptMinutes?.action, nil)
 check("ON keeps the minutes-before override", keptMinutes?.minutesBefore == 10, true)
 
+// すべてミュート中: 通知の行は OFF でも ON に戻せる (ON で通知に戻る)。アラーム／鳴らさない既定の行は戻せない
+func rowLocked(_ r: AlarmRuleDTO, _ ov: EventOverrideDTO?, muteAll: Bool) -> Bool {
+    var d = DisplayEvent(event: timed, calendarName: "", calendarColor: 0, muted: resolvedActionsMuted(timed, r, ov, codes, importReminders: false, muteAll: muteAll), effectiveMinutes: 0)
+    d.muteAll = muteAll
+    d.restoreSilenced = silencedWithoutOverride(timed, r, ov, codes, invite: invite, types: types, importReminders: false, muteAll: muteAll)
+    return d.switchLocked
+}
+var alarmRule = AlarmRuleDTO(); alarmRule.startAction = a; alarmRule.reminderAction = a
+let notifyOff = overrideAfterRingSwitch(nil, on: false, defaultSilenced: false)
+check("muteAll: notify row is switchable before OFF", rowLocked(notifyRule, nil, muteAll: true), false)
+check("muteAll: notify row after OFF has muted=true", resolvedActionsMuted(timed, notifyRule, notifyOff, codes, importReminders: false, muteAll: true), true)
+check("muteAll: notify row after OFF is still switchable (ON restores NOTIFY)", rowLocked(notifyRule, notifyOff, muteAll: true), false)
+let notifyOn = overrideAfterRingSwitch(notifyOff, on: true, defaultSilenced: silenced(notifyRule, notifyOff))
+check("muteAll: notify row ON removes the override", notifyOn == nil, true)
+check("muteAll: notify row after ON is not muted", resolvedActionsMuted(timed, notifyRule, notifyOn, codes, importReminders: false, muteAll: true), false)
+check("muteAll: alarm-default row is locked", rowLocked(alarmRule, nil, muteAll: true), true)
+check("muteAll: alarm-default row is locked even after OFF", rowLocked(alarmRule, notifyOff, muteAll: true), true)
+check("muteAll: mute-default row is locked (ON writes ALARM, dropped by muteAll)", rowLocked(muteRule, nil, muteAll: true), true)
+check("no muteAll: mute-default row is switchable", rowLocked(muteRule, nil, muteAll: false), false)
+check("no muteAll: alarm-default row is switchable", rowLocked(alarmRule, nil, muteAll: false), false)
+
 // 端末の暦が和暦でも終日の時刻は変わらない
 check("all-day with current calendar \(Calendar.current.identifier)", notificationDeliveryAhead(allDay, rule, nil, actions: (n, nil), importReminders: false, nowMillis: iso(tz == "America/Los_Angeles" ? "2026-10-22T15:00:00Z" : "2026-10-21T23:00:00Z")), true)
 print("calendar:", Calendar.current.identifier)

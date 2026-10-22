@@ -329,7 +329,9 @@ object AlarmExpander {
      * 鳴る側に戻る (false) なら指定を外すだけでよく、カレンダーの既定の動作 (通知だけ等) をそのまま使える。
      * 鳴らない (true) 時だけ「アラーム」の指定を書く。指定を常に ALARM にすると、通知だけのカレンダーの予定が
      * 全画面のアラームに格上げされてしまう。
-     * [hasReminderTriggers] は指定を外した後のリマインダー側の時刻の有無 (追加の何分前・取り込んだカレンダーの通知)
+     * [hasReminderTriggers] は指定を外した後のリマインダー側の時刻の有無 (追加の何分前・取り込んだカレンダーの通知)。
+     * [muteAll] が true の時は、すべてミュートで外れるアラームも鳴らない側に数える (通知は残る)。
+     * 行のスイッチを押せるかの判定に使う: ON で戻る動作がミュートで外れるなら、押しても鳴らないので押せなくする
      */
     fun silencedWithoutOverride(
         event: CalendarEvent,
@@ -338,10 +340,12 @@ object AlarmExpander {
         inviteFilter: InviteFilter,
         eventTypeFilter: EventTypeFilter,
         hasReminderTriggers: Boolean,
+        muteAll: Boolean = false,
     ): Boolean {
         if (!passesEventFilters(event, null, inviteFilter, eventTypeFilter)) return true
         val (start, reminder) = resolveActions(event, rule, null, titleCodes)
-        return start == EventAction.MUTE && (reminder == EventAction.MUTE || !hasReminderTriggers)
+        fun EventAction.silenced() = this == EventAction.MUTE || (muteAll && this == EventAction.ALARM)
+        return start.silenced() && (reminder.silenced() || !hasReminderTriggers)
     }
 
     /** 指定時刻が「今すぐ鳴らすべき／未来に予約すべき」窓に入るか。 */

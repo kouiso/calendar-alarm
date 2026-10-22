@@ -703,6 +703,69 @@ class EngineTest {
     }
 
     @Test
+    fun `すべてミュート中に通知の行を OFF にしても ON に戻せる。アラームの既定の行は OFF でも ON に戻せない`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        fun row(eventId: Long, calId: Long) = mapOf(
+            CalendarContract.Instances.EVENT_ID to eventId,
+            CalendarContract.Instances.CALENDAR_ID to calId,
+            CalendarContract.Instances.TITLE to "予定$eventId",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to start,
+            CalendarContract.Instances.END to start + 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        FakeCalendarProvider.instanceRows = listOf(row(1, 1), row(2, 2), row(3, 3))
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        // カレンダー1は通知だけ、2はアラーム、3は鳴らさない
+        db.calendarPrefs().upsert(CalendarPrefEntity("1", enabled = true, minutesBefore = 0, startAction = "NOTIFY", reminderAction = "NOTIFY"))
+        db.calendarPrefs().upsert(CalendarPrefEntity("2", enabled = true, minutesBefore = 0, startAction = "ALARM", reminderAction = "ALARM"))
+        db.calendarPrefs().upsert(CalendarPrefEntity("3", enabled = true, minutesBefore = 0, startAction = "MUTE", reminderAction = "MUTE"))
+
+        val settings = SettingsRepository(context)
+        settings.setMuteAll(true)
+        try {
+            suspend fun item(id: String) = repositoryWithCalendar.upcomingEvents().first { it.event.id == id }
+            suspend fun deliveries() = db.scheduledInstances().pending().associate { it.id to it.delivery }
+
+            // 通知の行: ON で切れる -> OFF で予約が消える -> OFF のままでも押せる -> ON で通知に戻る
+            val notify0 = item("1")
+            assertEquals(false, notify0.muted)
+            assertEquals(false, notify0.switchLocked)
+            repositoryWithCalendar.setEventSwitch(notify0, on = false)
+            val notifyOff = item("1")
+            assertTrue(notifyOff.muted)
+            assertEquals(false, notifyOff.switchLocked)
+            repositoryWithCalendar.setEventSwitch(notifyOff, on = true)
+            val notifyBack = item("1")
+            assertEquals(false, notifyBack.muted)
+            assertEquals(false, notifyBack.hasOverride)
+            assertEquals(false, notifyBack.switchLocked)
+            repositoryWithCalendar.resync("test")
+            assertEquals(
+                com.calendaralarm.shared.model.EventAction.NOTIFY.name,
+                deliveries().getValue("ev:1:1:$start:b0"),
+            )
+
+            // アラームの既定の行は、すべてミュート中は ON に戻しても外れるので、OFF の前後どちらも押せない
+            val alarm = item("2")
+            assertTrue(alarm.muted)
+            assertTrue(alarm.switchLocked)
+            // 鳴らさない既定の行も、ON で書く ALARM が外れるので押せない
+            val mute = item("3")
+            assertTrue(mute.muted)
+            assertTrue(mute.switchLocked)
+        } finally {
+            settings.setMuteAll(false)
+        }
+    }
+
+    @Test
     fun `鳴らさないアカウントの予定は、個別にアラームを指定していても行のスイッチを押せず鳴らない側に出る`() = runBlocking {
         val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
         fun row(eventId: Long, calId: Long) = mapOf(
