@@ -433,6 +433,8 @@ struct DisplayEvent: Identifiable, Hashable {
     var allDayOff: Bool = false
     /// 設定の「アラームをすべてミュート」中 (展開がアラームを全部外すので、鳴らない行はスイッチで入れても鳴らない)
     var muteAll: Bool = false
+    /// 始まる前で、通知の動作で届く (通知の許可が要る)
+    var notifies: Bool = false
 
     /// 行のスイッチを押せなくする (Android の `AgendaItem.switchLocked` と同じ規則)。
     /// すべてミュート中でも通知で鳴る行は切れるように残す

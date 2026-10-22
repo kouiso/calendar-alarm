@@ -363,8 +363,10 @@ struct SettingsView: View {
     private var ringStatusCard: some View {
         _ = clockTick
         let now = Engine.nowMillis
-        let missingCount = PermissionPlan.missingForRinging(center.states, scheduled: store.state.scheduled,
-                                                            nowMillis: now, usesRealAlarms: engine.usesRealAlarms)
+        // 通知で届く予定がこの先にある時だけ通知の許可も数える。予定画面と同じ予定の一覧から決める
+        let notifyAhead = store.displayEvents(nowMillis: now).contains { $0.notifies }
+        let missingCount = PermissionPlan.missingForRinging(center.states, notifyDeliveryAhead: notifyAhead,
+                                                            alarmMirrorsNotify: !engine.usesRealAlarms)
         let status = RingStatusSummary(
             missingPermissions: missingCount,
             recentMissed: store.recentMissedCount(nowMillis: now),
@@ -396,8 +398,8 @@ struct SettingsView: View {
                             let ok = center.states[p] == .granted
                             // 見出しの数と同じ規則で、鳴らすのに要る許可だけを「足りない」と赤く出す。
                             // 要らない許可 (通知だけで届く予約が無い時の通知) は、何に使うかを添えて灰色で出す
-                            let needed = PermissionPlan.neededForRinging(p, scheduled: store.state.scheduled,
-                                                                         nowMillis: now, usesRealAlarms: engine.usesRealAlarms)
+                            let needed = PermissionPlan.neededForRinging(p, notifyDeliveryAhead: notifyAhead,
+                                                                         alarmMirrorsNotify: !engine.usesRealAlarms)
                             HStack {
                                 Image(systemName: p.icon).frame(width: 22).foregroundStyle(.secondary)
                                 VStack(alignment: .leading, spacing: 1) {

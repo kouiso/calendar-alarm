@@ -116,42 +116,7 @@ struct AgendaView: View {
         return f.string(from: Date())
     }
 
-    private var displayEvents: [DisplayEvent] {
-        let now = Engine.nowMillis
-        let horizon = now + 14 * 86_400_000
-        return store.state.lastEvents
-            .filter { $0.endMillis >= now && $0.startMillis < horizon }
-            // このアプリで使わないアカウントの予定は出さない (#74)
-            .filter { !store.isHiddenCalendar($0.calendarId) }
-            .sorted { $0.startMillis < $1.startMillis }
-            .map { ev in
-                let ov = store.state.overrides[ev.instanceKey]
-                let rule = store.rule(for: ev.calendarId)
-                let cal = store.state.calendars.first { $0.id == ev.calendarId }
-                // 終日を鳴らさないカレンダーの終日予定は、個別指定より先に展開で外れる (shared `AlarmExpander.allDaySuppressed`)
-                let allDayOff = ev.allDay && rule.allDayMinutes < 0
-                // 鳴らさないアカウント (#74) の予定も、展開 (effectiveCalendarRules で enabled=false) が個別指定より先に外す
-                let accountOff = !store.accountAllowsRing(ev.calendarId)
-                return DisplayEvent(
-                    event: ev,
-                    calendarName: cal?.name ?? "",
-                    calendarColor: cal?.color ?? 0xFF888888,
-                    // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
-                    // 予約の展開と同じ判定を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
-                    // 行のスイッチが実際の予約と食い違わないよう、開始とリマインダーの解決後の動作まで見る
-                    muted: !rule.enabled || accountOff || allDayOff
-                        || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter)
-                        || resolvedActionsMuted(ev, rule, ov, store.state.titleCodes,
-                                                importReminders: store.state.importEventReminders,
-                                                muteAll: store.state.muteAll),
-                    effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore,
-                    calendarOff: !rule.enabled,
-                    accountOff: accountOff,
-                    allDayOff: allDayOff,
-                    muteAll: store.state.muteAll
-                )
-            }
-    }
+    private var displayEvents: [DisplayEvent] { store.displayEvents(nowMillis: Engine.nowMillis) }
 
     /// 検索クエリ適用後のイベント (タイトル部分一致)
     private var filteredEvents: [DisplayEvent] {
@@ -198,8 +163,11 @@ struct AgendaView: View {
 
     /// 鳴動の状態 (#51 PR2)。Android と同じ優先順 (shared `RingStatus`)
     private var ringStatus: RingStatusSummary {
-        let missing = PermissionPlan.missingForRinging(center.states, scheduled: store.state.scheduled,
-                                                       nowMillis: Engine.nowMillis, usesRealAlarms: engine.usesRealAlarms)
+        // 通知で届く予定がこの先にある時だけ、通知の許可も鳴らすのに要る側に数える。
+        // 予約の行は予定を消しても日数で消えるまで残るので、今の予定一覧から決める
+        let missing = PermissionPlan.missingForRinging(center.states,
+                                                       notifyDeliveryAhead: displayEvents.contains { $0.notifies },
+                                                       alarmMirrorsNotify: !engine.usesRealAlarms)
         return RingStatusSummary(missingPermissions: missing, recentMissed: recentMissedRecords.count, hasNextAlarm: nextAlarm != nil)
     }
 
@@ -544,12 +512,11 @@ struct EventRow: View {
     }
 }
 
-/// 何も鳴らないか。動作は shared `AlarmExpander.resolveActions` と同じ優先順:
+/// 予定が実際に使う動作。優先順は shared `AlarmExpander.resolveActions` と同じ:
 /// 予定の個別指定 > never コード > always コード > カレンダーの既定。
-/// 展開と同じく、リマインダーの動作はリマインダー側の時刻 (追加の何分前・取り込んだカレンダーの通知) がある時だけ鳴る。
-/// すべてミュート中のアラームも鳴らない側に数える (展開の emit と同じく通知は残る)
-func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
-                          importReminders: Bool, muteAll: Bool = false) -> Bool {
+/// 展開と同じく、リマインダーの動作はリマインダー側の時刻 (追加の何分前・取り込んだカレンダーの通知) がある時だけ使う (無ければ nil)
+func resolvedRingActions(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
+                         importReminders: Bool) -> (start: String, reminder: String?) {
     func matches(_ list: [String]) -> Bool {
         list.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty && ev.title.localizedCaseInsensitiveContains($0) }
     }
@@ -559,12 +526,92 @@ func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: Ev
         if apply && matches(codes.alwaysCodes) { return EventAction.alarm.rawValue }
         return fallback
     }
-    let mute = EventAction.mute.rawValue
     let hasReminderTriggers = !(ov?.extraOffsets ?? rule.extraOffsets).isEmpty
         || (importReminders && ev.calendarReminderMinutes.contains { $0 >= 0 })
+    return (resolve(codes.applyToStart, rule.startAction),
+            hasReminderTriggers ? resolve(codes.applyToReminders, rule.reminderAction) : nil)
+}
+
+/// 何も鳴らないか (`resolvedRingActions` の結果で決める)。
+/// すべてミュート中のアラームも鳴らない側に数える (展開の emit と同じく通知は残る)
+func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
+                          importReminders: Bool, muteAll: Bool = false) -> Bool {
+    let actions = resolvedRingActions(ev, rule, ov, codes, importReminders: importReminders)
     func silenced(_ action: String) -> Bool {
-        action == mute || (muteAll && action == EventAction.alarm.rawValue)
+        action == EventAction.mute.rawValue || (muteAll && action == EventAction.alarm.rawValue)
     }
-    return silenced(resolve(codes.applyToStart, rule.startAction))
-        && (silenced(resolve(codes.applyToReminders, rule.reminderAction)) || !hasReminderTriggers)
+    return silenced(actions.start) && (actions.reminder.map(silenced) ?? true)
+}
+
+/// 通知で届く時刻がこれから先にあるか。終日は shared `AlarmExpander.expandEvents` と同じく、
+/// 予定日 (UTC の日付) のローカル allDayMinutes に倒してから引く。生の startMillis だと、
+/// 0時を過ぎた当日の終日通知 (まだ9時前) を「もう過ぎた」と見てしまい、許可の警告が消える
+func notificationDeliveryAhead(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?,
+                               actions: (start: String, reminder: String?), importReminders: Bool,
+                               nowMillis: Int64) -> Bool {
+    let notify = EventAction.notify.rawValue
+    var startMillis = ev.startMillis
+    if ev.allDay {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? utc.timeZone
+        let day = utc.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: TimeInterval(ev.startMillis) / 1000))
+        var local = DateComponents()
+        local.year = day.year; local.month = day.month; local.day = day.day
+        local.hour = rule.allDayMinutes / 60; local.minute = rule.allDayMinutes % 60
+        if let d = Calendar.current.date(from: local) {
+            startMillis = Int64(d.timeIntervalSince1970 * 1000)
+        }
+    }
+    func ahead(_ minutes: Int) -> Bool { startMillis - Int64(minutes) * 60_000 > nowMillis }
+    if actions.start == notify && ahead(ov?.minutesBefore ?? rule.minutesBefore) { return true }
+    guard actions.reminder == notify else { return false }
+    let offsets = (ov?.extraOffsets ?? rule.extraOffsets)
+        + (importReminders ? ev.calendarReminderMinutes.filter { $0 >= 0 } : [])
+    return offsets.contains(where: ahead)
+}
+
+/// 予定画面の行と、設定の「鳴動の状態」が同じ予定の一覧から数えるための入口 (#51 PR2/PR3)。
+/// 予約の記録は予定を消しても日数で消えるまで残るので、通知の許可が要るかは記録ではなくこの一覧で決める
+extension Store {
+    func displayEvents(nowMillis now: Int64) -> [DisplayEvent] {
+        let horizon = now + 14 * 86_400_000
+        return state.lastEvents
+            .filter { $0.endMillis >= now && $0.startMillis < horizon }
+            // このアプリで使わないアカウントの予定は出さない (#74)
+            .filter { !isHiddenCalendar($0.calendarId) }
+            .sorted { $0.startMillis < $1.startMillis }
+            .map { ev in
+                let ov = state.overrides[ev.instanceKey]
+                let rule = self.rule(for: ev.calendarId)
+                let cal = state.calendars.first { $0.id == ev.calendarId }
+                // 終日を鳴らさないカレンダーの終日予定は、個別指定より先に展開で外れる (shared `AlarmExpander.allDaySuppressed`)
+                let allDayOff = ev.allDay && rule.allDayMinutes < 0
+                // 鳴らさないアカウント (#74) の予定も、展開 (effectiveCalendarRules で enabled=false) が個別指定より先に外す
+                let accountOff = !accountAllowsRing(ev.calendarId)
+                // 展開が予定ごとの指定より先に外す予定 (カレンダー・アカウント・終日・種類と招待のフィルタ)
+                let dropped = !rule.enabled || accountOff || allDayOff
+                    || !passesEventFilters(ev, ov, state.inviteFilter, state.eventTypeFilter)
+                let actions = resolvedRingActions(ev, rule, ov, state.titleCodes,
+                                                  importReminders: state.importEventReminders)
+                return DisplayEvent(
+                    event: ev,
+                    calendarName: cal?.name ?? "",
+                    calendarColor: cal?.color ?? 0xFF888888,
+                    // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
+                    // 予約の展開と同じ判定を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
+                    // 行のスイッチが実際の予約と食い違わないよう、開始とリマインダーの解決後の動作まで見る
+                    muted: dropped
+                        || resolvedActionsMuted(ev, rule, ov, state.titleCodes,
+                                                importReminders: state.importEventReminders,
+                                                muteAll: state.muteAll),
+                    effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore,
+                    calendarOff: !rule.enabled,
+                    accountOff: accountOff,
+                    allDayOff: allDayOff,
+                    muteAll: state.muteAll,
+                    // 始まる前の予定で通知の動作を使うものは、通知の許可が無いと届かない
+                    notifies: !dropped && notificationDeliveryAhead(ev, rule, ov, actions: actions, importReminders: state.importEventReminders, nowMillis: now)
+                )
+            }
+    }
 }

@@ -81,26 +81,6 @@ enum PermissionPlan {
     static func allGranted(_ states: [AppPermission: PermissionState]) -> Bool {
         AppPermission.allCases.allSatisfy { states[$0] == .granted }
     }
-
-    /// 予定画面と設定の「鳴動の状態」で同じ数にするための入口 (#51 PR3)。
-    /// 通知だけで届く予約がこの先にあるかを、両方の画面で同じ予約の一覧から決める
-    static func missingForRinging(_ states: [AppPermission: PermissionState], scheduled: [String: ScheduledRecord],
-                                  nowMillis: Int64, usesRealAlarms: Bool) -> Int {
-        missingForRinging(states, notifyDeliveryAhead: notifyDeliveryAhead(scheduled, nowMillis: nowMillis),
-                          alarmMirrorsNotify: !usesRealAlarms)
-    }
-
-    static func neededForRinging(_ p: AppPermission, scheduled: [String: ScheduledRecord],
-                                 nowMillis: Int64, usesRealAlarms: Bool) -> Bool {
-        neededForRinging(p, notifyDeliveryAhead: notifyDeliveryAhead(scheduled, nowMillis: nowMillis),
-                         alarmMirrorsNotify: !usesRealAlarms)
-    }
-
-    private static func notifyDeliveryAhead(_ scheduled: [String: ScheduledRecord], nowMillis: Int64) -> Bool {
-        scheduled.values.contains {
-            $0.instance.delivery == EventAction.notify.rawValue && $0.instance.triggerAtMillis > nowMillis
-        }
-    }
 }
 
 /// 端末の許可状態を読み、頼む。設定アプリから戻った時は refresh で取り直す。
