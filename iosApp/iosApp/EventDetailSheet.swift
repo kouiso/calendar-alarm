@@ -147,7 +147,7 @@ struct EventDetailSheet: View {
     /// 予定の日が予報の範囲の外なら天気は出さない
     private var eventForecast: WeatherService.Forecast? {
         let start = Date(timeIntervalSince1970: TimeInterval(ev.startMillis) / 1000)
-        return WeatherService.forecast(on: start, in: weather)
+        return WeatherService.forecast(on: start, allDay: ev.allDay, in: weather)
     }
 
     /// 小さい天気カード: アイコン40 + 気温34 + 天気・降水 + 「地点・HH:mm の予報」 (#51 PR3)。

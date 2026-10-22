@@ -43,14 +43,17 @@ final class WeatherService {
         }
     }
 
-    /// 予定の開始の日の予報。予報の日付は地点のタイムゾーンの日付なので、端末のタイムゾーンで引くと
-    /// 地点と端末で日付がずれる時に別の日の予報を出す。予報の範囲の外なら nil
-    static func forecast(on start: Date, in forecasts: [Forecast]?) -> Forecast? {
+    /// 予定の開始の日の予報。予報の日付は地点のタイムゾーンの日付なので、時刻のある予定は地点のタイムゾーンの日付で引く
+    /// (端末のタイムゾーンで引くと、地点と端末で日付がずれる時に別の日の予報を出す)。
+    /// 終日の予定は EventKit が端末のタイムゾーンの0時を開始にするので、端末のタイムゾーンの日付をそのまま使う
+    /// (地点のタイムゾーンに直すと、端末が地点より進んでいる時に前の日の予報を出す)。予報の範囲の外なら nil
+    static func forecast(on start: Date, allDay: Bool, in forecasts: [Forecast]?) -> Forecast? {
         guard let forecasts, let first = forecasts.first else { return nil }
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = first.timeZoneId.flatMap(TimeZone.init(identifier:)) ?? .current
+        f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = allDay ? .current : (first.timeZoneId.flatMap(TimeZone.init(identifier:)) ?? .current)
         let key = f.string(from: start)
         return forecasts.first { $0.date == key }
     }

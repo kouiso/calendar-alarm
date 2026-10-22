@@ -73,6 +73,18 @@ do {
         missed: [(id: "a", triggerAtMillis: now - hour, title: "同", detail: "同 @10/21 07:00")],
         nowMillis: now)
     check(twice.count == 2, "前の版の見逃しは行1つにつき1件だけ消し、残りは残す")
+    // 端末のタイムゾーンが変わって、記録した時の detail と今の行の detail の時刻が違っても二重に数えない
+    let zoneChanged = RingHistory.seed(
+        audit: [legacyMissed(22, at: now - hour, detail: "朝 @10/21 07:00")],
+        missed: [(id: "tz", triggerAtMillis: now - 2 * hour, title: "朝", detail: "朝 @10/20 15:00")],
+        nowMillis: now)
+    check(RingHistory.recentMissedCount(zoneChanged, nowMillis: now) == 1, "タイムゾーンが変わって detail がずれても、同じ見逃しは1件")
+    // 別のタイトルや、行より前に記録された見逃しは、同じ見逃しとして消さない
+    let unrelated = RingHistory.seed(
+        audit: [legacyMissed(23, at: now - hour, detail: "昼 @10/21 12:00"), legacyMissed(24, at: now - 5 * hour, detail: "朝 @10/20 15:00")],
+        missed: [(id: "tz2", triggerAtMillis: now - 2 * hour, title: "朝", detail: "朝 @10/21 07:00")],
+        nowMillis: now)
+    check(unrelated.count == 3, "タイトルが違う・行より前の記録は別の見逃しとして残す")
 }
 
 if failures > 0 {

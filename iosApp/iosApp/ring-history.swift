@@ -53,7 +53,8 @@ enum RingHistory {
     /// 停止とスヌーズは監査ログから作り直す (見逃しの数が更新直後に 0 に戻らないように)。
     /// 予約の行は単発アラームを使い直すと消えるので、行の無い見逃しは監査ログの MISSED で残す。
     /// 監査ログの MISSED が今ある行と同じ見逃しなら二重に数えない
-    /// (予約の id があればそれで、前の版の行は id が無いので detail が同じものを1行につき1件だけ)。
+    /// (予約の id があればそれで、前の版の行は id が無いので detail が同じものを1行につき1件だけ。
+    /// 端末のタイムゾーンが変わって detail の時刻がずれていても、タイトルと記録時刻で1行につき1件だけ)。
     static func seed(audit: [AuditEntry], missed: [(id: String, triggerAtMillis: Int64, title: String, detail: String)],
                      nowMillis: Int64) -> [AuditEntry] {
         let cutoff = nowMillis - retentionMillis
@@ -63,15 +64,32 @@ enum RingHistory {
                        instanceId: m.id, triggerAtMillis: m.triggerAtMillis, title: m.title)
         }
         let rowIds = Set(missed.map(\.id))
-        var unmatchedRows = fromRows.reduce(into: [String: Int]()) { $0[$1.detail, default: 0] += 1 }
-        let fromAudit = audit.filter { entry in
+        // 前の版の監査ログの MISSED (予約の id が無い) を、同じ見逃しの予約の行と1対1で対応づけて二重に数えない。
+        // まず detail が同じもの、次に端末のタイムゾーンが変わって detail の時刻の書き方がずれたものを
+        // 「タイトルが同じで、行の鳴動時刻から7日以内に記録されたもの」で対応づける
+        var unmatchedRows = fromRows
+        var consumed = Set<Int>()
+        let legacy = audit.indices.filter { audit[$0].type == "MISSED" && audit[$0].instanceId == nil }
+        for i in legacy {
+            guard let r = unmatchedRows.firstIndex(where: { $0.detail == audit[i].detail }) else { continue }
+            unmatchedRows.remove(at: r)
+            consumed.insert(i)
+        }
+        for i in legacy where !consumed.contains(i) {
+            let entry = audit[i]
+            guard let r = unmatchedRows.firstIndex(where: { row in
+                entry.detail.hasPrefix("\(row.title ?? "") @")
+                    && entry.atMillis >= row.atMillis && entry.atMillis - row.atMillis <= retentionMillis
+            }) else { continue }
+            unmatchedRows.remove(at: r)
+            consumed.insert(i)
+        }
+        let fromAudit = audit.enumerated().filter { i, entry in
             guard types.contains(entry.type) else { return false }
             guard entry.type == "MISSED" else { return true }
             if let instanceId = entry.instanceId { return !rowIds.contains(instanceId) }
-            guard let left = unmatchedRows[entry.detail], left > 0 else { return true }
-            unmatchedRows[entry.detail] = left - 1
-            return false
-        }
+            return !consumed.contains(i)
+        }.map(\.element)
         return (fromAudit + fromRows)
             .filter { $0.atMillis >= cutoff }
             .sorted { $0.atMillis < $1.atMillis }
