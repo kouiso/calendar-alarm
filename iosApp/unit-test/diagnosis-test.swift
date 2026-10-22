@@ -11,6 +11,7 @@ final class NotificationPathScheduler: AlarmScheduler {
     func schedule(_ inst: AlarmInstanceDTO, sound: String?) async throws -> String? { inst.id }
     func cancel(instanceId: String, reservationId: String?) async {}
     func hasReservation(instanceId: String) async -> Bool { true }
+    func unreservedPendingIds(_ scheduled: [String: ScheduledRecord]) async -> Set<String>? { nil }
 }
 
 /// OS の通知センターの偽物。テストのホストはアプリ本体なので、本物を触るとアプリの通知予約が消える
