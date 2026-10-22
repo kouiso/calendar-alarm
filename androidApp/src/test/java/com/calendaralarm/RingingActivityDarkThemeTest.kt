@@ -1,13 +1,12 @@
 package com.calendaralarm
 
 import android.content.res.Configuration
-import androidx.compose.ui.graphics.Color
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.graphics.toPixelMap
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.db.ScheduledInstanceEntity
@@ -60,6 +59,10 @@ class RingingActivityDarkThemeTest {
         AlarmService.ringingInstanceId.value = null
     }
 
+    private fun rgb(argb: Int) = Triple((argb shr 16) and 0xFF, (argb shr 8) and 0xFF, argb and 0xFF)
+
+    private fun androidx.compose.ui.graphics.Color.rgb() = rgb(androidx.compose.ui.graphics.toArgb(this))
+
     @Test
     fun `端末がライト設定でも鳴動画面のアクセントはダーク側のパレットで描かれる`() {
         val night = app.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
@@ -75,7 +78,8 @@ class RingingActivityDarkThemeTest {
                 ),
             )
         }
-        scenario = ActivityScenario.launch(RingingActivity.intent(app, id))
+        val launched = ActivityScenario.launch<RingingActivity>(RingingActivity.intent(app, id))
+        scenario = launched
         compose.waitUntil(timeoutMillis = 5_000) {
             compose.onAllNodesWithText("DarkThemeCheck").fetchSemanticsNodes().isNotEmpty()
         }
@@ -85,12 +89,23 @@ class RingingActivityDarkThemeTest {
         val light = palette.light.primary
         assertNotEquals("前提: ライトとダークで primary が違うこと", dark, light)
 
-        // 丸の中央は停止の■で上書きされるので、左寄り (丸の内側) の 1 画素を見る
-        val pixels = compose.onNodeWithTag(SLIDE_THUMB_TAG, useUnmergedTree = true).captureToImage().toPixelMap()
-        val actual = pixels[8, pixels.height / 2]
-        assertEquals("停止の丸の色がダーク側の primary であること (actual=$actual dark=$dark light=$light)", dark.toRgb(), actual.toRgb())
+        // 丸の中央は停止の■で上書きされるので、丸の左寄り (円の内側) の 1 画素を見る
+        val bounds = compose.onNodeWithTag(SLIDE_THUMB_TAG, useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInWindow
+        var actual = 0
+        launched.onActivity { activity ->
+            val decor = activity.window.decorView
+            val bitmap = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
+            decor.draw(Canvas(bitmap))
+            actual = bitmap.getPixel(
+                (bounds.left + bounds.width * 0.12f).toInt(),
+                bounds.center.y.toInt(),
+            )
+        }
+        assertEquals(
+            "停止の丸の色がダーク側の primary であること (actual=${rgb(actual)} dark=${dark.rgb()} light=${light.rgb()})",
+            dark.rgb(),
+            rgb(actual),
+        )
     }
-
-    private fun Color.toRgb(): Triple<Int, Int, Int> =
-        Triple((red * 255f + 0.5f).toInt(), (green * 255f + 0.5f).toInt(), (blue * 255f + 0.5f).toInt())
 }
