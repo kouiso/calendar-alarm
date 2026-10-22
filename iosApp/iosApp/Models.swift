@@ -446,7 +446,9 @@ enum InstanceState: String, Codable {
 struct ScheduledRecord: Codable, Hashable {
     var instance: AlarmInstanceDTO
     var state: InstanceState
-    var alarmKitId: String? = nil // AlarmKit UUID (iOS26 経路のみ)
+    /// 予約の実体の id。AlarmKit は UUID、通知 (iOS 26 未満) はリクエスト id。
+    /// 予約に失敗したまま残した行 (スヌーズの再試行待ち) は nil
+    var alarmKitId: String? = nil
     /// OS の予約に渡した取り込み音のファイル名 (#101)。nil = iPhone の既定音。
     /// どの予約がまだその音で鳴るかを知る手掛かりで、使われていない音だけを消すのに使う
     var soundFile: String? = nil
