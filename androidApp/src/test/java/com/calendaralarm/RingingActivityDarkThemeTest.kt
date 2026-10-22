@@ -86,7 +86,7 @@ class RingingActivityDarkThemeTest {
         assertNotEquals("前提: ライトとダークで primary が違うこと", dark, light)
 
         // 丸の中央は停止の■で上書きされるので、左寄り (丸の内側) の 1 画素を見る
-        val pixels = compose.onNodeWithTag(SLIDE_THUMB_TAG).captureToImage().toPixelMap()
+        val pixels = compose.onNodeWithTag(SLIDE_THUMB_TAG, useUnmergedTree = true).captureToImage().toPixelMap()
         val actual = pixels[8, pixels.height / 2]
         assertEquals("停止の丸の色がダーク側の primary であること (actual=$actual dark=$dark light=$light)", dark.toRgb(), actual.toRgb())
     }
