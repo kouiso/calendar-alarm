@@ -50,6 +50,16 @@
         <item quantity="other">In %1$d minutes</item>
     </plurals>
     <string name="event_starts_now">Starting now</string>
+    <string name="extracted_bad_datetime">Invalid date or time format (%1$s)</string>
+    <string name="extracted_field_date">Date (YYYY-MM-DD)</string>
+    <string name="extracted_field_end">End (blank = 1 hour)</string>
+    <string name="extracted_field_location">Location</string>
+    <string name="extracted_field_start">Start (YYYY-MM-DDTHH:mm)</string>
+    <string name="extracted_field_title">Title</string>
+    <string name="extracted_no_calendar">There is no calendar you can write to</string>
+    <string name="extracted_no_write_permission">Calendar write permission is not granted</string>
+    <string name="extracted_title">Add to calendar</string>
+    <string name="extracted_write_failed">Could not write to the calendar</string>
     <string name="mail_add_event">Add %1$s to your calendar</string>
     <string name="mail_ai_unavailable">AI reading is not available in this build</string>
     <string name="mail_channel">Mail to event</string>
@@ -113,6 +123,18 @@
     <string name="repeat_monthly_day">Monthly on day %1$d</string>
     <string name="repeat_once">Once</string>
     <string name="repeat_weekly_days">Weekly %1$s</string>
+    <string name="rule_template_breaking_news">Breaking news</string>
+    <string name="rule_template_delivery">Delivery notices</string>
+    <string name="rule_template_flight">Flight and gate changes</string>
+    <string name="rule_template_gmail">Gmail important mail</string>
+    <string name="rule_template_google_tasks">Google Tasks</string>
+    <string name="rule_template_outlook">Outlook important mail</string>
+    <string name="rule_template_security">Security and verification codes</string>
+    <string name="rule_template_telegram">Telegram urgent messages</string>
+    <string name="rule_template_twitch">Twitch stream start</string>
+    <string name="rule_template_whatsapp">WhatsApp priority contacts</string>
+    <string name="rule_template_x_posts">X (Twitter) posts</string>
+    <string name="rule_template_youtube_live">YouTube live start</string>
     <string name="rules_add">+ Rule</string>
     <string name="rules_ai_failed">Generation failed</string>
     <string name="rules_ai_generate">Generate with AI</string>
@@ -131,6 +153,13 @@
     <string name="rules_target_apps">Apps (empty = all apps)</string>
     <string name="rules_title">Notification alarms</string>
     <string name="rules_title_needs_permission">Notification alarms (needs permission)</string>
+    <string name="share_import_ai_unavailable">AI reading is not available in this build. Enter the date and time to add it.</string>
+    <string name="share_import_cancel">Cancel</string>
+    <string name="share_import_no_event">No event was found in the text. Enter the date and time to add it.</string>
+    <string name="share_import_read_failed">Reading failed (%1$s). Enter the date and time to add it.</string>
+    <string name="share_import_reading">Reading an event from the text</string>
+    <string name="share_import_title">Turn into an event</string>
+    <string name="share_import_unknown">unknown</string>
     <string name="share_to_event">Turn into an event</string>
     <string name="sync_channel">Sync</string>
     <string name="sync_running">Syncing your calendar</string>
