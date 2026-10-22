@@ -13,7 +13,7 @@ struct TimerView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     // Night UI カスタムセグメント
-                    NightSegment(labels: Mode.allCases.map { $0.rawValue }, selected: Binding(
+                    NightSegment(labels: Mode.allCases.map { NSLocalizedString($0.rawValue, comment: "タイマー画面の切り替え") }, selected: Binding(
                         get: { mode == .timer ? 0 : 1 },
                         set: { mode = $0 == 0 ? .timer : .stopwatch }))
                     .padding(.horizontal)

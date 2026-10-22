@@ -8,8 +8,6 @@ struct AlarmsView: View {
     @State private var editingNew = false
     @State private var deleteTarget: StandaloneAlarmDTO? = nil
 
-    private static let wdNames = ["SUNDAY": "日", "MONDAY": "月", "TUESDAY": "火", "WEDNESDAY": "水",
-                                  "THURSDAY": "木", "FRIDAY": "金", "SATURDAY": "土"]
 
     var body: some View {
         NavigationStack {
@@ -113,18 +111,27 @@ struct AlarmsView: View {
 
     private func repeatLabel(_ a: StandaloneAlarmDTO) -> String {
         switch a.effectiveRepeatMode {
-        case "ONCE": return "1回のみ"
-        case "MONTHLY": return "毎月"
-        case "INTERVAL_DAYS": return "\(a.repeatInterval)日ごと"
-        case "INTERVAL_WEEKS": return "\(a.repeatInterval)週ごと"
-        case "INTERVAL_MONTHS": return "\(a.repeatInterval)ヶ月ごと"
+        case "ONCE": return String(localized: "1回のみ")
+        case "MONTHLY": return String(localized: "毎月")
+        case "INTERVAL_DAYS": return String(localized: "\(a.repeatInterval)日ごと")
+        case "INTERVAL_WEEKS": return String(localized: "\(a.repeatInterval)週ごと")
+        case "INTERVAL_MONTHS": return String(localized: "\(a.repeatInterval)ヶ月ごと")
         default:
             // 曜日空のWEEKLYはONCEとして鳴る (展開側と同じ意味)
-            if a.daysOfWeek.isEmpty { return "1回のみ" }
-            if a.daysOfWeek.count == 7 { return "毎日" }
+            if a.daysOfWeek.isEmpty { return String(localized: "1回のみ") }
+            if a.daysOfWeek.count == 7 { return String(localized: "毎日") }
             let order = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"]
-            return order.filter { a.daysOfWeek.contains($0) }.compactMap { Self.wdNames[$0] }.joined()
+            // 曜日名は表から引いた後に訳す。日本語は「月水金」、英語は「Mon Wed Fri」と区切って並べる
+            let separator = Bundle.main.preferredLocalizations.first == "en" ? " " : ""
+            return order.filter { a.daysOfWeek.contains($0) }
+                .map { Self.weekdayShort($0) }
+                .joined(separator: separator)
         }
+    }
+
+    /// 曜日の短い名前 (日本語は「月」)。「月」は月表示のタブと同じ字になるので、曜日は専用の鍵で訳を引く
+    static func weekdayShort(_ day: String) -> String {
+        NSLocalizedString("weekday-short-\(day)", comment: "曜日の短い名前。day は SUNDAY〜SATURDAY")
     }
 
     private func nextInstance(_ a: StandaloneAlarmDTO) -> AlarmInstanceDTO? {
@@ -148,8 +155,6 @@ struct AlarmEditView: View {
     @State private var anchorDate = Date()
 
     private static let weekdays = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"]
-    private static let wdNames = ["SUNDAY": "日", "MONDAY": "月", "TUESDAY": "火", "WEDNESDAY": "水",
-                                  "THURSDAY": "木", "FRIDAY": "金", "SATURDAY": "土"]
 
     var body: some View {
         NavigationStack {
@@ -187,7 +192,7 @@ struct AlarmEditView: View {
                                         Button {
                                             if on { alarm.daysOfWeek.remove(wd) } else { alarm.daysOfWeek.insert(wd) }
                                         } label: {
-                                            Text(Self.wdNames[wd] ?? "?")
+                                            Text(AlarmsView.weekdayShort(wd))
                                                 .font(NightTheme.font(13, weight: .medium))
                                                 .frame(width: 32, height: 32)
                                                 .background(on ? NightTheme.indigo : Color(uiColor: .tertiarySystemGroupedBackground), in: Circle())
