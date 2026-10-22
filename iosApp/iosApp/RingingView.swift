@@ -111,24 +111,28 @@ struct RingingView: View {
                             .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 40))
                     }
                     .padding(.horizontal, 24)
-                    // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) { showSnoozePresets.toggle() }
-                    } label: {
-                        // 三項演算子で文字列を渡すと LocalizedStringKey にならず翻訳が効かないため、リテラルを分けて書く
-                        Group {
-                            if showSnoozePresets {
-                                Text("スヌーズ時間を選ぶ ▴")
-                            } else {
-                                Text("スヌーズ時間を選ぶ ▾")
+                    // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開。
+                    // 窓が低すぎる時は出さない: 下に固定した操作群が背伸びして、停止の丸が画面の外へ出るため
+                    let canChoose = RingingLayout.showsPresetPicker(windowHeight: geo.size.height)
+                    if canChoose {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.15)) { showSnoozePresets.toggle() }
+                        } label: {
+                            // 三項演算子で文字列を渡すと LocalizedStringKey にならず翻訳が効かないため、リテラルを分けて書く
+                            Group {
+                                if showSnoozePresets {
+                                    Text("スヌーズ時間を選ぶ ▴")
+                                } else {
+                                    Text("スヌーズ時間を選ぶ ▾")
+                                }
                             }
+                            .font(NightTheme.font(14))
+                            .foregroundStyle(NightTheme.muted)
+                            .padding(.horizontal, 12).padding(.vertical, 8)
                         }
-                        .font(NightTheme.font(14))
-                        .foregroundStyle(NightTheme.muted)
-                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .padding(.top, 4)
                     }
-                    .padding(.top, 4)
-                    if showSnoozePresets {
+                    if showSnoozePresets && canChoose {
                         HStack(spacing: 8) {
                             ForEach(snoozePresets, id: \.self) { m in
                                 Button { engine.snooze(inst, minutes: m) } label: {
@@ -177,6 +181,18 @@ struct RingingView: View {
             if remain > 0 { return "\(Int((remain + 30) / 60))分後に開始" }
         }
         return "まもなく開始"
+    }
+}
+
+/// 鳴動画面の寸法に関する決まり。下に固定した操作群が窓より高くなって、停止の丸が見えなくなるのを防ぐ
+enum RingingLayout {
+    /// 「スヌーズ時間を選ぶ」を出す窓の最低の高さ (pt)。
+    /// 固定した操作群は、開いたチップ込みで約 290pt。これを足しても上のスクロール領域に 230pt 以上残る高さにしてある。
+    /// これより低い窓では、既定のスヌーズと停止だけを残す
+    static let minHeightForPresetPicker: CGFloat = 520
+
+    static func showsPresetPicker(windowHeight: CGFloat) -> Bool {
+        windowHeight >= minHeightForPresetPicker
     }
 }
 
