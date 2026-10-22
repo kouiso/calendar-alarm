@@ -131,7 +131,6 @@ struct AgendaView: View {
                     || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter)
                 let actions = resolvedRingActions(ev, rule, ov, store.state.titleCodes,
                                                   importReminders: store.state.importEventReminders)
-                let notify = EventAction.notify.rawValue
                 return DisplayEvent(
                     event: ev,
                     calendarName: cal?.name ?? "",
@@ -149,7 +148,7 @@ struct AgendaView: View {
                     allDayOff: allDayOff,
                     muteAll: store.state.muteAll,
                     // 始まる前の予定で通知の動作を使うものは、通知の許可が無いと届かない
-                    notifies: !dropped && ev.startMillis > now && (actions.start == notify || actions.reminder == notify)
+                    notifies: !dropped && notificationDeliveryAhead(ev, rule, ov, actions: actions, importReminders: store.state.importEventReminders, nowMillis: now)
                 )
             }
     }
@@ -578,4 +577,31 @@ func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: Ev
         action == EventAction.mute.rawValue || (muteAll && action == EventAction.alarm.rawValue)
     }
     return silenced(actions.start) && (actions.reminder.map(silenced) ?? true)
+}
+
+/// 通知で届く時刻がこれから先にあるか。終日は shared `AlarmExpander.expandEvents` と同じく、
+/// 予定日 (UTC の日付) のローカル allDayMinutes に倒してから引く。生の startMillis だと、
+/// 0時を過ぎた当日の終日通知 (まだ9時前) を「もう過ぎた」と見てしまい、許可の警告が消える
+func notificationDeliveryAhead(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?,
+                               actions: (start: String, reminder: String?), importReminders: Bool,
+                               nowMillis: Int64) -> Bool {
+    let notify = EventAction.notify.rawValue
+    var startMillis = ev.startMillis
+    if ev.allDay {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? utc.timeZone
+        let day = utc.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: TimeInterval(ev.startMillis) / 1000))
+        var local = DateComponents()
+        local.year = day.year; local.month = day.month; local.day = day.day
+        local.hour = rule.allDayMinutes / 60; local.minute = rule.allDayMinutes % 60
+        if let d = Calendar.current.date(from: local) {
+            startMillis = Int64(d.timeIntervalSince1970 * 1000)
+        }
+    }
+    func ahead(_ minutes: Int) -> Bool { startMillis - Int64(minutes) * 60_000 > nowMillis }
+    if actions.start == notify && ahead(ov?.minutesBefore ?? rule.minutesBefore) { return true }
+    guard actions.reminder == notify else { return false }
+    let offsets = (ov?.extraOffsets ?? rule.extraOffsets)
+        + (importReminders ? ev.calendarReminderMinutes.filter { $0 >= 0 } : [])
+    return offsets.contains(where: ahead)
 }
