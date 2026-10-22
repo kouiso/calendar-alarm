@@ -37,9 +37,13 @@ final class Engine: ObservableObject {
     /// 予約を待つ間に取り消された子の id。予約の側はこれを見て、書き戻さずに終わる
     private var cancelledAwaitingChildren: Set<String> = []
 
+    /// アプリ自身が作った Engine の数 (差し替え口なしで作ったもの)。試験の母体が自分の Engine を動かしていないことの確認用
+    private(set) static var appEngineCount = 0
+
     /// [scheduler] [store] はテストで OS の予約失敗を再現し、端末の保存データを触らないための差し替え口。
     /// アプリは渡さない
     init(scheduler: AlarmScheduler? = nil, store: Store? = nil) {
+        if scheduler == nil { Self.appEngineCount += 1 }
         self.store = store ?? Store()
         if let scheduler {
             self.scheduler = scheduler

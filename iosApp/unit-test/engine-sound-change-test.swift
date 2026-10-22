@@ -384,6 +384,15 @@ final class EngineSoundChangeTests: XCTestCase {
         XCTAssertFalse(Engine.isRegeneratedByExpand(inst, calendarReadable: true))
     }
 
+    /// 母体のアプリが自分の Engine を作ると、試験の音のファイルを消し、共有の既定音を書き換えて試験が時々落ちる。
+    /// main が空の母体を選び、アプリ自身の Engine が1つも作られていないことを確かめる
+    func testHostAppRunsWithoutItsOwnEngine() async throws {
+        XCTAssertEqual(AppLauncher.launchedMode, .unitTestHost)
+        // 通常起動なら Engine は最初の画面を作る時に生まれる。その猶予を置いてから数える
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        XCTAssertEqual(Engine.appEngineCount, 0, "母体のアプリが自分の Engine を作っている")
+    }
+
     private func soundFile(_ name: String) -> String {
         AlarmSoundLibrary.soundsDirectory.appendingPathComponent(name).path
     }
