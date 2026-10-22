@@ -54,6 +54,7 @@ import kotlinx.coroutines.launch
  * 通知アラームの設定カード: 有効化・権限誘導・ルール一覧・追加
  * (手動/テンプレート/AI生成の3経路。元アプリと同じ導線。AI はキーを渡したビルドだけ)。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepository.Settings) {
     val context = LocalContext.current
@@ -132,18 +133,16 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                     }
                 }
             }
-            // テンプレート (横スクロール相当に複数行で表示)
-            NotificationRuleTemplates.ALL.chunked(3).forEach { row ->
-                Row {
-                    row.forEach { t ->
-                        TextButton(onClick = {
-                            scope.launch {
-                                settings.setNotificationRules(
-                                    prefs.notificationRules + t,
-                                )
-                            }
-                        }) { Text(t.name, style = MaterialTheme.typography.bodySmall) }
-                    }
+            // テンプレート。英語は名前が長く、3 個固定の行だと 1 文字ずつ折り返すので、幅に合わせて折り返す
+            FlowRow(Modifier.fillMaxWidth()) {
+                NotificationRuleTemplates.all(context).forEach { t ->
+                    TextButton(onClick = {
+                        scope.launch {
+                            settings.setNotificationRules(
+                                prefs.notificationRules + t,
+                            )
+                        }
+                    }) { Text(t.name, style = MaterialTheme.typography.bodySmall) }
                 }
             }
         }
