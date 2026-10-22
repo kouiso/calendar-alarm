@@ -70,7 +70,8 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     /// 捨てると、resync で拾えない時 (通知の許可が外れた等) に届いた分が見逃しになる
     @MainActor private var waiting: [(id: String, at: Int64)] = []
 
-    @MainActor private func deliver(_ id: String, at: Int64) {
+    /// 通知が届いた知らせの入口。テストからも呼ぶので internal
+    @MainActor func deliver(_ id: String, at: Int64) {
         guard let engine else { waiting.append((id, at)); return }
         engine.markNotificationDelivered(id, deliveredAtMillis: at)
     }

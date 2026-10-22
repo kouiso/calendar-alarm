@@ -29,6 +29,65 @@ final class FakeNotificationCenter: NotificationCenterPort {
         pending.removeAll { ids.contains($0) }
     }
     func add(_ request: UNNotificationRequest) { added.append(request.identifier) }
+    /// submit に渡された依頼。NotificationScheduler が OS に何を予約するかをそのまま見る
+    var submitted: [UNNotificationRequest] = []
+    var submitError: Error?
+    func submit(_ request: UNNotificationRequest) async throws {
+        if let submitError { throw submitError }
+        submitted.append(request)
+    }
+}
+
+/// UNNotification / UNNotificationResponse は公開の init が無い。OS が届けた物と同じ型を、
+/// NSCoder から復元して作る (delegate の本物のメソッドと、通知センターの読み取りを実行するため)
+private final class StubCoder: NSCoder {
+    private let values: [String: Any]
+    init(_ values: [String: Any]) { self.values = values }
+    override var allowsKeyedCoding: Bool { true }
+    override var requiresSecureCoding: Bool { false }
+    override func containsValue(forKey key: String) -> Bool { values[key] != nil }
+    override func decodeObject(forKey key: String) -> Any? { values[key] }
+    override func decodeBool(forKey key: String) -> Bool { (values[key] as? Bool) ?? false }
+}
+
+private enum OSNotification {
+    static func make(id: String, date: Date) -> UNNotification {
+        let request = UNNotificationRequest(identifier: id, content: UNMutableNotificationContent(), trigger: nil)
+        let coder = StubCoder(["request": request, "date": date])
+        return UNNotification(coder: coder)!
+    }
+
+    static func response(id: String, date: Date) -> UNNotificationResponse {
+        let coder = StubCoder([
+            "notification": make(id: id, date: date),
+            "actionIdentifier": UNNotificationDefaultActionIdentifier,
+        ])
+        return UNNotificationResponse(coder: coder)!
+    }
+}
+
+/// 読み取り (予約中・届いた) だけ本物の SystemNotificationCenter を通し、消す・足す・許可は偽物に流す。
+/// 本物の消す・足すを通すと、テストのホストであるアプリ本体の通知予約を触ってしまう
+private final class ReadsThroughSystemCenter: NotificationCenterPort {
+    let system: SystemNotificationCenter
+    let rest: FakeNotificationCenter
+    init(system: SystemNotificationCenter, rest: FakeNotificationCenter) {
+        self.system = system
+        self.rest = rest
+    }
+    func pendingRequestIds() async -> [String] { await system.pendingRequestIds() }
+    func delivered() async -> [(id: String, atMillis: Int64)] { await system.delivered() }
+    func isAuthorized() async -> Bool { await rest.isAuthorized() }
+    func removePending(_ ids: [String]) { rest.removePending(ids) }
+    func add(_ request: UNNotificationRequest) { rest.add(request) }
+    func submit(_ request: UNNotificationRequest) async throws { try await rest.submit(request) }
+}
+
+private final class FakeNotificationSource: UserNotificationSource {
+    var pendingList: [UNNotificationRequest] = []
+    var deliveredList: [UNNotification] = []
+    func pendingNotificationRequests() async -> [UNNotificationRequest] { pendingList }
+    func deliveredNotifications() async -> [UNNotification] { deliveredList }
 }
 
 final class DiagnosisPlanTests: XCTestCase {
@@ -337,5 +396,151 @@ final class StoreAuditOrderTests: XCTestCase {
         XCTAssertEqual(store.state.audit.map { $0.atMillis }, [500, 1_000, 2_000, 3_000, 3_000])
         // 差し込んでも採番は増える (診断画面の作り直しの合図に使う)
         XCTAssertEqual(store.state.nextAuditId, idBefore + 3)
+    }
+}
+
+
+/// 本番の配線 (NotificationScheduler / SystemNotificationCenter / NotificationPresenter) を通すテスト。
+/// ここが壊れると、iOS 26 未満の予約が全部「予約できていない」に見え、届いた証拠も取れなくなる。
+/// 他のテストは偽の予約や偽の通知センターを使うので、この配線の退行を拾えない
+@MainActor
+final class NotificationWiringTests: XCTestCase {
+    private var center: FakeNotificationCenter!
+    private var engine: Engine!
+
+    override func setUp() async throws {
+        center = FakeNotificationCenter()
+        engine = Engine(
+            scheduler: NotificationScheduler(port: center),
+            store: Store(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("store-\(UUID().uuidString).json")),
+            notifications: center)
+        engine.store.mutate {
+            $0.scheduled = [:]
+            $0.standaloneAlarms = []
+            $0.audit = []
+        }
+    }
+
+    private func pendingRow(_ id: String, at: Int64) {
+        let aid = engine.store.upsertAlarm(StandaloneAlarmDTO(hour: 7, minute: 0, repeatMode: "ONCE"))
+        let inst = AlarmInstanceDTO(
+            id: id, triggerAtMillis: at, title: "朝", kind: "STANDALONE", standaloneAlarmId: aid)
+        engine.store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: id))
+    }
+
+    /// 予約できたら、予約した通知の id を返す。nil を返すと全行が「予約できていない」と診断される
+    func testNotificationSchedulerReturnsTheIdItReserved() async throws {
+        let scheduler = NotificationScheduler(port: center)
+        let inst = AlarmInstanceDTO(
+            id: "sa:1:x", triggerAtMillis: Engine.nowMillis + 60_000, title: "朝", kind: "STANDALONE")
+        let rid = try await scheduler.schedule(inst)
+        XCTAssertEqual(rid, "sa:1:x")
+        XCTAssertEqual(center.submitted.map { $0.identifier }, ["sa:1:x"])
+        XCTAssertTrue(center.submitted.first?.trigger is UNCalendarNotificationTrigger)
+    }
+
+    /// OS が予約を断った時は投げる。投げないと、予約できていない行が「予約できた」になる
+    func testNotificationSchedulerThrowsWhenTheOSRefuses() async {
+        struct Refused: Error {}
+        center.submitError = Refused()
+        let inst = AlarmInstanceDTO(
+            id: "sa:1:x", triggerAtMillis: Engine.nowMillis + 60_000, title: "朝", kind: "STANDALONE")
+        do {
+            _ = try await NotificationScheduler(port: center).schedule(inst)
+            XCTFail("予約を断られたのに投げなかった")
+        } catch {}
+    }
+
+    func testNotificationSchedulerCancelRemovesThePendingRequest() async {
+        await NotificationScheduler(port: center).cancel(instanceId: "sa:1:x", reservationId: "sa:1:x")
+        XCTAssertEqual(center.removed, ["sa:1:x"])
+    }
+
+    /// 本物の NotificationScheduler で予約した行は、診断で「予約できている」になり、次のアラームに選ばれる。
+    /// 予約 id が nil に戻ると「このままでは鳴りません」と出る
+    func testReservedThroughTheRealSchedulerIsDiagnosedAsReserved() async throws {
+        let ok = await engine.scheduleTimer(durationMillis: 60_000, label: "テスト鳴動")
+        XCTAssertTrue(ok)
+        let rows = Array(engine.store.state.scheduled.values)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.alarmKitId, rows.first?.instance.id)
+        XCTAssertEqual(DiagnosisPlan.unreservedCount(rows, nowMillis: Engine.nowMillis), 0)
+        XCTAssertEqual(DiagnosisPlan.nextAlarm(rows, nowMillis: Engine.nowMillis)?.id, rows.first?.instance.id)
+    }
+
+    /// 通知センターに残った通知を resync が読み、届いた行を鳴動済みにする。
+    /// SystemNotificationCenter.delivered() が空を返すと、届いた証拠が全部消える
+    func testSystemNotificationCenterReadsDeliveredAndPending() async {
+        let source = FakeNotificationSource()
+        let date = Date(timeIntervalSince1970: 1_800_000_000.5)
+        source.deliveredList = [OSNotification.make(id: "sa:1:x", date: date)]
+        source.pendingList = [UNNotificationRequest(identifier: "sa:2:y", content: UNMutableNotificationContent(), trigger: nil)]
+        let system = SystemNotificationCenter(source: source)
+        let delivered = await system.delivered()
+        XCTAssertEqual(delivered.map { $0.id }, ["sa:1:x"])
+        XCTAssertEqual(delivered.first?.atMillis, 1_800_000_000_500)
+        let pending = await system.pendingRequestIds()
+        XCTAssertEqual(pending, ["sa:2:y"])
+    }
+
+    func testResyncFiresARowThatTheSystemCenterReportsDelivered() async {
+        let source = FakeNotificationSource()
+        let at = Engine.nowMillis - 60_000
+        pendingRow("sa:9:z", at: at)
+        source.deliveredList = [OSNotification.make(id: "sa:9:z", date: Date(timeIntervalSince1970: Double(at + 500) / 1000))]
+        let wired = Engine(
+            scheduler: NotificationScheduler(port: center),
+            store: engine.store,
+            notifications: ReadsThroughSystemCenter(system: SystemNotificationCenter(source: source), rest: center))
+        await wired.resync(reason: "test")
+        XCTAssertEqual(engine.store.state.scheduled["sa:9:z"]?.state, .fired)
+    }
+
+    /// 通知が届いた知らせは、engine が付く前なら待たせ、付いた時に記録する。
+    /// 待たせずに捨てると、起動直後に届いた分が見逃しになる
+    func testPresenterBuffersBeforeEngineAndFlushesWhenAttached() {
+        let at = Engine.nowMillis - 60_000
+        pendingRow("sa:5:q", at: at)
+        let presenter = NotificationPresenter()
+        presenter.deliver("sa:5:q", at: at + 500)
+        XCTAssertEqual(engine.store.state.scheduled["sa:5:q"]?.state, .pending)
+        presenter.engine = engine
+        XCTAssertEqual(engine.store.state.scheduled["sa:5:q"]?.state, .fired)
+        XCTAssertEqual(DiagnosisPlan.lastFired(engine.store.state.audit)?.atMillis, at + 500)
+    }
+
+    func testPresenterRecordsDeliveryDirectlyOnceAttached() {
+        let at = Engine.nowMillis - 60_000
+        pendingRow("sa:6:r", at: at)
+        let presenter = NotificationPresenter()
+        presenter.engine = engine
+        presenter.deliver("sa:6:r", at: at + 500)
+        XCTAssertEqual(engine.store.state.scheduled["sa:6:r"]?.state, .fired)
+    }
+
+    /// アプリを開いている間の通知はバナーと音で出し、届いた時刻で記録する (OS が渡す本物の型で呼ぶ)
+    func testWillPresentShowsBannerAndSoundAndRecordsDelivery() async {
+        let at = Engine.nowMillis - 60_000
+        pendingRow("sa:7:s", at: at)
+        let presenter = NotificationPresenter()
+        presenter.engine = engine
+        let note = OSNotification.make(id: "sa:7:s", date: Date(timeIntervalSince1970: Double(at + 500) / 1000))
+        let options = await presenter.userNotificationCenter(.current(), willPresent: note)
+        XCTAssertTrue(options.contains(.banner))
+        XCTAssertTrue(options.contains(.sound))
+        XCTAssertTrue(options.contains(.list))
+        XCTAssertEqual(engine.store.state.scheduled["sa:7:s"]?.state, .fired)
+    }
+
+    /// 通知を開いた時は、押した時刻でなく届いた時刻で残す
+    func testDidReceiveRecordsDeliveryAtTheDeliveredTime() async {
+        let at = Engine.nowMillis - 60_000
+        pendingRow("sa:8:t", at: at)
+        let presenter = NotificationPresenter()
+        presenter.engine = engine
+        let res = OSNotification.response(id: "sa:8:t", date: Date(timeIntervalSince1970: Double(at + 500) / 1000))
+        await presenter.userNotificationCenter(.current(), didReceive: res)
+        XCTAssertEqual(engine.store.state.scheduled["sa:8:t"]?.state, .fired)
+        XCTAssertEqual(DiagnosisPlan.lastFired(engine.store.state.audit)?.atMillis, at + 500)
     }
 }

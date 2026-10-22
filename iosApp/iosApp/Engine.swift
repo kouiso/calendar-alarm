@@ -643,17 +643,33 @@ protocol NotificationCenterPort: AnyObject {
     func isAuthorized() async -> Bool
     func removePending(_ ids: [String])
     func add(_ request: UNNotificationRequest)
+    /// 通知を予約し、OS が受け付けなかった時は投げる。add と違い失敗を呼び出し元に返す
+    func submit(_ request: UNNotificationRequest) async throws
 }
+
+/// SystemNotificationCenter が OS から読む 2 つの口。UNUserNotificationCenter と同じ形にして、
+/// テストで届いた通知を返す偽物に替えられるようにする (届いた通知の読み取りを実機なしで確かめるため)
+protocol UserNotificationSource: AnyObject {
+    func pendingNotificationRequests() async -> [UNNotificationRequest]
+    func deliveredNotifications() async -> [UNNotification]
+}
+
+extension UNUserNotificationCenter: UserNotificationSource {}
 
 final class SystemNotificationCenter: NotificationCenterPort {
     private let center = UNUserNotificationCenter.current()
+    private let source: UserNotificationSource
+
+    init(source: UserNotificationSource = UNUserNotificationCenter.current()) {
+        self.source = source
+    }
 
     func pendingRequestIds() async -> [String] {
-        await center.pendingNotificationRequests().map { $0.identifier }
+        await source.pendingNotificationRequests().map { $0.identifier }
     }
 
     func delivered() async -> [(id: String, atMillis: Int64)] {
-        await center.deliveredNotifications().map {
+        await source.deliveredNotifications().map {
             ($0.request.identifier, Int64($0.date.timeIntervalSince1970 * 1000))
         }
     }
@@ -668,5 +684,9 @@ final class SystemNotificationCenter: NotificationCenterPort {
 
     func add(_ request: UNNotificationRequest) {
         center.add(request) { _ in }
+    }
+
+    func submit(_ request: UNNotificationRequest) async throws {
+        try await center.add(request)
     }
 }
