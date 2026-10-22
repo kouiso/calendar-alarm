@@ -448,7 +448,10 @@ final class NotificationWiringTests: XCTestCase {
         do {
             _ = try await NotificationScheduler(port: center).schedule(inst)
             XCTFail("予約を断られたのに投げなかった")
-        } catch {}
+        } catch {
+            // OS の拒否をそのまま投げ直していること (別のエラーに化けると原因が追えない)
+            XCTAssertTrue(error is Refused, "投げたエラーが OS の拒否ではない: \(error)")
+        }
     }
 
     func testNotificationSchedulerCancelRemovesThePendingRequest() async {
