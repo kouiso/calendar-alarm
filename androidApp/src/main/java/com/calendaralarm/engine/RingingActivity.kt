@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.core.view.WindowCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -92,6 +93,7 @@ class RingingActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         applyLockscreenFlags()
+        useLightSystemBarIcons()
         instanceIdState.value = intent.getStringExtra(EXTRA_INSTANCE_ID)
         // FSI経由で本画面が出せたなら、フォールバックのオーバーレイ停止UIは畳む
         // (オーバーレイは常に最前面に描画されるので共存すると二重UIになる)。
@@ -294,6 +296,18 @@ class RingingActivity : ComponentActivity() {
             )
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    /**
+     * 画面は常時ダークで描くので、時計・電池・電波のアイコンは明るい色にする。
+     * アプリのテーマは windowLightStatusBar=true (ライト用の暗いアイコン) のままなので、
+     * この画面だけ上書きしないと、暗い背景に暗いアイコンで見えなくなる。
+     */
+    private fun useLightSystemBarIcons() {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
     }
 
     companion object {
