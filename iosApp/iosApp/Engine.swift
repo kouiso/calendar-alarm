@@ -342,6 +342,13 @@ final class Engine: ObservableObject {
             unreserved.remove(id)
         }
         if !unreserved.isEmpty { store.audit("RECOVER", "予約喪失 \(unreserved.count)件→再予約") }
+        // 予約 id を空にしておく。取り直しに失敗した行が「予約済み」に見えると、通知の照合 (notificationOutcome) が
+        // OS から消えた行と取り違えて、見逃しではなく鳴った扱いにしてしまう。取り直しに成功すれば上書きされる
+        for id in unreserved {
+            guard let rec = store.state.scheduled[id], rec.alarmKitId != nil else { continue }
+            store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending,
+                                               alarmKitId: nil, soundFile: rec.soundFile))
+        }
 
         let plan = SharedDomain.plan(PlanRequest(
             desired: desired,

@@ -167,3 +167,20 @@ final class SlideToStopLogicTests: XCTestCase {
         XCTAssertFalse(SlideToStopLogic.isGrab(startX: 88.5, thumbSize: 64, pad: 8))
     }
 }
+
+/// 低い窓では「スヌーズ時間を選ぶ」を出さない。出すと下に固定した操作群が高くなり、停止の丸が窓の外へ出る
+final class RingingLayoutTests: XCTestCase {
+    func testPresetPickerNeedsEnoughWindowHeight() {
+        // iPhone SE (667pt) でも、ふつうの窓では出す
+        XCTAssertTrue(RingingLayout.showsPresetPicker(windowHeight: 667))
+        XCTAssertTrue(RingingLayout.showsPresetPicker(windowHeight: RingingLayout.minHeightForPresetPicker))
+        // 小さいウィンドウ (iPad の Stage Manager など) では出さない
+        XCTAssertFalse(RingingLayout.showsPresetPicker(windowHeight: RingingLayout.minHeightForPresetPicker - 1))
+        XCTAssertFalse(RingingLayout.showsPresetPicker(windowHeight: 320))
+    }
+
+    /// 開いたチップ込みの固定の操作群 (約 290pt) を足しても、上のスクロール領域に 230pt 以上残る
+    func testLeavesRoomForTimeAboveTheControls() {
+        XCTAssertGreaterThanOrEqual(RingingLayout.minHeightForPresetPicker - 290, 230)
+    }
+}

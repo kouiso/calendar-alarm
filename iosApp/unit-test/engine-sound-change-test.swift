@@ -468,11 +468,13 @@ final class EngineSoundChangeTests: XCTestCase {
 
         XCTAssertNil(fake.booked[id], "前提: 予約が全部失敗している")
         XCTAssertEqual(engine.store.state.scheduled[id]?.state, .pending, "取り直しに失敗してタイマーの記録が消えた")
+        XCTAssertNil(engine.store.state.scheduled[id]?.alarmKitId, "取り直しに失敗した行が予約済みに見える (通知の照合が取り違える)")
 
         fake.failures = 0
         await engine.resync(reason: "bulk recover later")
 
         XCTAssertNotNil(fake.booked[id], "次の resync が取り直していない")
+        XCTAssertNotNil(engine.store.state.scheduled[id]?.alarmKitId, "取り直した行に予約 id が戻っていない")
     }
 
     /// 一覧に載っている予約と、PENDING 以外の行は「消えた」に数えない。時刻を過ぎた PENDING 行は数える
