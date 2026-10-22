@@ -241,6 +241,79 @@ final class EngineSoundChangeTests: XCTestCase {
         XCTAssertEqual(rec.instance.standaloneAlarmId, aid)
     }
 
+    /// 新しい音でも前の音でも、取り直しでも予約できなかったタイマーは、記録を残すだけでなく
+    /// 次の resync で取り直す。記録だけ残るとプランが「予約済み」と見て、二度と鳴らない (通知の予約は iOS 26 未満)
+    func testLostTimerIsBookedAgainByNextResync() async throws {
+        await engine.scheduleTimer(durationMillis: 3_600_000, label: "test")
+        let id = try XCTUnwrap(engine.store.state.scheduled.values.first { $0.instance.kind == "TIMER" }?.instance.id)
+        importTestSound()
+        engine.store.setAlarmSound(file: sound, label: "test")
+        fake.failures = 3
+        await engine.rescheduleForSoundChange()
+        XCTAssertNil(fake.booked[id], "前提: ここまでで予約が OS に無い")
+
+        await engine.resync(reason: "later")
+
+        XCTAssertNotNil(fake.booked[id], "次の resync が予約を取り直していない")
+        XCTAssertNotNil(engine.store.state.scheduled[id]?.alarmKitId)
+        XCTAssertEqual(engine.store.state.scheduled[id]?.state, .pending)
+    }
+
+    /// カレンダーを読めない時は、展開で作り直せる予定の行も作り直せない。記録を消さず残して拾い直させる
+    func testLostEventRecordIsKeptWhenCalendarCannotBeRead() async throws {
+        try XCTSkipIf(engine.reader.authorizationGranted, "カレンダーが読める環境では対象外")
+        let inst = AlarmInstanceDTO(id: "ev:c:e1:123:b0", triggerAtMillis: Engine.nowMillis + 3_600_000,
+                                    title: "予定", kind: "EVENT", eventId: "c:e1:123", minutesBefore: 0,
+                                    eventStartMillis: Engine.nowMillis + 3_600_000)
+        engine.store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: "fake-\(inst.id)"))
+        fake.booked[inst.id] = (inst, nil)
+        importTestSound()
+        engine.store.setAlarmSound(file: sound, label: "test")
+        fake.failures = 3
+
+        await engine.rescheduleForSoundChange()
+
+        let rec = try XCTUnwrap(engine.store.state.scheduled[inst.id], "予定の行の記録が消えた")
+        XCTAssertEqual(rec.state, .pending)
+        XCTAssertNil(rec.alarmKitId, "OS に予約が無いのに予約ありになっている")
+        await engine.resync(reason: "later")
+        XCTAssertNotNil(fake.booked[inst.id], "カレンダーを読めない間も、次の resync が予約を取り直す")
+    }
+
+    /// スヌーズの子を予約している最中に取り消しても、予約が書き戻して鳴らすことはない
+    func testCancelDuringSnoozeChildBookingStaysCancelled() async throws {
+        let (_, parentId) = try await bookAlarm(hoursAhead: 3)
+        let parent = try XCTUnwrap(engine.store.state.scheduled[parentId]?.instance)
+        let childId = "\(parentId):snz1"
+        var cancelTask: Task<Void, Never>?
+        fake.duringSchedule = { [engine] in
+            guard let engine else { return }
+            cancelTask = Task { await engine.cancelInstance(childId) }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+
+        await engine.snooze(parent, minutes: parent.snoozeMinutes + 3)?.value
+        await cancelTask?.value
+
+        XCTAssertNil(fake.booked[childId], "取り消したスヌーズの子が OS に残っている")
+        XCTAssertNil(engine.store.state.scheduled[childId], "取り消したスヌーズの子の記録が戻っている")
+    }
+
+    /// 子の予約が始まる前に取り消しても同じ: 予約の側が列で後から来て、取り消された子を見て何もしない
+    func testCancelBeforeSnoozeChildBookingStartsStaysCancelled() async throws {
+        let (_, parentId) = try await bookAlarm(hoursAhead: 3)
+        let parent = try XCTUnwrap(engine.store.state.scheduled[parentId]?.instance)
+        let childId = "\(parentId):snz1"
+
+        let booking = engine.snooze(parent, minutes: parent.snoozeMinutes + 3)
+        await engine.cancelInstance(childId)
+        await booking?.value
+
+        XCTAssertNil(fake.booked[childId])
+        XCTAssertNil(engine.store.state.scheduled[childId])
+        XCTAssertTrue(engine.store.state.audit.contains { $0.type == "SNOOZE_SKIP" })
+    }
+
     private func soundFile(_ name: String) -> String {
         AlarmSoundLibrary.soundsDirectory.appendingPathComponent(name).path
     }
