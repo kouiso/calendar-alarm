@@ -453,7 +453,8 @@ extension Store.Persisted {
                     return ($0.instance.id, $0.instance.triggerAtMillis, $0.instance.title,
                             "\($0.instance.title) @\(fmt.string(from: at))")
                 },
-                nowMillis: Int64(Date().timeIntervalSince1970 * 1000))
+                nowMillis: Int64(Date().timeIntervalSince1970 * 1000),
+                titleById: Dictionary(scheduled.values.map { ($0.instance.id, $0.instance.title) }, uniquingKeysWith: { first, _ in first }))
         }
         nextAlarmId = try c.decodeIfPresent(Int64.self, forKey: .nextAlarmId) ?? 1
         nextAuditId = try c.decodeIfPresent(Int64.self, forKey: .nextAuditId) ?? 1

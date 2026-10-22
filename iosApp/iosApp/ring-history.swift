@@ -75,6 +75,21 @@ enum RingHistory {
         return (title, nearest)
     }
 
+    /// 前の版の記録にはタイトルの欄が無い。停止は detail がタイトルそのもの、鳴らずは「タイトル @時刻」、
+    /// スヌーズは先頭が予約の id なので、残っている予約の行から引く。分からなければ nil
+    static func legacyTitle(_ entry: AuditEntry, titleById: [String: String], deviceZone: TimeZone) -> String? {
+        switch entry.type {
+        case "DISMISS", "DISMISS_OFFAPP":
+            return entry.detail.isEmpty ? nil : entry.detail
+        case "MISSED":
+            return legacyMissed(entry, zone: deviceZone)?.title
+        case "SNOOZE":
+            return entry.detail.split(separator: " ").first.flatMap { titleById[String($0)] }
+        default:
+            return nil
+        }
+    }
+
     /// 前の版で保存した状態には記録が無い。鳴らずは残っている予約の行と監査ログから、
     /// 停止とスヌーズは監査ログから作り直す (見逃しの数が更新直後に 0 に戻らないように)。
     /// 予約の行は単発アラームを使い直すと消えるので、行の無い見逃しは監査ログの MISSED で残す。
@@ -85,7 +100,7 @@ enum RingHistory {
     /// 前の版の MISSED には鳴動時刻の欄が無いので、残すものは detail の時刻から埋める
     /// (記録した時刻で数えると、何日も前の見逃しを「直近」と言ってしまう)
     static func seed(audit: [AuditEntry], missed: [(id: String, triggerAtMillis: Int64, title: String, detail: String)],
-                     nowMillis: Int64, deviceZone: TimeZone = .current) -> [AuditEntry] {
+                     nowMillis: Int64, deviceZone: TimeZone = .current, titleById: [String: String] = [:]) -> [AuditEntry] {
         let cutoff = nowMillis - retentionMillis
         // 予約の行由来の記録には監査ログの id が無いので、ぶつからない負の id を振る
         let fromRows = missed.sorted { $0.triggerAtMillis < $1.triggerAtMillis }.enumerated().map { i, m in
@@ -122,11 +137,13 @@ enum RingHistory {
         }
         let fromAudit: [AuditEntry] = audit.enumerated().compactMap { i, entry in
             guard types.contains(entry.type) else { return nil }
-            guard entry.type == "MISSED" else { return entry }
-            if let instanceId = entry.instanceId { return rowIds.contains(instanceId) ? nil : entry }
-            if consumed.contains(i) { return nil }
+            if entry.type == "MISSED", let instanceId = entry.instanceId, rowIds.contains(instanceId) { return nil }
+            if entry.type == "MISSED", entry.instanceId == nil, consumed.contains(i) { return nil }
             var kept = entry
-            kept.triggerAtMillis = legacyTriggers[i]
+            if entry.type == "MISSED", entry.instanceId == nil {
+                kept.triggerAtMillis = legacyTriggers[i]
+            }
+            if kept.title == nil { kept.title = legacyTitle(entry, titleById: titleById, deviceZone: deviceZone) }
             return kept
         }
         return (fromAudit + fromRows)

@@ -57,8 +57,8 @@ do {
         return "\(title) @\(f.string(from: Date(timeIntervalSince1970: TimeInterval(millis) / 1000)))"
     }
     func seed(_ audit: [AuditEntry], _ rows: [(id: String, triggerAtMillis: Int64, title: String, detail: String)],
-              at nowMillis: Int64 = now) -> [AuditEntry] {
-        RingHistory.seed(audit: audit, missed: rows, nowMillis: nowMillis, deviceZone: tokyo)
+              at nowMillis: Int64 = now, titles: [String: String] = [:]) -> [AuditEntry] {
+        RingHistory.seed(audit: audit, missed: rows, nowMillis: nowMillis, deviceZone: tokyo, titleById: titles)
     }
     func legacyMissed(_ id: Int64, at: Int64, detail: String) -> AuditEntry {
         AuditEntry(id: id, atMillis: at, type: "MISSED", detail: detail)
@@ -119,6 +119,16 @@ do {
                     (id: "d2", triggerAtMillis: now - 2 * hour, title: "日課", detail: det("日課", now - 2 * hour))])
     check(two.count == 2 && two.contains { $0.instanceId == "d1" } && two.contains { $0.instanceId == "d2" },
           "同じタイトルの行が2つなら近い方と対応づけ、行は2件とも残る")
+    // 前の版の記録にはタイトルの欄が無い。画面はタイトルだけを出すので、分かるものは引き継ぎで埋める
+    func legacy(_ id: Int64, _ type: String, _ detail: String) -> AuditEntry {
+        AuditEntry(id: id, atMillis: now - hour, type: type, detail: detail)
+    }
+    let titled = seed([legacy(40, "DISMISS", "朝"), legacy(41, "DISMISS_OFFAPP", "昼"),
+                       legacy(42, "SNOOZE", "sa:9:2026-10-21 +5m (native)"), legacy(43, "SNOOZE", "gone:1 (native)"),
+                       legacyMissed(44, at: now - hour, detail: det("夜", now - 3 * hour))],
+                      [], titles: ["sa:9:2026-10-21": "スヌーズ中"])
+    check(titled.map { $0.title ?? "-" } == ["朝", "昼", "スヌーズ中", "-", "夜"],
+          "停止は detail、スヌーズは予約の行、鳴らずは detail からタイトルを埋め、分からないものは空のまま")
 }
 
 if failures > 0 {
