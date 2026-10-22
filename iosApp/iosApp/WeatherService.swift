@@ -10,6 +10,9 @@ final class WeatherService {
         var tempMax: Double
         var tempMin: Double
         var precipitationProbability: Int?
+        /// date が属する地点のタイムゾーン (IANA 名)。端末のタイムゾーンと違う地点の予報を日付で引くのに使う。
+        /// 前の版で保存した値には無いので省略可
+        var timeZoneId: String? = nil
     }
 
     func forecast(for location: String, days: Int = 3) async -> [Forecast]? {
@@ -27,15 +30,29 @@ final class WeatherService {
               let (data, _) = try? await URLSession.shared.data(from: url),
               let res = try? JSONDecoder().decode(ForecastResponse.self, from: data),
               let daily = res.daily else { return nil }
+        let timeZoneId = res.timezone
         return daily.time.indices.map { i in
             Forecast(
                 date: daily.time[i],
                 weatherCode: daily.weatherCode[safe: i] ?? -1,
                 tempMax: daily.tempMax[safe: i] ?? .nan,
                 tempMin: daily.tempMin[safe: i] ?? .nan,
-                precipitationProbability: daily.pop?[safe: i] ?? nil
+                precipitationProbability: daily.pop?[safe: i] ?? nil,
+                timeZoneId: timeZoneId
             )
         }
+    }
+
+    /// 予定の開始の日の予報。予報の日付は地点のタイムゾーンの日付なので、端末のタイムゾーンで引くと
+    /// 地点と端末で日付がずれる時に別の日の予報を出す。予報の範囲の外なら nil
+    static func forecast(on start: Date, in forecasts: [Forecast]?) -> Forecast? {
+        guard let forecasts, let first = forecasts.first else { return nil }
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = first.timeZoneId.flatMap(TimeZone.init(identifier:)) ?? .current
+        let key = f.string(from: start)
+        return forecasts.first { $0.date == key }
     }
 
     /// ヘッダー/鳴動画面用の現在+時間別天気。
@@ -158,6 +175,8 @@ final class WeatherService {
             }
         }
         var daily: Daily?
+        /// timezone=auto で返る地点のタイムゾーン (daily.time はこの地点の日付)
+        var timezone: String?
     }
 }
 

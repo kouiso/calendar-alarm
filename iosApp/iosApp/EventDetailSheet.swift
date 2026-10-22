@@ -147,7 +147,7 @@ struct EventDetailSheet: View {
     /// 予定の日が予報の範囲の外なら天気は出さない
     private var eventForecast: WeatherService.Forecast? {
         let start = Date(timeIntervalSince1970: TimeInterval(ev.startMillis) / 1000)
-        return weather?.first { $0.date == Self.dayKey.string(from: start) }
+        return WeatherService.forecast(on: start, in: weather)
     }
 
     /// 小さい天気カード: アイコン40 + 気温34 + 天気・降水 + 「地点・HH:mm の予報」 (#51 PR3)。
@@ -177,9 +177,6 @@ struct EventDetailSheet: View {
         .background(NightTheme.nightSurface, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    private static let dayKey: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX"); return f
-    }()
     private static let hmFmt: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
     }()

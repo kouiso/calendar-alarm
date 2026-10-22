@@ -45,19 +45,34 @@ do {
 
 // 前の版の保存データ (記録が無い) から作り直す
 do {
+    let rowDetail = "朝 @10/21 06:40"
+    func legacyMissed(_ id: Int64, at: Int64, detail: String) -> AuditEntry {
+        AuditEntry(id: id, atMillis: at, type: "MISSED", detail: detail)
+    }
     let audit = [
         entry(10, "FIRED", at: now - 3 * hour),
         entry(11, "DISMISS", at: now - 3 * hour),
-        entry(12, "MISSED", at: now - hour),
+        legacyMissed(12, at: now - 2 * hour, detail: rowDetail),          // 今ある行と同じ見逃し (前の版の行)
+        legacyMissed(14, at: now - hour, detail: "夜 @10/21 22:00"),      // 行がもう無い見逃し
+        entry(15, "MISSED", at: now - hour, instance: "sa:1:2026-10-21", trigger: now - 2 * hour), // 行と同じ予約
+        entry(16, "MISSED", at: now - hour, instance: "gone", trigger: now - hour),                 // 行がもう無い予約
         entry(13, "SNOOZE", at: now - 9 * 24 * hour),
     ]
     let seeded = RingHistory.seed(
         audit: audit,
-        missed: [(id: "sa:1:2026-10-21", triggerAtMillis: now - 2 * hour, title: "朝", detail: "朝 @10/21 06:40")],
+        missed: [(id: "sa:1:2026-10-21", triggerAtMillis: now - 2 * hour, title: "朝", detail: rowDetail)],
         nowMillis: now)
-    check(seeded.map(\.type) == ["DISMISS", "MISSED"], "停止は監査ログから、鳴らずは予約の行から作り、古い記録は落として時刻順に並べる")
-    check(RingHistory.recentMissedCount(seeded, nowMillis: now) == 1, "更新直後も見逃しが 0 に戻らない")
-    check(seeded.last?.title == "朝" && (seeded.last?.id ?? 0) < 0, "予約の行由来の記録は負の id とタイトルを持つ")
+    check(seeded.map(\.type) == ["DISMISS", "MISSED", "MISSED", "MISSED"],
+          "停止は監査ログから、鳴らずは行と監査ログから作り、古い記録は落として時刻順に並べる")
+    check(RingHistory.recentMissedCount(seeded, nowMillis: now) == 3,
+          "行と同じ見逃しは二重に数えず、行がもう無い見逃し (id あり・なし) は残す")
+    check(seeded.filter { $0.type == "MISSED" && $0.id < 0 }.first?.title == "朝", "予約の行由来の記録は負の id とタイトルを持つ")
+    // 同じ detail の行が2つあっても、監査ログの前の版の見逃しは1行につき1件だけ消す
+    let twice = RingHistory.seed(
+        audit: [legacyMissed(20, at: now - hour, detail: "同 @10/21 07:00"), legacyMissed(21, at: now - hour, detail: "同 @10/21 07:00")],
+        missed: [(id: "a", triggerAtMillis: now - hour, title: "同", detail: "同 @10/21 07:00")],
+        nowMillis: now)
+    check(twice.count == 2, "前の版の見逃しは行1つにつき1件だけ消し、残りは残す")
 }
 
 if failures > 0 {

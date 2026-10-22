@@ -266,7 +266,8 @@ struct DayTimelineViewIOS: View {
                 }
                 // 今の時刻の線 (#51 PR3)。予定のブロックより上に描く。今日を見ている時だけ。
                 // テーマ色は「鳴る/オン」専用なので色表の赤で引く
-                TimelineView(.periodic(from: .now, by: 60)) { ctx in
+                // 開いた時刻の秒に合わせると分の境目から次の更新までラベルが1分前のままになるので、分の頭で更新する
+                TimelineView(.everyMinute) { ctx in
                     // 日付の判定も1分ごとにやり直す (開いたまま日付が変わったら前日の画面から線を消す)
                     if cal.isDate(date, inSameDayAs: ctx.date) {
                         let label = "今 \(Self.nowFmt.string(from: ctx.date))"

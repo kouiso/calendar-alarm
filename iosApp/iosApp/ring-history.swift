@@ -49,17 +49,28 @@ enum RingHistory {
         Array(history.reversed().prefix(limit))
     }
 
-    /// 前の版で保存した状態には記録が無い。鳴らずは残っている予約の行から、
+    /// 前の版で保存した状態には記録が無い。鳴らずは残っている予約の行と監査ログから、
     /// 停止とスヌーズは監査ログから作り直す (見逃しの数が更新直後に 0 に戻らないように)。
-    /// 予約の行が既に消えた見逃しは作れない (前の版の数え方でも数えていなかった)。
+    /// 予約の行は単発アラームを使い直すと消えるので、行の無い見逃しは監査ログの MISSED で残す。
+    /// 監査ログの MISSED が今ある行と同じ見逃しなら二重に数えない
+    /// (予約の id があればそれで、前の版の行は id が無いので detail が同じものを1行につき1件だけ)。
     static func seed(audit: [AuditEntry], missed: [(id: String, triggerAtMillis: Int64, title: String, detail: String)],
                      nowMillis: Int64) -> [AuditEntry] {
         let cutoff = nowMillis - retentionMillis
-        let fromAudit = audit.filter { types.contains($0.type) && $0.type != "MISSED" }
         // 予約の行由来の記録には監査ログの id が無いので、ぶつからない負の id を振る
         let fromRows = missed.sorted { $0.triggerAtMillis < $1.triggerAtMillis }.enumerated().map { i, m in
             AuditEntry(id: -Int64(i + 1), atMillis: m.triggerAtMillis, type: "MISSED", detail: m.detail,
                        instanceId: m.id, triggerAtMillis: m.triggerAtMillis, title: m.title)
+        }
+        let rowIds = Set(missed.map(\.id))
+        var unmatchedRows = fromRows.reduce(into: [String: Int]()) { $0[$1.detail, default: 0] += 1 }
+        let fromAudit = audit.filter { entry in
+            guard types.contains(entry.type) else { return false }
+            guard entry.type == "MISSED" else { return true }
+            if let instanceId = entry.instanceId { return !rowIds.contains(instanceId) }
+            guard let left = unmatchedRows[entry.detail], left > 0 else { return true }
+            unmatchedRows[entry.detail] = left - 1
+            return false
         }
         return (fromAudit + fromRows)
             .filter { $0.atMillis >= cutoff }

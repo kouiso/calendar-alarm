@@ -37,6 +37,7 @@
 		88AD950DD0441ABF8DBADCAE /* AlarmsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4F003771A83A79DB1D7C14D /* AlarmsView.swift */; };
 		8DA98EC782D9732A40A26D31 /* outfit_regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9B5EFAB358775E656E932A66 /* outfit_regular.ttf */; };
 		8F780525F00F3096C5364349 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE03925928578DE0F3DE47BB /* ShareViewController.swift */; };
+		9C344CBDC2CF3887BCBC5775 /* weather-forecast-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B43BAA08286BC866F901A9 /* weather-forecast-test.swift */; };
 		A18B776969A5B61C602C3D89 /* outfit_semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C694CCA1128C6527CB1476DC /* outfit_semibold.ttf */; };
 		A6D274A92BA0F9A706CB3085 /* CalendarAlarmWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */; };
 		A793851C3CD7E4B1FDBE5794 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F8642EDA4CA9194F126132 /* Store.swift */; };
@@ -130,6 +131,7 @@
 		D2D9928A082C610D9B0A9D67 /* plex_sans_jp_semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_semibold.ttf; sourceTree = "<group>"; };
 		D8EB8DEF9DAD9CCF3FED35DE /* AlarmSoundLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmSoundLibrary.swift; sourceTree = "<group>"; };
 		D910DFCFDA9A98A380AC51E6 /* ring-history.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ring-history.swift"; sourceTree = "<group>"; };
+		D9B43BAA08286BC866F901A9 /* weather-forecast-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "weather-forecast-test.swift"; sourceTree = "<group>"; };
 		DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAlarmWidget.swift; sourceTree = "<group>"; };
 		E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitReader.swift; sourceTree = "<group>"; };
 		E42B1C06A0E446C3B4F2DCD4 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
@@ -176,6 +178,7 @@
 				A22FA71EC8E0871C65511A60 /* alarm-sound-import-test.swift */,
 				9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */,
 				6AD851BAB943D3DB6E272879 /* engine-sound-change-test.swift */,
+				D9B43BAA08286BC866F901A9 /* weather-forecast-test.swift */,
 			);
 			path = "unit-test";
 			sourceTree = "<group>";
@@ -465,6 +468,7 @@
 				86B15B16E50DEF7BDFC0FC23 /* alarm-sound-import-test.swift in Sources */,
 				2C48431DBDA0DF45F9D75583 /* diagnosis-test.swift in Sources */,
 				00FE057011931AD95770F145 /* engine-sound-change-test.swift in Sources */,
+				9C344CBDC2CF3887BCBC5775 /* weather-forecast-test.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
