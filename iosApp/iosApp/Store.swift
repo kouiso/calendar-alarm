@@ -439,6 +439,11 @@ enum SnoozePresets {
     /// 鳴動画面に並べる上限。Android の `snoozePresets.take(6)` と同じ
     static let maxOnRingingScreen = 6
 
+    /// 鳴動画面に並べる分数。保存した一覧を先頭から [maxOnRingingScreen] 件まで使う (空なら空)
+    static func onRingingScreen(_ saved: [Int]) -> [Int] {
+        Array(saved.prefix(maxOnRingingScreen))
+    }
+
     static func toggled(_ current: [Int], _ m: Int) -> [Int] {
         current.contains(m) ? current.filter { $0 != m } : (current + [m]).sorted()
     }

@@ -28,6 +28,15 @@ final class SnoozePresetsTests: XCTestCase {
         XCTAssertEqual(SnoozePresets.toggled([], 15), [15])
     }
 
+    /// 鳴動画面に並べるのは保存した一覧の先頭 6 件まで。空なら空で、固定の一覧には戻らない (#107)
+    func testOnRingingScreenUsesSavedListCappedAtSix() {
+        XCTAssertEqual(SnoozePresets.onRingingScreen([]), [])
+        XCTAssertEqual(SnoozePresets.onRingingScreen([20, 45, 90]), [20, 45, 90], "保存した一覧でなく旧来の固定の一覧が使われた")
+        XCTAssertEqual(SnoozePresets.onRingingScreen([5, 10, 15, 30, 45, 60]), [5, 10, 15, 30, 45, 60])
+        XCTAssertEqual(SnoozePresets.onRingingScreen(SnoozePresets.choices), [1, 5, 10, 15, 20, 30], "9 件のうち先頭 6 件だけ")
+        XCTAssertEqual(SnoozePresets.onRingingScreen(SnoozePresets.choices).count, SnoozePresets.maxOnRingingScreen)
+    }
+
     /// 候補を持たない旧版の store.json は Android と同じ既定値で読む。他の設定はそのまま残る
     func testOldStoreWithoutKeyDecodesToDefaults() throws {
         try Data(#"{"defaultMinutesBefore":15,"defaultSnoozeMinutes":5}"#.utf8).write(to: url)

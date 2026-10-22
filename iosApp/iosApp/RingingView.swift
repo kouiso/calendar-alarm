@@ -118,8 +118,8 @@ struct RingingView: View {
                     // 設定で候補を全部外した時は、押しても何も出ない開閉ボタンを出さない。
                     // 窓が低すぎる時も出さない: チップを開くと固定した操作群が 287pt になり、
                     // 上の時刻と件名のスクロール領域が潰れるため (窓 320pt だと 1pt まで)。停止の丸はこの判定に関わらず窓に残る
-                    let presets = Array(store.state.snoozePresets.prefix(SnoozePresets.maxOnRingingScreen))
-                    let canChoose = !presets.isEmpty && RingingLayout.showsPresetPicker(windowHeight: geo.size.height)
+                    let presets = SnoozePresets.onRingingScreen(store.state.snoozePresets)
+                    let canChoose = RingingLayout.showsPresetToggle(presets: presets, windowHeight: geo.size.height)
                     if canChoose {
                         Button {
                             withAnimation(.easeInOut(duration: 0.15)) { showSnoozePresets.toggle() }
@@ -200,6 +200,11 @@ enum RingingLayout {
 
     static func showsPresetPicker(windowHeight: CGFloat) -> Bool {
         windowHeight >= minHeightForPresetPicker
+    }
+
+    /// 「スヌーズ時間を選ぶ」の開閉ボタンを出すか。選べる分数が 1 つも無い時は、押しても何も出ない死んだボタンになるので出さない
+    static func showsPresetToggle(presets: [Int], windowHeight: CGFloat) -> Bool {
+        !presets.isEmpty && showsPresetPicker(windowHeight: windowHeight)
     }
 }
 
