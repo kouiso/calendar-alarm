@@ -346,9 +346,13 @@ final class Store: ObservableObject {
 
     // MARK: - audit
 
-    func audit(_ type: String, _ detail: String) {
+    /// atMillis は後から分かった出来事 (閉じている間に届いた通知) を起きた時刻で残す時だけ渡す。
+    /// 一覧が時刻順のままになるよう、その時刻の位置に差し込む
+    func audit(_ type: String, _ detail: String, atMillis: Int64? = nil) {
         mutate { s in
-            s.audit.append(AuditEntry(id: s.nextAuditId, atMillis: Int64(Date().timeIntervalSince1970 * 1000), type: type, detail: detail))
+            let at = atMillis ?? Int64(Date().timeIntervalSince1970 * 1000)
+            let index = s.audit.lastIndex { $0.atMillis <= at }.map { $0 + 1 } ?? 0
+            s.audit.insert(AuditEntry(id: s.nextAuditId, atMillis: at, type: type, detail: detail), at: index)
             s.nextAuditId += 1
             if s.audit.count > 50 { s.audit.removeFirst(s.audit.count - 50) }
         }
