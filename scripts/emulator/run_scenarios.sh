@@ -35,14 +35,39 @@ now_ms() { date +%s%3N; }
 
 # ---------- 採取 ----------
 
+# 自アプリの表示名 (全ロケール)。他アプリの応答なしダイアログと見分けるのに使う。読めなければ空で、何も閉じない
+APP_DIR="${APK%%/androidApp/build/*}"
+APP_LABELS=()
+while IFS= read -r label; do
+  [ -n "$label" ] && APP_LABELS+=("$label")
+done < <(sed -n 's|.*name="app_name"[^>]*>\([^<]*\)</string>.*|\1|p' "$APP_DIR"/androidApp/src/main/res/values*/strings.xml 2>/dev/null)
+
+[ ${#APP_LABELS[@]} -gt 0 ] || echo "WARN: app labels not found under $APP_DIR; other apps' ANR dialogs will not be dismissed" >&2
+
 ui_dump() {
-  local dst=$1 _
-  for _ in 1 2 3; do
+  local dst=$1 _ dismissed=0 xy
+  for _ in 1 2 3 4 5; do
     adb shell rm -f /sdcard/ui.xml >/dev/null 2>&1
     # --windows は全窓 (オーバーレイ・SystemUI を含む) を出す。非対応版なら単一窓で取り直す
     if sh_ uiautomator dump --windows /sdcard/ui.xml 2>&1 | grep -q "dumped to" ||
        sh_ uiautomator dump /sdcard/ui.xml 2>&1 | grep -q "dumped to"; then
-      adb pull /sdcard/ui.xml "$dst" >/dev/null 2>&1 && return 0
+      if adb pull /sdcard/ui.xml "$dst" >/dev/null 2>&1; then
+        # 他アプリの「応答なし」ダイアログが停止UIを隠していたら閉じて取り直す (最大3回)
+        if xy=$("${CHECK[@]}" anr-wait "$dst" "${APP_LABELS[@]}"); then
+          if [ "$dismissed" -ge 3 ]; then
+            # 閉じても出続けるなら、停止UIが無いのか画面が隠れているのか区別できない。UI_DUMP_FAILED に回す
+            log "another app's ANR dialog keeps coming back: $dst"
+            rm -f "$dst"
+            return 1
+          fi
+          log "dismissing another app's ANR dialog at $xy: $dst"
+          sh_ input tap $xy >/dev/null 2>&1
+          dismissed=$((dismissed + 1))
+          sleep 2
+          continue
+        fi
+        return 0
+      fi
     fi
     sleep 1
   done
