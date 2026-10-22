@@ -17,9 +17,9 @@ SBI GitHub Issue #76（決定4）。対象は `doc/spec/kmp-replacement.md` の 
 | F-3 カレンダー既定オフセット | あり | あり | A `ui/SettingsScreen.kt:253` `defaultMinutes`, `:607` `onChange(minutesBefore…)` / I `SettingsView.swift:387`（`rule.minutesBefore`） |
 | F-3 イベント単位の上書き | あり | あり | A `data/db/Entities.kt:112` `EventOverrideEntity`, `ui/AgendaScreen.kt:277` / I `Models.swift:144` `EventOverrideDTO`, `EventDetailSheet.swift:17` |
 | F-4 フルスクリーン鳴動 | あり | あり（OS描画） | A `engine/AlarmService.kt:500` `setFullScreenIntent`, `RingingActivity.kt:246` / I `AlarmKitScheduler.swift:121` `AlarmPresentation.Alert` |
-| F-4 バイブ | あり | なし | A `engine/AlarmService.kt:52,86` `vibrator`, `vibrateForRing` / I `iosApp/iosApp` 配下に vibrat の一致なし |
-| F-4 音量固定・徐々に音量UP | あり | なし | A `engine/AlarmService.kt:329` `crescendo`, 設定 `data/SettingsRepository.kt:62`付近 / I `iosApp/iosApp` 配下に crescendo・volume の一致なし |
-| F-4 カスタム音（既定音） | あり | なし | A `data/SettingsRepository.kt` `defaultSoundUri`, `ui/AlarmEditScreen.kt:142` `OpenDocument` / I `AlarmKitScheduler.swift` に sound 指定なし（通知側 `:207` は `.default`） |
+| F-4 バイブ | あり | 対象外（端末の設定に従う。#101） | A `engine/AlarmService.kt:52,86` / I AlarmKit の `AlarmConfiguration` にバイブの指定が無い（iOS 26.1 SDK）。設定画面にそう書いた |
+| F-4 音量固定・徐々に音量UP | あり | 対象外（端末の設定に従う。#101） | A `engine/AlarmService.kt:329` / I AlarmKit に音量の指定が無い（iOS 26.1 SDK）。設定画面にそう書いた |
+| F-4 カスタム音（既定音） | あり | あり（#101） | A `data/SettingsRepository.kt` `defaultSoundUri` / I `AlarmSoundLibrary.swift`（Library/Sounds へ caf で取り込み、`AlertSound.named` で予約）、`SettingsView.swift` アラーム音の行 |
 | F-4 一括ミュート | あり | あり | A `data/SettingsRepository.kt` `muteAll` / I `SettingsView.swift:54-55` 「アラームをすべてミュート」 |
 | F-5 スヌーズ（鳴動画面から） | あり | あり | A `engine/RingingActivity.kt:138-139` `onSnooze`,`onSnoozeAt` / I `RingingView.swift:80`, `AlarmKitScheduler.swift:158` |
 | F-5 スヌーズ間隔の設定 | あり（5/10/15/30/45/60） | あり（5/10/15のみ） | A `ui/SettingsScreen.kt:1056`, `data/SettingsRepository.kt` `snoozePresets` / I `SettingsView.swift:21` `snoozeOptions = [5, 10, 15]` |
@@ -72,7 +72,7 @@ SBI GitHub Issue #76（決定4）。対象は `doc/spec/kmp-replacement.md` の 
 
 | # | 欠け | 欠けているOS | 補足 |
 |---|---|---|---|
-| G1 | 鳴動のバイブ・音量固定・徐々に音量UP・カスタム音 | iOS | AlarmKit で出せる範囲は未確認。仕様 §6 は AlertSound でカスタム MP3 を想定 |
+| G1 | 鳴動のバイブ・音量固定・徐々に音量UP・カスタム音 | 一部解消（#101） | カスタム音は iOS でも選べる。音量・徐々に大きく・バイブは AlarmKit に指定の口が無い（`AlarmManager.AlarmConfiguration` の引数は sound だけ）ため、設定画面に「iPhone の設定に従う」と書いた |
 | G2 | 共有→予定化 | Android | 印刷サービスのみ。`ACTION_SEND` の受け口がない |
 | G3 | 通知アラーム | iOS | 対象外に決定（#103）。`getDeliveredNotifications` が返すのは自アプリの通知だけ。通知サービス拡張も自アプリ宛てのリモート通知だけ。ANCS は BLE アクセサリ向けで端末内アプリは使えない |
 | G4 | 自己診断・トラブルシュート画面 | iOS | 電池最適化は iOS に該当しない。権限・次回予定・最後の鳴動の一覧はない（仕様 §6） |
