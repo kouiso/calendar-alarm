@@ -33,11 +33,12 @@ def wrap_xml(*nodes):
     return '<?xml version="1.0"?><hierarchy rotation="0">' + "".join(nodes) + "</hierarchy>"
 
 
-def anr_wait(xml, label="Calendar Alarm"):
+def anr_wait(xml, *labels):
+    labels = labels or ("Calendar Alarm",)
     with tempfile.NamedTemporaryFile("w", suffix=".xml", delete=False) as f:
         f.write(xml)
     try:
-        r = subprocess.run([sys.executable, os.path.join(HERE, "emu_check.py"), "anr-wait", f.name, label], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, os.path.join(HERE, "emu_check.py"), "anr-wait", f.name, *labels], capture_output=True, text=True)
         return r.returncode, r.stdout.strip()
     finally:
         os.unlink(f.name)
@@ -72,6 +73,17 @@ class AnrWait(unittest.TestCase):
     def test_dialog_without_readable_title_is_not_touched(self):
         xml = wrap_xml('<node class="x" package="android"><node text="Wait" resource-id="android:id/aerr_wait" package="android" bounds="[0,0][10,10]" /></node>')
         self.assertEqual(anr_wait(xml)[0], 1)
+
+    def test_empty_title_is_not_touched(self):
+        self.assertEqual(anr_wait(wrap_xml(dialog("  ")))[0], 1)
+
+    def test_any_known_own_label_blocks_dismissal(self):
+        xml = wrap_xml(dialog("カレンダーアラーム は応答していません"))
+        self.assertEqual(anr_wait(xml, "Calendar Alarm", "カレンダーアラーム")[0], 1)
+        self.assertEqual(anr_wait(xml, "Calendar Alarm")[0], 0)
+
+    def test_no_known_label_dismisses_nothing(self):
+        self.assertEqual(anr_wait(wrap_xml(dialog("Pixel Launcher isn't responding")), "")[0], 1)
 
     def test_broken_xml(self):
         self.assertEqual(anr_wait("<hierarchy")[0], 1)
