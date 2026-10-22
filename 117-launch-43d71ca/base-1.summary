@@ -1,0 +1,22 @@
+   1 	 Executed 14 tests, with 0 failures (0 unexpected) in 1.717 (1.720) seconds
+   1 	 Executed 17 tests, with 0 failures (0 unexpected) in 1.777 (1.781) seconds
+   1 	 Executed 17 tests, with 0 failures (0 unexpected) in 1.777 (1.782) seconds
+   1 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.060 (0.061) seconds
+   1 ** TEST SUCCEEDED **
+   1 Test Case '-[iosAppTests.AlarmSoundImportTests testLongSoundIsTrimmedUnderThirtySeconds]' passed (0.052 seconds).
+   1 Test Case '-[iosAppTests.AlarmSoundImportTests testNonAudioFileIsRejectedWithoutLeftovers]' passed (0.004 seconds).
+   1 Test Case '-[iosAppTests.AlarmSoundImportTests testShortSoundKeepsLengthAndIsUsedForReservations]' passed (0.004 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testCancelDuringRebookStaysCancelled]' passed (0.236 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testFailedRebookRestoresPreviousSound]' passed (0.042 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testFailureBeforeCancelKeepsRecord]' passed (0.009 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testHostAppRunsWithoutItsOwnEngine]' passed (1.060 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testLostEventIsKeptWhileCalendarUnreadable]' passed (0.025 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testLostReservationIsBookedAgainByResync]' passed (0.017 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testLostReservationIsNotListedWhenResyncAlsoFails]' passed (0.011 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testLostSnoozeChildIsKeptForRecovery]' passed (0.016 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testLostTimerIsKeptForRecovery]' passed (0.009 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testRegeneratedByExpandDependsOnCalendarForEvents]' passed (0.001 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testStaleEngineKeepsSoundImportedAfterItLoaded]' passed (0.024 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testStaleEngineKeepsSoundTheOtherEngineSaved]' passed (0.023 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testTimeEditDuringRebookKeepsNewTime]' passed (0.223 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testUnusedOldSoundIsStillRemoved]' passed (0.023 seconds).

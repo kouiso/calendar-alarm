@@ -1,0 +1,14 @@
+[
+ {
+  "atMillis": 1792650852027,
+  "detail": "app start: desired=0 sched=0 cancel=0",
+  "id": 1,
+  "type": "RESYNC"
+ },
+ {
+  "atMillis": 1792650852088,
+  "detail": "foreground: desired=0 sched=0 cancel=0",
+  "id": 2,
+  "type": "RESYNC"
+ }
+]

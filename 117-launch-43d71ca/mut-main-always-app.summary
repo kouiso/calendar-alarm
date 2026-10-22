@@ -1,0 +1,27 @@
+   1 	 Executed 14 tests, with 1 test skipped and 6 failures (0 unexpected) in 2.302 (2.306) seconds
+   1 	 Executed 17 tests, with 1 test skipped and 6 failures (0 unexpected) in 2.347 (2.352) seconds
+   1 	 Executed 17 tests, with 1 test skipped and 6 failures (0 unexpected) in 2.347 (2.353) seconds
+   1 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.045 (0.046) seconds
+   1 ** TEST FAILED **
+   1 iosApp/unit-test/engine-sound-change-test.swift:137: error: -[iosAppTests.EngineSoundChangeTests testLostReservationIsNotListedWhenResyncAlsoFails] : XCTAssertNil failed: "(inst: iosApp.AlarmInstanceDTO(id: "sa:1:2026-10-22", triggerAtMillis: 1792661940000, title: "アラーム", kind: "STANDALONE", eventId: nil, standaloneAlarmId: Optional(1), snoozeMinutes: 10, soundUri: nil, minutesBefore: 0, eventStartMillis: nil, snoozeSeq: 0, delivery: "ALARM", muteUntilUnlock: false), sound: Optional("alarm-custom-test-ec28c72f-9ed1-446f-9815-45d8c77edee4.caf"))"
+   1 iosApp/unit-test/engine-sound-change-test.swift:138: error: -[iosAppTests.EngineSoundChangeTests testLostReservationIsNotListedWhenResyncAlsoFails] : XCTAssertNil failed: "ScheduledRecord(instance: iosApp.AlarmInstanceDTO(id: "sa:1:2026-10-22", triggerAtMillis: 1792661940000, title: "アラーム", kind: "STANDALONE", eventId: nil, standaloneAlarmId: Optional(1), snoozeMinutes: 10, soundUri: nil, minutesBefore: 0, eventStartMillis: nil, snoozeSeq: 0, delivery: "ALARM", muteUntilUnlock: false), state: iosApp.InstanceState.pending, alarmKitId: Optional("fake-sa:1:2026-10-22"), soundFile: Optional("alarm-custom-test-ec28c72f-9ed1-446f-9815-45d8c77edee4.caf"))" - OS に無い予約が一覧に残っている
+   1 iosApp/unit-test/engine-sound-change-test.swift:151: error: -[iosAppTests.EngineSoundChangeTests testFailureBeforeCancelKeepsRecord] : XCTAssertNil failed: "alarm-custom-test-de0f5845-830b-48cb-99de-3d6422b1b127.caf"
+   1 iosApp/unit-test/engine-sound-change-test.swift:153: error: -[iosAppTests.EngineSoundChangeTests testFailureBeforeCancelKeepsRecord] : XCTAssertNil failed: "alarm-custom-test-de0f5845-830b-48cb-99de-3d6422b1b127.caf"
+   1 iosApp/unit-test/engine-sound-change-test.swift:281: error: -[iosAppTests.EngineSoundChangeTests testHostAppRunsWithoutItsOwnEngine] : XCTAssertEqual failed: ("Optional(iosApp.AppLauncher.Mode.app)") is not equal to ("Optional(iosApp.AppLauncher.Mode.unitTestHost)")
+   1 iosApp/unit-test/engine-sound-change-test.swift:284: error: -[iosAppTests.EngineSoundChangeTests testHostAppRunsWithoutItsOwnEngine] : XCTAssertEqual failed: ("1") is not equal to ("0") - 母体のアプリが自分の Engine を作っている
+   1 Test Case '-[iosAppTests.AlarmSoundImportTests testLongSoundIsTrimmedUnderThirtySeconds]' passed (0.039 seconds).
+   1 Test Case '-[iosAppTests.AlarmSoundImportTests testNonAudioFileIsRejectedWithoutLeftovers]' passed (0.003 seconds).
+   1 Test Case '-[iosAppTests.AlarmSoundImportTests testShortSoundKeepsLengthAndIsUsedForReservations]' passed (0.002 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testCancelDuringRebookStaysCancelled]' passed (0.295 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testFailedRebookRestoresPreviousSound]' passed (0.035 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testFailureBeforeCancelKeepsRecord]' failed (0.536 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testHostAppRunsWithoutItsOwnEngine]' failed (1.021 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testLostReservationIsBookedAgainByResync]' passed (0.043 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testLostReservationIsNotListedWhenResyncAlsoFails]' failed (0.025 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testLostSnoozeChildIsKeptForRecovery]' passed (0.020 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testLostTimerIsKeptForRecovery]' passed (0.012 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testRegeneratedByExpandDependsOnCalendarForEvents]' passed (0.001 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testStaleEngineKeepsSoundImportedAfterItLoaded]' passed (0.024 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testStaleEngineKeepsSoundTheOtherEngineSaved]' passed (0.023 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testTimeEditDuringRebookKeepsNewTime]' passed (0.234 seconds).
+   1 Test Case '-[iosAppTests.EngineSoundChangeTests testUnusedOldSoundIsStillRemoved]' passed (0.026 seconds).
