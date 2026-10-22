@@ -447,6 +447,9 @@ struct ScheduledRecord: Codable, Hashable {
     var instance: AlarmInstanceDTO
     var state: InstanceState
     var alarmKitId: String? = nil // AlarmKit UUID (iOS26 経路のみ)
+    /// OS の予約に渡した取り込み音のファイル名 (#101)。nil = iPhone の既定音。
+    /// どの予約がまだその音で鳴るかを知る手掛かりで、使われていない音だけを消すのに使う
+    var soundFile: String? = nil
 }
 
 // MARK: - JSON エンコード規約

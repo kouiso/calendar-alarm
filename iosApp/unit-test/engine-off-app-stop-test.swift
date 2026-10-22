@@ -13,7 +13,7 @@ private final class OffAppStopFakeScheduler: AlarmScheduler {
     /// schedule が呼ばれた順の instanceId
     var scheduledIds: [String] = []
 
-    func schedule(_ inst: AlarmInstanceDTO) async throws -> String? {
+    func schedule(_ inst: AlarmInstanceDTO, sound: String?) async throws -> String? {
         booked.insert(inst.id)
         scheduledIds.append(inst.id)
         return ReservationUUID.from(inst.id).uuidString
@@ -24,6 +24,8 @@ private final class OffAppStopFakeScheduler: AlarmScheduler {
     }
 
     var liveReservationIdsIfReadable: Set<UUID>? { Set(booked.map(ReservationUUID.from)) }
+
+    func hasReservation(instanceId: String) async -> Bool { booked.contains(instanceId) }
 }
 
 /// #61: アプリが止まっている間に鳴って、停止ボタンで止めたアラームを、次の resync で鳴らし直さない。

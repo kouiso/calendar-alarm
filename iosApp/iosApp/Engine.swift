@@ -21,9 +21,22 @@ final class Engine: ObservableObject {
     /// 鳴動中のインスタンス id (RingingView 用)
     @Published var alertingIds: Set<String> = []
 
-    /// [scheduler] [store] はテストで OS の予約を偽物にし、端末の保存データを触らないための差し替え口。
+    /// OS へ予約を渡している最中の取り込み音 (名前 → 本数)。予約が記録に載る前に
+    /// 音の片付けが走っても、これから鳴る音を消さないために数える。
+    /// バックグラウンドの resync は別の Engine で走るので、エンジンごとでなくアプリ全体で数える
+    private static var inFlightSounds: [String: Int] = [:]
+
+    /// 予約を書き換える処理 (resync・音の入れ直し) を1本ずつ流すための列の末尾。
+    /// どちらも途中で await するので、並んで走ると片方が古い写しで相手の予約を上書きする
+    private var reservationQueueTail: Task<Void, Never>?
+
+    /// アプリ自身が作った Engine の数 (差し替え口なしで作ったもの)。試験の母体が自分の Engine を動かしていないことの確認用
+    private(set) static var appEngineCount = 0
+
+    /// [scheduler] [store] はテストで OS の予約失敗を再現し、端末の保存データを触らないための差し替え口。
     /// アプリは渡さない
     init(scheduler: AlarmScheduler? = nil, store: Store? = nil) {
+        if scheduler == nil { Self.appEngineCount += 1 }
         self.store = store ?? Store()
         if let scheduler {
             self.scheduler = scheduler
@@ -110,6 +123,20 @@ final class Engine: ObservableObject {
     /// - PENDING のスヌーズ子インスタンスは desired に併合して残す
     /// - グレース幅を過ぎた PENDING は MISSED + 通知
     func resync(reason: String) async {
+        await runExclusively { await self.resyncNow(reason: reason) }
+    }
+
+    private func runExclusively(_ body: @escaping @MainActor () async -> Void) async {
+        let previous = reservationQueueTail
+        let task = Task { @MainActor in
+            await previous?.value
+            await body()
+        }
+        reservationQueueTail = task
+        await task.value
+    }
+
+    private func resyncNow(reason: String) async {
         let now = Self.nowMillis
         let horizon = now + Int64(horizonDays) * 86_400_000
         let zone = TimeZone.current.identifier
@@ -337,8 +364,8 @@ final class Engine: ObservableObject {
                 delivery: inst.delivery
             )
             do {
-                let rid = try await scheduler.schedule(shifted)
-                store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: rid))
+                let r = try await reserve(shifted)
+                store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: r.id, soundFile: r.sound))
                 scheduledCount += 1
             } catch {
                 store.audit("SCHEDULE_ERR", "\(inst.id): \(error.localizedDescription)")
@@ -364,8 +391,8 @@ final class Engine: ObservableObject {
                 continue
             }
             do {
-                let rid = try await scheduler.schedule(inst)
-                store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: rid))
+                let r = try await reserve(inst)
+                store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: r.id, soundFile: r.sound))
                 scheduledCount += 1
             } catch {
                 store.audit("SCHEDULE_ERR", "\(inst.id): \(error.localizedDescription)")
@@ -373,6 +400,8 @@ final class Engine: ObservableObject {
         }
 
         store.pruneOldInstances(nowMillis: now)
+        // 止めた・見逃したで鳴る予約が無くなった音はここで片付く
+        removeUnusedSounds()
         store.writeWidgetSnapshot()
         WidgetCenter.shared.reloadAllTimelines()
         store.audit("RESYNC", "\(reason): desired=\(desired.count) sched=\(plan.toSchedule.count) cancel=\(plan.toCancel.count)")
@@ -461,13 +490,16 @@ final class Engine: ObservableObject {
             // 温存経路で再予約され権限が戻れば自律回復する。ただし失敗は監査に残す
             // (try? で握り潰すとゾンビ予約がサイレントのまま二度と鳴らない)。
             var rid: String? = nil
+            var sound: String? = nil
             do {
-                rid = try await scheduler.schedule(next)
+                let r = try await reserve(next)
+                rid = r.id
+                sound = r.sound
                 store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m → \(next.id)")
             } catch {
                 store.audit("SCHEDULE_ERR", "snooze \(next.id): \(error.localizedDescription)")
             }
-            store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: rid))
+            store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: rid, soundFile: sound))
         }
     }
 
@@ -481,19 +513,139 @@ final class Engine: ObservableObject {
             kind: "TIMER"
         )
         do {
-            let rid = try await scheduler.schedule(inst)
-            store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: rid))
+            let r = try await reserve(inst)
+            store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: r.id, soundFile: r.sound))
             store.audit("TIMER_SET", "\(durationMillis / 1000)s")
         } catch {
             store.audit("SCHEDULE_ERR", "timer: \(error.localizedDescription)")
         }
     }
 
+    /// 音の入れ直しと同じ列で取り消す。列の外だと、入れ直しの途中で取り消したタイマーを入れ直しが書き戻して鳴らす
     func cancelInstance(_ id: String) async {
-        await scheduler.cancel(instanceId: id, reservationId: store.state.scheduled[id]?.alarmKitId)
-        UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: ["notify-\(id)"])
-        store.removeScheduled(id)
+        await runExclusively {
+            await self.scheduler.cancel(instanceId: id, reservationId: self.store.state.scheduled[id]?.alarmKitId)
+            UNUserNotificationCenter.current()
+                .removePendingNotificationRequests(withIdentifiers: ["notify-\(id)"])
+            self.store.removeScheduled(id)
+        }
+    }
+
+    /// 既定のアラーム音を変えた時に、入っている予約を新しい音で入れ直す (#101)。
+    /// AlarmKit は音を予約の時に決めるため、入れ直さないと変更前の音で鳴る
+    func rescheduleForSoundChange() async {
+        await runExclusively { await self.rescheduleForSoundChangeNow() }
+    }
+
+    private func rescheduleForSoundChangeNow() async {
+        let ids = store.state.scheduled.values
+            .filter { needsSoundChange($0) }
+            .map { $0.instance.id }
+        var count = 0
+        var lostIds: [String] = []
+        for id in ids {
+            // resync とは列で順番に走るが、鳴動の観測は await の間にも記録を変える。
+            // ループ前の写しで上書きしないよう、毎回いまの記録を読み直してそれを予約する
+            guard let current = store.state.scheduled[id], needsSoundChange(current) else { continue }
+            if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler,
+               ak.state(of: AlarmKitScheduler.uuid(from: id)) == .alerting {
+                continue
+            }
+            do {
+                let r = try await reserve(current.instance)
+                store.putScheduled(ScheduledRecord(instance: current.instance, state: .pending,
+                                                   alarmKitId: r.id ?? current.alarmKitId, soundFile: r.sound))
+                count += 1
+            } catch {
+                store.audit("SCHEDULE_ERR", "sound \(id): \(error.localizedDescription)")
+                if await !restoreAfterFailedSoundChange(current) { lostIds.append(id) }
+            }
+        }
+        if !lostIds.isEmpty {
+            // 記録を外した予約は、ここで予約し直さないとアプリを閉じたまま鳴らない
+            await resyncNow(reason: "sound change lost \(lostIds.count)")
+        }
+        removeUnusedSounds()
+        store.audit("SOUND", "\(AlarmSoundLibrary.currentDefault ?? "default"): \(count)件を入れ直し")
+    }
+
+    /// 鳴る直前 (5秒以内)・鳴動中・スヌーズ中は入れ直さない。前の音のまま鳴るが、
+    /// その音のファイルは記録 (soundFile) が指している間は消さないので既定音には落ちない
+    private func needsSoundChange(_ rec: ScheduledRecord) -> Bool {
+        rec.state == .pending && rec.instance.triggerAtMillis > Self.nowMillis + 5_000
+            && rec.instance.delivery != EventAction.notify.rawValue
+            && rec.soundFile != AlarmSoundLibrary.soundName(for: rec.instance)
+    }
+
+    /// AlarmKit は予約の前に同じ id の予約を取り消すので、予約が失敗すると前の予約も消えている。
+    /// 前の音で予約し直し、それも駄目なら記録を外して一覧に予約ありと出さない
+    /// (展開で作り直せないタイマー・スヌーズ子・カレンダーを読めない時の予定は残して拾い直させる)
+    /// @returns false = OS に予約が無いまま (resync で取り直す)
+    private func restoreAfterFailedSoundChange(_ rec: ScheduledRecord) async -> Bool {
+        let id = rec.instance.id
+        if await scheduler.hasReservation(instanceId: id) { return true }
+        do {
+            let r = try await reserve(rec.instance, sound: rec.soundFile)
+            store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending,
+                                               alarmKitId: r.id ?? rec.alarmKitId, soundFile: r.sound))
+            store.audit("SOUND_RESTORE", "\(id): 前の音で予約し直し")
+            return true
+        } catch {
+            if !Self.isRegeneratedByExpand(rec.instance, calendarReadable: reader.authorizationGranted) {
+                // 展開で作り直せない行は、記録を消すと二度と鳴らない。予約 id を空にして、次の resync で拾い直させる
+                store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending,
+                                                   alarmKitId: nil, soundFile: rec.soundFile))
+            } else {
+                store.removeScheduled(id)
+            }
+            store.audit("SCHEDULE_ERR", "sound restore \(id): \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    /// 展開 (SharedDomain.expand) が毎回作り直す行か。タイマーとスヌーズ子は今ある記録からしか持ち越されない。
+    /// カレンダーを読めない間は予定が展開に渡らず、予定の行も今ある記録からしか持ち越されない (resyncNow の preserved)
+    static func isRegeneratedByExpand(_ inst: AlarmInstanceDTO, calendarReadable: Bool) -> Bool {
+        inst.kind != "TIMER" && inst.snoozeSeq == 0 && (inst.kind != "EVENT" || calendarReadable)
+    }
+
+    /// OS へ予約し、その予約に渡した音を一緒に返す。音はここで1回だけ決め、記録に残す
+    private func reserve(_ inst: AlarmInstanceDTO) async throws -> (id: String?, sound: String?) {
+        try await reserve(inst, sound: AlarmSoundLibrary.soundName(for: inst))
+    }
+
+    private func reserve(_ inst: AlarmInstanceDTO, sound: String?) async throws -> (id: String?, sound: String?) {
+        if let sound { Self.inFlightSounds[sound, default: 0] += 1 }
+        defer {
+            if let sound {
+                let left = (Self.inFlightSounds[sound] ?? 1) - 1
+                Self.inFlightSounds[sound] = left > 0 ? left : nil
+            }
+        }
+        let id = try await scheduler.schedule(inst, sound: sound)
+        return (id, sound)
+    }
+
+    /// 取り込んだ音のうち、もう鳴らす予定の無いものを消す (#101)。
+    /// 待機中・鳴動中・スヌーズ中の記録が指す音、予約を渡している最中の音、既定と個別指定の音は残す。
+    /// 入れ直しに失敗して前の音で予約し直した記録も前の音を指すので残る。
+    /// バックグラウンドの resync は前景と別の Engine・Store で走り、手元の写しは古いことがある。
+    /// 写しだけで決めると前景で取り込んだばかりの音を消すので、保存済みの状態が指す音と、
+    /// 写しを読んだ後に置かれたファイルも残す
+    func removeUnusedSounds() {
+        var keep = Self.soundsInUse(store.state)
+        if let saved = store.savedState() { keep.formUnion(Self.soundsInUse(saved)) }
+        keep.formUnion(Self.inFlightSounds.keys)
+        AlarmSoundLibrary.removeAll(except: keep, createdBefore: store.loadedAt)
+    }
+
+    private static func soundsInUse(_ s: Store.Persisted) -> Set<String> {
+        var keep = Set(s.scheduled.values
+            .filter { [.pending, .fired, .snoozed].contains($0.state) }
+            .compactMap { $0.soundFile })
+        if let current = s.alarmSoundFile { keep.insert(current) }
+        keep.formUnion(s.standaloneAlarms.compactMap { $0.soundUri })
+        return keep
     }
 
     // MARK: - ユーティリティ
