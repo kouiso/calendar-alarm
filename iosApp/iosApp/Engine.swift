@@ -30,6 +30,13 @@ final class Engine: ObservableObject {
     /// どちらも途中で await するので、並んで走ると片方が古い写しで相手の予約を上書きする
     private var reservationQueueTail: Task<Void, Never>?
 
+    /// 記録だけ先に置いて、OS への予約を列で待っているスヌーズの子の id。
+    /// 待っている間に走った resync は、この子を計画に入れていない (計画を作った後に置かれた) ので、
+    /// 記録を外すことがある。外れても予約の側が取り直せるよう、印は記録と別に持つ
+    private var snoozeChildrenAwaitingBooking: Set<String> = []
+    /// 予約を待つ間に取り消された子の id。予約の側はこれを見て、書き戻さずに終わる
+    private var cancelledAwaitingChildren: Set<String> = []
+
     /// [scheduler] [store] はテストで OS の予約失敗を再現し、端末の保存データを触らないための差し替え口。
     /// アプリは渡さない
     init(scheduler: AlarmScheduler? = nil, store: Store? = nil) {
@@ -501,12 +508,19 @@ final class Engine: ObservableObject {
         // 止めた直後に reconcile が走ると「snoozed + AlarmKit 消滅 + 子なし」と
         // 誤判定されて単発親が消費OFFになり、登録済みなら温存条件を保てる。
         store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: nil))
+        snoozeChildrenAwaitingBooking.insert(next.id)
+        cancelledAwaitingChildren.remove(next.id)
         return Task {
             // 取り消し (cancelInstance) と同じ列で予約する。列の外だと、予約の await の間に取り消された子を
             // このあとの putScheduled が書き戻し、取り消したタイマーが鳴る
             await self.runExclusively {
-                // 列で先に取り消されていたら、子はもう無い。予約も書き戻しもしない
-                guard self.store.state.scheduled[next.id]?.state == .pending else {
+                defer {
+                    self.snoozeChildrenAwaitingBooking.remove(next.id)
+                    self.cancelledAwaitingChildren.remove(next.id)
+                }
+                // 列で先に取り消されていたら、予約も書き戻しもしない。
+                // 記録の有無では決めない: 待つ間に走った resync が記録を外していても、取り消されていない子は取り直す
+                if self.cancelledAwaitingChildren.contains(next.id) {
                     self.store.audit("SNOOZE_SKIP", "\(next.id): 予約の前に取り消された")
                     return
                 }
@@ -549,6 +563,7 @@ final class Engine: ObservableObject {
     /// 音の入れ直しと同じ列で取り消す。列の外だと、入れ直しの途中で取り消したタイマーを入れ直しが書き戻して鳴らす
     func cancelInstance(_ id: String) async {
         await runExclusively {
+            if self.snoozeChildrenAwaitingBooking.contains(id) { self.cancelledAwaitingChildren.insert(id) }
             await self.scheduler.cancel(instanceId: id, reservationId: self.store.state.scheduled[id]?.alarmKitId)
             UNUserNotificationCenter.current()
                 .removePendingNotificationRequests(withIdentifiers: ["notify-\(id)"])
