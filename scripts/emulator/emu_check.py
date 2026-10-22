@@ -57,9 +57,13 @@ def anr_wait(path, *app_labels):
         if node.get("resource-id") != "android:id/aerr_wait":
             continue
         # この「待機」を含む最小の祖先のうち、タイトルを持つもの
+        # 別のダイアログの「待機」まで含む祖先に上がったら、そこで止める (他のダイアログのタイトルを拾わない)
         anc, title = parent.get(node), None
         while anc is not None and title is None:
-            for t in anc.iter("node"):
+            subtree = list(anc.iter("node"))
+            if sum(1 for t in subtree if t.get("resource-id") == "android:id/aerr_wait") > 1:
+                break
+            for t in subtree:
                 if t.get("resource-id") == "android:id/alertTitle":
                     title = t.get("text") or ""
                     break

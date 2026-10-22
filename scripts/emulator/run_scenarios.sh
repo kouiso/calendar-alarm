@@ -42,6 +42,8 @@ while IFS= read -r label; do
   [ -n "$label" ] && APP_LABELS+=("$label")
 done < <(sed -n 's|.*name="app_name"[^>]*>\([^<]*\)</string>.*|\1|p' "$APP_DIR"/androidApp/src/main/res/values*/strings.xml 2>/dev/null)
 
+[ ${#APP_LABELS[@]} -gt 0 ] || echo "WARN: app labels not found under $APP_DIR; other apps' ANR dialogs will not be dismissed" >&2
+
 ui_dump() {
   local dst=$1 _ dismissed=0 xy
   for _ in 1 2 3 4 5; do

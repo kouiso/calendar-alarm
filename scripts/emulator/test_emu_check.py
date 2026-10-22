@@ -61,6 +61,16 @@ class AnrWait(unittest.TestCase):
         only_own = wrap_xml(dialog("Calendar Alarm isn't responding"), dialog("Calendar Alarm isn't responding", "[1,1][3,3]"))
         self.assertEqual(anr_wait(only_own)[0], 1)
 
+    def test_dialogs_without_own_wrapper_are_not_cross_paired(self):
+        # 同じ親の直下に 2 つのダイアログの部品が並んでいても、他方のタイトルは拾わない
+        flat = wrap_xml(
+            '<node class="root" package="android">'
+            + dialog("Calendar Alarm isn't responding", "[1,1][3,3]", wrap=False)
+            + dialog("Pixel Launcher isn't responding", "[100,100][200,200]", wrap=False)
+            + "</node>"
+        )
+        self.assertEqual(anr_wait(flat)[0], 1)
+
     def test_localized_title_of_other_app_is_dismissed(self):
         self.assertEqual(anr_wait(wrap_xml(dialog("Pixel Launcher は応答していません")))[0], 0)
 
