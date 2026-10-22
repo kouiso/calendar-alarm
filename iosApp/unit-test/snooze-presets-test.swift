@@ -61,3 +61,14 @@ final class SnoozePresetsTests: XCTestCase {
         XCTAssertEqual(Store(fileURL: url).state.snoozePresets, [5, 10, 15, 20, 30, 60])
     }
 }
+
+/// 設定の「鳴動画面で選べるスヌーズ」が英語の端末でも読めること (文言を表に入れ忘れると日本語のまま出る)
+final class SnoozePresetLocalizationTests: XCTestCase {
+    func testSettingsLabelHasEnglish() throws {
+        let path = try XCTUnwrap(Bundle(for: Engine.self).path(forResource: "en", ofType: "lproj"), "英語の翻訳がアプリに入っていない")
+        let en = try XCTUnwrap(Bundle(path: path))
+        XCTAssertEqual(en.localizedString(forKey: "鳴動画面で選べるスヌーズ", value: "__missing__", table: nil),
+                       "Snooze choices on the ringing screen")
+        XCTAssertEqual(String(format: en.localizedString(forKey: "%lld分", value: "__missing__", table: nil), 15), "15 min")
+    }
+}
