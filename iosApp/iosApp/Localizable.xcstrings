@@ -128,6 +128,16 @@
         }
       }
     },
+    "iPhone の標準": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone default"
+          }
+        }
+      }
+    },
     "weekday-short-FRIDAY": {
       "localizations": {
         "ja": {
@@ -270,6 +280,16 @@
         }
       }
     },
+    "この音声は使えませんでした: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This audio file could not be used: %@"
+          }
+        }
+      }
+    },
     "これで、鳴ってすぐ止められる": {
       "localizations": {
         "en": {
@@ -346,6 +366,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Edit alarm"
+          }
+        }
+      }
+    },
+    "アラーム音: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alarm sound: %@"
           }
         }
       }
@@ -780,6 +810,16 @@
         }
       }
     },
+    "標準に戻す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset to default"
+          }
+        }
+      }
+    },
     "次 %@": {
       "localizations": {
         "en": {
@@ -930,6 +970,16 @@
         }
       }
     },
+    "選ぶ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose"
+          }
+        }
+      }
+    },
     "閉じる": {
       "localizations": {
         "en": {
@@ -966,6 +1016,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Start only"
+          }
+        }
+      }
+    },
+    "音声を開けませんでした: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not open the audio file: %@"
+          }
+        }
+      }
+    },
+    "音量・だんだん大きくする・バイブは、iPhone の「サウンドと触覚」の設定に従います。iPhone のアラーム機能では、アプリから変えられるのは音だけです。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume, gradual volume increase and vibration follow your iPhone’s Sounds & Haptics settings. With the iPhone’s alarm feature, the app can only change the sound."
           }
         }
       }
