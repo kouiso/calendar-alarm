@@ -10,10 +10,15 @@ struct RingingView: View {
     @EnvironmentObject var store: Store
     @State private var now = Date()
     @State private var weather: WeatherService.NowForecast? = nil
-    @State private var showSnoozePresets = false
+    @State private var showSnoozePresets: Bool
     /// プリセット設定が iOS 側に無いため固定候補 (Android は設定の snoozePresets を使用)
     private let snoozePresets = [5, 10, 15, 30]
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    /// 試験で「チップを開いた状態」から始めるための引数。画面から開く時は既定の false のまま
+    init(startsWithPresetsOpen: Bool = false) {
+        _showSnoozePresets = State(initialValue: startsWithPresetsOpen)
+    }
 
     private var accent: Color {
         AppPalette.byId(store.state.themeId).accent
@@ -112,7 +117,8 @@ struct RingingView: View {
                     }
                     .padding(.horizontal, 24)
                     // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開。
-                    // 窓が低すぎる時は出さない: 下に固定した操作群が背伸びして、停止の丸が画面の外へ出るため
+                    // 窓が低すぎる時は出さない: チップを開くと固定した操作群が 287pt になり、
+                    // 上の時刻と件名のスクロール領域が潰れるため (窓 320pt だと 1pt まで)。停止の丸はこの判定に関わらず窓に残る
                     let canChoose = RingingLayout.showsPresetPicker(windowHeight: geo.size.height)
                     if canChoose {
                         Button {
@@ -184,10 +190,11 @@ struct RingingView: View {
     }
 }
 
-/// 鳴動画面の寸法に関する決まり。下に固定した操作群が窓より高くなって、停止の丸が見えなくなるのを防ぐ
+/// 鳴動画面の寸法に関する決まり。下に固定した操作群が背伸びして、上の時刻と件名の領域が潰れるのを防ぐ
 enum RingingLayout {
-    /// 「スヌーズ時間を選ぶ」を出す窓の最低の高さ (pt)。
-    /// 固定した操作群は、開いたチップ込みで約 290pt。これを足しても上のスクロール領域に 230pt 以上残る高さにしてある。
+    /// 「スヌーズ時間を選ぶ」を出す窓の最低の高さ (pt)。安全領域を除いた、画面の部品が見る高さで比べる。
+    /// 固定した操作群は、開いたチップ込みで 287pt (RingingWindowRenderTests で実測)。
+    /// これを引いても上のスクロール領域に 233pt 残る高さにしてある。
     /// これより低い窓では、既定のスヌーズと停止だけを残す
     static let minHeightForPresetPicker: CGFloat = 520
 

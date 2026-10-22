@@ -23,6 +23,7 @@
 		4E485751888C27D65F6C4ABA /* MailImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B399458D4913DD152149CADA /* MailImportView.swift */; };
 		54E5C67790C94D5298C69492 /* CalendarAlarmWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		56C929D3E057A4F1B62C284A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70278C1DA89E0C3594F39E2A /* SettingsView.swift */; };
+		5A07798B1780DD37A04D83F4 /* ringing-window-render-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF88FE737D7DF6DAF9D183AD /* ringing-window-render-test.swift */; };
 		5D99C358A61DC29A7E4BB564 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 6D6BF153DA3AEE3B1A413B7E /* Localizable.xcstrings */; };
 		60F95E5171F583E80686583F /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBC7C20D6CC306ED12728299 /* Permissions.swift */; };
 		61495687E00D3BDC4E29BB9B /* EventDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */; };
@@ -142,6 +143,7 @@
 		F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_medium.ttf; sourceTree = "<group>"; };
 		F4F8642EDA4CA9194F126132 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
 		F5CB9C72F79CDC56058DD028 /* SharedKitBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedKitBridge.swift; sourceTree = "<group>"; };
+		FF88FE737D7DF6DAF9D183AD /* ringing-window-render-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ringing-window-render-test.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -180,6 +182,7 @@
 				1AC8EE707421AED144DFAD38 /* engine-snooze-minutes-test.swift */,
 				6AD851BAB943D3DB6E272879 /* engine-sound-change-test.swift */,
 				AECCA8E3197BA59E900D5152 /* ringing-localization-test.swift */,
+				FF88FE737D7DF6DAF9D183AD /* ringing-window-render-test.swift */,
 			);
 			path = "unit-test";
 			sourceTree = "<group>";
@@ -470,6 +473,7 @@
 				966320DEE11E9E181F326ACE /* engine-snooze-minutes-test.swift in Sources */,
 				00FE057011931AD95770F145 /* engine-sound-change-test.swift in Sources */,
 				8BC62EA88163A9C19DEA60E3 /* ringing-localization-test.swift in Sources */,
+				5A07798B1780DD37A04D83F4 /* ringing-window-render-test.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
