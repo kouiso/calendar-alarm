@@ -524,3 +524,37 @@ extension AlarmInstanceDTO {
         muteUntilUnlock = try c.decodeIfPresent(Bool.self, forKey: .muteUntilUnlock) ?? false
     }
 }
+
+/// 通知で届く時刻がこれから先にあるか。終日は shared `AlarmExpander.expandEvents` と同じく、
+/// 予定日 (UTC の日付) のローカル allDayMinutes に倒してから引く。生の startMillis だと、
+/// 0時を過ぎた当日の終日通知 (まだ9時前) を「もう過ぎた」と見てしまい、許可の警告が消える
+func notificationDeliveryAhead(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?,
+                               actions: (start: String, reminder: String?), importReminders: Bool,
+                               nowMillis: Int64) -> Bool {
+    let notify = EventAction.notify.rawValue
+    var startMillis = ev.startMillis
+    if ev.allDay {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? utc.timeZone
+        let day = utc.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: TimeInterval(ev.startMillis) / 1000))
+        var local = DateComponents()
+        local.year = day.year; local.month = day.month; local.day = day.day
+        local.hour = rule.allDayMinutes / 60; local.minute = rule.allDayMinutes % 60
+        // 端末の暦が和暦などでも、取り出した西暦の年月日をそのまま端末のタイムゾーンの日時にする (shared は西暦で組む)
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = TimeZone.current
+        if let d = gregorian.date(from: local) {
+            startMillis = Int64(d.timeIntervalSince1970 * 1000)
+        }
+    }
+    func ahead(_ minutes: Int) -> Bool { startMillis - Int64(minutes) * 60_000 > nowMillis }
+    let startMinutes = ov?.minutesBefore ?? rule.minutesBefore
+    if actions.start == notify && ahead(startMinutes) { return true }
+    guard actions.reminder == notify else { return false }
+    // shared `AlarmExpander` は開始の予約を先に作り、同じ時刻のリマインダーは重複として作らない。
+    // 開始がミュートの時は何も作らないので、その時刻のリマインダーは残る
+    let startTriggerTaken = actions.start != EventAction.mute.rawValue
+    let offsets = (ov?.extraOffsets ?? rule.extraOffsets)
+        + (importReminders ? ev.calendarReminderMinutes.filter { $0 >= 0 } : [])
+    return offsets.contains { ahead($0) && !(startTriggerTaken && $0 == startMinutes) }
+}
