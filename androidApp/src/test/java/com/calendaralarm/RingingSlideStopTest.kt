@@ -185,4 +185,49 @@ class RingingSlideStopTest {
         compose.waitForIdle()
         assertEquals(1, dismissIntents().size)
     }
+
+    @Test
+    fun `引いたまま別の鳴動に替わり離しても どちらも止めない`() {
+        val otherId = "tm:slide-other"
+        val otherTitle = "SlideStopOther"
+        runBlocking {
+            app.container.db.scheduledInstances().upsert(
+                listOf(
+                    ScheduledInstanceEntity.of(
+                        AlarmInstance(otherId, System.currentTimeMillis(), otherTitle, AlarmKind.TIMER),
+                    ),
+                ),
+            )
+        }
+        // 丸を90% (閾値80%の先) まで引いたまま指を離さない
+        compose.onNodeWithContentDescription(SLIDER).performTouchInput {
+            val travel = width - 80f
+            down(Offset(40f, centerY))
+            moveTo(Offset(40f + 8f + 0.9f * travel, centerY))
+        }
+        compose.mainClock.advanceTimeBy(100)
+        compose.waitForIdle()
+        assertNotStopped()
+
+        // 引いている途中で、鳴動中の id が別のアラームへ替わる
+        AlarmService.ringingInstanceId.value = otherId
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodesWithText(otherTitle).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // 離す。見ていない方 (最初の鳴動) も、新しく替わった方も止めてはいけない
+        compose.onNodeWithContentDescription(SLIDER).performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+
+        val sent = dismissIntents()
+        assertTrue(
+            "別の鳴動に替わった後の指離しで DISMISS が送られた: " +
+                sent.map { it.getStringExtra(AlarmService.EXTRA_INSTANCE_ID) },
+            sent.isEmpty(),
+        )
+        assertNotEquals(Lifecycle.State.DESTROYED, scenario?.state)
+    }
 }
