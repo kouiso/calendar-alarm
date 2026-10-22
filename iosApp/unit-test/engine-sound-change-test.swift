@@ -16,6 +16,8 @@ final class FakeScheduler: AlarmScheduler {
     var cancelBeforeFailing = true
     /// 予約の途中で一度だけ走らせる処理 (await の間の割り込みを再現する)
     var duringSchedule: (() async -> Void)?
+    /// 予約の有無を聞かれた時に一度だけ走らせる処理 (resync の途中の割り込みを再現する)
+    var duringHasReservation: (() async -> Void)?
 
     struct Failure: Error {}
 
@@ -42,7 +44,11 @@ final class FakeScheduler: AlarmScheduler {
     }
 
     func hasReservation(instanceId: String) async -> Bool {
-        booked[instanceId] != nil
+        if let hook = duringHasReservation {
+            duringHasReservation = nil
+            await hook()
+        }
+        return booked[instanceId] != nil
     }
 }
 
@@ -297,6 +303,28 @@ final class EngineSoundChangeTests: XCTestCase {
 
         XCTAssertNil(fake.booked[childId], "取り消したスヌーズの子が OS に残っている")
         XCTAssertNil(engine.store.state.scheduled[childId], "取り消したスヌーズの子の記録が戻っている")
+    }
+
+    /// スヌーズした時に別の resync が途中で、その子を計画に入れていなくても、子の記録を外されても、
+    /// 予約の側が取り直す。取り消されていない子を取りこぼすと、親は静かになったまま子も鳴らない
+    func testSnoozeDuringRunningResyncStillBooksTheChild() async throws {
+        let (_, firstId) = try await bookAlarm(hoursAhead: 3)
+        let (_, secondId) = try await bookAlarm(hoursAhead: 5)
+        let parent = try XCTUnwrap(engine.store.state.scheduled[firstId]?.instance)
+        let childId = "\(firstId):snz1"
+        // 二つ目の予約が OS から消えた状態にして、resync が予約の有無を聞きに行く所を作る
+        fake.booked.removeValue(forKey: secondId)
+        var booking: Task<Void, Never>?
+        fake.duringHasReservation = { [engine] in
+            booking = engine?.snooze(parent, minutes: parent.snoozeMinutes + 3)
+        }
+
+        await engine.resync(reason: "running while the user snoozes")
+        await booking?.value
+
+        XCTAssertNotNil(fake.booked[childId], "resync に記録を外されたスヌーズの子が、取り直されていない")
+        XCTAssertEqual(engine.store.state.scheduled[childId]?.state, .pending)
+        XCTAssertNotNil(engine.store.state.scheduled[childId]?.alarmKitId)
     }
 
     /// 子の予約が始まる前に取り消しても同じ: 予約の側が列で後から来て、取り消された子を見て何もしない
