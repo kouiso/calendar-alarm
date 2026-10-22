@@ -8,5 +8,5 @@ out="$(mktemp -d "${TMPDIR:-/tmp}/ios-logic-test.XXXXXX")"
 trap 'rm -rf "$out"' EXIT
 swiftc -O -o "$out/run" \
   "$root/iosApp/iosApp/OffAppStopPlan.swift" \
-  "$root/iosApp/logic-test/off-app-stop-main.swift"
+  "$root/iosApp/logic-test/off-app-stop/main.swift"
 "$out/run"
