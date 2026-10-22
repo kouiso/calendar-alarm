@@ -252,6 +252,12 @@ final class Store: ObservableObject {
         mutate { $0.overrides[instanceKey] = EventOverrideDTO(action: action.rawValue, minutesBefore: minutes, extraOffsets: extras) }
     }
     func removeOverride(instanceKey: String) { mutate { $0.overrides.removeValue(forKey: instanceKey) } }
+    /// 予定ごとの個別指定を丸ごと置き換える。nil なら指定ごと消す
+    func replaceOverride(instanceKey: String, with ov: EventOverrideDTO?) {
+        mutate { s in
+            if let ov { s.overrides[instanceKey] = ov } else { s.overrides.removeValue(forKey: instanceKey) }
+        }
+    }
 
     // MARK: - standalone alarms
 

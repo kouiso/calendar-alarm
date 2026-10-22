@@ -435,6 +435,9 @@ struct DisplayEvent: Identifiable, Hashable {
     var muteAll: Bool = false
     /// 始まる前で、通知の動作で届く (通知の許可が要る)
     var notifies: Bool = false
+    /// 予定ごとの指定を外すと何も鳴らない (カレンダーの既定が鳴らさない・絞り込みで外れる等)。
+    /// 行のスイッチを ON にする時、これが true の時だけ「アラーム」を書く (通知だけの予定を格上げしないため)
+    var defaultSilenced: Bool = false
 
     /// 行のスイッチを押せなくする (Android の `AgendaItem.switchLocked` と同じ規則)。
     /// すべてミュート中でも通知で鳴る行は切れるように残す
@@ -559,4 +562,57 @@ func notificationDeliveryAhead(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ o
     let offsets = (ov?.extraOffsets ?? rule.extraOffsets)
         + (importReminders ? ev.calendarReminderMinutes.filter { $0 >= 0 } : [])
     return offsets.contains { ahead($0) && !(startTriggerTaken && $0 == startMinutes) }
+}
+
+/// 予定が実際に使う動作。優先順は shared `AlarmExpander.resolveActions` と同じ:
+/// 予定の個別指定 > never コード > always コード > カレンダーの既定。
+/// 展開と同じく、リマインダーの動作はリマインダー側の時刻 (追加の何分前・取り込んだカレンダーの通知) がある時だけ使う (無ければ nil)
+func resolvedRingActions(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
+                         importReminders: Bool) -> (start: String, reminder: String?) {
+    func matches(_ list: [String]) -> Bool {
+        list.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty && ev.title.localizedCaseInsensitiveContains($0) }
+    }
+    func resolve(_ apply: Bool, _ fallback: String) -> String {
+        if let a = ov?.action { return a }
+        if apply && matches(codes.neverCodes) { return EventAction.mute.rawValue }
+        if apply && matches(codes.alwaysCodes) { return EventAction.alarm.rawValue }
+        return fallback
+    }
+    let hasReminderTriggers = !(ov?.extraOffsets ?? rule.extraOffsets).isEmpty
+        || (importReminders && ev.calendarReminderMinutes.contains { $0 >= 0 })
+    return (resolve(codes.applyToStart, rule.startAction),
+            hasReminderTriggers ? resolve(codes.applyToReminders, rule.reminderAction) : nil)
+}
+
+/// 何も鳴らないか (`resolvedRingActions` の結果で決める)。
+/// すべてミュート中のアラームも鳴らない側に数える (展開の emit と同じく通知は残る)
+func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
+                          importReminders: Bool, muteAll: Bool = false) -> Bool {
+    let actions = resolvedRingActions(ev, rule, ov, codes, importReminders: importReminders)
+    func silenced(_ action: String) -> Bool {
+        action == EventAction.mute.rawValue || (muteAll && action == EventAction.alarm.rawValue)
+    }
+    return silenced(actions.start) && (actions.reminder.map(silenced) ?? true)
+}
+
+/// 予定ごとの指定を外した時に、何も鳴らないか (shared `AlarmExpander.silencedWithoutOverride` と同じ)。
+/// 行のスイッチを ON にする時の分かれ目: 鳴る側に戻るなら指定を外してカレンダーの既定の動作 (通知だけ等) を使い、
+/// 鳴らない時だけ「アラーム」を書く。常に ALARM を書くと、通知だけの予定が全画面のアラームに格上げされる。
+/// 何分前などの個別指定は ON でも残すので、リマインダー側の時刻の有無には指定の分まで数える
+func silencedWithoutOverride(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
+                             invite: InviteFilter, types: EventTypeFilter, importReminders: Bool) -> Bool {
+    if !passesEventFilters(ev, nil, invite, types) { return true }
+    let rest = EventOverrideDTO(action: nil, minutesBefore: ov?.minutesBefore, extraOffsets: ov?.extraOffsets)
+    return resolvedActionsMuted(ev, rule, rest, codes, importReminders: importReminders, muteAll: false)
+}
+
+/// 行のスイッチを押した後の、その予定の個別指定。OFF は「鳴らさない」を書く。
+/// ON は、指定を外すとそのまま鳴る予定なら「アクション」の指定を外し (カレンダーの既定の通知はそのまま)、
+/// 鳴らない予定だけ「アラーム」を書く。何分前などの指定はどちらでも残す。指定が空になれば nil (指定ごと消す)
+func overrideAfterRingSwitch(_ ov: EventOverrideDTO?, on: Bool, defaultSilenced: Bool) -> EventOverrideDTO? {
+    if !on { return EventOverrideDTO(action: EventAction.mute.rawValue, minutesBefore: ov?.minutesBefore, extraOffsets: ov?.extraOffsets) }
+    if defaultSilenced { return EventOverrideDTO(action: EventAction.alarm.rawValue, minutesBefore: ov?.minutesBefore, extraOffsets: ov?.extraOffsets) }
+    guard var kept = ov else { return nil }
+    kept.action = nil
+    return kept.minutesBefore == nil && kept.extraOffsets == nil ? nil : kept
 }

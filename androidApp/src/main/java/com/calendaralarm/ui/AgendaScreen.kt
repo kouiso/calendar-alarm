@@ -288,11 +288,7 @@ fun AgendaScreen(
                     // 行の右端のスイッチ: その予定だけ鳴らす／鳴らさないを決める (#51 PR2)
                     onToggle = { item, on ->
                         scope.launch {
-                            repository.setEventOverride(
-                                item.event.instanceKey,
-                                if (on) EventAction.ALARM else EventAction.MUTE,
-                                null,
-                            )
+                            repository.setEventSwitch(item, on)
                             refreshKey++
                         }
                     },
