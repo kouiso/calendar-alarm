@@ -46,6 +46,10 @@ object RingingOverlay {
 
     fun isShowing() = overlayView != null
 
+    // サービス経由で実際に表示された View を、テストが中身まで検査できるようにする
+    @VisibleForTesting
+    internal fun shownViewForTest(): View? = overlayView
+
     fun canShow(context: Context): Boolean =
         Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(context)
 
@@ -60,7 +64,9 @@ object RingingOverlay {
         instanceId: String,
         title: String,
         snoozeMinutes: Int,
-        snoozePresets: List<Int> = emptyList(),
+        // 既定値を持たせない: 省略してもコンパイルが通ると、呼び出し側の渡し忘れで
+        // オーバーレイだけチップと見出しが静かに消える (鳴動画面とのズレ)
+        snoozePresets: List<Int>,
         stillValid: () -> Boolean = { true },
     ) {
         if (!canShow(context)) return
