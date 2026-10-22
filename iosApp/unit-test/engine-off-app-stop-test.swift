@@ -26,6 +26,10 @@ private final class OffAppStopFakeScheduler: AlarmScheduler {
     var liveReservationIdsIfReadable: Set<UUID>? { Set(booked.map(ReservationUUID.from)) }
 
     func hasReservation(instanceId: String) async -> Bool { booked.contains(instanceId) }
+
+    func unreservedPendingIds(_ scheduled: [String: ScheduledRecord]) async -> Set<String>? {
+        ReservationGap.unreserved(scheduled) { booked.contains($0) }
+    }
 }
 
 /// #61: アプリが止まっている間に鳴って、停止ボタンで止めたアラームを、次の resync で鳴らし直さない。

@@ -32,6 +32,17 @@ protocol AlarmScheduler {
     var liveReservationIdsIfReadable: Set<UUID>? { get }
     /// OS にこのインスタンスの予約がまだ残っているか
     func hasReservation(instanceId: String) async -> Bool
+    /// OS の予約一覧と突き合わせて、予約が消えている PENDING 行の id を返す (一覧を1回だけ取る経路)。
+    /// nil = 一覧では聞けない経路。呼び出し側が行ごとに hasReservation で聞く
+    func unreservedPendingIds(_ scheduled: [String: ScheduledRecord]) async -> Set<String>?
+}
+
+/// 「PENDING なのに OS に予約が無い行」の判定。AlarmKit は iOS 26 以降でしか呼べず XCTest から届かないので、
+/// OS への問い合わせ [isLive] だけを外から渡す形にして、判定そのものを試験で動かせるようにする
+enum ReservationGap {
+    static func unreserved(_ scheduled: [String: ScheduledRecord], isLive: (String) -> Bool) -> Set<String> {
+        Set(scheduled.filter { $0.value.state == .pending && !isLive($0.key) }.map { $0.key })
+    }
 }
 
 /// インスタンス id から決める予約の UUID。AlarmKit の型に置くと iOS 26 未満の分岐から呼べないので外に置く
@@ -215,6 +226,13 @@ final class AlarmKitScheduler: AlarmScheduler {
         existingIds.contains(Self.uuid(from: instanceId))
     }
 
+    func unreservedPendingIds(_ scheduled: [String: ScheduledRecord]) async -> Set<String>? {
+        // 権限が無い間は一覧を読めない。読めないのを「全部消えた」と取り違えて取り直しを始めないよう、何も拾わない
+        guard authorizationGranted else { return [] }
+        let live = Set(allAlarms.map { $0.id })
+        return ReservationGap.unreserved(scheduled) { live.contains(Self.uuid(from: $0)) }
+    }
+
     /// インスタンス id 文字列から決定論的 UUID (AlarmKit は UUID 必須、差分適用のため決定的に)。
     static func uuid(from instanceId: String) -> UUID { ReservationUUID.from(instanceId) }
 }
@@ -272,4 +290,7 @@ final class NotificationScheduler: AlarmScheduler {
     func hasReservation(instanceId: String) async -> Bool {
         await port.pendingRequestIds().contains(instanceId)
     }
+
+    /// 通知は行ごとに聞く (鳴る前で、通知配信ではない行だけが対象なので Engine 側で絞る)
+    func unreservedPendingIds(_ scheduled: [String: ScheduledRecord]) async -> Set<String>? { nil }
 }
