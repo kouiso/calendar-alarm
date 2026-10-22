@@ -523,7 +523,7 @@ extension AlarmInstanceDTO {
 /// 0時を過ぎた当日の終日通知 (まだ9時前) を「もう過ぎた」と見てしまい、許可の警告が消える
 func notificationDeliveryAhead(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?,
                                actions: (start: String, reminder: String?), importReminders: Bool,
-                               nowMillis: Int64) -> Bool {
+                               muteAll: Bool = false, nowMillis: Int64) -> Bool {
     let notify = EventAction.notify.rawValue
     var startMillis = ev.startMillis
     if ev.allDay {
@@ -546,7 +546,9 @@ func notificationDeliveryAhead(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ o
     guard actions.reminder == notify else { return false }
     // shared `AlarmExpander` は開始の予約を先に作り、同じ時刻のリマインダーは重複として作らない。
     // 開始がミュートの時は何も作らないので、その時刻のリマインダーは残る
+    // すべてミュート中のアラームの開始も、展開は時刻を記録する前に外すので、その時刻のリマインダーは残る
     let startTriggerTaken = actions.start != EventAction.mute.rawValue
+        && !(muteAll && actions.start == EventAction.alarm.rawValue)
     let offsets = (ov?.extraOffsets ?? rule.extraOffsets)
         + (importReminders ? ev.calendarReminderMinutes.filter { $0 >= 0 } : [])
     return offsets.contains { ahead($0) && !(startTriggerTaken && $0 == startMinutes) }

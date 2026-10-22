@@ -39,6 +39,7 @@ check("alarm start + notify reminder at same offset -> no notification", notific
 var rdiff = rule; rdiff.minutesBefore = 10; rdiff.extraOffsets = [30]
 check("alarm start + notify reminder at different offset -> notification", notificationDeliveryAhead(timed, rdiff, nil, actions: (a, n), importReminders: false, nowMillis: iso("2026-10-22T09:00:00Z")), true)
 check("muted start leaves the same-offset reminder", notificationDeliveryAhead(timed, rdup, nil, actions: (EventAction.mute.rawValue, n), importReminders: false, nowMillis: iso("2026-10-22T09:00:00Z")), true)
+check("global mute drops the alarm start, so the same-offset notify reminder still needs permission", notificationDeliveryAhead(timed, rdup, nil, actions: (a, n), importReminders: false, muteAll: true, nowMillis: iso("2026-10-22T09:00:00Z")), true)
 // 端末の暦が和暦でも終日の時刻は変わらない
 check("all-day with current calendar \(Calendar.current.identifier)", notificationDeliveryAhead(allDay, rule, nil, actions: (n, nil), importReminders: false, nowMillis: iso(tz == "America/Los_Angeles" ? "2026-10-22T15:00:00Z" : "2026-10-21T23:00:00Z")), true)
 print("calendar:", Calendar.current.identifier)

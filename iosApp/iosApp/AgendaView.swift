@@ -583,7 +583,7 @@ extension Store {
                     allDayOff: allDayOff,
                     muteAll: state.muteAll,
                     // 始まる前の予定で通知の動作を使うものは、通知の許可が無いと届かない
-                    notifies: !dropped && notificationDeliveryAhead(ev, rule, ov, actions: actions, importReminders: state.importEventReminders, nowMillis: now)
+                    notifies: !dropped && notificationDeliveryAhead(ev, rule, ov, actions: actions, importReminders: state.importEventReminders, muteAll: state.muteAll, nowMillis: now)
                 )
             }
     }
