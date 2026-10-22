@@ -88,6 +88,16 @@
         }
       }
     },
+    "+%lld分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%lld min"
+          }
+        }
+      }
+    },
     "10秒後に鳴らしてみる": {
       "localizations": {
         "en": {
@@ -386,6 +396,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stopwatch"
+          }
+        }
+      }
+    },
+    "スヌーズ %lld分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snooze %lld min"
+          }
+        }
+      }
+    },
+    "スライドして停止 ›": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slide to stop ›"
           }
         }
       }
