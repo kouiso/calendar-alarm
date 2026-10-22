@@ -33,7 +33,8 @@ final class EventKitReader {
                 name: cal.title,
                 accountName: cal.source.title,
                 color: Self.argb(from: cal.cgColor),
-                isPrimary: cal.source.sourceType == .calDAV && cal.title.lowercased().contains("calendar")
+                isPrimary: cal.source.sourceType == .calDAV && cal.title.lowercased().contains("calendar"),
+                accountId: cal.source.sourceIdentifier
             )
         }
     }
