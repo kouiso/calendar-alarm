@@ -175,7 +175,8 @@ final class Engine: ObservableObject {
             for id in Self.legacyRequestIds(Array(s.scheduled.values),
                                             knownRequestIds: pendingIds.union(deliveredAt.keys)) {
                 if let rec = s.scheduled[id] {
-                    store.putScheduled(ScheduledRecord(instance: rec.instance, state: rec.state, alarmKitId: id))
+                    store.putScheduled(ScheduledRecord(instance: rec.instance, state: rec.state, alarmKitId: id,
+                                                       soundFile: rec.soundFile))
                 }
             }
             s = store.state

@@ -8,8 +8,9 @@ final class NotificationPathScheduler: AlarmScheduler {
     var authorizationGranted: Bool { true }
     var authorizationUndetermined: Bool { false }
     func requestAuthorization() async {}
-    func schedule(_ inst: AlarmInstanceDTO) async throws -> String? { inst.id }
+    func schedule(_ inst: AlarmInstanceDTO, sound: String?) async throws -> String? { inst.id }
     func cancel(instanceId: String, reservationId: String?) async {}
+    func hasReservation(instanceId: String) async -> Bool { true }
 }
 
 /// OS の通知センターの偽物。テストのホストはアプリ本体なので、本物を触るとアプリの通知予約が消える
@@ -433,7 +434,7 @@ final class NotificationWiringTests: XCTestCase {
         let scheduler = NotificationScheduler(port: center)
         let inst = AlarmInstanceDTO(
             id: "sa:1:x", triggerAtMillis: Engine.nowMillis + 60_000, title: "朝", kind: "STANDALONE")
-        let rid = try await scheduler.schedule(inst)
+        let rid = try await scheduler.schedule(inst, sound: nil)
         XCTAssertEqual(rid, "sa:1:x")
         XCTAssertEqual(center.submitted.map { $0.identifier }, ["sa:1:x"])
         XCTAssertTrue(center.submitted.first?.trigger is UNCalendarNotificationTrigger)
@@ -446,7 +447,7 @@ final class NotificationWiringTests: XCTestCase {
         let inst = AlarmInstanceDTO(
             id: "sa:1:x", triggerAtMillis: Engine.nowMillis + 60_000, title: "朝", kind: "STANDALONE")
         do {
-            _ = try await NotificationScheduler(port: center).schedule(inst)
+            _ = try await NotificationScheduler(port: center).schedule(inst, sound: nil)
             XCTFail("予約を断られたのに投げなかった")
         } catch {
             // OS の拒否をそのまま投げ直していること (別のエラーに化けると原因が追えない)

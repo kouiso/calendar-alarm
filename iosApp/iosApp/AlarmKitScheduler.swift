@@ -244,6 +244,6 @@ final class NotificationScheduler: AlarmScheduler {
     }
 
     func hasReservation(instanceId: String) async -> Bool {
-        await center.pendingNotificationRequests().contains { $0.identifier == instanceId }
+        await port.pendingRequestIds().contains(instanceId)
     }
 }
