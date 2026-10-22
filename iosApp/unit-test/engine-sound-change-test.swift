@@ -276,9 +276,12 @@ final class EngineSoundChangeTests: XCTestCase {
     }
 
     /// 母体のアプリが自分の Engine を作ると、試験の音のファイルを消し、共有の既定音を書き換えて試験が時々落ちる。
-    /// 試験の母体として起動した時は空の画面だけを出す、という判定が効いていることを確かめる
-    func testHostAppRunsWithoutItsOwnEngine() {
-        XCTAssertTrue(AppLauncher.isUnitTestHost)
+    /// main が空の母体を選び、アプリ自身の Engine が1つも作られていないことを確かめる
+    func testHostAppRunsWithoutItsOwnEngine() async throws {
+        XCTAssertEqual(AppLauncher.launchedMode, .unitTestHost)
+        // 通常起動なら Engine は最初の画面を作る時に生まれる。その猶予を置いてから数える
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        XCTAssertEqual(Engine.appEngineCount, 0, "母体のアプリが自分の Engine を作っている")
     }
 
     private func soundFile(_ name: String) -> String {

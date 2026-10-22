@@ -7,17 +7,23 @@ import WidgetKit
 /// アプリ全体で共有する `AlarmSoundLibrary.currentDefault` を試験の途中で書き換えて、試験が時々落ちる
 @main
 enum AppLauncher {
-    /// Xcode は母体のアプリを起動する時に XCTestConfigurationFilePath を渡す。
-    /// XCTest の読み込みが main より後でも見落とさないよう、クラスの有無も合わせて見る
+    enum Mode { case app, unitTestHost }
+
+    /// main が実際に選んだ起動。試験が「母体が自分の Engine を動かしていない」ことを確かめるのに読む
+    private(set) static var launchedMode: Mode?
+
+    /// Xcode は単体テストの母体を起動する時だけ XCTestConfigurationFilePath を渡す。
+    /// 通常の起動や UI テスト・WDA 経由の起動には付かないので、これ1つで見分ける
     static var isUnitTestHost: Bool {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-            || NSClassFromString("XCTestCase") != nil
     }
 
     static func main() {
         if isUnitTestHost {
+            launchedMode = .unitTestHost
             UnitTestHostApp.main()
         } else {
+            launchedMode = .app
             CalendarAlarmApp.main()
         }
     }

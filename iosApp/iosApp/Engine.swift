@@ -30,9 +30,13 @@ final class Engine: ObservableObject {
     /// どちらも途中で await するので、並んで走ると片方が古い写しで相手の予約を上書きする
     private var reservationQueueTail: Task<Void, Never>?
 
+    /// アプリ自身が作った Engine の数 (差し替え口なしで作ったもの)。試験の母体が自分の Engine を動かしていないことの確認用
+    private(set) static var appEngineCount = 0
+
     /// [scheduler] [store] はテストで OS の予約失敗を再現し、端末の保存データを触らないための差し替え口。
     /// アプリは渡さない
     init(scheduler: AlarmScheduler? = nil, store: Store? = nil) {
+        if scheduler == nil { Self.appEngineCount += 1 }
         self.store = store ?? Store()
         if let scheduler {
             self.scheduler = scheduler
