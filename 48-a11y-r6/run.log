@@ -1,0 +1,85 @@
+[14:35:12.862] before: zen 2 | volumes {2: '0', 3: '0', 4: '0', 5: '0'} | a11y services: 
+[14:35:17.666] Success
+[14:35:18.634] Success
+[14:35:19.103] === path activity ===
+[14:35:22.515] t+  3.3s ringing=False top=com.calendaralarm.pr48/com.calendaralarm.MainActivity overlay_window=False
+[14:35:28.396] t+  9.1s ringing=True top=com.calendaralarm.pr48/com.calendaralarm.engine.RingingActivity overlay_window=False
+[14:35:30.851] t+ 11.6s ringing=False top=com.calendaralarm.pr48/com.calendaralarm.MainActivity overlay_window=False
+[14:35:34.708] t+ 15.5s ringing=False top=com.google.android.apps.nexuslauncher/.NexusLauncherActivity overlay_window=False
+[14:35:37.263] instrument: scheduled=A11Y-activity
+[14:35:37.263] instrument: TREE00=android.widget.FrameLayout text=null desc=null click=false important=true acts=[4,8,64,16908342]
+[14:35:37.263] instrument: TREE01=  android.widget.LinearLayout text=null desc=null click=false important=false acts=[4,8,64,16908342]
+[14:35:37.263] instrument: TREE02=    android.widget.FrameLayout text=null desc=null click=false important=false acts=[4,8,64,16908342]
+[14:35:37.263] instrument: TREE03=      androidx.compose.ui.platform.ComposeView text=null desc=null click=false important=true acts=[4,8,64,16908342]
+[14:35:37.263] instrument: TREE04=        android.view.View text=null desc=null click=false important=false acts=[64]
+[14:35:37.263] instrument: TREE05=          android.view.View text=null desc=null click=false important=true acts=[64]
+[14:35:37.263] instrument: TREE06=            android.widget.ScrollView text=null desc=null click=false important=true acts=[64]
+[14:35:37.263] instrument: TREE07=              android.view.View text=null desc=null click=false important=true acts=[64]
+[14:35:37.263] instrument: TREE08=                android.widget.TextView text=10月22日 (木) desc=null click=false important=true acts=[64,131072,256,512]
+[14:35:37.263] instrument: TREE09=              android.widget.TextView text=14:35 desc=null click=false important=true acts=[64,131072,256,512]
+[14:35:37.263] instrument: TREE10=              android.widget.TextView text=まもなく開始 desc=null click=false important=true acts=[64,131072,256,512]
+[14:35:37.263] instrument: TREE11=              android.widget.TextView text=A11Y-activity desc=null click=false important=true acts=[64,131072,256,512]
+[14:35:37.263] instrument: TREE12=            android.view.View text=null desc=null click=true important=true acts=[64,1,16]
+[14:35:37.263] instrument: TREE13=              android.widget.TextView text=スヌーズ 10分 desc=null click=false important=true acts=[64,131072,256,512]
+[14:35:37.263] instrument: TREE14=            android.view.View text=null desc=null click=true important=true acts=[64,1,16]
+[14:35:37.263] instrument: TREE15=              android.widget.TextView text=スヌーズ時間を選ぶ ▾ desc=null click=false important=true acts=[64,131072,256,512]
+[14:35:37.263] instrument: TREE16=            android.view.View text=null desc=null click=true important=true acts=[64,16,131072,256,512]
+[14:35:37.263] instrument: TREE17=              android.view.View text=null desc=スライドして停止 click=false important=true acts=[64,131072,256,512]
+[14:35:37.263] instrument: TREE18=              android.widget.TextView text=スライドして停止 › desc=null click=false important=true acts=[64,131072,256,512]
+[14:35:37.263] instrument: TREE19=              android.view.View text=null desc=null click=false important=false acts=[64]
+[14:35:37.263] instrument: TREE20=            android.widget.TextView text=Calendar Alarm desc=null click=false important=true acts=[64,131072,256,512]
+[14:35:37.263] instrument: CLICKING=now
+[14:35:37.263] instrument: ACTION_CLICK=performAction returned true
+[14:35:37.263] instrument: AFTER=slider still present=false
+[14:35:37.263] instrument: INSTRUMENTATION_RESULT: stream=
+[14:35:37.263] instrument: OK (1 test)
+[14:35:37.513] --- audit_log
+[14:35:37.513]     14:35:22.557 SCHEDULE adhoc tm:1792647322524 @1792647328524
+[14:35:37.513]     14:35:22.585 RESYNC reason=workManager +0 -0 fire=0
+[14:35:37.513]     14:35:24.401 RESYNC reason=app start +0 -0 fire=0
+[14:35:37.513]     14:35:29.469 FIRE tm:1792647322524
+[14:35:37.513]     14:35:29.525 WARN tm:1792647322524: オーバーレイ未許可 (FSI=可): ロック解除中は通知シェードからのみ停止可能
+[14:35:37.513]     14:35:32.061 STOP_TAP 画面: tm:1792647322524
+[14:35:37.513]     14:35:32.103 DISMISS tm:1792647322524
+[14:35:37.513] instance states (latest 3): [('tm:1792647322524', 'DISMISSED')]
+[14:35:37.513] ROW 13-activity: PASS ACTION_CLICK performAction=True; audit stop entries=2; found=['INSTRUMENTATION_STATUS: FOUND=after=7546ms window type=1 layer=0 title=Calendar Alarm class=android.view.View clickable=false focusable=false actions=[64:null, 131072:null, 256:null, 512:null]']
+[14:35:37.513] === path overlay ===
+[14:35:40.022] t+  0.2s ringing=False top=com.google.android.calculator/com.android.calculator2.Calculator overlay_window=False
+[14:35:48.061] t+  8.2s ringing=True top=com.google.android.calculator/com.android.calculator2.Calculator overlay_window=True
+[14:35:50.462] t+ 10.6s ringing=False top=com.google.android.calculator/com.android.calculator2.Calculator overlay_window=False
+[14:35:56.616] instrument: scheduled=A11Y-overlay
+[14:35:56.616] instrument: TREE00=android.widget.LinearLayout text=null desc=null click=false important=true acts=[4,8,64,16908342]
+[14:35:56.616] instrument: TREE01=  android.widget.ScrollView text=null desc=null click=false important=true acts=[4,8,1,64,16908342]
+[14:35:56.616] instrument: TREE02=    android.widget.LinearLayout text=null desc=null click=false important=false acts=[4,8,64,16908342]
+[14:35:56.616] instrument: TREE03=      android.widget.TextView text=14:35 desc=null click=false important=true acts=[4,8,64,16908342,256,512,131072]
+[14:35:56.616] instrument: TREE04=      android.widget.TextView text=A11Y-overlay desc=null click=false important=true acts=[4,8,64,16908342,256,512,131072]
+[14:35:56.616] instrument: TREE05=      android.view.View text=null desc=null click=false important=false acts=[4,8,64,16908342]
+[14:35:56.616] instrument: TREE06=  android.widget.TextView text=スヌーズ 10分 desc=null click=true important=true acts=[4,8,1,64,16,16908342,256,512,131072]
+[14:35:56.616] instrument: TREE07=  android.widget.TextView text=スヌーズ時間を選ぶ ▾ desc=null click=true important=true acts=[4,8,1,64,16,16908342,256,512,131072]
+[14:35:56.616] instrument: TREE08=  android.widget.FrameLayout text=null desc=スライドして停止 click=true important=true acts=[4,8,1,64,16,131072,256,512,16908342]
+[14:35:56.616] instrument: TREE09=    android.widget.TextView text=スライドして停止 › desc=null click=false important=true acts=[4,8,64,16908342,256,512,131072]
+[14:35:56.616] instrument: TREE10=    android.widget.FrameLayout text=null desc=null click=false important=false acts=[4,8,64,16908342]
+[14:35:56.616] instrument: TREE11=      android.view.View text=null desc=null click=false important=false acts=[4,8,64,16908342]
+[14:35:56.616] instrument: TREE12=  android.widget.TextView text=Calendar Alarm desc=null click=false important=true acts=[4,8,64,16908342,256,512,131072]
+[14:35:56.616] instrument: CLICKING=now
+[14:35:56.616] instrument: ACTION_CLICK=performAction returned true
+[14:35:56.616] instrument: AFTER=slider still present=false
+[14:35:56.616] instrument: INSTRUMENTATION_RESULT: stream=
+[14:35:56.616] instrument: OK (1 test)
+[14:35:56.839] --- audit_log
+[14:35:56.839]     14:35:43.069 SCHEDULE adhoc tm:1792647343045 @1792647349045
+[14:35:56.839]     14:35:43.115 RESYNC reason=boot:android.intent.action.BOOT_COMPLETED +0 -0 fire=0
+[14:35:56.839]     14:35:49.114 FSI_DENIED フルスクリーンIntent未許可のためヘッズアップ通知へフォールバック
+[14:35:56.839]     14:35:49.136 FIRE tm:1792647343045
+[14:35:56.839]     14:35:49.146 FSI_DENIED フルスクリーンIntent未許可のためヘッズアップ通知へフォールバック
+[14:35:56.839]     14:35:49.203 WARN tm:1792647343045: FSI拒否: ロック中・画面OFF時に鳴動画面が自動表示されない
+[14:35:56.839]     14:35:49.252 OVERLAY_SHOWN tm:1792647343045: 停止UIをオーバーレイで表示
+[14:35:56.839]     14:35:51.418 STOP_TAP オーバーレイ: tm:1792647343045
+[14:35:56.839]     14:35:51.427 DISMISS_RECV tm:1792647343045
+[14:35:56.839]     14:35:51.471 DISMISS tm:1792647343045
+[14:35:56.839] instance states (latest 3): [('tm:1792647343045', 'DISMISSED'), ('tm:1792647322524', 'DISMISSED')]
+[14:35:56.839] ROW 13-overlay: PASS ACTION_CLICK performAction=True; audit stop entries=3; found=['INSTRUMENTATION_STATUS: FOUND=after=6376ms window type=3 layer=0 title=null class=android.widget.FrameLayout clickable=true focusable=true actions=[4:null, 8:null, 1:null, 64:null, 16:null, 131072:null, 256:null, 512:null, 16908342:null]']
+[14:35:58.766] vibration after restore: {'alarm_vibration_intensity': 'null', 'ring_vibration_intensity': 'null', 'notification_vibration_intensity': 'null', 'media_vibration_intensity': 'null', 'haptic_feedback_intensity': 'null'}
+[14:35:58.766] RESULTS
+[14:35:58.766]    13-activity PASS ACTION_CLICK performAction=True; audit stop entries=2; found=['INSTRUMENTATION_STATUS: FOUND=after=7546ms window type=1 layer=0 title=Calendar Alarm class=android.view.View clickable=false focusable=false actions=[64:null, 131072:null, 256:null, 512:null]']
+[14:35:58.766]    13-overlay PASS ACTION_CLICK performAction=True; audit stop entries=3; found=['INSTRUMENTATION_STATUS: FOUND=after=6376ms window type=3 layer=0 title=null class=android.widget.FrameLayout clickable=true focusable=true actions=[4:null, 8:null, 1:null, 64:null, 16:null, 131072:null, 256:null, 512:null, 16908342:null]']
