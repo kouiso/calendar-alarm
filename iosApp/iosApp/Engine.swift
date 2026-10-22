@@ -69,6 +69,8 @@ final class Engine: ObservableObject {
         for (id, rec) in store.state.scheduled {
             let uuid = AlarmKitScheduler.uuid(from: id)
             guard let state = live[uuid] else {
+                // 通知のみの予定は、予約時に .fired で記録され、もともと AlarmKit に無い。止めたことにして履歴に載せない
+                if rec.instance.delivery == EventAction.notify.rawValue { continue }
                 // AlarmKit から消えた = ユーザーがアラートUIで完全に止めた
                 if rec.state == .fired || rec.state == .snoozed {
                     store.markState(id, .dismissed)
