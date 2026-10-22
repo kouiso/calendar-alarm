@@ -153,7 +153,7 @@ object RingingOverlay {
             gravity = Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             background = GradientDrawable().apply {
-                cornerRadius = dp(36).toFloat()
+                cornerRadius = dp(RingingSlideSpec.TRACK_CORNER_DP).toFloat()
                 setColor(bg)
             }
         }
@@ -222,7 +222,7 @@ object RingingOverlay {
             }
         }
         root.addView(snooze, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(72),
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(RingingSlideSpec.SNOOZE_HEIGHT_DP),
         ))
 
         // 別分数スヌーズは開閉式: 鳴動画面 (RingingActivity) と同じく
@@ -292,7 +292,7 @@ object RingingOverlay {
         // TalkBack はこのトラックへのダブルタップ (performClick) で停止できる。
         root.addView(buildSlideToStop(context, instanceId, accent, fg),
             LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(72),
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(RingingSlideSpec.TRACK_HEIGHT_DP),
             ).apply { topMargin = dp(12) })
 
         root.addView(TextView(context).apply {
@@ -322,8 +322,8 @@ object RingingOverlay {
         fg: Int,
     ): View {
         val dp = { v: Int -> (v * context.resources.displayMetrics.density).toInt() }
-        val thumbSize = dp(56)
-        val pad = dp(8)
+        val thumbSize = dp(RingingSlideSpec.THUMB_DP)
+        val pad = dp(RingingSlideSpec.PAD_DP)
 
         fun dismiss() {
             audit(context.applicationContext, "STOP_TAP", "オーバーレイ: $instanceId")
@@ -338,7 +338,7 @@ object RingingOverlay {
         val slider = FrameLayout(context).apply {
             contentDescription = "スライドして停止"
             background = GradientDrawable().apply {
-                cornerRadius = dp(36).toFloat()
+                cornerRadius = dp(RingingSlideSpec.TRACK_CORNER_DP).toFloat()
                 setColor(Color.parseColor("#14FFFFFF"))
                 // アクセントの35%枠: RingingActivity のスライダーと同じ視認性
                 setStroke(dp(1), Color.argb(89, Color.red(accent), Color.green(accent), Color.blue(accent)))
@@ -368,7 +368,7 @@ object RingingOverlay {
                 setColor(Color.parseColor("#26247A"))
                 cornerRadius = dp(3).toFloat()
             }
-        }, FrameLayout.LayoutParams(dp(22), dp(22)).apply {
+        }, FrameLayout.LayoutParams(dp(RingingSlideSpec.STOP_ICON_DP), dp(RingingSlideSpec.STOP_ICON_DP)).apply {
             gravity = Gravity.CENTER
         })
         slider.addView(thumb, FrameLayout.LayoutParams(thumbSize, thumbSize).apply {

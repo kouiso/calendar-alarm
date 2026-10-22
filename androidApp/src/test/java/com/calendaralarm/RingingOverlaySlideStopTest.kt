@@ -6,12 +6,14 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.graphics.PixelFormat
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.engine.AlarmReceiver
 import com.calendaralarm.engine.AlarmService
 import com.calendaralarm.engine.RingingOverlay
+import com.calendaralarm.engine.RingingSlideSpec
 import com.calendaralarm.shared.logic.SlideToStopRule
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -40,9 +42,10 @@ class RingingOverlaySlideStopTest {
         const val SLIDER = "スライドして停止"
         const val ID = "tm:overlay"
 
-        // RingingOverlay.buildSlideToStop と同じ寸法 (mdpi なので dp = px)
-        const val THUMB = 56f
-        const val PAD = 8f
+        // 鳴動画面・iOS と同じ寸法を RingingSlideSpec から読む (mdpi なので dp = px)。
+        // 自前の定数を持つと、画面側が寸法を変えてもテストが緑のままになる
+        val THUMB = RingingSlideSpec.THUMB_DP.toFloat()
+        val PAD = RingingSlideSpec.PAD_DP.toFloat()
     }
 
     @Before
@@ -119,6 +122,27 @@ class RingingOverlaySlideStopTest {
         assertEquals(1, sent.size)
         assertEquals(AlarmReceiver::class.java.name, sent.single().component?.className)
         assertEquals(ID, sent.single().getStringExtra(AlarmService.EXTRA_INSTANCE_ID))
+    }
+
+    @Test
+    fun `停止トラックとスヌーズと丸が鳴動画面と iOS の寸法になっている`() {
+        // 掴める幅 (丸 + 余白×3 = 88) が両 OS で揃うのは、丸と余白がこの寸法の時だけ (#52)
+        assertEquals("停止トラックの高さ", RingingSlideSpec.TRACK_HEIGHT_DP, slider.height)
+        val thumb = (slider as ViewGroup).getChildAt(1)
+        assertEquals("丸の幅", RingingSlideSpec.THUMB_DP, thumb.width)
+        assertEquals("丸の高さ", RingingSlideSpec.THUMB_DP, thumb.height)
+        assertEquals("丸の左余白", RingingSlideSpec.PAD_DP, thumb.left)
+        val snooze = ArrayList<View>()
+        root.findViewsWithText(snooze, "スヌーズ 10分", View.FIND_VIEWS_WITH_TEXT)
+        assertEquals("スヌーズボタンは1つだけ", 1, snooze.size)
+        assertEquals("スヌーズボタンの高さ", RingingSlideSpec.SNOOZE_HEIGHT_DP, snooze.single().height)
+        assertEquals("掴める幅", 88f, grabLimit(), 0f)
+    }
+
+    @Test
+    fun `掴める幅の内側ぎりぎりから引いても停止を送る`() {
+        drag(fromX = grabLimit() - 2f, progress = 1f)
+        assertEquals(1, dismissBroadcasts().size)
     }
 
     @Test

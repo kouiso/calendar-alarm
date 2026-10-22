@@ -450,9 +450,9 @@ private fun RingingScreen(
             // スヌーズは大きい1ボタンのみ: プリセット常時表示は押し間違いの元なので畳む
             Surface(
                 onClick = onSnooze,
-                modifier = Modifier.fillMaxWidth().height(80.dp),
+                modifier = Modifier.fillMaxWidth().height(RingingSlideSpec.SNOOZE_HEIGHT_DP.dp),
                 color = Color.White.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(40.dp),
+                shape = RoundedCornerShape(RingingSlideSpec.TRACK_CORNER_DP.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text("スヌーズ ${snoozeMinutes}分", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFECEEF3))
@@ -527,16 +527,16 @@ private fun SlideToStop(
     var trackWidthPx by remember { mutableStateOf(0f) }
     var downX by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
-    val thumbPx = with(density) { 64.dp.toPx() }
-    val padPx = with(density) { 8.dp.toPx() }
+    val thumbPx = with(density) { RingingSlideSpec.THUMB_DP.dp.toPx() }
+    val padPx = with(density) { RingingSlideSpec.PAD_DP.dp.toPx() }
     val travel = (trackWidthPx - thumbPx - padPx * 2).coerceAtLeast(1f)
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(80.dp)
-            .clip(RoundedCornerShape(40.dp))
+            .height(RingingSlideSpec.TRACK_HEIGHT_DP.dp)
+            .clip(RoundedCornerShape(RingingSlideSpec.TRACK_CORNER_DP.dp))
             .background(Color.White.copy(alpha = 0.08f))
-            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(40.dp))
+            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(RingingSlideSpec.TRACK_CORNER_DP.dp))
             .onSizeChanged { trackWidthPx = it.width.toFloat() }
             .semantics(mergeDescendants = true) {
                 contentDescription = "スライドして停止"
@@ -598,13 +598,13 @@ private fun SlideToStop(
             modifier = Modifier
                 .absoluteOffset { IntOffset((padPx + progress.value * travel).toInt(), 0) }
                 .testTag(SLIDE_THUMB_TAG)
-                .size(64.dp)
+                .size(RingingSlideSpec.THUMB_DP.dp)
                 .clip(CircleShape)
                 .background(accent),
             contentAlignment = Alignment.Center,
         ) {
             // 丸の中は停止の■ (デザイン正本: 矢印ではなく停止アイコン)
-            Box(Modifier.size(24.dp).clip(RoundedCornerShape(4.dp)).background(onAccent))
+            Box(Modifier.size(RingingSlideSpec.STOP_ICON_DP.dp).clip(RoundedCornerShape(4.dp)).background(onAccent))
         }
     }
 }
