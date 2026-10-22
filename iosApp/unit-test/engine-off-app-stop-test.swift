@@ -164,6 +164,12 @@ final class EngineOffAppStopTests: XCTestCase {
         XCTAssertEqual(engine.store.savedState()?.scheduled[id]?.state, .pending, "試験の前提: 保存は失敗している")
         XCTAssertNotNil(OffAppStopLog().entries[id], "保存が済んでいないのに書き残しを消した")
 
+        // 保存が失敗し続ける間にもう一度 resync しても、書き残しは残る。
+        // 2 回目はその行がもう PENDING ではなく、止めた行として数えないと消してしまう
+        await engine.resync(reason: "test again")
+        XCTAssertEqual(engine.store.savedState()?.scheduled[id]?.state, .pending, "試験の前提: 保存はまだ失敗している")
+        XCTAssertNotNil(OffAppStopLog().entries[id], "2 回目の resync で、ディスクに載っていない行の書き残しを消した")
+
         // アプリが落ちて起動し直した状態: ディスクの PENDING 行を読み、書き残しだけが頼り
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path)
         let relaunched = Engine(scheduler: fake, store: Store(fileURL: storeURL))

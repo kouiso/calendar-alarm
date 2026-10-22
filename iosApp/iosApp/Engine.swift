@@ -231,10 +231,15 @@ final class Engine: ObservableObject {
             // 停止済みの保存は直列キューで遅れて書かれるが、書き残しの削除は UserDefaults へ即座に効く。
             // 保存が済む前にアプリが落ちると、行は PENDING のまま戻って止めた証拠だけが無くなり、拾い直されて鳴り直す。
             // なのでディスクに「停止済み」が載ったのを読み戻して確かめ、載っていない行の書き残しは残す
+            // 今回止めた行だけでなく、前の回で止めたのにまだ載っていない行も数える。数えないと、保存が失敗し続ける間の
+            // 2 回目の resync で、残したはずの書き残しを消してしまう (その行はもう PENDING ではなく rows に入らない)
             let onDisk = store.savedState()?.scheduled
-            let unsaved = Set(decision.consumed.filter { onDisk?[$0]?.state != .dismissed })
-            if !unsaved.isEmpty {
-                store.audit("DISMISS_OFFAPP_UNSAVED", "停止済みがディスクに載らず書き残しを残した: \(unsaved.sorted().joined(separator: ","))")
+            let unsaved = Set(stopLog.entries.keys.filter {
+                store.state.scheduled[$0]?.state == .dismissed && onDisk?[$0]?.state != .dismissed
+            })
+            let newlyUnsaved = unsaved.intersection(decision.consumed)
+            if !newlyUnsaved.isEmpty {
+                store.audit("DISMISS_OFFAPP_UNSAVED", "停止済みがディスクに載らず書き残しを残した: \(newlyUnsaved.sorted().joined(separator: ","))")
             }
             // 使った書き残しと、待っている行がもう無い書き残しは消す (同じ id の別の回に効かせないため)
             let stillPending = Set(rows.map { $0.id }).subtracting(decision.consumed)
