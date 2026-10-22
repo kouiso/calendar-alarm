@@ -58,16 +58,6 @@ enum OffAppStopPlan {
         }
         return Decision(consumed: consumed, oneShotAlarmIds: oneShot)
     }
-
-    /// 予約が消えたので拾い直す行の id。止めた書き残しの無い、AlarmKit に無い行は全部ここに入る
-    static func lostReservations(pending: [Row], nowMillis: Int64, stopped: Set<String>,
-                                 isLive: (String) -> Bool) -> [String] {
-        let consumed = Set(consumedWhileAway(pending: pending, nowMillis: nowMillis, stopped: stopped, isLive: isLive))
-        return pending
-            .filter { !isLive($0.id) && !consumed.contains($0.id) }
-            .map { $0.id }
-            .sorted()
-    }
 }
 
 /// 停止ボタンの intent が「止めた」を書き残す場所。intent はアプリの外 (ロック画面) から呼ばれ、

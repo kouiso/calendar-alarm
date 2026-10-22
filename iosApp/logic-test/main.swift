@@ -29,18 +29,13 @@ check(!OffAppStopPlan.consumedWhileAway(pending: rows, nowMillis: now, stopped: 
       "まだ鳴っている (AlarmKit に残る) 行は、書き残しがあっても止められた扱いにしない")
 check(!OffAppStopPlan.consumedWhileAway(pending: rows, nowMillis: now, stopped: stopped.union(["sa:2:snz1"]), isLive: isLive).contains("sa:2:snz1"),
       "予約に失敗したまま残した行 (alarmKitId なし) は、止められた扱いにしない")
-check(OffAppStopPlan.lostReservations(pending: rows, nowMillis: now, stopped: stopped, isLive: isLive) == ["ev:future-lost", "sa:2:snz1"],
-      "予定時刻がまだ先の行と、予約に失敗したまま残した過去の行を、予約喪失として拾い直す")
 
 // 予約が本当に消えた行 (再起動や OS の破棄) は、AlarmKit から消えて見えるのは止めた行と同じ。書き残しで見分ける
 let purged = [Row(id: "ev:x", triggerAtMillis: now - 60_000, wasReserved: true)]
 check(OffAppStopPlan.decide(pending: purged, nowMillis: now, stopped: []) { _ in false }.consumed.isEmpty,
       "書き残しの無い過去の行は、AlarmKit に無くても止めた扱いにしない (鳴らし損ねと嘘の履歴を防ぐ)")
-check(OffAppStopPlan.lostReservations(pending: purged, nowMillis: now, stopped: []) { _ in false } == ["ev:x"],
-      "書き残しの無い過去の行は予約喪失として拾い直す (グレース内は鳴らし、過ぎれば見逃し通知)")
-check(OffAppStopPlan.decide(pending: purged, nowMillis: now, stopped: ["ev:x"]) { _ in false }.consumed == ["ev:x"]
-      && OffAppStopPlan.lostReservations(pending: purged, nowMillis: now, stopped: ["ev:x"]) { _ in false }.isEmpty,
-      "同じ行でも停止の書き残しがあれば止めた扱いにし、拾い直さない")
+check(OffAppStopPlan.decide(pending: purged, nowMillis: now, stopped: ["ev:x"]) { _ in false }.consumed == ["ev:x"],
+      "同じ行でも停止の書き残しがあれば止めた扱いにする")
 check(OffAppStopPlan.consumedWhileAway(pending: [Row(id: "ev:future", triggerAtMillis: now + 60_000, wasReserved: true)],
                                        nowMillis: now, stopped: ["ev:future"]) { _ in false }.isEmpty,
       "予定時刻より前の行は、書き残しがあっても止めた扱いにしない")
@@ -49,18 +44,8 @@ check(OffAppStopPlan.consumedWhileAway(pending: [Row(id: "ev:edge", triggerAtMil
                                        nowMillis: now, stopped: ["ev:edge"]) { _ in false }
       == ["ev:edge"],
       "予定時刻ちょうどは過ぎた側に数える (再予約で二重に鳴らさない)")
-check(OffAppStopPlan.consumedWhileAway(pending: [], nowMillis: now, stopped: stopped) { _ in false }.isEmpty
-      && OffAppStopPlan.lostReservations(pending: [], nowMillis: now, stopped: stopped) { _ in false }.isEmpty,
+check(OffAppStopPlan.consumedWhileAway(pending: [], nowMillis: now, stopped: stopped) { _ in false }.isEmpty,
       "予約が無ければ何もしない")
-
-// 拾い直しと止められた扱いは重ならず、AlarmKit に無い PENDING 行はどちらかに必ず入る
-for s in [stopped, Set<String>(), Set(rows.map { $0.id })] {
-    let consumedAll = Set(OffAppStopPlan.consumedWhileAway(pending: rows, nowMillis: now, stopped: s, isLive: isLive))
-    let lostAll = Set(OffAppStopPlan.lostReservations(pending: rows, nowMillis: now, stopped: s, isLive: isLive))
-    check(consumedAll.isDisjoint(with: lostAll)
-          && consumedAll.union(lostAll) == Set(rows.filter { !live.contains($0.id) }.map { $0.id }),
-          "AlarmKit に無い行は、止められた扱いか拾い直しのどちらか一方に必ず入る (書き残し \(s.count) 件)")
-}
 
 // 単発アラームの消費
 let oneShot = OffAppStopPlan.decide(pending: [
