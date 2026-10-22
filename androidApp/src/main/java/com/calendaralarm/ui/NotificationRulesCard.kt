@@ -133,7 +133,7 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                 }
             }
             // テンプレート (横スクロール相当に複数行で表示)
-            NotificationRuleTemplates.ALL.chunked(3).forEach { row ->
+            NotificationRuleTemplates.all(context).chunked(3).forEach { row ->
                 Row {
                     row.forEach { t ->
                         TextButton(onClick = {
