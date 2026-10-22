@@ -285,11 +285,8 @@ final class Engine: ObservableObject {
         // 記録は外さず、プランの入力から外して取り直させる: 取り直しに失敗しても、展開で作り直せないタイマーと
         // スヌーズ子の記録が残り、次の resync でまた試せる (外すと、権限が戻っても拾う相手が居ない)
         var unreserved: Set<String> = []
-        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler, ak.authorizationGranted {
-            let liveIds = Set(ak.allAlarms.map { $0.id })
-            for (id, rec) in store.state.scheduled where rec.state == .pending {
-                if !liveIds.contains(AlarmKitScheduler.uuid(from: id)) { unreserved.insert(id) }
-            }
+        if let lost = await scheduler.unreservedPendingIds(store.state.scheduled) {
+            unreserved = lost
         } else if !scheduler.usesRealAlarms {
             // 通知の予約 (iOS 26 未満) も同じ。鳴る前なのに予約が無い行だけを見る
             for (id, rec) in store.state.scheduled

@@ -115,10 +115,17 @@ struct RingingView: View {
                     Button {
                         withAnimation(.easeInOut(duration: 0.15)) { showSnoozePresets.toggle() }
                     } label: {
-                        Text(showSnoozePresets ? "スヌーズ時間を選ぶ ▴" : "スヌーズ時間を選ぶ ▾")
-                            .font(NightTheme.font(14))
-                            .foregroundStyle(NightTheme.muted)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
+                        // 三項演算子で文字列を渡すと LocalizedStringKey にならず翻訳が効かないため、リテラルを分けて書く
+                        Group {
+                            if showSnoozePresets {
+                                Text("スヌーズ時間を選ぶ ▴")
+                            } else {
+                                Text("スヌーズ時間を選ぶ ▾")
+                            }
+                        }
+                        .font(NightTheme.font(14))
+                        .foregroundStyle(NightTheme.muted)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
                     }
                     .padding(.top, 4)
                     if showSnoozePresets {
