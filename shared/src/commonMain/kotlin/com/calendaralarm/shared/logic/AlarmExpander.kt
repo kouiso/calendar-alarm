@@ -76,7 +76,7 @@ object AlarmExpander {
             // 終日イベントは startMillis が UTC 0時。深夜に鳴らさないため
             // イベント日のローカル allDayMinutes (既定9:00) に倒す。負数なら鳴らさない。
             val eventStart = if (event.allDay) {
-                if (rule.allDayMinutes < 0) continue
+                if (allDaySuppressed(event, rule)) continue
                 val day = Instant.fromEpochMilliseconds(event.startMillis)
                     .toLocalDateTime(TimeZone.UTC).date
                 LocalDateTime(
@@ -114,7 +114,7 @@ object AlarmExpander {
             extras.sorted().forEach { emit(it, reminderAction) }
             // カレンダー側リマインダーの取り込み (アプリ追加分と同じ trigger は重複除外)
             // 負値は「開始N分後」を意味してしまうため防御的に除外する
-            // (Android の MINUTES_DEFAULT=-1 は Reader 側で既定10分に解決済み)。
+            // (Android の MINUTES_DEFAULT=-1 は AlarmRepository 側で既定分数に解決済み)。
             if (importEventReminders) {
                 event.calendarReminderMinutes.filter { it >= 0 }.sorted()
                     .forEach { emit(it, reminderAction) }
@@ -122,6 +122,13 @@ object AlarmExpander {
         }
         return result
     }
+
+    /**
+     * カレンダーの「終日の予定は鳴らさない」で外れる予定か。予定ごとの個別指定より強い
+     * (展開が個別指定を見る前に外すため)。予定一覧のスイッチもこれで押せなくする
+     */
+    fun allDaySuppressed(event: CalendarEvent, rule: AlarmRule): Boolean =
+        event.allDay && rule.allDayMinutes < 0
 
     /**
      * 予定の絞り込み (招待・種類・予定あり／なし) を通るか。予約の展開と予定一覧の表示が同じ判定を使う (#79)。
@@ -315,6 +322,30 @@ object AlarmExpander {
                 else -> rule.reminderAction
             }
         return startAction to reminderAction
+    }
+
+    /**
+     * 予定ごとの指定を外した時に、何も鳴らない状態か。一覧の行のスイッチを ON にする時の分かれ目:
+     * 鳴る側に戻る (false) なら指定を外すだけでよく、カレンダーの既定の動作 (通知だけ等) をそのまま使える。
+     * 鳴らない (true) 時だけ「アラーム」の指定を書く。指定を常に ALARM にすると、通知だけのカレンダーの予定が
+     * 全画面のアラームに格上げされてしまう。
+     * [hasReminderTriggers] は指定を外した後のリマインダー側の時刻の有無 (追加の何分前・取り込んだカレンダーの通知)。
+     * [muteAll] が true の時は、すべてミュートで外れるアラームも鳴らない側に数える (通知は残る)。
+     * 行のスイッチを押せるかの判定に使う: ON で戻る動作がミュートで外れるなら、押しても鳴らないので押せなくする
+     */
+    fun silencedWithoutOverride(
+        event: CalendarEvent,
+        rule: AlarmRule,
+        titleCodes: TitleCodeSettings,
+        inviteFilter: InviteFilter,
+        eventTypeFilter: EventTypeFilter,
+        hasReminderTriggers: Boolean,
+        muteAll: Boolean = false,
+    ): Boolean {
+        if (!passesEventFilters(event, null, inviteFilter, eventTypeFilter)) return true
+        val (start, reminder) = resolveActions(event, rule, null, titleCodes)
+        fun EventAction.silenced() = this == EventAction.MUTE || (muteAll && this == EventAction.ALARM)
+        return start.silenced() && (reminder.silenced() || !hasReminderTriggers)
     }
 
     /** 指定時刻が「今すぐ鳴らすべき／未来に予約すべき」窓に入るか。 */

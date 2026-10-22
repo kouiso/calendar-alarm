@@ -425,6 +425,25 @@ struct DisplayEvent: Identifiable, Hashable {
     var calendarColor: Int
     var muted: Bool
     var effectiveMinutes: Int
+    /// カレンダーを鳴らさない設定にしている (予定ごとの指定より強い)
+    var calendarOff: Bool = false
+    /// アカウントを鳴らさない設定にしている (#74。展開が予定ごとの指定より先に外す)
+    var accountOff: Bool = false
+    /// 終日の予定で、カレンダーが終日を鳴らさない設定 (予定ごとの指定より強い)
+    var allDayOff: Bool = false
+    /// 設定の「アラームをすべてミュート」中 (展開がアラームを全部外すので、鳴らない行はスイッチで入れても鳴らない)
+    var muteAll: Bool = false
+    /// 始まる前で、通知の動作で届く (通知の許可が要る)
+    var notifies: Bool = false
+    /// 予定ごとの指定を外すと何も鳴らない (カレンダーの既定が鳴らさない・絞り込みで外れる等)。
+    /// 行のスイッチを ON にする時、これが true の時だけ「アラーム」を書く (通知だけの予定を格上げしないため)
+    var defaultSilenced: Bool = false
+    /// 行のスイッチを ON にして戻る動作が、すべてミュートで外れて鳴らない (通知だけの既定は数えない)
+    var restoreSilenced: Bool = false
+
+    /// 行のスイッチを押せなくする (Android の `AgendaItem.switchLocked` と同じ規則)。
+    /// ON で戻る先が鳴らない時だけ押せなくする。ON で通知に戻る行は、今 OFF でも入れられるように残す
+    var switchLocked: Bool { calendarOff || accountOff || allDayOff || (muteAll && restoreSilenced) }
 }
 
 struct AuditEntry: Codable, Identifiable, Hashable {
@@ -514,4 +533,94 @@ extension AlarmInstanceDTO {
         delivery = try c.decodeIfPresent(String.self, forKey: .delivery) ?? EventAction.alarm.rawValue
         muteUntilUnlock = try c.decodeIfPresent(Bool.self, forKey: .muteUntilUnlock) ?? false
     }
+}
+
+/// 通知で届く時刻がこれから先にあるか。終日は shared `AlarmExpander.expandEvents` と同じく、
+/// 予定日 (UTC の日付) のローカル allDayMinutes に倒してから引く。生の startMillis だと、
+/// 0時を過ぎた当日の終日通知 (まだ9時前) を「もう過ぎた」と見てしまい、許可の警告が消える
+func notificationDeliveryAhead(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?,
+                               actions: (start: String, reminder: String?), importReminders: Bool,
+                               muteAll: Bool = false, nowMillis: Int64) -> Bool {
+    let notify = EventAction.notify.rawValue
+    var startMillis = ev.startMillis
+    if ev.allDay {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? utc.timeZone
+        let day = utc.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: TimeInterval(ev.startMillis) / 1000))
+        var local = DateComponents()
+        local.year = day.year; local.month = day.month; local.day = day.day
+        local.hour = rule.allDayMinutes / 60; local.minute = rule.allDayMinutes % 60
+        // 端末の暦が和暦などでも、取り出した西暦の年月日をそのまま端末のタイムゾーンの日時にする (shared は西暦で組む)
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = TimeZone.current
+        if let d = gregorian.date(from: local) {
+            startMillis = Int64(d.timeIntervalSince1970 * 1000)
+        }
+    }
+    func ahead(_ minutes: Int) -> Bool { startMillis - Int64(minutes) * 60_000 > nowMillis }
+    let startMinutes = ov?.minutesBefore ?? rule.minutesBefore
+    if actions.start == notify && ahead(startMinutes) { return true }
+    guard actions.reminder == notify else { return false }
+    // shared `AlarmExpander` は開始の予約を先に作り、同じ時刻のリマインダーは重複として作らない。
+    // 開始がミュートの時は何も作らないので、その時刻のリマインダーは残る
+    // すべてミュート中のアラームの開始も、展開は時刻を記録する前に外すので、その時刻のリマインダーは残る
+    let startTriggerTaken = actions.start != EventAction.mute.rawValue
+        && !(muteAll && actions.start == EventAction.alarm.rawValue)
+    let offsets = (ov?.extraOffsets ?? rule.extraOffsets)
+        + (importReminders ? ev.calendarReminderMinutes.filter { $0 >= 0 } : [])
+    return offsets.contains { ahead($0) && !(startTriggerTaken && $0 == startMinutes) }
+}
+
+/// 予定が実際に使う動作。優先順は shared `AlarmExpander.resolveActions` と同じ:
+/// 予定の個別指定 > never コード > always コード > カレンダーの既定。
+/// 展開と同じく、リマインダーの動作はリマインダー側の時刻 (追加の何分前・取り込んだカレンダーの通知) がある時だけ使う (無ければ nil)
+func resolvedRingActions(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
+                         importReminders: Bool) -> (start: String, reminder: String?) {
+    func matches(_ list: [String]) -> Bool {
+        list.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty && ev.title.localizedCaseInsensitiveContains($0) }
+    }
+    func resolve(_ apply: Bool, _ fallback: String) -> String {
+        if let a = ov?.action { return a }
+        if apply && matches(codes.neverCodes) { return EventAction.mute.rawValue }
+        if apply && matches(codes.alwaysCodes) { return EventAction.alarm.rawValue }
+        return fallback
+    }
+    let hasReminderTriggers = !(ov?.extraOffsets ?? rule.extraOffsets).isEmpty
+        || (importReminders && ev.calendarReminderMinutes.contains { $0 >= 0 })
+    return (resolve(codes.applyToStart, rule.startAction),
+            hasReminderTriggers ? resolve(codes.applyToReminders, rule.reminderAction) : nil)
+}
+
+/// 何も鳴らないか (`resolvedRingActions` の結果で決める)。
+/// すべてミュート中のアラームも鳴らない側に数える (展開の emit と同じく通知は残る)
+func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
+                          importReminders: Bool, muteAll: Bool = false) -> Bool {
+    let actions = resolvedRingActions(ev, rule, ov, codes, importReminders: importReminders)
+    func silenced(_ action: String) -> Bool {
+        action == EventAction.mute.rawValue || (muteAll && action == EventAction.alarm.rawValue)
+    }
+    return silenced(actions.start) && (actions.reminder.map(silenced) ?? true)
+}
+
+/// 予定ごとの指定を外した時に、何も鳴らないか (shared `AlarmExpander.silencedWithoutOverride` と同じ)。
+/// 行のスイッチを ON にする時の分かれ目: 鳴る側に戻るなら指定を外してカレンダーの既定の動作 (通知だけ等) を使い、
+/// 鳴らない時だけ「アラーム」を書く。常に ALARM を書くと、通知だけの予定が全画面のアラームに格上げされる。
+/// muteAll が true なら、すべてミュートで外れるアラームも鳴らない側に数える (スイッチを押せるかの判定用)。
+/// 何分前などの個別指定は ON でも残すので、リマインダー側の時刻の有無には指定の分まで数える
+func silencedWithoutOverride(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
+                             invite: InviteFilter, types: EventTypeFilter, importReminders: Bool, muteAll: Bool = false) -> Bool {
+    if !passesEventFilters(ev, nil, invite, types) { return true }
+    let rest = EventOverrideDTO(action: nil, minutesBefore: ov?.minutesBefore, extraOffsets: ov?.extraOffsets)
+    return resolvedActionsMuted(ev, rule, rest, codes, importReminders: importReminders, muteAll: muteAll)
+}
+
+/// 行のスイッチを押した後の、その予定の個別指定。OFF は「鳴らさない」を書く。
+/// ON は、指定を外すとそのまま鳴る予定なら「アクション」の指定を外し (カレンダーの既定の通知はそのまま)、
+/// 鳴らない予定だけ「アラーム」を書く。何分前などの指定はどちらでも残す。指定が空になれば nil (指定ごと消す)
+func overrideAfterRingSwitch(_ ov: EventOverrideDTO?, on: Bool, defaultSilenced: Bool) -> EventOverrideDTO? {
+    if !on { return EventOverrideDTO(action: EventAction.mute.rawValue, minutesBefore: ov?.minutesBefore, extraOffsets: ov?.extraOffsets) }
+    if defaultSilenced { return EventOverrideDTO(action: EventAction.alarm.rawValue, minutesBefore: ov?.minutesBefore, extraOffsets: ov?.extraOffsets) }
+    guard var kept = ov else { return nil }
+    kept.action = nil
+    return kept.minutesBefore == nil && kept.extraOffsets == nil ? nil : kept
 }
