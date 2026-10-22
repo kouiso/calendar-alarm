@@ -227,6 +227,12 @@ final class NotificationScheduler: AlarmScheduler {
     static let maxCapacity = 55
 
     private let center = UNUserNotificationCenter.current()
+    /// 予約と取消の宛先。テストでは偽物に替えて、予約した id を返す所を実行する
+    private let port: NotificationCenterPort
+
+    init(port: NotificationCenterPort = SystemNotificationCenter()) {
+        self.port = port
+    }
 
     var usesRealAlarms: Bool { false }
 
@@ -251,18 +257,19 @@ final class NotificationScheduler: AlarmScheduler {
         let date = Date(timeIntervalSince1970: TimeInterval(inst.triggerAtMillis) / 1000)
         let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
         let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-        try await center.add(UNNotificationRequest(identifier: inst.id, content: content, trigger: trigger))
-        return nil
+        try await port.submit(UNNotificationRequest(identifier: inst.id, content: content, trigger: trigger))
+        // 予約できた印として返す。届いたかを後から推定する時に、予約に失敗した行と見分ける
+        return inst.id
     }
 
     func cancel(instanceId: String, reservationId: String?) async {
-        center.removePendingNotificationRequests(withIdentifiers: [instanceId])
+        port.removePending([instanceId])
     }
 
     /// 通知の経路は AlarmKit の一覧を持たないので、消えた予約の判定 (#61) はしない
     var liveReservationIdsIfReadable: Set<UUID>? { nil }
 
     func hasReservation(instanceId: String) async -> Bool {
-        await center.pendingNotificationRequests().contains { $0.identifier == instanceId }
+        await port.pendingRequestIds().contains(instanceId)
     }
 }

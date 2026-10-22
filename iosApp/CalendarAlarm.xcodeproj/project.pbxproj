@@ -15,6 +15,7 @@
 		1CE003037AC626E59CCD42F8 /* AlarmStopIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 718CE6D806B5B18E35707156 /* AlarmStopIntent.swift */; };
 		1FE6A64E84AB17C9C5EC1DEE /* AlarmSoundLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EB8DEF9DAD9CCF3FED35DE /* AlarmSoundLibrary.swift */; };
 		29622F303C81E6C8561DA830 /* outfit_extralight.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CF4FE1923E95F87EA8A05028 /* outfit_extralight.ttf */; };
+		2C48431DBDA0DF45F9D75583 /* diagnosis-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */; };
 		2DF8005728D2E0319C73F77B /* plex_sans_jp_medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */; };
 		2E6FBB230347EBF9423F1C52 /* RingingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8688F25F9579677C2080FB0E /* RingingView.swift */; };
 		397AD219F56EB6076068BAD1 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E42B1C06A0E446C3B4F2DCD4 /* Localizable.xcstrings */; };
@@ -30,6 +31,7 @@
 		626990B5CF8E3DC8C227D393 /* OpenRouterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01AB4C06EB145E37B770350C /* OpenRouterService.swift */; };
 		6FD84B70A4880BED419DDD24 /* AgendaViewsIOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A431831DE81C49A75897127 /* AgendaViewsIOS.swift */; };
 		70C15B080DE1D75F672A4741 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C59894E1200D6FB530B33BED /* Theme.swift */; };
+		7121EA4333EF57BBD17EF851 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3906726812F9FD3E5895AD2A /* DiagnosticsView.swift */; };
 		78335F051083F14CA2C916EE /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7384BC516B1FE4FB2F672E67 /* WeatherService.swift */; };
 		83DF4A4775FDA2DFD643DF85 /* MailShareExt.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 90ED19FA826B4A1503E171A1 /* MailShareExt.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		84CB7D0E16454D83E7DD74BE /* SharedKitBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5CB9C72F79CDC56058DD028 /* SharedKitBridge.swift */; };
@@ -99,6 +101,7 @@
 		24F9472624F7ECEBFD26FF3E /* Engine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Engine.swift; sourceTree = "<group>"; };
 		2EEE1565D963DCF58E797F77 /* OffAppStopPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffAppStopPlan.swift; sourceTree = "<group>"; };
 		2F0A11DC2B493DF079DC6BD6 /* CalendarAlarmWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CalendarAlarmWidget.entitlements; sourceTree = "<group>"; };
+		3906726812F9FD3E5895AD2A /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
 		3C4B1C1CFBE436D31467257B /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		64370CDCC54B81F0CD76CFAC /* outfit_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_medium.ttf; sourceTree = "<group>"; };
 		66A4F7800854676434D761F4 /* AgendaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaView.swift; sourceTree = "<group>"; };
@@ -118,6 +121,7 @@
 		9A431831DE81C49A75897127 /* AgendaViewsIOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaViewsIOS.swift; sourceTree = "<group>"; };
 		9B5EFAB358775E656E932A66 /* outfit_regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_regular.ttf; sourceTree = "<group>"; };
 		9BC0FA0EA0069BF21E257989 /* iosApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = iosApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "diagnosis-test.swift"; sourceTree = "<group>"; };
 		A22FA71EC8E0871C65511A60 /* alarm-sound-import-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "alarm-sound-import-test.swift"; sourceTree = "<group>"; };
 		A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerView.swift; sourceTree = "<group>"; };
 		B399458D4913DD152149CADA /* MailImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailImportView.swift; sourceTree = "<group>"; };
@@ -174,6 +178,7 @@
 			isa = PBXGroup;
 			children = (
 				A22FA71EC8E0871C65511A60 /* alarm-sound-import-test.swift */,
+				9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */,
 				C3DB907D283B90CDEE0E5F06 /* engine-off-app-stop-test.swift */,
 				6AD851BAB943D3DB6E272879 /* engine-sound-change-test.swift */,
 			);
@@ -201,6 +206,7 @@
 				718CE6D806B5B18E35707156 /* AlarmStopIntent.swift */,
 				E4F003771A83A79DB1D7C14D /* AlarmsView.swift */,
 				1664780F463A19E9DA0C56BA /* CalendarAlarmApp.swift */,
+				3906726812F9FD3E5895AD2A /* DiagnosticsView.swift */,
 				24F9472624F7ECEBFD26FF3E /* Engine.swift */,
 				C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */,
 				E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */,
@@ -463,6 +469,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				86B15B16E50DEF7BDFC0FC23 /* alarm-sound-import-test.swift in Sources */,
+				2C48431DBDA0DF45F9D75583 /* diagnosis-test.swift in Sources */,
 				E710C0FCC3752DD55B30D5BC /* engine-off-app-stop-test.swift in Sources */,
 				00FE057011931AD95770F145 /* engine-sound-change-test.swift in Sources */,
 			);
@@ -487,6 +494,7 @@
 				1CE003037AC626E59CCD42F8 /* AlarmStopIntent.swift in Sources */,
 				88AD950DD0441ABF8DBADCAE /* AlarmsView.swift in Sources */,
 				D00DDF3835BD77953502752A /* CalendarAlarmApp.swift in Sources */,
+				7121EA4333EF57BBD17EF851 /* DiagnosticsView.swift in Sources */,
 				4E39CD6EA7BC70A764AACD7A /* Engine.swift in Sources */,
 				61495687E00D3BDC4E29BB9B /* EventDetailSheet.swift in Sources */,
 				1AC90D4E8D2703925A409766 /* EventKitReader.swift in Sources */,

@@ -428,6 +428,18 @@ struct SettingsView: View {
                         Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
                     }
                 }
+                // 鳴らなかった時の自己診断 (#104): 許可・集中モード・裏の更新・予約の状態をまとめて見る
+                Divider().padding(.vertical, 8)
+                NavigationLink {
+                    DiagnosticsView()
+                } label: {
+                    HStack {
+                        Image(systemName: "stethoscope").foregroundStyle(NightTheme.indigo)
+                        Text("鳴らない時の診断").font(NightTheme.font(13))
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
+                    }
+                }
                 if showPerms {
                     Divider().padding(.vertical, 8)
                     VStack(spacing: 10) {
