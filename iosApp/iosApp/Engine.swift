@@ -616,7 +616,7 @@ final class Engine: ObservableObject {
             store.audit("SOUND_RESTORE", "\(id): 前の音で予約し直し")
             return true
         } catch {
-            if !Self.isRegeneratedByExpand(rec.instance) || !reader.authorizationGranted {
+            if !Self.isRegeneratedByExpand(rec.instance) || (rec.instance.kind == "EVENT" && !reader.authorizationGranted) {
                 // 展開で作り直せない行と、カレンダーを読めず作り直せない予定の行は、記録を消すと二度と鳴らない。
                 // 予約 id を空にして、次の resync で拾い直させる
                 store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending,
