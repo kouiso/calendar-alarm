@@ -15,11 +15,15 @@ final class NotificationPathScheduler: AlarmScheduler {
 /// OS の通知センターの偽物。テストのホストはアプリ本体なので、本物を触るとアプリの通知予約が消える
 final class FakeNotificationCenter: NotificationCenterPort {
     var pending: [String] = []
+    /// 通知センターに残っている (届いた) 通知。resync の「届いた証拠」になる
+    var deliveredList: [(id: String, atMillis: Int64)] = []
+    /// 今の通知許可。false だと resync は証拠の無い行を見逃し判定に回す
+    var authorized = true
     var removed: [String] = []
     var added: [String] = []
     func pendingRequestIds() async -> [String] { pending }
-    func delivered() async -> [(id: String, atMillis: Int64)] { [] }
-    func isAuthorized() async -> Bool { true }
+    func delivered() async -> [(id: String, atMillis: Int64)] { deliveredList }
+    func isAuthorized() async -> Bool { authorized }
     func removePending(_ ids: [String]) {
         removed += ids
         pending.removeAll { ids.contains($0) }
@@ -179,6 +183,66 @@ final class EngineNotificationOutcomeTests: XCTestCase {
             standaloneAlarmId: aid)
         engine.store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: id))
         return (aid, id)
+    }
+
+    /// resync のテスト用の行。offsetMs は今からの差 (負は過去)。rid が nil なら旧版が残した予約 id 無しの行
+    private func oneShotRow(offsetMs: Int64, rid: Bool) -> (alarmId: Int64, instanceId: String, trigger: Int64) {
+        let aid = engine.store.upsertAlarm(StandaloneAlarmDTO(hour: 7, minute: 0, repeatMode: "ONCE"))
+        let id = "sa:\(aid):resync"
+        let trigger = Engine.nowMillis + offsetMs
+        let inst = AlarmInstanceDTO(
+            id: id, triggerAtMillis: trigger, title: "朝", kind: "STANDALONE", standaloneAlarmId: aid)
+        engine.store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: rid ? id : nil))
+        return (aid, id, trigger)
+    }
+
+    /// 旧版の行 (予約 id 無し) が通知センターに届いた通知を持つ時、resync が id を埋めたうえで
+    /// 届いた時刻の鳴動 (FIRED) にする。埋めないと予約失敗の行に見えて、届いても見逃しになる
+    func testResyncFillsLegacyIdAndFiresFromDeliveredNotification() async {
+        let row = oneShotRow(offsetMs: -60_000, rid: false)
+        let deliveredAt = row.trigger + 800
+        center.deliveredList = [(row.instanceId, deliveredAt)]
+        await engine.resync(reason: "test")
+
+        let rec = engine.store.state.scheduled[row.instanceId]
+        XCTAssertEqual(rec?.state, .fired)
+        XCTAssertEqual(rec?.alarmKitId, row.instanceId)
+        XCTAssertEqual(DiagnosisPlan.lastFired(engine.store.state.audit)?.atMillis, deliveredAt)
+        XCTAssertFalse(engine.store.state.audit.contains { $0.type == "MISSED" })
+        XCTAssertEqual(engine.store.state.standaloneAlarms.first { $0.id == row.alarmId }?.enabled, false)
+    }
+
+    /// 予約から消えて届いた証拠も無い行は、今の通知許可で分かれる。
+    /// 許可が無ければ時刻に出なかった側なので、猶予 (1 時間) を過ぎたら見逃し (MISSED)。UNCONFIRMED にしない
+    func testResyncCountsGoneRowAsMissedWhenNotAuthorized() async {
+        let row = oneShotRow(offsetMs: -2 * 3_600_000, rid: true)
+        center.authorized = false
+        await engine.resync(reason: "test")
+
+        XCTAssertEqual(engine.store.state.scheduled[row.instanceId]?.state, .missed)
+        XCTAssertTrue(engine.store.state.audit.contains { $0.type == "MISSED" })
+        XCTAssertFalse(engine.store.state.audit.contains { $0.type == DiagnosisPlan.unconfirmedType })
+    }
+
+    /// 許可があるのに証拠が無い行は、見逃しと言い切れないので UNCONFIRMED (見逃しにも鳴動にも数えない)
+    func testResyncMarksGoneRowUnconfirmedWhenAuthorized() async {
+        let row = oneShotRow(offsetMs: -2 * 3_600_000, rid: true)
+        center.authorized = true
+        await engine.resync(reason: "test")
+
+        XCTAssertEqual(engine.store.state.scheduled[row.instanceId]?.state, .fired)
+        XCTAssertTrue(engine.store.state.audit.contains { $0.type == DiagnosisPlan.unconfirmedType })
+        XCTAssertFalse(engine.store.state.audit.contains { $0.type == "MISSED" })
+        XCTAssertFalse(engine.store.state.audit.contains { $0.type == "FIRED" })
+    }
+
+    /// 許可が無くても猶予内の行は、見逃しにも UNCONFIRMED にもしない (見逃し判定は猶予の後)
+    func testResyncDoesNotJudgeGoneRowWithinGraceWhenNotAuthorized() async {
+        _ = oneShotRow(offsetMs: -60_000, rid: true)
+        center.authorized = false
+        await engine.resync(reason: "test")
+
+        XCTAssertFalse(engine.store.state.audit.contains { $0.type == "MISSED" || $0.type == DiagnosisPlan.unconfirmedType })
     }
 
     /// 届いた証拠の無い行は鳴動の記録 (FIRED) にも見逃しにもせず、「1回のみ」は消費する
