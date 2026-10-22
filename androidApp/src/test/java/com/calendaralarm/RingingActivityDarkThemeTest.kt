@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.core.app.ActivityScenario
+import androidx.core.view.WindowCompat
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.db.ScheduledInstanceEntity
 import com.calendaralarm.engine.AlarmService
@@ -22,6 +23,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Before
 import org.junit.Rule
@@ -109,5 +111,42 @@ class RingingActivityDarkThemeTest {
             dark.rgb(),
             rgb(actual),
         )
+    }
+
+    /**
+     * アプリのテーマは windowLightStatusBar=true (ライト端末向けの暗いアイコン)。
+     * 鳴動画面は常時ダークなので、そのままだと暗い背景に暗い時計・電池・電波が重なって見えない。
+     * 起動した画面のステータスバー・ナビゲーションバーのアイコンが明るい側であることを確かめる。
+     */
+    @Test
+    fun `端末がライト設定でも鳴動画面のステータスバーのアイコンは明るい色になる`() {
+        val night = app.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        assertEquals("前提: 端末はライト設定であること", Configuration.UI_MODE_NIGHT_NO, night)
+
+        val id = "tm:dark-system-bars"
+        runBlocking {
+            app.container.db.scheduledInstances().upsert(
+                listOf(
+                    ScheduledInstanceEntity.of(
+                        AlarmInstance(id, System.currentTimeMillis(), "SystemBarsCheck", AlarmKind.TIMER),
+                    ),
+                ),
+            )
+        }
+        val launched = ActivityScenario.launch<RingingActivity>(RingingActivity.intent(app, id))
+        scenario = launched
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodesWithText("SystemBarsCheck").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        var statusBarLight = true
+        var navigationBarLight = true
+        launched.onActivity { activity ->
+            val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+            statusBarLight = controller.isAppearanceLightStatusBars
+            navigationBarLight = controller.isAppearanceLightNavigationBars
+        }
+        assertFalse("ステータスバーのアイコンが暗い色 (ライト用) のまま", statusBarLight)
+        assertFalse("ナビゲーションバーのアイコンが暗い色 (ライト用) のまま", navigationBarLight)
     }
 }
