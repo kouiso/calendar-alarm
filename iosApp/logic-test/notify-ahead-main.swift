@@ -40,6 +40,41 @@ var rdiff = rule; rdiff.minutesBefore = 10; rdiff.extraOffsets = [30]
 check("alarm start + notify reminder at different offset -> notification", notificationDeliveryAhead(timed, rdiff, nil, actions: (a, n), importReminders: false, nowMillis: iso("2026-10-22T09:00:00Z")), true)
 check("muted start leaves the same-offset reminder", notificationDeliveryAhead(timed, rdup, nil, actions: (EventAction.mute.rawValue, n), importReminders: false, nowMillis: iso("2026-10-22T09:00:00Z")), true)
 check("global mute drops the alarm start, so the same-offset notify reminder still needs permission", notificationDeliveryAhead(timed, rdup, nil, actions: (a, n), importReminders: false, muteAll: true, nowMillis: iso("2026-10-22T09:00:00Z")), true)
+// #51 PR2 行のスイッチ: 通知だけのカレンダーの予定を OFF→ON に戻しても通知のまま (全画面のアラームに格上げしない)
+func checkS(_ name: String, _ got: String?, _ want: String?) { if got != want { fails += 1; print("FAIL", name, got ?? "nil", want ?? "nil") } else { print("PASS", name) } }
+var notifyRule = AlarmRuleDTO(); notifyRule.startAction = n; notifyRule.reminderAction = n
+var muteRule = AlarmRuleDTO(); muteRule.startAction = EventAction.mute.rawValue; muteRule.reminderAction = EventAction.mute.rawValue
+let codes = TitleCodeSettings(), invite = InviteFilter(), types = EventTypeFilter()
+func silenced(_ r: AlarmRuleDTO, _ ov: EventOverrideDTO? = nil, _ e: CalendarEventDTO = timed) -> Bool {
+    silencedWithoutOverride(e, r, ov, codes, invite: invite, types: types, importReminders: false)
+}
+check("notify calendar is not silenced without an override", silenced(notifyRule), false)
+check("mute calendar is silenced without an override", silenced(muteRule), true)
+var birthday = timed; birthday.googleEventType = "birthday"
+check("type-filtered event is silenced without an override", silenced(notifyRule, nil, birthday), true)
+// 変更前の挙動の再現: ON で ALARM を書くと、通知カレンダーの予定が開始もリマインダーも ALARM になる
+let upgraded = EventOverrideDTO(action: a)
+var notifyWithReminder = notifyRule; notifyWithReminder.extraOffsets = [30]
+checkS("old behaviour: ALARM override upgrades the start", resolvedRingActions(timed, notifyWithReminder, upgraded, codes, importReminders: false).start, a)
+checkS("old behaviour: ALARM override upgrades the reminder", resolvedRingActions(timed, notifyWithReminder, upgraded, codes, importReminders: false).reminder, a)
+// 修正後: OFF -> ON で指定が消え、開始もリマインダーも通知のまま
+let off = overrideAfterRingSwitch(nil, on: false, defaultSilenced: false)
+checkS("switch OFF writes MUTE", off?.action, EventAction.mute.rawValue)
+let back = overrideAfterRingSwitch(off, on: true, defaultSilenced: silenced(notifyWithReminder, off))
+checkS("OFF then ON on a notify calendar leaves no override", back?.action, nil)
+check("OFF then ON on a notify calendar removes the override entirely", back == nil, true)
+checkS("OFF then ON keeps the start as NOTIFY", resolvedRingActions(timed, notifyWithReminder, back, codes, importReminders: false).start, n)
+checkS("OFF then ON keeps the reminder as NOTIFY", resolvedRingActions(timed, notifyWithReminder, back, codes, importReminders: false).reminder, n)
+// 鳴らさないカレンダーの予定は ON で ALARM を書く (書かないと ON にならない)
+let onMute = overrideAfterRingSwitch(nil, on: true, defaultSilenced: silenced(muteRule))
+checkS("ON on a mute calendar writes ALARM", onMute?.action, a)
+check("ON on a mute calendar actually rings", !resolvedActionsMuted(timed, muteRule, onMute, codes, importReminders: false), true)
+// 何分前の指定は残す
+let withMinutes = EventOverrideDTO(action: EventAction.mute.rawValue, minutesBefore: 10, extraOffsets: nil)
+let keptMinutes = overrideAfterRingSwitch(withMinutes, on: true, defaultSilenced: silenced(notifyRule, withMinutes))
+checkS("ON clears only the action", keptMinutes?.action, nil)
+check("ON keeps the minutes-before override", keptMinutes?.minutesBefore == 10, true)
+
 // 端末の暦が和暦でも終日の時刻は変わらない
 check("all-day with current calendar \(Calendar.current.identifier)", notificationDeliveryAhead(allDay, rule, nil, actions: (n, nil), importReminders: false, nowMillis: iso(tz == "America/Los_Angeles" ? "2026-10-22T15:00:00Z" : "2026-10-21T23:00:00Z")), true)
 print("calendar:", Calendar.current.identifier)

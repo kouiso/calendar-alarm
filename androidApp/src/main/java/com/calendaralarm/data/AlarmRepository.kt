@@ -195,6 +195,11 @@ class AlarmRepository(
         val hasReminderTriggers: Boolean = true,
         /** 設定の「アラームをすべてミュート」。展開はアラームを全部外し、通知だけ残す */
         val muteAll: Boolean = false,
+        /**
+         * 予定ごとの指定を外すと何も鳴らない (カレンダーの既定が鳴らさない・種類や招待の絞り込みで外れる等)。
+         * 行のスイッチを ON にする時、これが true の時だけ「アラーム」の指定を書く (通知だけの予定を格上げしないため)
+         */
+        val defaultSilenced: Boolean = false,
     ) {
         /** 予定ごとの指定では鳴るようにできない (スイッチを押せなくする) */
         val lockedByCalendar: Boolean get() = calendarOff || accountOff || allDayOff
@@ -290,6 +295,12 @@ class AlarmRepository(
                 hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
                     (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
                 muteAll = appSettings.muteAll,
+                defaultSilenced = AlarmExpander.silencedWithoutOverride(
+                    ev, rule, appSettings.titleCodes, appSettings.inviteFilter, appSettings.eventTypeFilter,
+                    // 何分前などの個別指定は ON でも残すので、リマインダー側の時刻は指定の分まで数える
+                    hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
+                        (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
+                ),
             )
         }
     }
@@ -833,6 +844,28 @@ class AlarmRepository(
         val csv = extraOffsets?.toCsv() ?: current?.extraOffsetsCsv
         db.eventOverrides().upsert(EventOverrideEntity(instanceKey, a, mb, csv))
         resync("event override")
+    }
+
+    /**
+     * 一覧の行のスイッチ (#51 PR2)。OFF は「鳴らさない」を書く。
+     * ON は、指定を外すとそのまま鳴る予定なら指定を外してカレンダーの既定に戻す (通知だけの予定は通知のまま)。
+     * 外すと鳴らない予定だけ「アラーム」を書く。何分前などの個別指定は残す
+     */
+    suspend fun setEventSwitch(item: AgendaItem, on: Boolean) {
+        val key = item.event.instanceKey
+        if (!on) {
+            setEventOverride(key, EventAction.MUTE, null)
+        } else if (item.defaultSilenced) {
+            setEventOverride(key, EventAction.ALARM, null)
+        } else {
+            val current = db.eventOverrides().all().firstOrNull { it.instanceKey == key }
+            if (current != null && (current.minutesBefore != null || current.extraOffsetsCsv != null)) {
+                db.eventOverrides().upsert(current.copy(action = null))
+                resync("event override action cleared")
+            } else {
+                removeEventOverride(key)
+            }
+        }
     }
 
     suspend fun removeEventOverride(instanceKey: String) {
