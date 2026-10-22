@@ -390,6 +390,19 @@ final class EngineSoundChangeTests: XCTestCase {
         XCTAssertTrue(AlarmSoundLibrary.exists(older), "前景の既定の音を古い写しで消した")
     }
 
+    /// 保存済みの状態があるのに読めない時は、別の Engine が書いた分を確かめられない。音を消さずに次の機会へ回す
+    func testUnreadableSavedStateKeepsSounds() async throws {
+        let older = placeSound()
+        defer { AlarmSoundLibrary.remove(older); try? FileManager.default.removeItem(at: storeURL) }
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        let background = backgroundEngine()
+        try Data("not json".utf8).write(to: storeURL)
+
+        background.removeUnusedSounds()
+
+        XCTAssertTrue(AlarmSoundLibrary.exists(older), "保存済みの状態を読めないのに音を消した")
+    }
+
     /// 片付け自体は止めていない: どこからも指されていない古い音は消える
     func testUnusedOldSoundIsStillRemoved() async throws {
         let unused = placeSound()

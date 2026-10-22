@@ -280,37 +280,31 @@ final class Engine: ObservableObject {
             store.audit("NOTIFY_CANCEL", "\(staleReqIds.count)件")
         }
 
-        // AlarmKit 側で予約だけが消えた PENDING 行を拾い直す (再起動や OS 内部の
-        // 破棄でストア上は PENDING だが実体は無い → 二度と鳴らない穴を塞ぐ。
-        // Android は毎回全件 AlarmManager へ再主張する方式で同じ問題を潰している)。
+        // OS 側で予約だけが消えた PENDING 行を拾い直す (再起動や OS 内部の破棄でストア上は PENDING だが
+        // 実体は無い → 二度と鳴らない穴を塞ぐ。Android は毎回全件 AlarmManager へ再主張する方式で同じ問題を潰している)。
+        // 記録は外さず、プランの入力から外して取り直させる: 取り直しに失敗しても、展開で作り直せないタイマーと
+        // スヌーズ子の記録が残り、次の resync でまた試せる (外すと、権限が戻っても拾う相手が居ない)
+        var unreserved: Set<String> = []
         if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler, ak.authorizationGranted {
             let liveIds = Set(ak.allAlarms.map { $0.id })
             for (id, rec) in store.state.scheduled where rec.state == .pending {
-                if !liveIds.contains(AlarmKitScheduler.uuid(from: id)) {
-                    store.removeScheduled(id)
-                    store.audit("RECOVER", "\(id): AlarmKit予約喪失→再予約")
-                }
+                if !liveIds.contains(AlarmKitScheduler.uuid(from: id)) { unreserved.insert(id) }
             }
-        }
-
-        // 通知の予約 (iOS 26 未満) も OS 側で消える。音の入れ直しに失敗して予約を失った行は、
-        // 記録だけ残るとプランが「予約済み」と見て二度と取り直さない。鳴る前なのに予約が無い行は
-        // プランの入力から外して取り直させる (記録は残すので、取り直しも失敗した時は次の resync でまた試す)
-        var unreserved: Set<String> = []
-        if !scheduler.usesRealAlarms {
+        } else if !scheduler.usesRealAlarms {
+            // 通知の予約 (iOS 26 未満) も同じ。鳴る前なのに予約が無い行だけを見る
             for (id, rec) in store.state.scheduled
             where rec.state == .pending && rec.instance.delivery != EventAction.notify.rawValue
                 && rec.instance.triggerAtMillis > now {
                 if await !scheduler.hasReservation(instanceId: id) { unreserved.insert(id) }
             }
-            // 予約が無く、もう鳴らす理由も無い行 (予定を消した等) は、取り消す相手が居ないのでここで外す
-            let desiredNow = Set(desired.map { $0.id })
-            for id in unreserved where !desiredNow.contains(id) {
-                store.removeScheduled(id)
-                unreserved.remove(id)
-            }
-            if !unreserved.isEmpty { store.audit("RECOVER", "通知の予約喪失 \(unreserved.count)件→再予約") }
         }
+        // 予約が無く、もう鳴らす理由も無い行 (予定を消した等) は、取り消す相手が居ないのでここで外す
+        let desiredNow = Set(desired.map { $0.id })
+        for id in unreserved where !desiredNow.contains(id) {
+            store.removeScheduled(id)
+            unreserved.remove(id)
+        }
+        if !unreserved.isEmpty { store.audit("RECOVER", "予約喪失 \(unreserved.count)件→再予約") }
 
         let plan = SharedDomain.plan(PlanRequest(
             desired: desired,
@@ -674,7 +668,12 @@ final class Engine: ObservableObject {
     /// 写しを読んだ後に置かれたファイルも残す
     func removeUnusedSounds() {
         var keep = Self.soundsInUse(store.state)
-        if let saved = store.savedState() { keep.formUnion(Self.soundsInUse(saved)) }
+        if let saved = store.savedState() {
+            keep.formUnion(Self.soundsInUse(saved))
+        } else if store.hasSavedFile {
+            // 保存済みの状態があるのに読めない時は、別の Engine が書いた分を確かめられない。消さずに次の機会へ回す
+            return
+        }
         keep.formUnion(Self.inFlightSounds.keys)
         AlarmSoundLibrary.removeAll(except: keep, createdBefore: store.loadedAt)
     }
