@@ -24,16 +24,13 @@ final class WeatherForecastLookupTests: XCTestCase {
     /// 終日の予定の開始は端末のタイムゾーンの0時 (EventKit)。端末が東京・地点がロサンゼルスでも、
     /// 地点のタイムゾーンに直して前の日 (10/23) の予報を出さない
     func testAllDayUsesTheDeviceDayEvenWhenTheForecastZoneDiffers() throws {
-        let saved = NSTimeZone.default
-        defer { NSTimeZone.default = saved }
-        NSTimeZone.default = try XCTUnwrap(TimeZone(identifier: "Asia/Tokyo"))
-        XCTAssertEqual(TimeZone.current.identifier, "Asia/Tokyo")
+        let tokyo = try XCTUnwrap(TimeZone(identifier: "Asia/Tokyo"))
         let allDayStart = try utc("2026-10-23T15:00:00Z")   // 東京の 2026-10-24 00:00
         let la = [forecast("2026-10-23", zone: "America/Los_Angeles"), forecast("2026-10-24", zone: "America/Los_Angeles"),
                   forecast("2026-10-25", zone: "America/Los_Angeles")]
-        XCTAssertEqual(WeatherService.forecast(on: allDayStart, allDay: true, in: la)?.date, "2026-10-24")
+        XCTAssertEqual(WeatherService.forecast(on: allDayStart, allDay: true, in: la, deviceZone: tokyo)?.date, "2026-10-24")
         // 時刻のある予定は今までどおり地点の日付 (同じ瞬間はロサンゼルスでは 10/23 08:00)
-        XCTAssertEqual(WeatherService.forecast(on: allDayStart, allDay: false, in: la)?.date, "2026-10-23")
+        XCTAssertEqual(WeatherService.forecast(on: allDayStart, allDay: false, in: la, deviceZone: tokyo)?.date, "2026-10-23")
     }
 
     func testOutsideTheForecastRangeReturnsNil() throws {

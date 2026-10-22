@@ -49,14 +49,43 @@ enum RingHistory {
         Array(history.reversed().prefix(limit))
     }
 
+    /// 端末のタイムゾーンが変わると、前の版の detail の時刻 (記録した時のタイムゾーンの書き方) は
+    /// 今のタイムゾーンで読むと最大でこの分ずれる (UTC-12 から UTC+14 までの差)
+    static let zoneShiftMillis: Int64 = 26 * 60 * 60 * 1000
+
+    /// 前の版の MISSED の detail は「タイトル @M/d HH:mm」で、後ろは鳴るはずだった時刻。
+    /// 前の版の記録には鳴動時刻の欄が無いので、ここから読む。年は書いていないので記録した時刻に最も近い年で補う。
+    /// 読めない書式なら nil
+    static func legacyMissed(_ entry: AuditEntry, zone: TimeZone) -> (title: String, triggerAtMillis: Int64)? {
+        guard let marker = entry.detail.range(of: " @", options: .backwards) else { return nil }
+        let title = String(entry.detail[..<marker.lowerBound])
+        let parts = entry.detail[marker.upperBound...].split(separator: " ")
+        guard parts.count == 2 else { return nil }
+        let md = parts[0].split(separator: "/").compactMap { Int($0) }
+        let hm = parts[1].split(separator: ":").compactMap { Int($0) }
+        guard md.count == 2, hm.count == 2 else { return nil }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = zone
+        let year = cal.component(.year, from: Date(timeIntervalSince1970: TimeInterval(entry.atMillis) / 1000))
+        let candidates: [Int64] = [year - 1, year, year + 1].compactMap { y in
+            cal.date(from: DateComponents(year: y, month: md[0], day: md[1], hour: hm[0], minute: hm[1]))
+                .map { Int64($0.timeIntervalSince1970 * 1000) }
+        }
+        guard let nearest = candidates.min(by: { abs($0 - entry.atMillis) < abs($1 - entry.atMillis) }) else { return nil }
+        return (title, nearest)
+    }
+
     /// 前の版で保存した状態には記録が無い。鳴らずは残っている予約の行と監査ログから、
     /// 停止とスヌーズは監査ログから作り直す (見逃しの数が更新直後に 0 に戻らないように)。
     /// 予約の行は単発アラームを使い直すと消えるので、行の無い見逃しは監査ログの MISSED で残す。
     /// 監査ログの MISSED が今ある行と同じ見逃しなら二重に数えない
     /// (予約の id があればそれで、前の版の行は id が無いので detail が同じものを1行につき1件だけ。
-    /// 端末のタイムゾーンが変わって detail の時刻がずれていても、タイトルと記録時刻で1行につき1件だけ)。
+    /// 端末のタイムゾーンが変わって detail の時刻がずれていても、タイトルが同じで detail の時刻が
+    /// 行の鳴動時刻に最も近いものを1行につき1件だけ)。
+    /// 前の版の MISSED には鳴動時刻の欄が無いので、残すものは detail の時刻から埋める
+    /// (記録した時刻で数えると、何日も前の見逃しを「直近」と言ってしまう)
     static func seed(audit: [AuditEntry], missed: [(id: String, triggerAtMillis: Int64, title: String, detail: String)],
-                     nowMillis: Int64) -> [AuditEntry] {
+                     nowMillis: Int64, deviceZone: TimeZone = .current) -> [AuditEntry] {
         let cutoff = nowMillis - retentionMillis
         // 予約の行由来の記録には監査ログの id が無いので、ぶつからない負の id を振る
         let fromRows = missed.sorted { $0.triggerAtMillis < $1.triggerAtMillis }.enumerated().map { i, m in
@@ -66,7 +95,7 @@ enum RingHistory {
         let rowIds = Set(missed.map(\.id))
         // 前の版の監査ログの MISSED (予約の id が無い) を、同じ見逃しの予約の行と1対1で対応づけて二重に数えない。
         // まず detail が同じもの、次に端末のタイムゾーンが変わって detail の時刻の書き方がずれたものを
-        // 「タイトルが同じで、行の鳴動時刻から7日以内に記録されたもの」で対応づける
+        // 「タイトルが同じで、detail の時刻が行の鳴動時刻に最も近いもの」で対応づける
         var unmatchedRows = fromRows
         var consumed = Set<Int>()
         let legacy = audit.indices.filter { audit[$0].type == "MISSED" && audit[$0].instanceId == nil }
@@ -75,21 +104,31 @@ enum RingHistory {
             unmatchedRows.remove(at: r)
             consumed.insert(i)
         }
+        var legacyTriggers: [Int: Int64] = [:]
         for i in legacy where !consumed.contains(i) {
-            let entry = audit[i]
-            guard let r = unmatchedRows.firstIndex(where: { row in
-                entry.detail.hasPrefix("\(row.title ?? "") @")
-                    && entry.atMillis >= row.atMillis && entry.atMillis - row.atMillis <= retentionMillis
+            guard let parsed = legacyMissed(audit[i], zone: deviceZone) else { continue }
+            legacyTriggers[i] = parsed.triggerAtMillis
+            let candidates = unmatchedRows.indices.filter { r in
+                let row = unmatchedRows[r]
+                return row.title == parsed.title
+                    && row.atMillis <= audit[i].atMillis
+                    && abs(row.atMillis - parsed.triggerAtMillis) <= zoneShiftMillis
+            }
+            guard let r = candidates.min(by: {
+                abs(unmatchedRows[$0].atMillis - parsed.triggerAtMillis) < abs(unmatchedRows[$1].atMillis - parsed.triggerAtMillis)
             }) else { continue }
             unmatchedRows.remove(at: r)
             consumed.insert(i)
         }
-        let fromAudit = audit.enumerated().filter { i, entry in
-            guard types.contains(entry.type) else { return false }
-            guard entry.type == "MISSED" else { return true }
-            if let instanceId = entry.instanceId { return !rowIds.contains(instanceId) }
-            return !consumed.contains(i)
-        }.map(\.element)
+        let fromAudit: [AuditEntry] = audit.enumerated().compactMap { i, entry in
+            guard types.contains(entry.type) else { return nil }
+            guard entry.type == "MISSED" else { return entry }
+            if let instanceId = entry.instanceId { return rowIds.contains(instanceId) ? nil : entry }
+            if consumed.contains(i) { return nil }
+            var kept = entry
+            kept.triggerAtMillis = legacyTriggers[i]
+            return kept
+        }
         return (fromAudit + fromRows)
             .filter { $0.atMillis >= cutoff }
             .sorted { $0.atMillis < $1.atMillis }

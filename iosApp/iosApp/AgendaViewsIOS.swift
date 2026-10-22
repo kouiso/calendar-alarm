@@ -284,6 +284,8 @@ struct DayTimelineViewIOS: View {
                         }
                         .frame(height: 16)
                         .offset(y: hourH * CGFloat(minutesOfDay(ctx.date)) / 60 - 8)
+                        // 線は表示だけ。重なった予定へのタップを奪わない
+                        .allowsHitTesting(false)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(label)
                     }

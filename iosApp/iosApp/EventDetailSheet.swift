@@ -144,10 +144,13 @@ struct EventDetailSheet: View {
     }
 
     /// 予定の日の予報。予報は今日から3日分あり、先頭 (今日) ではなく予定の日の分を使う。
-    /// 予定の日が予報の範囲の外なら天気は出さない
+    /// 予定の日が予報の範囲の外なら天気は出さない。
+    /// 取得時に気温が欠けた日は .nan が入っていて、Int(.nan) は落ちるので出さない
     private var eventForecast: WeatherService.Forecast? {
         let start = Date(timeIntervalSince1970: TimeInterval(ev.startMillis) / 1000)
-        return WeatherService.forecast(on: start, allDay: ev.allDay, in: weather)
+        guard let f = WeatherService.forecast(on: start, allDay: ev.allDay, in: weather),
+              f.tempMax.isFinite, f.tempMin.isFinite else { return nil }
+        return f
     }
 
     /// 小さい天気カード: アイコン40 + 気温34 + 天気・降水 + 「地点・HH:mm の予報」 (#51 PR3)。
