@@ -558,16 +558,23 @@ func notificationDeliveryAhead(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ o
         var local = DateComponents()
         local.year = day.year; local.month = day.month; local.day = day.day
         local.hour = rule.allDayMinutes / 60; local.minute = rule.allDayMinutes % 60
-        if let d = Calendar.current.date(from: local) {
+        // 端末の暦が和暦などでも、取り出した西暦の年月日をそのまま端末のタイムゾーンの日時にする (shared は西暦で組む)
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = TimeZone.current
+        if let d = gregorian.date(from: local) {
             startMillis = Int64(d.timeIntervalSince1970 * 1000)
         }
     }
     func ahead(_ minutes: Int) -> Bool { startMillis - Int64(minutes) * 60_000 > nowMillis }
-    if actions.start == notify && ahead(ov?.minutesBefore ?? rule.minutesBefore) { return true }
+    let startMinutes = ov?.minutesBefore ?? rule.minutesBefore
+    if actions.start == notify && ahead(startMinutes) { return true }
     guard actions.reminder == notify else { return false }
+    // shared `AlarmExpander` は開始の予約を先に作り、同じ時刻のリマインダーは重複として作らない。
+    // 開始がミュートの時は何も作らないので、その時刻のリマインダーは残る
+    let startTriggerTaken = actions.start != EventAction.mute.rawValue
     let offsets = (ov?.extraOffsets ?? rule.extraOffsets)
         + (importReminders ? ev.calendarReminderMinutes.filter { $0 >= 0 } : [])
-    return offsets.contains(where: ahead)
+    return offsets.contains { ahead($0) && !(startTriggerTaken && $0 == startMinutes) }
 }
 
 /// 予定画面の行と、設定の「鳴動の状態」が同じ予定の一覧から数えるための入口 (#51 PR2/PR3)。
