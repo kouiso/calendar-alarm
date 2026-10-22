@@ -36,13 +36,23 @@ now_ms() { date +%s%3N; }
 # ---------- 採取 ----------
 
 ui_dump() {
-  local dst=$1 _
-  for _ in 1 2 3; do
+  local dst=$1 _ dismissed=0 xy
+  for _ in 1 2 3 4 5; do
     adb shell rm -f /sdcard/ui.xml >/dev/null 2>&1
     # --windows は全窓 (オーバーレイ・SystemUI を含む) を出す。非対応版なら単一窓で取り直す
     if sh_ uiautomator dump --windows /sdcard/ui.xml 2>&1 | grep -q "dumped to" ||
        sh_ uiautomator dump /sdcard/ui.xml 2>&1 | grep -q "dumped to"; then
-      adb pull /sdcard/ui.xml "$dst" >/dev/null 2>&1 && return 0
+      if adb pull /sdcard/ui.xml "$dst" >/dev/null 2>&1; then
+        # 他アプリの「応答なし」ダイアログが停止UIを隠していたら閉じて取り直す (最大3回)
+        if [ "$dismissed" -lt 3 ] && xy=$("${CHECK[@]}" anr-wait "$dst" "Calendar Alarm"); then
+          log "dismissing another app's ANR dialog at $xy: $dst"
+          sh_ input tap $xy >/dev/null 2>&1
+          dismissed=$((dismissed + 1))
+          sleep 2
+          continue
+        fi
+        return 0
+      fi
     fi
     sleep 1
   done

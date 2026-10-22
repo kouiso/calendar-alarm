@@ -7,6 +7,7 @@
   hiding-windows <dumpsys_window.txt> 画面上で他アプリのオーバーレイを隠す窓 (HIDE_NON_SYSTEM_OVERLAY_WINDOWS) を出す
   alarm-players <dumpsys_audio.txt> <uid>  uid の USAGE_ALARM で state:started のプレイヤー数を出す
   notif <dumpsys_notification.txt> <pkg> <id>  pkg/id の通知レコード数を出す
+  anr-wait <ui.xml> <app_label>      他アプリの「応答なし」ダイアログの「待機」中心座標を "x y" で出す (無い・自アプリのものなら exit 1)
   audit <db> [since_millis]          audit_log を時刻順に TSV で出す
 """
 import re
@@ -34,6 +35,32 @@ def stop_node(path, pkg, text):
         print(f"{(x1 + x2) // 2} {(y1 + y2) // 2}")
         return 0
     return 1
+
+
+def anr_wait(path, app_label):
+    """遅い共有ランナーでは Pixel Launcher 等が応答なしになり、全画面のダイアログが停止UIを隠す。
+    それを「停止UIが無い」と読まないために、他アプリのものだけ「待機」で閉じる。
+    自アプリの応答なしは本物の不具合なので閉じず、そのまま判定に回す。"""
+    try:
+        root = ET.parse(path).getroot()
+    except (ET.ParseError, FileNotFoundError):
+        return 1
+    title = ""
+    wait = None
+    for node in root.iter("node"):
+        rid = node.get("resource-id")
+        if rid == "android:id/alertTitle":
+            title = node.get("text") or ""
+        elif rid == "android:id/aerr_wait":
+            wait = node.get("bounds", "")
+    if wait is None or "isn't responding" not in title or app_label in title:
+        return 1
+    m = re.match(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", wait)
+    if not m:
+        return 1
+    x1, y1, x2, y2 = map(int, m.groups())
+    print(f"{(x1 + x2) // 2} {(y1 + y2) // 2}")
+    return 0
 
 
 def _window_blocks(text):
@@ -136,6 +163,8 @@ def main(argv):
         return alarm_players(*args)
     if cmd == "notif":
         return notif(*args)
+    if cmd == "anr-wait":
+        return anr_wait(*args)
     if cmd == "audit":
         return audit(*args)
     print(f"unknown command: {cmd}", file=sys.stderr)
