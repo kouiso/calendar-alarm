@@ -40,27 +40,42 @@ def stop_node(path, pkg, text):
 def anr_wait(path, app_label):
     """遅い共有ランナーでは Pixel Launcher 等が応答なしになり、全画面のダイアログが停止UIを隠す。
     それを「停止UIが無い」と読まないために、他アプリのものだけ「待機」で閉じる。
-    自アプリの応答なしは本物の不具合なので閉じず、そのまま判定に回す。"""
+    自アプリの応答なしは本物の不具合なので閉じず、そのまま判定に回す。
+    ダイアログが複数あっても、タイトルと「待機」は同じダイアログの中のものだけを組にする。
+    英語以外の表示でも動くよう、ダイアログの印は文言でなく resource-id (aerr_wait) で見る"""
     try:
         root = ET.parse(path).getroot()
     except (ET.ParseError, FileNotFoundError):
         return 1
-    title = ""
-    wait = None
+    parent = {child: node for node in root.iter() for child in node}
+    found = []
     for node in root.iter("node"):
-        rid = node.get("resource-id")
-        if rid == "android:id/alertTitle":
-            title = node.get("text") or ""
-        elif rid == "android:id/aerr_wait":
-            wait = node.get("bounds", "")
-    if wait is None or "isn't responding" not in title or app_label in title:
+        if node.get("resource-id") != "android:id/aerr_wait":
+            continue
+        # この「待機」を含む最小の祖先のうち、タイトルを持つもの
+        anc, title = parent.get(node), None
+        while anc is not None and title is None:
+            for t in anc.iter("node"):
+                if t.get("resource-id") == "android:id/alertTitle":
+                    title = t.get("text") or ""
+                    break
+            anc = parent.get(anc)
+        found.append((title, node.get("bounds", "")))
+    if not found:
         return 1
-    m = re.match(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", wait)
-    if not m:
-        return 1
-    x1, y1, x2, y2 = map(int, m.groups())
-    print(f"{(x1 + x2) // 2} {(y1 + y2) // 2}")
-    return 0
+    for title, bounds in found:
+        # タイトルが読めない・自アプリの名前を含むダイアログは触らない (本物の不具合を隠さない)
+        if title is None or app_label in title:
+            continue
+        m = re.match(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+        if not m:
+            continue
+        x1, y1, x2, y2 = map(int, m.groups())
+        if x2 <= x1 or y2 <= y1:
+            continue
+        print(f"{(x1 + x2) // 2} {(y1 + y2) // 2}")
+        return 0
+    return 1
 
 
 def _window_blocks(text):
