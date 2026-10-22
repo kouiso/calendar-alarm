@@ -38,7 +38,7 @@ import org.robolectric.annotation.GraphicsMode
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w360dp-h740dp-mdpi-notnight")
+@Config(sdk = [34], qualifiers = "w360dp-h740dp-notnight-mdpi")
 class RingingActivityDarkThemeTest {
 
     @OptIn(ExperimentalTestApi::class)
