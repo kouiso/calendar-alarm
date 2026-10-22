@@ -370,7 +370,10 @@ final class Engine: ObservableObject {
             store.removeScheduled(id)
             unreserved.remove(id)
         }
-        if !unreserved.isEmpty { store.audit("RECOVER", "予約喪失 \(unreserved.count)件→再予約") }
+        // どの行を取り直したかを残す。止めた行を取り直していないことを、監査の記録から確かめられるように (#61)
+        if !unreserved.isEmpty {
+            store.audit("RECOVER", "予約喪失 \(unreserved.count)件→再予約: \(unreserved.sorted().joined(separator: ","))")
+        }
 
         let plan = SharedDomain.plan(PlanRequest(
             desired: desired,

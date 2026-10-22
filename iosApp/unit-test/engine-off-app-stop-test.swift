@@ -132,6 +132,9 @@ final class EngineOffAppStopTests: XCTestCase {
 
         XCTAssertTrue(audited("RECOVER", id))
         XCTAssertFalse(audited("DISMISS_OFFAPP", id))
+        // 拾い直した行は実際に予約し直されて鳴る。監査の文言だけでなく、予約が入ったことを見る
+        XCTAssertTrue(fake.scheduledIds.contains(id), "拾い直したのに予約し直していない (鳴らない)")
+        XCTAssertEqual(engine.store.state.scheduled[id]?.state, .pending)
     }
 
     /// 停止済みの保存がディスクに載らないまま落ちても、止めた証拠 (書き残し) は残る。
