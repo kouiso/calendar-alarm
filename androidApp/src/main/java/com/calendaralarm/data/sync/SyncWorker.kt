@@ -51,12 +51,12 @@ class SyncWorker(
             val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE)
                 as NotificationManager
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "同期", NotificationManager.IMPORTANCE_MIN),
+                NotificationChannel(CHANNEL_ID, applicationContext.getString(R.string.sync_channel), NotificationManager.IMPORTANCE_MIN),
             )
         }
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alarm)
-            .setContentTitle("カレンダーを同期しています")
+            .setContentTitle(applicationContext.getString(R.string.sync_running))
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
         return ForegroundInfo(NOTIFICATION_ID, notification)

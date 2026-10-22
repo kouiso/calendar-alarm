@@ -32,10 +32,23 @@ final class Store: ObservableObject {
         var weatherLocation: String = ""
         var weatherHeaderEnabled: Bool = true
         var weatherOnAlarmScreen: Bool = true
+        /// 既定のアラーム音 (Library/Sounds のファイル名)。nil = iPhone の既定音 (#101)
+        var alarmSoundFile: String? = nil
+        /// 取り込んだ時の元のファイル名 (画面表示用)
+        var alarmSoundLabel: String? = nil
+        /// 予定一覧に週番号を出すか (旧版の「Show Calendar Week」)
+        var showWeekNumbers: Bool = false
+        /// 週の開始曜日 (ISO: 1=月 … 7=日)。既定はこれまでの月表示と同じ日曜
+        var firstWeekday: Int = WeekDisplay.defaultFirstWeekday
         var timerPresets: [TimerPresetDTO] = TimerPresets.defaults
         /// OpenRouter APIキー (AI機能用)
         // calendar_prefs: calendarId -> AlarmRuleDTO
         var calendarRules: [String: AlarmRuleDTO] = [:]
+        // 何分前をカレンダーで選んだ calendarId。含まれないカレンダーの何分前はアカウントの既定、
+        // 無ければアプリの既定に従う (#74)。スイッチ等で calendarRules に行ができても既定は効き続ける
+        var calendarMinutesChosen: Set<String> = []
+        // CalendarSource.accountKey (EventKit のソース識別子) -> AccountSettingDTO (#74)
+        var accountSettings: [String: AccountSettingDTO] = [:]
         // event_overrides: instanceKey -> EventOverrideDTO
         var overrides: [String: EventOverrideDTO] = [:]
         var standaloneAlarms: [StandaloneAlarmDTO] = []
@@ -52,18 +65,27 @@ final class Store: ObservableObject {
     @Published private(set) var state = Persisted()
 
     private let fileURL: URL
+    /// いまの state をディスクから読んだ時刻。これより後に置かれたファイルを、この写しは知らない
+    private(set) var loadedAt = Date()
     /// 保存は直列キューに流す。並列 detached だと古いスナップショットが後勝ちで残る
     /// (書き込み順序が呼び出し順と逆転する) のを防ぐため FIFO にする。
     private let saveQueue = DispatchQueue(label: "calendaralarm.store.save")
 
-    init() {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("CalendarAlarm", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        fileURL = dir.appendingPathComponent("store.json")
-        if let data = try? Data(contentsOf: fileURL),
+    /// [fileURL] はテストで端末の保存データを上書きしないための差し替え口。アプリは渡さない
+    init(fileURL: URL? = nil) {
+        if let fileURL {
+            self.fileURL = fileURL
+        } else {
+            let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("CalendarAlarm", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            self.fileURL = dir.appendingPathComponent("store.json")
+        }
+        loadedAt = Date()
+        if let data = try? Data(contentsOf: self.fileURL),
            let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = loaded
+            AlarmSoundLibrary.currentDefault = loaded.alarmSoundFile
             // 旧版で保存した AI のキーとモデルを端末から消す。読み込みでは落ちるだけで
             // ファイルに残るので、決定7のとおり起動時に書き直す
             if let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -78,10 +100,19 @@ final class Store: ObservableObject {
     /// 保存キューの未完了書き込みを先に flush してから読む。
     func reload() {
         saveQueue.sync {}
+        loadedAt = Date()
         if let data = try? Data(contentsOf: fileURL),
            let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = loaded
+            AlarmSoundLibrary.currentDefault = loaded.alarmSoundFile
         }
+    }
+
+    /// ディスクに保存済みの状態。別の Store (バックグラウンドの Engine) が書いた分も入る。手元の state は変えない
+    func savedState() -> Persisted? {
+        saveQueue.sync {}
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        return try? JSONDecoder().decode(Persisted.self, from: data)
     }
 
     /// 書き出しは直列キューで原子的に (tmp → rename)。呼び出し順=書き込み順なので最後の保存が常に最新。
@@ -105,6 +136,14 @@ final class Store: ObservableObject {
     func setDefaultMinutes(_ v: Int) { mutate { $0.defaultMinutesBefore = v } }
     func setDefaultSnooze(_ v: Int) { mutate { $0.defaultSnoozeMinutes = v } }
     func setWeatherEnabled(_ v: Bool) { mutate { $0.weatherEnabled = v } }
+    /// 既定のアラーム音を変える。前の音のファイルは、どの予約の記録も指さなくなってから Engine が消す
+    /// (鳴る直前・鳴動中・スヌーズ中の予約は前の音のまま鳴るため)
+    func setAlarmSound(file: String?, label: String?) {
+        mutate { $0.alarmSoundFile = file; $0.alarmSoundLabel = label }
+        AlarmSoundLibrary.currentDefault = file
+    }
+    func setShowWeekNumbers(_ v: Bool) { mutate { $0.showWeekNumbers = v } }
+    func setFirstWeekday(_ v: Int) { mutate { $0.firstWeekday = WeekDisplay.normalize(v) } }
     func setDefaultStartAction(_ a: EventAction) { mutate { $0.defaultStartAction = a.rawValue } }
     func setDefaultReminderAction(_ a: EventAction) { mutate { $0.defaultReminderAction = a.rawValue } }
     func setTitleCodes(_ v: TitleCodeSettings) { mutate { $0.titleCodes = v } }
@@ -158,8 +197,74 @@ final class Store: ObservableObject {
 
     // MARK: - calendar prefs
 
+    /// カレンダー単位のルール。何分前はカレンダーで選んだ値、無ければアカウントの「何分前」→ アプリの既定の順
     func rule(for calendarId: String) -> AlarmRuleDTO {
-        state.calendarRules[calendarId] ?? AlarmRuleDTO(minutesBefore: state.defaultMinutesBefore)
+        var r = state.calendarRules[calendarId] ?? AlarmRuleDTO(minutesBefore: state.defaultMinutesBefore)
+        if !state.calendarMinutesChosen.contains(calendarId) {
+            r.minutesBefore = accountSetting(forCalendar: calendarId).minutesBefore ?? state.defaultMinutesBefore
+        }
+        return r
+    }
+
+    /// このカレンダーで何分前を選んだか (false = 既定に従う)
+    func isCalendarMinutesChosen(_ calendarId: String) -> Bool { state.calendarMinutesChosen.contains(calendarId) }
+
+    /// カレンダーの何分前を選ぶ。nil で既定 (アカウント → アプリ) に戻す
+    func setCalendarMinutes(_ calendarId: String, _ minutes: Int?) {
+        mutate {
+            var r = $0.calendarRules[calendarId] ?? AlarmRuleDTO(minutesBefore: $0.defaultMinutesBefore)
+            if let m = minutes {
+                r.minutesBefore = m
+                $0.calendarMinutesChosen.insert(calendarId)
+            } else {
+                $0.calendarMinutesChosen.remove(calendarId)
+            }
+            $0.calendarRules[calendarId] = r
+        }
+    }
+
+    // MARK: - account settings (#74)
+
+    func accountSetting(forCalendar calendarId: String) -> AccountSettingDTO {
+        let account = state.calendars.first { $0.id == calendarId }?.accountKey ?? ""
+        return state.accountSettings[account] ?? AccountSettingDTO()
+    }
+
+    func setAccountSetting(_ accountKey: String, _ setting: AccountSettingDTO) {
+        mutate { $0.accountSettings[accountKey] = setting }
+    }
+
+    /// アカウントの「使う」「鳴らす」が両方 ON か
+    func accountAllowsRing(_ calendarId: String) -> Bool {
+        let a = accountSetting(forCalendar: calendarId)
+        return a.use && a.ring
+    }
+
+    /// このアプリで使わないアカウントのカレンダーか (一覧にも出さない)
+    func isHiddenCalendar(_ calendarId: String) -> Bool { !accountSetting(forCalendar: calendarId).use }
+
+    /// 展開に渡すカレンダー単位のルール。アカウント設定を配下カレンダーへ当てはめる
+    /// (Android の `AccountRules.apply` と同じ規則: 鳴らさないアカウントは止め、何分前はカレンダーで選んだ時だけそちらが勝つ)
+    func effectiveCalendarRules() -> [String: AlarmRuleDTO] {
+        // 選んでいない行の何分前は、ここでアプリの既定に揃えてからアカウントの既定を重ねる
+        var out = state.calendarRules
+        for (id, rule) in state.calendarRules where !state.calendarMinutesChosen.contains(id) {
+            var r = rule; r.minutesBefore = state.defaultMinutesBefore; out[id] = r
+        }
+        for cal in state.calendars {
+            let account = state.accountSettings[cal.accountKey] ?? AccountSettingDTO()
+            let allows = account.use && account.ring
+            if allows && account.minutesBefore == nil { continue }
+            // 何も決めていないカレンダーはアプリ既定の動作 (開始/リマインダーの既定アクション) を引き継ぐ
+            var r = out[cal.id] ?? AlarmRuleDTO(
+                minutesBefore: state.defaultMinutesBefore,
+                startAction: state.defaultStartAction,
+                reminderAction: state.defaultReminderAction)
+            if let m = account.minutesBefore, !state.calendarMinutesChosen.contains(cal.id) { r.minutesBefore = m }
+            if !allows { r.enabled = false }
+            out[cal.id] = r
+        }
+        return out
     }
 
     func setCalendarRule(_ calendarId: String, _ rule: AlarmRuleDTO) {
@@ -294,8 +399,17 @@ extension Store.Persisted {
         weatherLocation = try c.decodeIfPresent(String.self, forKey: .weatherLocation) ?? ""
         weatherHeaderEnabled = try c.decodeIfPresent(Bool.self, forKey: .weatherHeaderEnabled) ?? true
         weatherOnAlarmScreen = try c.decodeIfPresent(Bool.self, forKey: .weatherOnAlarmScreen) ?? true
+        alarmSoundFile = try c.decodeIfPresent(String.self, forKey: .alarmSoundFile)
+        alarmSoundLabel = try c.decodeIfPresent(String.self, forKey: .alarmSoundLabel)
+        showWeekNumbers = try c.decodeIfPresent(Bool.self, forKey: .showWeekNumbers) ?? false
+        firstWeekday = WeekDisplay.normalize(try c.decodeIfPresent(Int.self, forKey: .firstWeekday) ?? WeekDisplay.defaultFirstWeekday)
         timerPresets = try c.decodeIfPresent([TimerPresetDTO].self, forKey: .timerPresets) ?? TimerPresets.defaults
         calendarRules = try c.decodeIfPresent([String: AlarmRuleDTO].self, forKey: .calendarRules) ?? [:]
+        // キーが無い旧データは、アプリ既定と違う分数の行だけを選んだ値とみなす。旧版はスイッチ等を触っただけでも
+        // その時の既定を書き込んでいたため、既定と同じ値は「選んでいない」と扱う (Android の v5→v6 移行と同じ規則)
+        calendarMinutesChosen = try c.decodeIfPresent(Set<String>.self, forKey: .calendarMinutesChosen)
+            ?? Set(calendarRules.filter { $0.value.minutesBefore != defaultMinutesBefore }.keys)
+        accountSettings = try c.decodeIfPresent([String: AccountSettingDTO].self, forKey: .accountSettings) ?? [:]
         overrides = try c.decodeIfPresent([String: EventOverrideDTO].self, forKey: .overrides) ?? [:]
         standaloneAlarms = try c.decodeIfPresent([StandaloneAlarmDTO].self, forKey: .standaloneAlarms) ?? []
         scheduled = try c.decodeIfPresent([String: ScheduledRecord].self, forKey: .scheduled) ?? [:]

@@ -11,7 +11,7 @@ struct NextAlarmEntry: TimelineEntry {
 
 struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> NextAlarmEntry {
-        NextAlarmEntry(date: .now, title: "アラーム", triggerAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
+        NextAlarmEntry(date: .now, title: String(localized: "アラーム"), triggerAtMillis: Int64(Date().timeIntervalSince1970 * 1000))
     }
     func getSnapshot(in context: Context, completion: @escaping (NextAlarmEntry) -> Void) {
         completion(load())
@@ -30,7 +30,7 @@ struct Provider: TimelineProvider {
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let num = obj["triggerAtMillis"] as? NSNumber,
               let title = obj["title"] as? String else {
-            return NextAlarmEntry(date: .now, title: "次のアラームなし", triggerAtMillis: 0)
+            return NextAlarmEntry(date: .now, title: String(localized: "次のアラームなし"), triggerAtMillis: 0)
         }
         return NextAlarmEntry(date: .now, title: title, triggerAtMillis: num.int64Value)
     }

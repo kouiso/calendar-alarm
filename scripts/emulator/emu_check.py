@@ -8,6 +8,7 @@
   hiding-windows <dumpsys_window.txt> 画面上で他アプリのオーバーレイを隠す窓 (HIDE_NON_SYSTEM_OVERLAY_WINDOWS) を出す
   alarm-players <dumpsys_audio.txt> <uid>  uid の USAGE_ALARM で state:started のプレイヤー数を出す
   notif <dumpsys_notification.txt> <pkg> <id>  pkg/id の通知レコード数を出す
+  anr-wait <ui.xml> <app_label>...   他アプリの「応答なし」ダイアログの「待機」中心座標を "x y" で出す (無い・自アプリのものなら exit 1)
   audit <db> [since_millis]          audit_log を時刻順に TSV で出す
 """
 import re
@@ -60,6 +61,55 @@ def slide_swipe(path, pkg, desc, dpi=None):
         start = int(40 * int(dpi) / 160) if dpi and str(dpi).isdigit() else int(w * 0.10)
         start = min(start, int(w * 0.4))
         print(f"{x1 + start} {y} {x1 + int(w * 0.97)} {y}")
+        return 0
+    return 1
+
+
+def anr_wait(path, *app_labels):
+    """遅い共有ランナーでは Pixel Launcher 等が応答なしになり、全画面のダイアログが停止UIを隠す。
+    それを「停止UIが無い」と読まないために、他アプリのものだけ「待機」で閉じる。
+    自アプリの応答なしは本物の不具合なので閉じず、そのまま判定に回す。
+    ダイアログが複数あっても、タイトルと「待機」は同じダイアログの中のものだけを組にする。
+    英語以外の表示でも動くよう、ダイアログの印は文言でなく resource-id (aerr_wait) で見る"""
+    # 自アプリの表示名が分からなければ、自アプリのものと見分けられないので何も閉じない
+    labels = [label for label in app_labels if label.strip()]
+    if not labels:
+        return 1
+    try:
+        root = ET.parse(path).getroot()
+    except (ET.ParseError, FileNotFoundError):
+        return 1
+    parent = {child: node for node in root.iter() for child in node}
+    found = []
+    for node in root.iter("node"):
+        if node.get("resource-id") != "android:id/aerr_wait":
+            continue
+        # この「待機」を含む最小の祖先のうち、タイトルを持つもの
+        # 別のダイアログの「待機」まで含む祖先に上がったら、そこで止める (他のダイアログのタイトルを拾わない)
+        anc, title = parent.get(node), None
+        while anc is not None and title is None:
+            subtree = list(anc.iter("node"))
+            if sum(1 for t in subtree if t.get("resource-id") == "android:id/aerr_wait") > 1:
+                break
+            for t in subtree:
+                if t.get("resource-id") == "android:id/alertTitle":
+                    title = t.get("text") or ""
+                    break
+            anc = parent.get(anc)
+        found.append((title, node.get("bounds", "")))
+    if not found:
+        return 1
+    for title, bounds in found:
+        # タイトルが読めない (無い・空)・自アプリの名前を含むダイアログは触らない (本物の不具合を隠さない)
+        if title is None or not title.strip() or any(label in title for label in labels):
+            continue
+        m = re.match(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds)
+        if not m:
+            continue
+        x1, y1, x2, y2 = map(int, m.groups())
+        if x2 <= x1 or y2 <= y1:
+            continue
+        print(f"{(x1 + x2) // 2} {(y1 + y2) // 2}")
         return 0
     return 1
 
@@ -166,6 +216,8 @@ def main(argv):
         return alarm_players(*args)
     if cmd == "notif":
         return notif(*args)
+    if cmd == "anr-wait":
+        return anr_wait(*args)
     if cmd == "audit":
         return audit(*args)
     print(f"unknown command: {cmd}", file=sys.stderr)
