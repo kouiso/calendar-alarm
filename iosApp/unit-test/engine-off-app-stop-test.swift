@@ -64,10 +64,11 @@ final class EngineOffAppStopTests: XCTestCase {
 
     /// AlarmKit に予約済みで、もう鳴り終わって一覧から消えた行を置く (アプリが見ていない間に鳴った後の状態)。
     /// 題名に id を入れ、どの監査行もこの行を指せるようにする
-    private func placeRungRow(minutesAgo: Int) -> String {
-        let id = "sa:offapp-test-\(UUID().uuidString.lowercased())"
+    private func placeRungRow(minutesAgo: Int, timer: Bool = false) -> String {
+        // タイマーは展開で作り直せないので、resync が記録から持ち越す。取り直しが実際に予約まで届くかを見るのに使う
+        let id = "\(timer ? "tm" : "sa"):offapp-test-\(UUID().uuidString.lowercased())"
         let inst = AlarmInstanceDTO(id: id, triggerAtMillis: Engine.nowMillis - Int64(minutesAgo) * 60_000,
-                                    title: id, kind: "STANDALONE")
+                                    title: id, kind: timer ? "TIMER" : "STANDALONE")
         engine.store.putScheduled(ScheduledRecord(instance: inst, state: .pending,
                                                   alarmKitId: ReservationUUID.from(id).uuidString))
         return id
@@ -113,6 +114,16 @@ final class EngineOffAppStopTests: XCTestCase {
         assertDismissedOnly(id)
     }
 
+    /// タイマーは resync が毎回記録から持ち越すので、止めた証拠が効かないと一番先に鳴り直す行になる
+    func testStoppedTimerIsNotRungAgain() async throws {
+        let id = placeRungRow(minutesAgo: 10, timer: true)
+        try await pressStop(id)
+
+        await engine.resync(reason: "test")
+
+        assertDismissedOnly(id)
+    }
+
     /// 書き残しが無ければ止めた扱いにしない。1時間を過ぎていれば従来どおり見逃し
     func testWithoutStopRecordAfterGraceIsMissed() async throws {
         let id = placeRungRow(minutesAgo: 120)
@@ -126,7 +137,7 @@ final class EngineOffAppStopTests: XCTestCase {
 
     /// 書き残しが無ければ止めた扱いにしない。1時間以内なら従来どおり予約喪失として拾い直す
     func testWithoutStopRecordWithinGraceIsRecovered() async throws {
-        let id = placeRungRow(minutesAgo: 10)
+        let id = placeRungRow(minutesAgo: 10, timer: true)
 
         await engine.resync(reason: "test")
 
