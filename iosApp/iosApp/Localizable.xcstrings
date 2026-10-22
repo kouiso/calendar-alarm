@@ -410,6 +410,26 @@
         }
       }
     },
+    "スヌーズ時間を選ぶ ▴": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose snooze time ▴"
+          }
+        }
+      }
+    },
+    "スヌーズ時間を選ぶ ▾": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose snooze time ▾"
+          }
+        }
+      }
+    },
     "スライドして停止 ›": {
       "localizations": {
         "en": {

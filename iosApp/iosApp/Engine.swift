@@ -285,11 +285,8 @@ final class Engine: ObservableObject {
         // 記録は外さず、プランの入力から外して取り直させる: 取り直しに失敗しても、展開で作り直せないタイマーと
         // スヌーズ子の記録が残り、次の resync でまた試せる (外すと、権限が戻っても拾う相手が居ない)
         var unreserved: Set<String> = []
-        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler, ak.authorizationGranted {
-            let liveIds = Set(ak.allAlarms.map { $0.id })
-            for (id, rec) in store.state.scheduled where rec.state == .pending {
-                if !liveIds.contains(AlarmKitScheduler.uuid(from: id)) { unreserved.insert(id) }
-            }
+        if let lost = await scheduler.unreservedPendingIds(store.state.scheduled) {
+            unreserved = lost
         } else if !scheduler.usesRealAlarms {
             // 通知の予約 (iOS 26 未満) も同じ。鳴る前なのに予約が無い行だけを見る
             for (id, rec) in store.state.scheduled
@@ -613,7 +610,7 @@ final class Engine: ObservableObject {
 
     /// AlarmKit は予約の前に同じ id の予約を取り消すので、予約が失敗すると前の予約も消えている。
     /// 前の音で予約し直し、それも駄目なら記録を外して一覧に予約ありと出さない
-    /// (展開で作り直せないタイマーとスヌーズ子は残して拾い直させる)
+    /// (展開で作り直せないタイマー・スヌーズ子・カレンダーを読めない時の予定は残して拾い直させる)
     /// @returns false = OS に予約が無いまま (resync で取り直す)
     private func restoreAfterFailedSoundChange(_ rec: ScheduledRecord) async -> Bool {
         let id = rec.instance.id
@@ -625,8 +622,8 @@ final class Engine: ObservableObject {
             store.audit("SOUND_RESTORE", "\(id): 前の音で予約し直し")
             return true
         } catch {
-            if !Self.isRegeneratedByExpand(rec.instance) || (rec.instance.kind == "EVENT" && !reader.authorizationGranted) {
-                // 展開で作り直せない行と、カレンダーを読めず作り直せない予定の行は、記録を消すと二度と鳴らない。
+            if !Self.isRegeneratedByExpand(rec.instance, calendarReadable: reader.authorizationGranted) {
+                // 展開で作り直せない行 (カレンダーを読めない間の予定を含む) は、記録を消すと二度と鳴らない。
                 // 予約 id を空にして、次の resync で拾い直させる
                 store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending,
                                                    alarmKitId: nil, soundFile: rec.soundFile))
@@ -638,9 +635,10 @@ final class Engine: ObservableObject {
         }
     }
 
-    /// 展開 (SharedDomain.expand) が毎回作り直す行か。タイマーとスヌーズ子は今ある記録からしか持ち越されない
-    static func isRegeneratedByExpand(_ inst: AlarmInstanceDTO) -> Bool {
-        inst.kind != "TIMER" && inst.snoozeSeq == 0
+    /// 展開 (SharedDomain.expand) が毎回作り直す行か。タイマーとスヌーズ子は今ある記録からしか持ち越されない。
+    /// カレンダーを読めない間は予定が展開に渡らず、予定の行も今ある記録からしか持ち越されない (resyncNow の preserved)
+    static func isRegeneratedByExpand(_ inst: AlarmInstanceDTO, calendarReadable: Bool) -> Bool {
+        inst.kind != "TIMER" && inst.snoozeSeq == 0 && (inst.kind != "EVENT" || calendarReadable)
     }
 
     /// OS へ予約し、その予約に渡した音を一緒に返す。音はここで1回だけ決め、記録に残す
