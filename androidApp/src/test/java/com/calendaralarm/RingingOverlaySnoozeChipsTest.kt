@@ -3,6 +3,8 @@ package com.calendaralarm
 import android.content.Intent
 import android.os.Looper
 import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.engine.AlarmService
 import com.calendaralarm.engine.RingingOverlay
@@ -43,9 +45,14 @@ class RingingOverlaySnoozeChipsTest {
         return root
     }
 
+    /** 閉じていて見えない View も含めて、文字が [text] と一致する TextView を木をたどって集める (findViewsWithText は見えない子を飛ばす)。 */
     private fun texts(root: View, text: String): List<View> {
         val found = ArrayList<View>()
-        root.findViewsWithText(found, text, View.FIND_VIEWS_WITH_TEXT)
+        fun walk(v: View) {
+            if (v is TextView && v.text.toString() == text) found.add(v)
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(root)
         return found
     }
 
