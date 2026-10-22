@@ -1,0 +1,16 @@
+orig volumes {'voice': 1, 'system': 0, 'ring': 0, 'music': 0, 'alarm': 0, 'notification': 0} zen 2 | Night mode: no
+quiet volumes {'voice': 1, 'system': 0, 'ring': 0, 'music': 0, 'alarm': 0, 'notification': 0} zen 2 | Night mode: no
+Performing Streamed Install
+Success
+schedule: Broadcasting: Intent { act=com.calendaralarm.emu.SCHEDULE flg=0x400000 cmp=com.calendaralarm.pr48/com.calendaralarm.emu.EmuHarnessReceiver (has extras) } Broadcast completed: result=1, data="tm:1792707070320"
+top = com.calendaralarm.pr48/com.calendaralarm.engine.RingingActivity ringing = True night = Night mode: no
+screenshot 1080x2340 bg at top centre=(10, 12, 17)
+AFTER top 93px x 1080px: black_glyph_px=0 light_glyph_px=5164
+  dumpsys window: mRemoteInsetsControlTarget=RemoteInsetsControlTarget{27e266d displayId=0 requestedVisibleTypes=503 animatingTypes=0}
+  dumpsys window: mLastAppearance=LIGHT_NAVIGATION_BARS FORCE_LIGHT_NAVIGATION_BARS
+  dumpsys window: apr=LIGHT_STATUS_BARS LIGHT_NAVIGATION_BARS FORCE_LIGHT_NAVIGATION_BARS
+  dumpsys window: apr=LIGHT_STATUS_BARS LIGHT_NAVIGATION_BARS
+  dumpsys window: snapshot=TaskSnapshot{ mId=1792684285181 mCaptureTime=3245449333155213 mTopActivityComponent=com.android.chrome/org.chromium.chrome.browser.ChromeTabbedActivity mSnapshot=android.hardware.HardwareBuff
+stopped, ringing = False
+BEFORE (/Users/kouiso/.claude/jobs/9b132361/tmp/shots/c48/before-a1.png) top 35px: black_glyph_px=483 light_glyph_px=200
+restored volumes {'voice': 1, 'system': 0, 'ring': 0, 'music': 0, 'alarm': 0, 'notification': 0} zen 2 | Night mode: no
