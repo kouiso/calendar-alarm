@@ -350,6 +350,40 @@ final class EngineSoundChangeTests: XCTestCase {
         XCTAssertTrue(engine.store.state.audit.contains { $0.type == "SNOOZE_SKIP" })
     }
 
+    /// カレンダーを読めない間は、予定の行も展開で作り直せない。予約できなかった時に記録を消すと、許可が戻るまで鳴らない
+    func testLostEventIsKeptWhileCalendarUnreadable() async throws {
+        try XCTSkipIf(engine.reader.authorizationGranted, "カレンダーの許可がある端末では再現できない")
+        let (_, alarmInstanceId) = try await bookAlarm(hoursAhead: 3)
+        var event = try XCTUnwrap(engine.store.state.scheduled[alarmInstanceId]?.instance)
+        event.id = "ev:test-\(UUID().uuidString.lowercased()):b0"
+        event.kind = "EVENT"
+        event.standaloneAlarmId = nil
+        engine.store.putScheduled(ScheduledRecord(instance: event, state: .pending, alarmKitId: "fake-\(event.id)"))
+        fake.booked[event.id] = (event, nil)
+        engine.store.setAlarmSound(file: sound, label: "test")
+        fake.failures = 6
+
+        await engine.rescheduleForSoundChange()
+
+        let rec = try XCTUnwrap(engine.store.state.scheduled[event.id], "予定の記録が消えた")
+        XCTAssertEqual(rec.state, .pending)
+        XCTAssertNil(rec.alarmKitId, "OS に予約が無いのに予約ありになっている")
+    }
+
+    /// 展開で作り直せるかの判定。予定はカレンダーを読める時だけ作り直せる
+    func testRegeneratedByExpandDependsOnCalendarForEvents() {
+        var inst = AlarmInstanceDTO(id: "ev:x:b0", triggerAtMillis: 0, title: "t", kind: "EVENT")
+        XCTAssertTrue(Engine.isRegeneratedByExpand(inst, calendarReadable: true))
+        XCTAssertFalse(Engine.isRegeneratedByExpand(inst, calendarReadable: false))
+        inst.kind = "STANDALONE"
+        XCTAssertTrue(Engine.isRegeneratedByExpand(inst, calendarReadable: false))
+        inst.snoozeSeq = 1
+        XCTAssertFalse(Engine.isRegeneratedByExpand(inst, calendarReadable: true))
+        inst.snoozeSeq = 0
+        inst.kind = "TIMER"
+        XCTAssertFalse(Engine.isRegeneratedByExpand(inst, calendarReadable: true))
+    }
+
     private func soundFile(_ name: String) -> String {
         AlarmSoundLibrary.soundsDirectory.appendingPathComponent(name).path
     }
