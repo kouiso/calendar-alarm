@@ -110,9 +110,11 @@ struct RingingView: View {
                     }
                     .padding(.horizontal, 24)
                     // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開。
-                    // 設定で候補を全部外した時は、押しても何も出ない開閉ボタンを出さない
+                    // 設定で候補を全部外した時は、押しても何も出ない開閉ボタンを出さない。
+                    // 窓が低すぎる時も出さない: 下に固定した操作群が背伸びして、停止の丸が画面の外へ出るため
                     let presets = Array(store.state.snoozePresets.prefix(SnoozePresets.maxOnRingingScreen))
-                    if !presets.isEmpty {
+                    let canChoose = !presets.isEmpty && RingingLayout.showsPresetPicker(windowHeight: geo.size.height)
+                    if canChoose {
                         Button {
                             withAnimation(.easeInOut(duration: 0.15)) { showSnoozePresets.toggle() }
                         } label: {
@@ -130,7 +132,7 @@ struct RingingView: View {
                         }
                         .padding(.top, 4)
                     }
-                    if showSnoozePresets && !presets.isEmpty {
+                    if showSnoozePresets && canChoose {
                         HStack(spacing: 8) {
                             ForEach(presets, id: \.self) { m in
                                 Button { engine.snooze(inst, minutes: m) } label: {
@@ -179,6 +181,18 @@ struct RingingView: View {
             if remain > 0 { return "\(Int((remain + 30) / 60))分後に開始" }
         }
         return "まもなく開始"
+    }
+}
+
+/// 鳴動画面の寸法に関する決まり。下に固定した操作群が窓より高くなって、停止の丸が見えなくなるのを防ぐ
+enum RingingLayout {
+    /// 「スヌーズ時間を選ぶ」を出す窓の最低の高さ (pt)。
+    /// 固定した操作群は、開いたチップ込みで約 290pt。これを足しても上のスクロール領域に 230pt 以上残る高さにしてある。
+    /// これより低い窓では、既定のスヌーズと停止だけを残す
+    static let minHeightForPresetPicker: CGFloat = 520
+
+    static func showsPresetPicker(windowHeight: CGFloat) -> Bool {
+        windowHeight >= minHeightForPresetPicker
     }
 }
 

@@ -199,7 +199,9 @@ final class AlarmKitScheduler: AlarmScheduler {
     func unreservedPendingIds(_ scheduled: [String: ScheduledRecord]) async -> Set<String>? {
         // 権限が無い間は一覧を読めない。読めないのを「全部消えた」と取り違えて取り直しを始めないよう、何も拾わない
         guard authorizationGranted else { return [] }
-        let live = Set(allAlarms.map { $0.id })
+        // 一覧の読み取りが失敗した時も同じ。空の一覧は「予約が全部消えた」に見え、OS に残る予約を記録なしで鳴らしてしまう
+        guard let list = try? manager.alarms else { return [] }
+        let live = Set(list.map { $0.id })
         return ReservationGap.unreserved(scheduled) { live.contains(Self.uuid(from: $0)) }
     }
 
