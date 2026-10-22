@@ -187,12 +187,14 @@ final class Engine: ObservableObject {
             .filter { terminalIds.contains($0.instance.id) }
             .compactMap { $0.instance.standaloneAlarmId })
 
+        // アカウント単位の設定 (#74) を当てはめたルール。展開とスヌーズ親の判定で同じものを使う
+        let effectiveRules = store.effectiveCalendarRules()
         let expandReq = ExpandRequest(
             events: events,
             standalone: s.standaloneAlarms.filter {
                 $0.effectiveRepeatMode != "ONCE" || !consumedAlarmIds.contains($0.id)
             },
-            calendarRules: s.calendarRules,
+            calendarRules: effectiveRules,
             overrides: s.overrides,
             disabledCalendarIds: [],
             nowMillis: now,
@@ -224,7 +226,7 @@ final class Engine: ObservableObject {
         // 読み取り失敗時は空のまま (EVENT 温存経路で保護される)。
         let liveEventKeys: Set<String> = calendarsOk ? Set(events.filter {
             s.overrides[$0.instanceKey]?.action != EventAction.mute.rawValue &&
-            (s.calendarRules[$0.calendarId]?.enabled ?? true)
+            (effectiveRules[$0.calendarId]?.enabled ?? true)
         }.map { $0.instanceKey }) : []
 
         // 展開で再生成されない PENDING 系を理想状態へ持ち越す:
@@ -284,9 +286,28 @@ final class Engine: ObservableObject {
             }
         }
 
+        // 通知の予約 (iOS 26 未満) も OS 側で消える。音の入れ直しに失敗して予約を失った行は、
+        // 記録だけ残るとプランが「予約済み」と見て二度と取り直さない。鳴る前なのに予約が無い行は
+        // プランの入力から外して取り直させる (記録は残すので、取り直しも失敗した時は次の resync でまた試す)
+        var unreserved: Set<String> = []
+        if !scheduler.usesRealAlarms {
+            for (id, rec) in store.state.scheduled
+            where rec.state == .pending && rec.instance.delivery != EventAction.notify.rawValue
+                && rec.instance.triggerAtMillis > now {
+                if await !scheduler.hasReservation(instanceId: id) { unreserved.insert(id) }
+            }
+            // 予約が無く、もう鳴らす理由も無い行 (予定を消した等) は、取り消す相手が居ないのでここで外す
+            let desiredNow = Set(desired.map { $0.id })
+            for id in unreserved where !desiredNow.contains(id) {
+                store.removeScheduled(id)
+                unreserved.remove(id)
+            }
+            if !unreserved.isEmpty { store.audit("RECOVER", "通知の予約喪失 \(unreserved.count)件→再予約") }
+        }
+
         let plan = SharedDomain.plan(PlanRequest(
             desired: desired,
-            scheduled: store.pendingScheduled(),
+            scheduled: store.pendingScheduled().filter { !unreserved.contains($0.key) },
             nowMillis: now
         )) ?? PlanResult(toSchedule: desired, toCancel: [], toFireNow: [])
 
@@ -481,20 +502,29 @@ final class Engine: ObservableObject {
         // 誤判定されて単発親が消費OFFになり、登録済みなら温存条件を保てる。
         store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: nil))
         return Task {
-            // 予約失敗 (権限剥奪等) でも記録は .pending で残す — 次回 resync の
-            // 温存経路で再予約され権限が戻れば自律回復する。ただし失敗は監査に残す
-            // (try? で握り潰すとゾンビ予約がサイレントのまま二度と鳴らない)。
-            var rid: String? = nil
-            var sound: String? = nil
-            do {
-                let r = try await reserve(next)
-                rid = r.id
-                sound = r.sound
-                store.audit("SNOOZE", "\(inst.id) +\(minutes)m → \(next.id)")
-            } catch {
-                store.audit("SCHEDULE_ERR", "snooze \(next.id): \(error.localizedDescription)")
+            // 取り消し (cancelInstance) と同じ列で予約する。列の外だと、予約の await の間に取り消された子を
+            // このあとの putScheduled が書き戻し、取り消したタイマーが鳴る
+            await self.runExclusively {
+                // 列で先に取り消されていたら、子はもう無い。予約も書き戻しもしない
+                guard self.store.state.scheduled[next.id]?.state == .pending else {
+                    self.store.audit("SNOOZE_SKIP", "\(next.id): 予約の前に取り消された")
+                    return
+                }
+                // 予約失敗 (権限剥奪等) でも記録は .pending で残す — 次回 resync の
+                // 温存経路で再予約され権限が戻れば自律回復する。ただし失敗は監査に残す
+                // (try? で握り潰すとゾンビ予約がサイレントのまま二度と鳴らない)。
+                var rid: String? = nil
+                var sound: String? = nil
+                do {
+                    let r = try await self.reserve(next)
+                    rid = r.id
+                    sound = r.sound
+                    self.store.audit("SNOOZE", "\(inst.id) +\(minutes)m → \(next.id)")
+                } catch {
+                    self.store.audit("SCHEDULE_ERR", "snooze \(next.id): \(error.localizedDescription)")
+                }
+                self.store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: rid, soundFile: sound))
             }
-            store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: rid, soundFile: sound))
         }
     }
 
@@ -586,8 +616,9 @@ final class Engine: ObservableObject {
             store.audit("SOUND_RESTORE", "\(id): 前の音で予約し直し")
             return true
         } catch {
-            if !Self.isRegeneratedByExpand(rec.instance) {
-                // 展開で作り直せない行は、記録を消すと二度と鳴らない。予約 id を空にして、次の resync で拾い直させる
+            if !Self.isRegeneratedByExpand(rec.instance) || !reader.authorizationGranted {
+                // 展開で作り直せない行と、カレンダーを読めず作り直せない予定の行は、記録を消すと二度と鳴らない。
+                // 予約 id を空にして、次の resync で拾い直させる
                 store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending,
                                                    alarmKitId: nil, soundFile: rec.soundFile))
             } else {

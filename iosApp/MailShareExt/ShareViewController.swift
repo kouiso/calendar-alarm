@@ -12,7 +12,7 @@ final class ShareViewController: UIViewController {
 
     private lazy var label: UILabel = {
         let l = UILabel()
-        l.text = "予定に変換中…"
+        l.text = String(localized: "予定に変換中…")
         l.textAlignment = .center
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
@@ -49,16 +49,16 @@ final class ShareViewController: UIViewController {
                 }
             }
         } else {
-            fail("テキストを受け取れませんでした")
+            fail(String(localized: "テキストを受け取れませんでした"))
         }
     }
 
     /// 本文を App Group へ書いて本体アプリを起動する。
     private func handOff(_ text: String?) {
-        guard let text = text, !text.isEmpty else { return fail("テキストを受け取れませんでした") }
+        guard let text = text, !text.isEmpty else { return fail(String(localized: "テキストを受け取れませんでした")) }
         guard let dir = FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: groupId) else {
-            return fail("アプリ間の受け渡し領域がありません")
+            return fail(String(localized: "アプリ間の受け渡し領域がありません"))
         }
         do {
             try text.write(
@@ -66,7 +66,7 @@ final class ShareViewController: UIViewController {
                 atomically: true, encoding: .utf8,
             )
         } catch {
-            return fail("共有データを保存できませんでした")
+            return fail(String(localized: "共有データを保存できませんでした"))
         }
         openHostApp()
     }

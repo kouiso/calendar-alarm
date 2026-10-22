@@ -96,6 +96,8 @@ struct AgendaView: View {
         let horizon = now + 14 * 86_400_000
         return store.state.lastEvents
             .filter { $0.endMillis >= now && $0.startMillis < horizon }
+            // このアプリで使わないアカウントの予定は出さない (#74)
+            .filter { !store.isHiddenCalendar($0.calendarId) }
             .sorted { $0.startMillis < $1.startMillis }
             .map { ev in
                 let ov = store.state.overrides[ev.instanceKey]
@@ -107,7 +109,7 @@ struct AgendaView: View {
                     calendarColor: cal?.color ?? 0xFF888888,
                     // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
                     // 予約の展開と同じ判定を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
-                    muted: !rule.enabled
+                    muted: !rule.enabled || !store.accountAllowsRing(ev.calendarId)
                         || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter),
                     effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore
                 )

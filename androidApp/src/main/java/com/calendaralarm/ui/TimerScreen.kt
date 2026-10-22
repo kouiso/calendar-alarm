@@ -36,6 +36,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.calendaralarm.R
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -67,13 +69,13 @@ fun TimerScreen(repository: AlarmRepository, settings: SettingsRepository) {
     var tab by remember { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize()) {
         Text(
-            "タイマー",
+            stringResource(R.string.timer_title),
             fontSize = 30.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = 20.dp, top = 58.dp),
         )
         NightSegment(
-            labels = listOf("タイマー", "ストップウォッチ"),
+            labels = listOf(stringResource(R.string.timer_title), stringResource(R.string.timer_stopwatch)),
             selected = tab,
             onSelect = { tab = it },
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp).fillMaxWidth(),
@@ -164,8 +166,10 @@ private fun TimerPane(repository: AlarmRepository, settings: SettingsRepository)
                         letterSpacing = (-2).sp,
                     )
                     Text(
-                        SimpleDateFormat("H:mm", Locale.getDefault())
-                            .format(Date(timer.triggerAtMillis)) + " に鳴ります",
+                        stringResource(
+                            R.string.timer_rings_at,
+                            SimpleDateFormat("H:mm", Locale.getDefault()).format(Date(timer.triggerAtMillis)),
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -176,7 +180,7 @@ private fun TimerPane(repository: AlarmRepository, settings: SettingsRepository)
                 onClick = { scope.launch { repository.onDismissed(timer.id) } },
                 modifier = Modifier.height(52.dp),
             ) {
-                Text("キャンセル")
+                Text(stringResource(R.string.common_cancel))
             }
         } else {
             ClockRing {
@@ -236,12 +240,12 @@ private fun TimerPane(repository: AlarmRepository, settings: SettingsRepository)
                                 settings.setTimerPresets(cur - target)
                             }
                             deletePreset = null
-                        }) { Text("削除") }
+                        }) { Text(stringResource(R.string.common_delete)) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { deletePreset = null }) { Text("戻る") }
+                        TextButton(onClick = { deletePreset = null }) { Text(stringResource(R.string.common_back)) }
                     },
-                    text = { Text("「${target.label}」を削除しますか？") },
+                    text = { Text(stringResource(R.string.timer_preset_delete_confirm, target.label)) },
                 )
             }
             Spacer(Modifier.height(28.dp))
@@ -260,7 +264,7 @@ private fun TimerPane(repository: AlarmRepository, settings: SettingsRepository)
                 },
                 modifier = Modifier.fillMaxWidth().height(64.dp),
                 shape = RoundedCornerShape(32.dp),
-            ) { Text("開始", fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
+            ) { Text(stringResource(R.string.common_start), fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
         }
     }
 }
@@ -309,24 +313,24 @@ private fun StopwatchPane() {
                 },
                 modifier = Modifier.height(52.dp),
             ) {
-                Text(if (running) "停止" else "開始", fontSize = 16.sp)
+                Text(stringResource(if (running) R.string.common_stop else R.string.common_start), fontSize = 16.sp)
             }
             OutlinedButton(
                 onClick = { laps = laps + elapsed },
                 enabled = running,
                 modifier = Modifier.height(52.dp),
-            ) { Text("ラップ") }
+            ) { Text(stringResource(R.string.timer_lap)) }
             OutlinedButton(
                 onClick = {
                     running = false; accum = 0L; laps = emptyList()
                 },
                 modifier = Modifier.height(52.dp),
-            ) { Text("リセット") }
+            ) { Text(stringResource(R.string.timer_reset)) }
         }
         Spacer(Modifier.height(16.dp))
         laps.asReversed().take(5).forEachIndexed { i, lap ->
             Text(
-                "ラップ ${laps.size - i}: ${formatStopwatch(lap)}",
+                stringResource(R.string.timer_lap_row, laps.size - i, formatStopwatch(lap)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -389,16 +393,16 @@ private fun AddPresetDialog(
                     if (m <= 0 || label.isBlank()) return@TextButton
                     onSave(label.trim(), m)
                 },
-            ) { Text("保存") }
+            ) { Text(stringResource(R.string.common_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("戻る") } },
-        title = { Text("プリセットを追加") },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_back)) } },
+        title = { Text(stringResource(R.string.timer_preset_add)) },
         text = {
             Column {
                 OutlinedTextField(
                     value = label,
                     onValueChange = { label = it.take(12) },
-                    label = { Text("名前") },
+                    label = { Text(stringResource(R.string.timer_preset_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -406,7 +410,7 @@ private fun AddPresetDialog(
                 OutlinedTextField(
                     value = minutes,
                     onValueChange = { minutes = it.filter { c -> c.isDigit() }.take(3) },
-                    label = { Text("分数") },
+                    label = { Text(stringResource(R.string.timer_preset_minutes)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -454,7 +458,7 @@ private fun MinuteWheel(minutes: Int, onMinutes: (Int) -> Unit) {
                 )
                 if (sel) {
                     Text(
-                        "分",
+                        stringResource(R.string.unit_minutes_short),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,

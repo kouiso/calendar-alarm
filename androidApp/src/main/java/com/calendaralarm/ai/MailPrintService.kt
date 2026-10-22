@@ -1,6 +1,7 @@
 package com.calendaralarm.ai
 
 import android.app.NotificationChannel
+import com.calendaralarm.R
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -53,17 +54,17 @@ class MailPrintService : PrintService() {
         val info = printJob.info ?: return
         printJob.start()
         scope.launch {
-            val tag = info.label ?: "印刷ジョブ"
+            val tag = info.label ?: getString(R.string.mail_print_job)
             try {
                 val text = extractText(printJob)
                 val api = AiConfig.api()
                 if (api == null) {
-                    notifyExtract("このビルドでは AI の読み取りを使えません", null)
+                    notifyExtract(getString(R.string.mail_ai_unavailable), null)
                     printJob.complete()
                     return@launch
                 }
                 if (text.isNullOrBlank()) {
-                    notifyExtract("$tag: テキストを読み取れませんでした", null)
+                    notifyExtract(getString(R.string.mail_no_text, tag), null)
                     printJob.complete()
                     return@launch
                 }
@@ -73,13 +74,13 @@ class MailPrintService : PrintService() {
                 val ev = MailEventExtractor(api)
                     .extract(text, nowIso, TimeZone.currentSystemDefault())
                 if (ev == null) {
-                    notifyExtract("$tag: 予定が見つかりませんでした", null)
+                    notifyExtract(getString(R.string.mail_no_event, tag), null)
                 } else {
-                    notifyExtract("${ev.title} を予定に追加", json.encodeToString(ev))
+                    notifyExtract(getString(R.string.mail_add_event, ev.title), json.encodeToString(ev))
                 }
                 printJob.complete()
             } catch (e: Exception) {
-                notifyExtract("$tag: ${e.message ?: "失敗"}", null)
+                notifyExtract(getString(R.string.mail_failed, tag, e.message ?: getString(R.string.mail_failed_unknown)), null)
                 printJob.fail("extraction failed")
             }
         }
@@ -103,7 +104,7 @@ class MailPrintService : PrintService() {
         if (eventJson != null) stashPending(this, eventJson)
         val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         mgr.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "メール→予定", NotificationManager.IMPORTANCE_DEFAULT),
+            NotificationChannel(CHANNEL_ID, getString(R.string.mail_channel), NotificationManager.IMPORTANCE_DEFAULT),
         )
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -117,7 +118,7 @@ class MailPrintService : PrintService() {
             (System.currentTimeMillis() % Int.MAX_VALUE).toInt(),
             NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_email)
-                .setContentTitle("メール→予定")
+                .setContentTitle(getString(R.string.mail_channel))
                 .setContentText(text)
                 .setContentIntent(pi)
                 .setAutoCancel(true)
