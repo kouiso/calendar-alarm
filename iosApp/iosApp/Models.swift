@@ -438,10 +438,12 @@ struct DisplayEvent: Identifiable, Hashable {
     /// 予定ごとの指定を外すと何も鳴らない (カレンダーの既定が鳴らさない・絞り込みで外れる等)。
     /// 行のスイッチを ON にする時、これが true の時だけ「アラーム」を書く (通知だけの予定を格上げしないため)
     var defaultSilenced: Bool = false
+    /// 行のスイッチを ON にして戻る動作が、すべてミュートで外れて鳴らない (通知だけの既定は数えない)
+    var restoreSilenced: Bool = false
 
     /// 行のスイッチを押せなくする (Android の `AgendaItem.switchLocked` と同じ規則)。
-    /// すべてミュート中でも通知で鳴る行は切れるように残す
-    var switchLocked: Bool { calendarOff || accountOff || allDayOff || (muteAll && muted) }
+    /// ON で戻る先が鳴らない時だけ押せなくする。ON で通知に戻る行は、今 OFF でも入れられるように残す
+    var switchLocked: Bool { calendarOff || accountOff || allDayOff || (muteAll && restoreSilenced) }
 }
 
 struct AuditEntry: Codable, Identifiable, Hashable {
@@ -598,12 +600,13 @@ func resolvedActionsMuted(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: Ev
 /// 予定ごとの指定を外した時に、何も鳴らないか (shared `AlarmExpander.silencedWithoutOverride` と同じ)。
 /// 行のスイッチを ON にする時の分かれ目: 鳴る側に戻るなら指定を外してカレンダーの既定の動作 (通知だけ等) を使い、
 /// 鳴らない時だけ「アラーム」を書く。常に ALARM を書くと、通知だけの予定が全画面のアラームに格上げされる。
+/// muteAll が true なら、すべてミュートで外れるアラームも鳴らない側に数える (スイッチを押せるかの判定用)。
 /// 何分前などの個別指定は ON でも残すので、リマインダー側の時刻の有無には指定の分まで数える
 func silencedWithoutOverride(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ ov: EventOverrideDTO?, _ codes: TitleCodeSettings,
-                             invite: InviteFilter, types: EventTypeFilter, importReminders: Bool) -> Bool {
+                             invite: InviteFilter, types: EventTypeFilter, importReminders: Bool, muteAll: Bool = false) -> Bool {
     if !passesEventFilters(ev, nil, invite, types) { return true }
     let rest = EventOverrideDTO(action: nil, minutesBefore: ov?.minutesBefore, extraOffsets: ov?.extraOffsets)
-    return resolvedActionsMuted(ev, rule, rest, codes, importReminders: importReminders, muteAll: false)
+    return resolvedActionsMuted(ev, rule, rest, codes, importReminders: importReminders, muteAll: muteAll)
 }
 
 /// 行のスイッチを押した後の、その予定の個別指定。OFF は「鳴らさない」を書く。

@@ -151,7 +151,12 @@ struct AgendaView: View {
                     notifies: !dropped && notificationDeliveryAhead(ev, rule, ov, actions: actions, importReminders: store.state.importEventReminders, muteAll: store.state.muteAll, nowMillis: now),
                     defaultSilenced: silencedWithoutOverride(ev, rule, ov, store.state.titleCodes,
                                                              invite: store.state.inviteFilter, types: store.state.eventTypeFilter,
-                                                             importReminders: store.state.importEventReminders)
+                                                             importReminders: store.state.importEventReminders),
+                    // ON で戻る先がすべてミュートで外れるなら押せなくする (今の muted ではなく戻る先で決める)
+                    restoreSilenced: silencedWithoutOverride(ev, rule, ov, store.state.titleCodes,
+                                                             invite: store.state.inviteFilter, types: store.state.eventTypeFilter,
+                                                             importReminders: store.state.importEventReminders,
+                                                             muteAll: store.state.muteAll)
                 )
             }
     }

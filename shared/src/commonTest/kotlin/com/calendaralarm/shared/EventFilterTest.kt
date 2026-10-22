@@ -30,7 +30,19 @@ class SilencedWithoutOverrideTest {
         codes: com.calendaralarm.shared.model.TitleCodeSettings = com.calendaralarm.shared.model.TitleCodeSettings(),
         types: EventTypeFilter = EventTypeFilter(),
         hasReminderTriggers: Boolean = false,
-    ) = AlarmExpander.silencedWithoutOverride(event.copy(title = title), rule, codes, InviteFilter(), types, hasReminderTriggers)
+        muteAll: Boolean = false,
+    ) = AlarmExpander.silencedWithoutOverride(event.copy(title = title), rule, codes, InviteFilter(), types, hasReminderTriggers, muteAll)
+
+    @Test
+    fun `すべてミュート中は、指定を外して戻る先がアラームなら鳴らない側、通知なら鳴る側`() {
+        assertFalse(silenced(AlarmRule(startAction = EventAction.NOTIFY, reminderAction = EventAction.NOTIFY), muteAll = true))
+        assertTrue(silenced(AlarmRule(startAction = EventAction.ALARM, reminderAction = EventAction.ALARM), muteAll = true, hasReminderTriggers = true))
+        assertTrue(silenced(AlarmRule(startAction = EventAction.ALARM), muteAll = true))
+        // すべてミュートでなければアラームの既定は鳴る側
+        assertFalse(silenced(AlarmRule(startAction = EventAction.ALARM), muteAll = false))
+        // 開始がアラームでも、リマインダーが通知で時刻があれば、通知が残る
+        assertFalse(silenced(AlarmRule(startAction = EventAction.ALARM, reminderAction = EventAction.NOTIFY), muteAll = true, hasReminderTriggers = true))
+    }
 
     @Test
     fun `通知だけのカレンダーは指定を外せば鳴る側なので ALARM を書かない`() {

@@ -188,15 +188,21 @@ class AlarmRepository(
          * 行のスイッチを ON にする時、これが true の時だけ「アラーム」の指定を書く (通知だけの予定を格上げしないため)
          */
         val defaultSilenced: Boolean = false,
+        /**
+         * 行のスイッチを ON にして戻る動作が、すべてミュートで外れて鳴らない。
+         * defaultSilenced との違いは、すべてミュートで外れるアラームの既定も数える点 (通知だけの既定は数えない)
+         */
+        val restoreSilenced: Boolean = false,
     ) {
         /** 予定ごとの指定では鳴るようにできない (スイッチを押せなくする) */
         val lockedByCalendar: Boolean get() = calendarOff || accountOff || allDayOff
 
         /**
-         * 行のスイッチを押せなくする。すべてミュート中は、スイッチで入れるアラームの指定も展開で外れて鳴らないので、
-         * 鳴らない側の行は入れられない。通知で鳴る側の行は切れるように残す
+         * 行のスイッチを押せなくする。すべてミュート中は、ON で戻る動作 (アラームの指定、または外した後の既定) が
+         * 展開で外れて鳴らないなら入れられない。ON で通知に戻る行は、今 OFF でも入れられるように残す
+         * (今の muted ではなく ON で戻る先で決める。通知の行を OFF にした後で押せなくなるのを防ぐ)
          */
-        val switchLocked: Boolean get() = lockedByCalendar || (muteAll && muted)
+        val switchLocked: Boolean get() = lockedByCalendar || (muteAll && restoreSilenced)
 
         /**
          * 何も鳴らない状態 (UI のグレー化と行のスイッチ)。展開 (AlarmExpander.expandEvents) と同じく、
@@ -288,6 +294,12 @@ class AlarmRepository(
                     // 何分前などの個別指定は ON でも残すので、リマインダー側の時刻は指定の分まで数える
                     hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
                         (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
+                ),
+                restoreSilenced = AlarmExpander.silencedWithoutOverride(
+                    ev, rule, appSettings.titleCodes, appSettings.inviteFilter, appSettings.eventTypeFilter,
+                    hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
+                        (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
+                    muteAll = appSettings.muteAll,
                 ),
             )
         }
