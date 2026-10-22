@@ -1,0 +1,6 @@
+shrink-0-open-h700 window=700x700 :: blocks=413..493(80),538..578(40),585..666(81) thumb=595..657
+shrink-h519 window=700x519 :: blocks=317..397(80),404..485(81) thumb=414..476
+shrink-h480 window=700x480 :: blocks=278..358(80),365..446(81) thumb=375..437
+shrink-h400 window=700x400 :: blocks=198..278(80),285..366(81) thumb=295..357
+shrink-h320 window=700x320 :: blocks=118..198(80),205..286(81) thumb=215..277
+shrink-back-h700 window=700x700 :: blocks=413..493(80),538..578(40),585..666(81) thumb=595..657
