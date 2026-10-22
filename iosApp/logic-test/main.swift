@@ -119,6 +119,23 @@ do {
                     (id: "d2", triggerAtMillis: now - 2 * hour, title: "日課", detail: det("日課", now - 2 * hour))])
     check(two.count == 2 && two.contains { $0.instanceId == "d1" } && two.contains { $0.instanceId == "d2" },
           "同じタイトルの行が2つなら近い方と対応づけ、行は2件とも残る")
+    // 日課のように同じタイトルで24時間ずれた別の日の見逃しを、タイムゾーンの変更と取り違えて消さない。
+    // 昨日の行 (26時間前) と、行の無い今日の見逃し (2時間前に鳴るはずで1時間前に記録、タイムゾーン変更なし)
+    let daily = seed([legacyMissed(35, at: now - hour, detail: det("朝", now - 2 * hour))],
+                     [(id: "yesterday", triggerAtMillis: now - 26 * hour, title: "朝", detail: det("朝", now - 26 * hour))])
+    check(daily.count == 2 && RingHistory.recentMissedCount(daily, nowMillis: now) == 1,
+          "24時間ずれた同じタイトルの別の日の見逃しは、昨日の行と取り違えず2件で残る")
+    check(daily.first { $0.instanceId == nil }.map { abs(($0.triggerAtMillis ?? 0) - (now - 2 * hour)) < 60_000 } == true,
+          "残した今日の見逃しは detail の鳴動時刻で直近に数える")
+    // 実在するタイムゾーンの差で説明できないずれ (東京から+6時間: 記録した側が UTC+15) は同じ見逃しとみなさない
+    let impossible = seed([legacyMissed(36, at: now - hour, detail: det("昼", now - 2 * hour))],
+                          [(id: "imp", triggerAtMillis: now - 8 * hour, title: "昼", detail: det("昼", now - 8 * hour))])
+    check(impossible.count == 2, "実在するタイムゾーンの差を超えるずれは別の見逃しとして残す")
+    // 実在する最大の差 (記録した側が UTC+14 のキリバス、東京から+5時間) は同じ見逃しとして対応づける
+    let kiritimati = TimeZone(identifier: "Pacific/Kiritimati")!
+    let farZone = seed([legacyMissed(37, at: now - hour, detail: det("島", now - 2 * hour, zone: kiritimati))],
+                       [(id: "kir", triggerAtMillis: now - 2 * hour, title: "島", detail: det("島", now - 2 * hour))])
+    check(farZone.count == 1, "UTC+14 で記録した見逃しは、タイムゾーンが変わっただけの同じ見逃しとして1件にする")
     // 前の版の記録にはタイトルの欄が無い。画面はタイトルだけを出すので、分かるものは引き継ぎで埋める
     func legacy(_ id: Int64, _ type: String, _ detail: String) -> AuditEntry {
         AuditEntry(id: id, atMillis: now - hour, type: type, detail: detail)

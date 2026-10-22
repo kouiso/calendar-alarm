@@ -49,9 +49,20 @@ enum RingHistory {
         Array(history.reversed().prefix(limit))
     }
 
-    /// 端末のタイムゾーンが変わると、前の版の detail の時刻 (記録した時のタイムゾーンの書き方) は
-    /// 今のタイムゾーンで読むと最大でこの分ずれる (UTC-12 から UTC+14 までの差)
-    static let zoneShiftMillis: Int64 = 26 * 60 * 60 * 1000
+    /// 前の版の detail の時刻は、記録した時のタイムゾーンの書き方。今のタイムゾーンで読んだ時刻 (parsed) と
+    /// 予約の行の鳴動時刻 (rowTrigger) の差は、「記録した時のタイムゾーンの UTC からの差 - 今の差」に等しい。
+    /// その「記録した時のタイムゾーン」が実在する差 (UTC-12 から UTC+14、15分刻み) に収まる時だけ、
+    /// タイムゾーンが変わっただけの同じ見逃しとみなす。
+    /// 日課のように同じタイトルで24時間ずれた別の日の見逃しは、実在するタイムゾーンでは説明できないので同じとみなさない
+    static func isPlausibleZoneShift(rowTrigger: Int64, parsed: Int64, deviceZone: TimeZone) -> Bool {
+        // detail は分までしか持たないので、行の鳴動時刻も分に切り下げて比べる
+        let rowMinute = rowTrigger - rowTrigger % 60_000
+        let shift = parsed - rowMinute
+        guard shift % (15 * 60 * 1000) == 0 else { return false }
+        let current = deviceZone.secondsFromGMT(for: Date(timeIntervalSince1970: TimeInterval(rowTrigger) / 1000))
+        let recorded = current + Int(shift / 1000)
+        return recorded >= -12 * 3600 && recorded <= 14 * 3600
+    }
 
     /// 前の版の MISSED の detail は「タイトル @M/d HH:mm」で、後ろは鳴るはずだった時刻。
     /// 前の版の記録には鳴動時刻の欄が無いので、ここから読む。年は書いていないので記録した時刻に最も近い年で補う。
@@ -95,8 +106,8 @@ enum RingHistory {
     /// 予約の行は単発アラームを使い直すと消えるので、行の無い見逃しは監査ログの MISSED で残す。
     /// 監査ログの MISSED が今ある行と同じ見逃しなら二重に数えない
     /// (予約の id があればそれで、前の版の行は id が無いので detail が同じものを1行につき1件だけ。
-    /// 端末のタイムゾーンが変わって detail の時刻がずれていても、タイトルが同じで detail の時刻が
-    /// 行の鳴動時刻に最も近いものを1行につき1件だけ)。
+    /// 端末のタイムゾーンが変わって detail の時刻がずれていても、タイトルが同じで、ずれが実在するタイムゾーンの差で
+    /// 説明でき、detail の時刻が行の鳴動時刻に最も近いものを1行につき1件だけ。説明できない曖昧なものは別の見逃しとして残す)。
     /// 前の版の MISSED には鳴動時刻の欄が無いので、残すものは detail の時刻から埋める
     /// (記録した時刻で数えると、何日も前の見逃しを「直近」と言ってしまう)
     static func seed(audit: [AuditEntry], missed: [(id: String, triggerAtMillis: Int64, title: String, detail: String)],
@@ -127,7 +138,7 @@ enum RingHistory {
                 let row = unmatchedRows[r]
                 return row.title == parsed.title
                     && row.atMillis <= audit[i].atMillis
-                    && abs(row.atMillis - parsed.triggerAtMillis) <= zoneShiftMillis
+                    && isPlausibleZoneShift(rowTrigger: row.atMillis, parsed: parsed.triggerAtMillis, deviceZone: deviceZone)
             }
             guard let r = candidates.min(by: {
                 abs(unmatchedRows[$0].atMillis - parsed.triggerAtMillis) < abs(unmatchedRows[$1].atMillis - parsed.triggerAtMillis)
