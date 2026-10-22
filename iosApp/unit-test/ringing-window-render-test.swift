@@ -74,6 +74,13 @@ final class RingingWindowRenderTests: XCTestCase {
         note("安全領域 top=\(insets.top) bottom=\(insets.bottom) → 窓の高さ=\(Int(window.bounds.height))")
     }
 
+    /// 開いたままの窓を、画面の部品が見る高さが [layoutHeight] になるよう伸縮する。
+    /// 安全領域は機種で違う (iPhone 17 は上 62 下 34、iPad Pro 11 は上 32 下 0) ので、窓の高さそのものを渡すと機種で判定が変わる
+    private func resizeForLayout(height layoutHeight: CGFloat) {
+        let insets = window.safeAreaInsets
+        resize(height: layoutHeight + insets.top + insets.bottom)
+    }
+
     private func resize(height: CGFloat) {
         window.frame = CGRect(x: 0, y: 0, width: width, height: height)
         window.layoutIfNeeded()
@@ -212,17 +219,17 @@ final class RingingWindowRenderTests: XCTestCase {
 
     /// チップを開いてから窓を 520pt 未満へ縮める: 選ぶボタンとチップは消え、停止の丸は窓に残る。戻すとチップも戻る
     func testShrinkingBelowThresholdAfterOpeningChipsHidesPickerAndKeepsStop() throws {
-        show(height: 700, presetsOpen: true)
+        showForLayout(height: 700, presetsOpen: true)
         let open = try measure("shrink-0-open-h700")
         XCTAssertEqual(chipBlocks(open), 1, "開いた直後にチップが無い")
         for h in [519.0, 480.0, 400.0, 320.0] {
-            resize(height: CGFloat(h))
+            resizeForLayout(height: CGFloat(h))
             let m = try measure("shrink-h\(Int(h))")
             XCTAssertEqual(chipBlocks(m), 0, "h=\(Int(h)): チップが残っている")
             try assertStopInside(m, "縮めた h=\(Int(h))")
             assertScrollAreaKept(m, "縮めた h=\(Int(h))")
         }
-        resize(height: 700)
+        resizeForLayout(height: 700)
         let back = try measure("shrink-back-h700")
         XCTAssertEqual(chipBlocks(back), 1, "窓を戻してもチップが戻らない")
         try assertStopInside(back, "戻した h=700")
