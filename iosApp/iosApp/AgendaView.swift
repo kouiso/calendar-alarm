@@ -148,7 +148,7 @@ struct AgendaView: View {
                     allDayOff: allDayOff,
                     muteAll: store.state.muteAll,
                     // 始まる前の予定で通知の動作を使うものは、通知の許可が無いと届かない
-                    notifies: !dropped && notificationDeliveryAhead(ev, rule, ov, actions: actions, importReminders: store.state.importEventReminders, nowMillis: now)
+                    notifies: !dropped && notificationDeliveryAhead(ev, rule, ov, actions: actions, importReminders: store.state.importEventReminders, muteAll: store.state.muteAll, nowMillis: now)
                 )
             }
     }
