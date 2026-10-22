@@ -2,7 +2,34 @@ import SwiftUI
 import BackgroundTasks
 import WidgetKit
 
+/// 起動の入口。単体テストの母体として起動された時は、アプリ本体の Engine・Store を作らない。
+/// 母体のアプリが自分の Engine で resync や音の片付けを走らせると、試験が置いた音のファイルを消し、
+/// アプリ全体で共有する `AlarmSoundLibrary.currentDefault` を試験の途中で書き換えて、試験が時々落ちる
 @main
+enum AppLauncher {
+    /// Xcode は母体のアプリを起動する時に XCTestConfigurationFilePath を渡す。
+    /// XCTest の読み込みが main より後でも見落とさないよう、クラスの有無も合わせて見る
+    static var isUnitTestHost: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
+    }
+
+    static func main() {
+        if isUnitTestHost {
+            UnitTestHostApp.main()
+        } else {
+            CalendarAlarmApp.main()
+        }
+    }
+}
+
+/// 単体テストの母体。画面は空で、予約・保存・通知には何も触れない
+struct UnitTestHostApp: App {
+    var body: some Scene {
+        WindowGroup { Color.clear }
+    }
+}
+
 struct CalendarAlarmApp: App {
 
     @StateObject private var engine = Engine()
