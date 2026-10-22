@@ -38,7 +38,10 @@ final class EngineOffAppStopTests: XCTestCase {
 
     override func setUp() async throws {
         fake = OffAppStopFakeScheduler()
-        storeURL = FileManager.default.temporaryDirectory.appendingPathComponent("offapp-store-\(UUID().uuidString).json")
+        // 保存を失敗させる試験のため、書き込み権限を外せる専用のディレクトリに置く
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("offapp-store-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        storeURL = dir.appendingPathComponent("store.json")
         // 端末の保存データを上書きしないよう、一時ファイルの Store を渡す
         engine = Engine(scheduler: fake, store: Store(fileURL: storeURL))
         engine.store.mutate {
@@ -50,7 +53,9 @@ final class EngineOffAppStopTests: XCTestCase {
 
     override func tearDown() async throws {
         UserDefaults.standard.removeObject(forKey: OffAppStopLog.key)
-        try? FileManager.default.removeItem(at: storeURL)
+        let dir = storeURL.deletingLastPathComponent()
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path)
+        try? FileManager.default.removeItem(at: dir)
     }
 
     /// AlarmKit に予約済みで、もう鳴り終わって一覧から消えた行を置く (アプリが見ていない間に鳴った後の状態)。
@@ -123,6 +128,37 @@ final class EngineOffAppStopTests: XCTestCase {
 
         XCTAssertTrue(audited("RECOVER", id))
         XCTAssertFalse(audited("DISMISS_OFFAPP", id))
+    }
+
+    /// 停止済みの保存がディスクに載らないまま落ちても、止めた証拠 (書き残し) は残る。
+    /// 消すと、次の起動で PENDING に戻った行が証拠を失って拾い直され、止めたのに鳴り直す (#61)
+    func testStopRecordSurvivesWhenDismissedStateIsNotPersisted() async throws {
+        let id = placeRungRow(minutesAgo: 10)
+        try await pressStop(id)
+        // PENDING の行をディスクへ流しきってから、書き込みだけを失敗させる
+        XCTAssertEqual(engine.store.savedState()?.scheduled[id]?.state, .pending)
+        let dir = storeURL.deletingLastPathComponent()
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: dir.path)
+
+        await engine.resync(reason: "test")
+
+        XCTAssertEqual(engine.store.state.scheduled[id]?.state, .dismissed, "メモリ上は停止済みになる")
+        XCTAssertEqual(engine.store.savedState()?.scheduled[id]?.state, .pending, "試験の前提: 保存は失敗している")
+        XCTAssertNotNil(OffAppStopLog().entries[id], "保存が済んでいないのに書き残しを消した")
+
+        // アプリが落ちて起動し直した状態: ディスクの PENDING 行を読み、書き残しだけが頼り
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path)
+        let relaunched = Engine(scheduler: fake, store: Store(fileURL: storeURL))
+        XCTAssertEqual(relaunched.store.state.scheduled[id]?.state, .pending)
+
+        await relaunched.resync(reason: "test")
+
+        let audit = relaunched.store.state.audit
+        XCTAssertEqual(relaunched.store.state.scheduled[id]?.state, .dismissed, "起動し直した後に止めた行が停止済みにならない")
+        XCTAssertTrue(audit.contains { $0.type == "DISMISS_OFFAPP" && $0.detail.contains(id) })
+        XCTAssertFalse(audit.contains { $0.type == "RECOVER" && $0.detail.contains(id) }, "止めたのに拾い直した (鳴り直す)")
+        XCTAssertFalse(fake.scheduledIds.contains(id), "止めたのに OS へ予約し直した")
+        XCTAssertNil(OffAppStopLog().entries[id], "保存が済んだ後の書き残しが残っている")
     }
 
     /// 予約に渡す設定に停止ボタンの intent が付いている。付け忘れると書き残しが残らず #61 が戻る
