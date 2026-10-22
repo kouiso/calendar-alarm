@@ -3,6 +3,8 @@ package com.calendaralarm
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -61,7 +63,7 @@ class RingingActivityDarkThemeTest {
 
     private fun rgb(argb: Int) = Triple((argb shr 16) and 0xFF, (argb shr 8) and 0xFF, argb and 0xFF)
 
-    private fun androidx.compose.ui.graphics.Color.rgb() = rgb(androidx.compose.ui.graphics.toArgb(this))
+    private fun Color.rgb() = rgb(toArgb())
 
     @Test
     fun `端末がライト設定でも鳴動画面のアクセントはダーク側のパレットで描かれる`() {
