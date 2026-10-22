@@ -3,6 +3,7 @@ import SwiftUI
 import CryptoKit
 import UserNotifications
 import AlarmKit
+import ActivityKit
 
 /// 鳴動予約の抽象。実体は AlarmKit (iOS26+) または UNUserNotificationCenter。
 
@@ -21,9 +22,13 @@ protocol AlarmScheduler {
     /// まだ一度も頼んでいない (OS のダイアログで頼める) か
     var authorizationUndetermined: Bool { get }
     func requestAuthorization() async
+    /// [sound] は Library/Sounds の取り込み音のファイル名 (nil = 既定音)。
+    /// 呼び出し側が決めて記録するので、予約側で選び直さない
     /// @returns AlarmKit UUID など予約側の識別子 (通知経路は nil)
-    func schedule(_ inst: AlarmInstanceDTO) async throws -> String?
+    func schedule(_ inst: AlarmInstanceDTO, sound: String?) async throws -> String?
     func cancel(instanceId: String, reservationId: String?) async
+    /// OS にこのインスタンスの予約がまだ残っているか
+    func hasReservation(instanceId: String) async -> Bool
 }
 
 // MARK: - AlarmKit (iOS 26+)
@@ -107,7 +112,7 @@ final class AlarmKitScheduler: AlarmScheduler {
         }
     }
 
-    func schedule(_ inst: AlarmInstanceDTO) async throws -> String? {
+    func schedule(_ inst: AlarmInstanceDTO, sound: String?) async throws -> String? {
         if manager.authorizationState != .authorized {
             _ = try? await manager.requestAuthorization()
         }
@@ -160,10 +165,13 @@ final class AlarmKitScheduler: AlarmScheduler {
             preAlert: nil,
             postAlert: TimeInterval(inst.snoozeMinutes) * 60
         )
+        // AlarmKit で指定できるのは音だけ (音量・だんだん大きく・バイブは iPhone の設定に従う)
+        let alertSound: AlertConfiguration.AlertSound = sound.map { .named($0) } ?? .default
         let config = AlarmManager.AlarmConfiguration<AppAlarmMetadata>(
             countdownDuration: countdown,
             schedule: .fixed(date),
-            attributes: attrs
+            attributes: attrs,
+            sound: alertSound
         )
         _ = try await manager.schedule(id: uuid, configuration: config)
         return uuid.uuidString
@@ -171,6 +179,10 @@ final class AlarmKitScheduler: AlarmScheduler {
 
     func cancel(instanceId: String, reservationId: String?) async {
         try? manager.cancel(id: Self.uuid(from: instanceId))
+    }
+
+    func hasReservation(instanceId: String) async -> Bool {
+        existingIds.contains(Self.uuid(from: instanceId))
     }
 
     /// インスタンス id 文字列から決定論的 UUID (AlarmKit は UUID 必須、差分適用のため決定的に)。
@@ -214,10 +226,10 @@ final class NotificationScheduler: AlarmScheduler {
         UserDefaults.standard.set(ok, forKey: "notifAuthorized")
     }
 
-    func schedule(_ inst: AlarmInstanceDTO) async throws -> String? {
+    func schedule(_ inst: AlarmInstanceDTO, sound: String?) async throws -> String? {
         let content = UNMutableNotificationContent()
         content.title = inst.title
-        content.sound = .default
+        content.sound = sound.map { UNNotificationSound(named: UNNotificationSoundName($0)) } ?? .default
         content.interruptionLevel = .timeSensitive
         let date = Date(timeIntervalSince1970: TimeInterval(inst.triggerAtMillis) / 1000)
         let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
@@ -229,5 +241,9 @@ final class NotificationScheduler: AlarmScheduler {
 
     func cancel(instanceId: String, reservationId: String?) async {
         port.removePending([instanceId])
+    }
+
+    func hasReservation(instanceId: String) async -> Bool {
+        await center.pendingNotificationRequests().contains { $0.identifier == instanceId }
     }
 }

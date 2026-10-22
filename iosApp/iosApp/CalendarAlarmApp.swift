@@ -3,7 +3,40 @@ import BackgroundTasks
 import UserNotifications
 import WidgetKit
 
+/// 起動の入口。単体テストの母体として起動された時は、アプリ本体の Engine・Store を作らない。
+/// 母体のアプリが自分の Engine で resync や音の片付けを走らせると、試験が置いた音のファイルを消し、
+/// アプリ全体で共有する `AlarmSoundLibrary.currentDefault` を試験の途中で書き換えて、試験が時々落ちる
 @main
+enum AppLauncher {
+    enum Mode { case app, unitTestHost }
+
+    /// main が実際に選んだ起動。試験が「母体が自分の Engine を動かしていない」ことを確かめるのに読む
+    private(set) static var launchedMode: Mode?
+
+    /// Xcode は単体テストの母体を起動する時だけ XCTestConfigurationFilePath を渡す。
+    /// 通常の起動や UI テスト・WDA 経由の起動には付かないので、これ1つで見分ける
+    static var isUnitTestHost: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
+    static func main() {
+        if isUnitTestHost {
+            launchedMode = .unitTestHost
+            UnitTestHostApp.main()
+        } else {
+            launchedMode = .app
+            CalendarAlarmApp.main()
+        }
+    }
+}
+
+/// 単体テストの母体。画面は空で、予約・保存・通知には何も触れない
+struct UnitTestHostApp: App {
+    var body: some Scene {
+        WindowGroup { Color.clear }
+    }
+}
+
 struct CalendarAlarmApp: App {
 
     @StateObject private var engine = Engine()
