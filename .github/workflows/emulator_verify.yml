@@ -108,6 +108,9 @@ jobs:
         with:
           path: verifier
 
+      - name: Verifier unit tests
+        run: python3 verifier/scripts/emulator/test_emu_check.py
+
       - name: Checkout app under test
         uses: actions/checkout@v4
         with:

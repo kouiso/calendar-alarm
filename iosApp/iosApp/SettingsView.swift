@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 /// 設定タブ: Android 版のアイコン主導UIと同構成。
 /// 見出し・説明文なし — [アイコン + チップ/スイッチ] の行だけ。
@@ -13,6 +14,8 @@ struct SettingsView: View {
     @State private var showCodes = false
     @State private var photoItem: PhotosPickerItem? = nil
     @State private var weatherLocDraft = ""
+    @State private var showSoundPicker = false
+    @State private var soundError: String? = nil
 
     private let actionOptions: [(EventAction, String)] =
         [(.alarm, "アラーム"), (.notify, "通知"), (.mute, "OFF")]
@@ -64,6 +67,41 @@ struct SettingsView: View {
                                     set: { store.setMuteAll($0); resync("mute all") }
                                 )).labelsHidden()
                             }
+                            // アラーム音 (#101)。AlarmKit で指定できるのは音だけ
+                            IconRow("music.note") {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("アラーム音: \(store.state.alarmSoundLabel ?? "iPhone の標準")")
+                                        .font(NightTheme.font(13)).foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                    if let soundError {
+                                        Text(soundError).font(NightTheme.font(11)).foregroundStyle(.orange)
+                                    }
+                                }
+                                Spacer()
+                                Button("選ぶ") { showSoundPicker = true }
+                                    .font(NightTheme.font(13)).foregroundStyle(NightTheme.indigo)
+                                if store.state.alarmSoundFile != nil {
+                                    Button("標準に戻す") { changeSound(file: nil, label: nil) }
+                                        .font(NightTheme.font(13)).foregroundStyle(.secondary)
+                                }
+                            }
+                            // AlarmKit が受け付けない項目は、出来ないと画面に書く (Android にはある設定)
+                            Text("音量・だんだん大きくする・バイブは、iPhone の「サウンドと触覚」の設定に従います。iPhone のアラーム機能では、アプリから変えられるのは音だけです。")
+                                .font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .fileImporter(isPresented: $showSoundPicker, allowedContentTypes: [.audio]) { result in
+                        switch result {
+                        case .success(let url):
+                            do {
+                                let name = try AlarmSoundLibrary.importSound(from: url)
+                                changeSound(file: name, label: url.deletingPathExtension().lastPathComponent)
+                            } catch {
+                                soundError = "この音声は使えませんでした: \(error.localizedDescription)"
+                            }
+                        case .failure(let error):
+                            soundError = "音声を開けませんでした: \(error.localizedDescription)"
                         }
                     }
 
@@ -390,6 +428,18 @@ struct SettingsView: View {
                         Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
                     }
                 }
+                // 鳴らなかった時の自己診断 (#104): 許可・集中モード・裏の更新・予約の状態をまとめて見る
+                Divider().padding(.vertical, 8)
+                NavigationLink {
+                    DiagnosticsView()
+                } label: {
+                    HStack {
+                        Image(systemName: "stethoscope").foregroundStyle(NightTheme.indigo)
+                        Text("鳴らない時の診断").font(NightTheme.font(13))
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
+                    }
+                }
                 if showPerms {
                     Divider().padding(.vertical, 8)
                     VStack(spacing: 10) {
@@ -524,6 +574,13 @@ struct SettingsView: View {
     }
 
     private func resync(_ reason: String) { Task { await engine.resync(reason: reason) } }
+
+    /// 既定の音を変え、入っている予約を新しい音で入れ直す (AlarmKit は予約時に音が決まる)
+    private func changeSound(file: String?, label: String?) {
+        soundError = nil
+        store.setAlarmSound(file: file, label: label)
+        Task { await engine.rescheduleForSoundChange() }
+    }
 }
 
 // MARK: - 共通部品

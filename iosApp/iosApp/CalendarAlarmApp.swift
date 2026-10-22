@@ -1,8 +1,42 @@
 import SwiftUI
 import BackgroundTasks
+import UserNotifications
 import WidgetKit
 
+/// 起動の入口。単体テストの母体として起動された時は、アプリ本体の Engine・Store を作らない。
+/// 母体のアプリが自分の Engine で resync や音の片付けを走らせると、試験が置いた音のファイルを消し、
+/// アプリ全体で共有する `AlarmSoundLibrary.currentDefault` を試験の途中で書き換えて、試験が時々落ちる
 @main
+enum AppLauncher {
+    enum Mode { case app, unitTestHost }
+
+    /// main が実際に選んだ起動。試験が「母体が自分の Engine を動かしていない」ことを確かめるのに読む
+    private(set) static var launchedMode: Mode?
+
+    /// Xcode は単体テストの母体を起動する時だけ XCTestConfigurationFilePath を渡す。
+    /// 通常の起動や UI テスト・WDA 経由の起動には付かないので、これ1つで見分ける
+    static var isUnitTestHost: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
+    static func main() {
+        if isUnitTestHost {
+            launchedMode = .unitTestHost
+            UnitTestHostApp.main()
+        } else {
+            launchedMode = .app
+            CalendarAlarmApp.main()
+        }
+    }
+}
+
+/// 単体テストの母体。画面は空で、予約・保存・通知には何も触れない
+struct UnitTestHostApp: App {
+    var body: some Scene {
+        WindowGroup { Color.clear }
+    }
+}
+
 struct CalendarAlarmApp: App {
 
     @StateObject private var engine = Engine()
@@ -10,6 +44,8 @@ struct CalendarAlarmApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        // 起動処理が終わる前に受け口を置かないと、通知を開いて起動した時の知らせを取りこぼす
+        UNUserNotificationCenter.current().delegate = NotificationPresenter.shared
         registerBackgroundTask()
     }
 
@@ -21,6 +57,7 @@ struct CalendarAlarmApp: App {
                 .environmentObject(permissions)
                 .nightFont()
                 .task {
+                    NotificationPresenter.shared.engine = engine
                     await engine.resync(reason: "app start")
                 }
                 .onChange(of: scenePhase) { _, phase in
@@ -52,6 +89,51 @@ struct CalendarAlarmApp: App {
         let req = BGProcessingTaskRequest(identifier: "com.calendaralarm.resync")
         req.earliestBeginDate = Date(timeIntervalSinceNow: 6 * 3600)
         try? BGTaskScheduler.shared.submit(req)
+    }
+}
+
+/// 通知の受け口。iOS 26 未満のアラームは通知で鳴らすため、受け口が無いとアプリを開いている間は
+/// 音も表示も出ない (診断画面の鳴動テストも鳴らない)。届いた行はここで鳴動済みにする
+final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = NotificationPresenter()
+    @MainActor weak var engine: Engine? {
+        didSet { flushWaiting() }
+    }
+    /// engine が付く前 (通知を開いて起動した直後) に来た知らせ。付いた時に流す。
+    /// 捨てると、resync で拾えない時 (通知の許可が外れた等) に届いた分が見逃しになる
+    @MainActor private var waiting: [(id: String, at: Int64)] = []
+
+    /// 通知が届いた知らせの入口。テストからも呼ぶので internal
+    @MainActor func deliver(_ id: String, at: Int64) {
+        guard let engine else { waiting.append((id, at)); return }
+        engine.markNotificationDelivered(id, deliveredAtMillis: at)
+    }
+
+    @MainActor private func flushWaiting() {
+        guard let engine, !waiting.isEmpty else { return }
+        let items = waiting
+        waiting = []
+        for item in items { engine.markNotificationDelivered(item.id, deliveredAtMillis: item.at) }
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        let id = notification.request.identifier
+        let at = Int64(notification.date.timeIntervalSince1970 * 1000)
+        await MainActor.run { deliver(id, at: at) }
+        return [.banner, .list, .sound]
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        // 押された時刻ではなく届いた時刻で残す。通知を後から開いた時に時刻がずれないように
+        let id = response.notification.request.identifier
+        let at = Int64(response.notification.date.timeIntervalSince1970 * 1000)
+        await MainActor.run { deliver(id, at: at) }
     }
 }
 

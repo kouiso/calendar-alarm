@@ -17,9 +17,9 @@ SBI GitHub Issue #76（決定4）。対象は `doc/spec/kmp-replacement.md` の 
 | F-3 カレンダー既定オフセット | あり | あり | A `ui/SettingsScreen.kt:253` `defaultMinutes`, `:607` `onChange(minutesBefore…)` / I `SettingsView.swift:387`（`rule.minutesBefore`） |
 | F-3 イベント単位の上書き | あり | あり | A `data/db/Entities.kt:112` `EventOverrideEntity`, `ui/AgendaScreen.kt:277` / I `Models.swift:144` `EventOverrideDTO`, `EventDetailSheet.swift:17` |
 | F-4 フルスクリーン鳴動 | あり | あり（OS描画） | A `engine/AlarmService.kt:500` `setFullScreenIntent`, `RingingActivity.kt:246` / I `AlarmKitScheduler.swift:121` `AlarmPresentation.Alert` |
-| F-4 バイブ | あり | なし | A `engine/AlarmService.kt:52,86` `vibrator`, `vibrateForRing` / I `iosApp/iosApp` 配下に vibrat の一致なし |
-| F-4 音量固定・徐々に音量UP | あり | なし | A `engine/AlarmService.kt:329` `crescendo`, 設定 `data/SettingsRepository.kt:62`付近 / I `iosApp/iosApp` 配下に crescendo・volume の一致なし |
-| F-4 カスタム音（既定音） | あり | なし | A `data/SettingsRepository.kt` `defaultSoundUri`, `ui/AlarmEditScreen.kt:142` `OpenDocument` / I `AlarmKitScheduler.swift` に sound 指定なし（通知側 `:207` は `.default`） |
+| F-4 バイブ | あり | 対象外（端末の設定に従う。#101） | A `engine/AlarmService.kt:52,86` / I AlarmKit の `AlarmConfiguration` にバイブの指定が無い（iOS 26.1 SDK）。設定画面にそう書いた |
+| F-4 音量固定・徐々に音量UP | あり | 対象外（端末の設定に従う。#101） | A `engine/AlarmService.kt:329` / I AlarmKit に音量の指定が無い（iOS 26.1 SDK）。設定画面にそう書いた |
+| F-4 カスタム音（既定音） | あり | あり（#101） | A `data/SettingsRepository.kt` `defaultSoundUri` / I `AlarmSoundLibrary.swift`（Library/Sounds へ caf で取り込み、`AlertSound.named` で予約）、`SettingsView.swift` アラーム音の行 |
 | F-4 一括ミュート | あり | あり | A `data/SettingsRepository.kt` `muteAll` / I `SettingsView.swift:54-55` 「アラームをすべてミュート」 |
 | F-5 スヌーズ（鳴動画面から） | あり | あり | A `engine/RingingActivity.kt:138-139` `onSnooze`,`onSnoozeAt` / I `RingingView.swift:80`, `AlarmKitScheduler.swift:158` |
 | F-5 スヌーズ間隔の設定 | あり（5/10/15/30/45/60） | あり（5/10/15のみ） | A `ui/SettingsScreen.kt:1056`, `data/SettingsRepository.kt` `snoozePresets` / I `SettingsView.swift:21` `snoozeOptions = [5, 10, 15]` |
@@ -44,7 +44,7 @@ SBI GitHub Issue #76（決定4）。対象は `doc/spec/kmp-replacement.md` の 
 | 鳴動画面 | あり（アプリ描画） | あり（OS描画 + アプリ内 `RingingView`） | A `engine/RingingActivity.kt` / I `AlarmKitScheduler.swift:121`, `CalendarAlarmApp.swift:72` |
 | カレンダー設定 | あり | あり | A `ui/SettingsScreen.kt:238-260` / I `SettingsView.swift:234-241` |
 | 設定 | あり | あり（項目は少ない） | A `ui/SettingsScreen.kt:134-384` / I `SettingsView.swift:30-270` |
-| 電池最適化ガイド・トラブルシュート | あり | なし | A `ui/TroubleshootingScreen.kt:217`, `:181`, `MainActivity.kt:304` / I 画面なし（`iosApp/iosApp` 配下に troubleshoot・診断の一致なし）。iOS は設定に「10秒後に鳴動テスト」あり（`SettingsView.swift:352`） |
+| 電池最適化ガイド・トラブルシュート | あり | あり（自己診断、#104） | A `ui/TroubleshootingScreen.kt:217` / I `DiagnosticsView.swift`（許可・集中モード・サイレント・裏の更新・低電力・次のアラーム・最後の鳴動・直近の失敗、10秒後テスト）。電池最適化は iOS に無い |
 | アラーム一覧/編集 | あり | あり | A `ui/AlarmsScreen.kt:57`, `AlarmEditScreen.kt:77` / I `AlarmsView.swift:4,140` |
 | 月/週ビュー | あり（月・3日・日タイムライン） | あり（同3種） | A `ui/AgendaScreen.kt:248-261` / I `AgendaView.swift:57-61` |
 | 監査ログ表示 | あり | あり | A `data/db/Entities.kt:122`, `ui/SettingsScreen.kt:384` / I `Store.swift:45,242`, `SettingsView.swift:272` |
@@ -72,10 +72,10 @@ SBI GitHub Issue #76（決定4）。対象は `doc/spec/kmp-replacement.md` の 
 
 | # | 欠け | 欠けているOS | 補足 |
 |---|---|---|---|
-| G1 | 鳴動のバイブ・音量固定・徐々に音量UP・カスタム音 | iOS | AlarmKit で出せる範囲は未確認。仕様 §6 は AlertSound でカスタム MP3 を想定 |
+| G1 | 鳴動のバイブ・音量固定・徐々に音量UP・カスタム音 | 一部解消（#101） | カスタム音は iOS でも選べる。音量・徐々に大きく・バイブは AlarmKit に指定の口が無い（`AlarmManager.AlarmConfiguration` の引数は sound だけ）ため、設定画面に「iPhone の設定に従う」と書いた |
 | G2 | 共有→予定化 | Android | 印刷サービスのみ。`ACTION_SEND` の受け口がない |
 | G3 | 通知アラーム | iOS | 対象外に決定（#103）。`getDeliveredNotifications` が返すのは自アプリの通知だけ。通知サービス拡張も自アプリ宛てのリモート通知だけ。ANCS は BLE アクセサリ向けで端末内アプリは使えない |
-| G4 | 自己診断・トラブルシュート画面 | iOS | 電池最適化は iOS に該当しない。権限・次回予定・最後の鳴動の一覧はない（仕様 §6） |
+| G4 | 自己診断・トラブルシュート画面 | 解消（#104） | 設定の権限カードから「鳴らない時の診断」を開く。直せる項目は許可ダイアログか設定アプリへ飛ぶ |
 | G5 | 日本語・英語のローカライズ | 両方 | 仕様 §9 は日英。現状は日本語固定 |
 | G6 | 週番号・週開始曜日が画面に出ない | 解消（#106） | 旧版にあった機能。両 OS で予定一覧の週番号（ISO 8601）と月表示の週の始まりを設定できる |
 | G7 | スヌーズ間隔の選択肢が 5/10/15 だけ | iOS | Android は 5〜60 の6択 |
