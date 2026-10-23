@@ -22,7 +22,7 @@ SBI GitHub Issue #76（決定4）。対象は `doc/spec/kmp-replacement.md` の 
 | F-4 カスタム音（既定音） | あり | あり（#101） | A `data/SettingsRepository.kt` `defaultSoundUri` / I `AlarmSoundLibrary.swift`（Library/Sounds へ caf で取り込み、`AlertSound.named` で予約）、`SettingsView.swift` アラーム音の行 |
 | F-4 一括ミュート | あり | あり | A `data/SettingsRepository.kt` `muteAll` / I `SettingsView.swift:54-55` 「アラームをすべてミュート」 |
 | F-5 スヌーズ（鳴動画面から） | あり | あり | A `engine/RingingActivity.kt:138-139` `onSnooze`,`onSnoozeAt` / I `RingingView.swift:80`, `AlarmKitScheduler.swift:158` |
-| F-5 スヌーズ間隔の設定 | あり（5/10/15/30/45/60） | あり（5/10/15のみ） | A `ui/SettingsScreen.kt:1056`, `data/SettingsRepository.kt` `snoozePresets` / I `SettingsView.swift:21` `snoozeOptions = [5, 10, 15]` |
+| F-5 スヌーズ間隔の設定 | あり（5/10/15/30/45/60） | あり（#107。既定 5/10/15/30/45/60、設定で 1〜90 分から選ぶ） | A `ui/SettingsScreen.kt:1056`, `data/SettingsRepository.kt` `snoozePresets` / I `Store.swift` `SnoozePresets`, `SettingsView.swift:56-77` 「鳴動画面で選べるスヌーズ」, `RingingView.swift:114` `snoozePresets.prefix(6)`。`SettingsView.swift:24` の `snoozeOptions = [5, 10, 15]` は「既定のスヌーズ」の行で、鳴動画面の選択肢とは別 |
 | F-6 単発・曜日繰り返しアラーム | あり | あり | A `ui/AlarmEditScreen.kt:121,382` / I `AlarmsView.swift:123-126` |
 | F-7 例外日 | あり | あり | A `ui/AlarmEditScreen.kt:100,284` / I `AlarmsView.swift:90,231` |
 | F-8 天気（場所→5日予報） | あり | あり | A `ui/AgendaScreen.kt:290`, `S weather/WeatherApi.kt:44` / I `AgendaView.swift:8-9`, `WeatherService.swift` |
@@ -78,7 +78,7 @@ SBI GitHub Issue #76（決定4）。対象は `doc/spec/kmp-replacement.md` の 
 | G4 | 自己診断・トラブルシュート画面 | 解消（#104） | 設定の権限カードから「鳴らない時の診断」を開く。直せる項目は許可ダイアログか設定アプリへ飛ぶ |
 | G5 | 日本語・英語のローカライズ | 両方 | 仕様 §9 は日英。現状は日本語固定 |
 | G6 | 週番号・週開始曜日が画面に出ない | 解消（#106） | 旧版にあった機能。両 OS で予定一覧の週番号（ISO 8601）と月表示の週の始まりを設定できる |
-| G7 | スヌーズ間隔の選択肢が 5/10/15 だけ | iOS | Android は 5〜60 の6択 |
+| G7 | スヌーズ間隔の選択肢が 5/10/15 だけ | 解消（#107） | 鳴動画面の選択肢を設定で選べる（1〜90 分、既定は Android と同じ 5/10/15/30/45/60、画面には最大6つ） |
 | G8 | 再起動・TZ変更後の再登録、同時刻衝突の処理 | iOS（未確認） | コード上の根拠が見つからないため要実機確認 |
 
 課金・広告（F-11）は Phase 3 で、コード側の確認は今回していない。Google アカウント複数対応は #74、通知時刻の重複は #75 の範囲で、ここでは扱わない。
