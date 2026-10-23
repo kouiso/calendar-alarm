@@ -179,4 +179,13 @@ final class RingingLayoutTests: XCTestCase {
         XCTAssertFalse(RingingLayout.showsPresetPicker(windowHeight: RingingLayout.minHeightForPresetPicker - 1))
         XCTAssertFalse(RingingLayout.showsPresetPicker(windowHeight: 320))
     }
+
+    /// 選べる分数が 1 つも無い時は、窓が十分高くても開閉ボタンを出さない (押しても何も出ない死んだボタンになる)
+    func testPresetToggleNeedsAtLeastOnePreset() {
+        XCTAssertFalse(RingingLayout.showsPresetToggle(presets: [], windowHeight: 667))
+        XCTAssertTrue(RingingLayout.showsPresetToggle(presets: [10], windowHeight: 667))
+        XCTAssertTrue(RingingLayout.showsPresetToggle(presets: [10], windowHeight: RingingLayout.minHeightForPresetPicker))
+        XCTAssertFalse(RingingLayout.showsPresetToggle(presets: [10], windowHeight: RingingLayout.minHeightForPresetPicker - 1))
+        XCTAssertFalse(RingingLayout.showsPresetToggle(presets: [], windowHeight: 320))
+    }
 }

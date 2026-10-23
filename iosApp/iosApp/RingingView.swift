@@ -11,8 +11,6 @@ struct RingingView: View {
     @State private var now = Date()
     @State private var weather: WeatherService.NowForecast? = nil
     @State private var showSnoozePresets: Bool
-    /// プリセット設定が iOS 側に無いため固定候補 (Android は設定の snoozePresets を使用)
-    private let snoozePresets = [5, 10, 15, 30]
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     /// 試験で「チップを開いた状態」から始めるための引数。画面から開く時は既定の false のまま
@@ -117,9 +115,11 @@ struct RingingView: View {
                     }
                     .padding(.horizontal, 24)
                     // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開。
-                    // 窓が低すぎる時は出さない: チップを開くと固定した操作群が 287pt になり、
+                    // 設定で候補を全部外した時は、押しても何も出ない開閉ボタンを出さない。
+                    // 窓が低すぎる時も出さない: チップを開くと固定した操作群が 287pt になり、
                     // 上の時刻と件名のスクロール領域が潰れるため (窓 320pt だと 1pt まで)。停止の丸はこの判定に関わらず窓に残る
-                    let canChoose = RingingLayout.showsPresetPicker(windowHeight: geo.size.height)
+                    let presets = SnoozePresets.onRingingScreen(store.state.snoozePresets)
+                    let canChoose = RingingLayout.showsPresetToggle(presets: presets, windowHeight: geo.size.height)
                     if canChoose {
                         Button {
                             withAnimation(.easeInOut(duration: 0.15)) { showSnoozePresets.toggle() }
@@ -140,7 +140,7 @@ struct RingingView: View {
                     }
                     if showSnoozePresets && canChoose {
                         HStack(spacing: 8) {
-                            ForEach(snoozePresets, id: \.self) { m in
+                            ForEach(presets, id: \.self) { m in
                                 Button { engine.snooze(inst, minutes: m) } label: {
                                     Text("+\(m)分")
                                         .font(NightTheme.font(14))
@@ -200,6 +200,11 @@ enum RingingLayout {
 
     static func showsPresetPicker(windowHeight: CGFloat) -> Bool {
         windowHeight >= minHeightForPresetPicker
+    }
+
+    /// 「スヌーズ時間を選ぶ」の開閉ボタンを出すか。選べる分数が 1 つも無い時は、押しても何も出ない死んだボタンになるので出さない
+    static func showsPresetToggle(presets: [Int], windowHeight: CGFloat) -> Bool {
+        !presets.isEmpty && showsPresetPicker(windowHeight: windowHeight)
     }
 }
 

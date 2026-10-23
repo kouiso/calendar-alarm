@@ -188,6 +188,66 @@ final class RingingWindowRenderTests: XCTestCase {
     /// チップ (高さ 40) の塊の数
     private func chipBlocks(_ m: Measure) -> Int { m.blocks.filter { abs(($0.bottom - $0.top) - 40) < 3 }.count }
 
+    /// 保存した分数の一覧を差し替える (鳴動画面は Store の一覧をそのまま読む)
+    private func setSavedPresets(_ minutes: [Int]) { engine.store.mutate { $0.snoozePresets = minutes } }
+
+    /// チップ (高さ 40) の行を横に切り、チップの個数を数える。チップの間は 8pt の背景が見える
+    private func chipCount(_ name: String) throws -> Int {
+        let s = try snapshot(name)
+        // チップが 9 個並んでも列がチップの間 (8pt) に落ちないよう、窓の幅の中を 7pt おきに探す
+        let found = stride(from: 40.0, to: width - 40, by: 7.0).lazy
+            .compactMap { runs(s, xPt: CGFloat($0)).first { abs(($0.bottom - $0.top) - 40) < 3 } }.first
+        let row = try XCTUnwrap(found, "\(name): チップの行が描かれていない")
+        let y = Int(((row.top + row.bottom) / 2) * s.scale)
+        let bg = s.pixel(0, y)
+        var n = 0, start: Int?
+        for x in 0..<s.w {
+            let p = s.pixel(x, y)
+            let on = abs(p.r - bg.r) + abs(p.g - bg.g) + abs(p.b - bg.b) >= 12
+            if on, start == nil { start = x }
+            if !on, let st = start { if CGFloat(x - st) / s.scale >= 20 { n += 1 }; start = nil }
+        }
+        if let st = start, CGFloat(s.w - st) / s.scale >= 20 { n += 1 }
+        note("\(name): チップ \(n) 個")
+        return n
+    }
+
+    /// 鳴動画面に出るチップは、設定で保存した一覧 (旧来の固定の 4 つではない) で、多くても 6 個 (#107)
+    func testChipsFollowSavedListAndCapAtSix() throws {
+        setSavedPresets([20, 45, 90])
+        showForLayout(height: 700, presetsOpen: true)
+        XCTAssertEqual(try chipCount("saved-3"), 3, "保存した 3 件が出ていない (旧来の固定の一覧なら 4 個)")
+
+        setSavedPresets(SnoozePresets.choices)
+        showForLayout(height: 700, presetsOpen: true)
+        XCTAssertEqual(try chipCount("saved-9"), SnoozePresets.maxOnRingingScreen, "9 件保存しても出るのは 6 個まで")
+
+        setSavedPresets(SnoozePresets.defaults)
+        showForLayout(height: 700, presetsOpen: true)
+        XCTAssertEqual(try chipCount("saved-defaults"), 6)
+    }
+
+    /// 一覧が空なら開閉ボタンを出さない: 折りたたみでは、ボタンの分だけ固定した操作群が低くなる。開いた状態で始めてもチップは出ない
+    func testEmptyListHidesToggleAndChips() throws {
+        setSavedPresets(SnoozePresets.defaults)
+        showForLayout(height: 700)
+        let withToggle = try measure("toggle-defaults")
+        let withTop = try XCTUnwrap(withToggle.blocks.first?.top)
+
+        setSavedPresets([])
+        showForLayout(height: 700)
+        let empty = try measure("toggle-empty")
+        let emptyTop = try XCTUnwrap(empty.blocks.first?.top)
+        note("開閉ボタンの分の高さ: \(Int(emptyTop - withTop))pt (一覧あり \(Int(withTop)) / 空 \(Int(emptyTop)))")
+        XCTAssertGreaterThanOrEqual(emptyTop - withTop, 30, "一覧が空なのに開閉ボタンの場所が空いていない")
+
+        showForLayout(height: 700, presetsOpen: true)
+        let emptyOpen = try measure("toggle-empty-open")
+        XCTAssertEqual(chipBlocks(emptyOpen), 0, "一覧が空なのにチップが出た")
+        XCTAssertEqual(try XCTUnwrap(emptyOpen.blocks.first?.top), emptyTop, accuracy: 1, "空の一覧で開いた状態から始めると配置が変わった")
+        try assertStopInside(empty, "空の一覧")
+    }
+
     /// 窓の高さごとに、折りたたんだ状態で停止の丸が窓に収まる
     func testStopStaysInsideAtEveryHeight() throws {
         for h in [667.0, 560.0, 520.0, 519.0, 480.0, 400.0, 320.0, 260.0] {
