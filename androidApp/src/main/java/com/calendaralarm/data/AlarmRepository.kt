@@ -15,6 +15,7 @@ import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.AlarmState
+import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
@@ -25,7 +26,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -117,11 +122,18 @@ class AlarmRepository(
      * 呼び出し元の多くは鳴動・停止の経路にある独立コルーチンで、そこで例外が漏れると
      * プロセスごと落ちて鳴動と停止を巻き込む (#46)。ログが欠けるより鳴動が止まる方が重い。
      */
-    suspend fun audit(action: String, detail: String) {
+    suspend fun audit(action: String, detail: String, ring: ScheduledInstanceEntity? = null) {
         try {
             withContext(Dispatchers.IO) {
                 db.auditLog().insert(
-                    AuditLogEntity(atMillis = System.currentTimeMillis(), action = action, detail = detail),
+                    AuditLogEntity(
+                        atMillis = System.currentTimeMillis(),
+                        action = action,
+                        detail = detail,
+                        instanceId = ring?.id,
+                        triggerAtMillis = ring?.triggerAtMillis,
+                        title = ring?.title,
+                    ),
                 )
             }
         } catch (e: CancellationException) {
@@ -138,6 +150,29 @@ class AlarmRepository(
 
     fun auditFlow(limit: Int = 100) = db.auditLog().recentFlow(limit)
 
+    /** 停止・スヌーズ・鳴らず の記録だけを新しい順に (設定先頭の「最近の鳴動」と「すべて見る」用) */
+    fun recentRingLogFlow(limit: Int = 3) =
+        db.auditLog().recentByActionsFlow(RING_OUTCOME_ACTIONS, limit)
+
+    /**
+     * 鳴動時刻が直近24時間の「鳴らず」の件数 (予定画面と設定の「鳴動の状態」用)。
+     * 予約の行は単発アラームを使い直すと消えるので、鳴動ログの MISS 行で数える (#51 PR3)。
+     * 画面を開いたままでも24時間を過ぎた見逃しが外れるよう、窓の起点を一定間隔で進め直す
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun recentMissedFlow(
+        nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+        refreshMillis: Long = 60_000L,
+    ): Flow<Int> =
+        flow {
+            while (true) {
+                emit(nowMillis())
+                delay(refreshMillis)
+            }
+        }.flatMapLatest { now ->
+            db.auditLog().missedSinceFlow(now - com.calendaralarm.shared.logic.RingStatus.MISSED_WINDOW_MILLIS)
+        }.distinctUntilChanged()
+
     /** アジェンダ画面用: イベント + 有効な鳴動ルールと解決済みアクション。 */
     data class AgendaItem(
         val event: com.calendaralarm.shared.model.CalendarEvent,
@@ -150,11 +185,56 @@ class AlarmRepository(
         val minutesBefore: Int,
         val extraOffsets: List<Int>,
         val hasOverride: Boolean,
+        /** カレンダーを鳴らさない設定にしている (予定ごとの指定より強い。展開がカレンダー単位で外すため) */
+        val calendarOff: Boolean = false,
+        /** アカウントを鳴らさない設定にしている (#74。カレンダーを鳴らさない時と同じく展開が予定ごとの指定より先に外す) */
+        val accountOff: Boolean = false,
+        /** 終日の予定で、カレンダーが終日を鳴らさない設定 (予定ごとの指定より強い) */
+        val allDayOff: Boolean = false,
+        /** リマインダー側の鳴る時刻があるか (追加の何分前か、取り込んだカレンダーの通知)。無ければリマインダーの動作は何も鳴らさない */
+        val hasReminderTriggers: Boolean = true,
+        /** 設定の「アラームをすべてミュート」。展開はアラームを全部外し、通知だけ残す */
+        val muteAll: Boolean = false,
+        /**
+         * 予定ごとの指定を外すと何も鳴らない (カレンダーの既定が鳴らさない・種類や招待の絞り込みで外れる等)。
+         * 行のスイッチを ON にする時、これが true の時だけ「アラーム」の指定を書く (通知だけの予定を格上げしないため)
+         */
+        val defaultSilenced: Boolean = false,
+        /**
+         * 行のスイッチを ON にして戻る動作が、すべてミュートで外れて鳴らない。
+         * defaultSilenced との違いは、すべてミュートで外れるアラームの既定も数える点 (通知だけの既定は数えない)
+         */
+        val restoreSilenced: Boolean = false,
     ) {
-        /** 何も鳴らない状態 (UI のグレー化判定用)。 */
+        /** 予定ごとの指定では鳴るようにできない (スイッチを押せなくする) */
+        val lockedByCalendar: Boolean get() = calendarOff || accountOff || allDayOff
+
+        /**
+         * 行のスイッチを押せなくする。すべてミュート中は、ON で戻る動作 (アラームの指定、または外した後の既定) が
+         * 展開で外れて鳴らないなら入れられない。ON で通知に戻る行は、今 OFF でも入れられるように残す
+         * (今の muted ではなく ON で戻る先で決める。通知の行を OFF にした後で押せなくなるのを防ぐ)
+         */
+        val switchLocked: Boolean get() = lockedByCalendar || (muteAll && restoreSilenced)
+
+        /**
+         * 何も鳴らない状態 (UI のグレー化と行のスイッチ)。展開 (AlarmExpander.expandEvents) と同じく、
+         * リマインダーの動作はリマインダー側の時刻がある時だけ鳴るので、時刻が無ければ開始の動作だけで決まる。
+         * すべてミュート中のアラームも鳴らない側に数える (通知は残る)
+         */
         val muted: Boolean
-            get() = startAction == EventAction.MUTE && reminderAction == EventAction.MUTE
+            get() = startAction.silenced() && (reminderAction.silenced() || !hasReminderTriggers)
+
+        private fun EventAction.silenced(): Boolean =
+            this == EventAction.MUTE || (muteAll && this == EventAction.ALARM)
     }
+
+    /**
+     * Reminders.MINUTES=-1 (MINUTES_DEFAULT) は「システム既定」。実値は端末依存で取得できないため、
+     * 設定画面で変えられる既定分数 defaultMinutesBefore に解決する (代替値を隠さない)。
+     * 予約 (resync) と一覧のスイッチが別々に解決すると、鳴るのに「鳴らない」と出るずれが起きるので、両方ここを通す
+     */
+    private fun CalendarEvent.withResolvedDefaultReminders(appSettings: SettingsRepository.Settings): CalendarEvent =
+        copy(calendarReminderMinutes = calendarReminderMinutes.map { if (it < 0) appSettings.defaultMinutesBefore else it })
 
     suspend fun upcomingEvents(days: Int = 14): List<AgendaItem> = withContext(Dispatchers.IO) {
         if (!hasCalendarPermission()) return@withContext emptyList()
@@ -172,7 +252,7 @@ class AlarmRepository(
             calendarReader.events(
                 now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
                 (now + days.days).toEpochMilliseconds(),
-            ),
+            ).map { it.withResolvedDefaultReminders(appSettings) },
             appSettings,
             now.toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds,
             (now + days.days).toEpochMilliseconds(),
@@ -195,8 +275,11 @@ class AlarmRepository(
             // 招待フィルタも反映する: 展開側で鳴らない予定が「アラーム」
             // アイコン表示になるのは矛盾
             // 予約の展開と同じ判定関数を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
-            val (start, reminder) = if (pref?.enabled == false ||
-                ev.calendarId in accountApplied.disabledCalendarIds ||
+            // 終日を鳴らさないカレンダーの終日予定も、個別指定より先に展開で外れるので鳴らない側に倒す
+            val allDayOff = AlarmExpander.allDaySuppressed(ev, rule)
+            // 鳴らさないアカウント (#74) の予定も展開が個別指定より先に外すので、スイッチで入れても鳴らない
+            val accountOff = ev.calendarId in accountApplied.disabledCalendarIds
+            val (start, reminder) = if (pref?.enabled == false || allDayOff || accountOff ||
                 !AlarmExpander.passesEventFilters(ev, override, appSettings.inviteFilter, appSettings.eventTypeFilter)
             ) {
                 EventAction.MUTE to EventAction.MUTE
@@ -212,6 +295,24 @@ class AlarmRepository(
                 minutesBefore = ov?.minutesBefore ?: rule.minutesBefore,
                 extraOffsets = ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets,
                 hasOverride = ov != null,
+                calendarOff = pref?.enabled == false,
+                accountOff = accountOff,
+                allDayOff = allDayOff,
+                hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
+                    (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
+                muteAll = appSettings.muteAll,
+                defaultSilenced = AlarmExpander.silencedWithoutOverride(
+                    ev, rule, appSettings.titleCodes, appSettings.inviteFilter, appSettings.eventTypeFilter,
+                    // 何分前などの個別指定は ON でも残すので、リマインダー側の時刻は指定の分まで数える
+                    hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
+                        (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
+                ),
+                restoreSilenced = AlarmExpander.silencedWithoutOverride(
+                    ev, rule, appSettings.titleCodes, appSettings.inviteFilter, appSettings.eventTypeFilter,
+                    hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
+                        (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
+                    muteAll = appSettings.muteAll,
+                ),
             )
         }
     }
@@ -253,7 +354,7 @@ class AlarmRepository(
         if (id == null) return
         setState(id, AlarmState.DISMISSED)
         scheduler.cancel(id)
-        audit("DISMISS", id)
+        audit("DISMISS", id, db.scheduledInstances().byId(id))
         // 単発アラームは終端到達=消費。アラーム本体も OFF に倒して
         // 「有効表示なのに二度と鳴らない」状態を残さない
         db.scheduledInstances().byId(id)?.standaloneAlarmId?.let {
@@ -384,7 +485,7 @@ class AlarmRepository(
         db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(snoozed)))
         if (!scheduler.schedule(snoozed)) audit("EXACT_DENIED", snoozed.id)
         setState(instance.id, AlarmState.SNOOZED)
-        audit("SNOOZE", "${instance.id} +${minutes}m → ${snoozed.id}")
+        audit("SNOOZE", "${instance.id} +${minutes}m → ${snoozed.id}", entity)
         onScheduleChanged?.invoke()
     }
 
@@ -426,6 +527,7 @@ class AlarmRepository(
                 it.state in setOf(
                     AlarmState.FIRED.name, AlarmState.DISMISSED.name,
                     AlarmState.SNOOZED.name, AlarmState.MISSED.name,
+                    AlarmState.SKIPPED.name,
                 )
             }
             .map { it.id }
@@ -498,16 +600,7 @@ class AlarmRepository(
                     calendarReader.events(
                         (now - 14.days).toEpochMilliseconds(),
                         horizon.toEpochMilliseconds(),
-                    ).map { ev ->
-                        // Reminders.MINUTES=-1 (MINUTES_DEFAULT) は「システム既定」。
-                        // 実値は端末依存で取得不能なため、ユーザーが設定画面で変えられる
-                        // 既存の既定分数 defaultMinutesBefore に解決する (代替値を隠さない)。
-                        ev.copy(
-                            calendarReminderMinutes = ev.calendarReminderMinutes.map {
-                                if (it < 0) appSettings.defaultMinutesBefore else it
-                            },
-                        )
-                    },
+                    ).map { it.withResolvedDefaultReminders(appSettings) },
                     appSettings,
                     (now - 14.days).toEpochMilliseconds(),
                     horizon.toEpochMilliseconds(),
@@ -628,12 +721,13 @@ class AlarmRepository(
         for (fire in plan.toFireNow) {
             // 一度も予約していない ev: インスタンスの過去分 (リマインダー取込ONの
             // 初回 resync 等) は「元カレンダー側が既に通知した時刻」。後追いで
-            // 不意に鳴らさず、次回展開からも外れるよう MISSED に倒す。
+            // 不意に鳴らさず、次回展開からも外れるよう終端にする。鳴らせなかったのではなく
+            // わざと鳴らさなかったので、見逃しの件数に入らない SKIPPED にする。
             // setState は UPDATE WHERE id のみで行が無いと更新0になるため、
             // 先に行を作ってから終端化する (残さないと次回 resync で再展開される)。
             if (fire.id !in armedIds && fire.id.startsWith("ev:")) {
                 db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
-                markMissed(fire.id, "予約前に通知時刻が過ぎていた")
+                markSkipped(fire.id, "予約前に通知時刻が過ぎていた")
                 continue
             }
             db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
@@ -658,10 +752,18 @@ class AlarmRepository(
     /** 単発指定で MISSED 化する。鳴動を試みたが起動を OS に拒否された時などに使う。 */
     suspend fun markMissed(id: String, detail: String? = null) {
         setState(id, AlarmState.MISSED)
-        audit("MISS", if (detail == null) id else "$id: $detail")
-        db.scheduledInstances().byId(id)?.standaloneAlarmId?.let {
+        val row = db.scheduledInstances().byId(id)
+        audit("MISS", if (detail == null) id else "$id: $detail", row)
+        row?.standaloneAlarmId?.let {
             disableConsumedOneShots(setOf(it))
         }
+        onScheduleChanged?.invoke()
+    }
+
+    /** 予約前に時刻が過ぎた行を、見逃しに数えない終端 (SKIPPED) にする。ev: 専用なので単発アラームの消費は見ない */
+    suspend fun markSkipped(id: String, detail: String) {
+        setState(id, AlarmState.SKIPPED)
+        audit("SKIP", "$id: $detail")
         onScheduleChanged?.invoke()
     }
 
@@ -672,7 +774,7 @@ class AlarmRepository(
             .filter { it.triggerAtMillis < cutoff }
         stale.forEach {
             setState(it.id, AlarmState.MISSED)
-            audit("MISS", it.id)
+            audit("MISS", it.id, it)
         }
         if (stale.isNotEmpty()) {
             disableConsumedOneShots(stale.mapNotNull { it.standaloneAlarmId }.toSet())
@@ -754,6 +856,28 @@ class AlarmRepository(
         val csv = extraOffsets?.toCsv() ?: current?.extraOffsetsCsv
         db.eventOverrides().upsert(EventOverrideEntity(instanceKey, a, mb, csv))
         resync("event override")
+    }
+
+    /**
+     * 一覧の行のスイッチ (#51 PR2)。OFF は「鳴らさない」を書く。
+     * ON は、指定を外すとそのまま鳴る予定なら指定を外してカレンダーの既定に戻す (通知だけの予定は通知のまま)。
+     * 外すと鳴らない予定だけ「アラーム」を書く。何分前などの個別指定は残す
+     */
+    suspend fun setEventSwitch(item: AgendaItem, on: Boolean) {
+        val key = item.event.instanceKey
+        if (!on) {
+            setEventOverride(key, EventAction.MUTE, null)
+        } else if (item.defaultSilenced) {
+            setEventOverride(key, EventAction.ALARM, null)
+        } else {
+            val current = db.eventOverrides().all().firstOrNull { it.instanceKey == key }
+            if (current != null && (current.minutesBefore != null || current.extraOffsetsCsv != null)) {
+                db.eventOverrides().upsert(current.copy(action = null))
+                resync("event override action cleared")
+            } else {
+                removeEventOverride(key)
+            }
+        }
     }
 
     suspend fun removeEventOverride(instanceKey: String) {
@@ -840,6 +964,9 @@ class AlarmRepository(
         /** 待ちが複数ある時の発火のずらし幅。同じ時刻に重ねず、押し出しの順を安定させる */
         private const val REARM_STAGGER_MS = 500L
         private const val TAG = "AlarmRepository"
+
+        /** 「最近の鳴動」に出す結果 (停止・スヌーズ・鳴らず)。鳴った (FIRE) は必ずどれかと対になるので出さない */
+        val RING_OUTCOME_ACTIONS = listOf("DISMISS", "SNOOZE", "MISS")
 
         // ビット: 1=SUN,2=MON,4=TUE,8=WED,16=THU,32=FRI,64=SAT
         fun daysToMask(days: Set<DayOfWeek>): Int = days.fold(0) { acc, d ->

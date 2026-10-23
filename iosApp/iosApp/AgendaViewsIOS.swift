@@ -17,7 +17,8 @@ enum AgendaViewMode: String, CaseIterable, Identifiable {
         case .list: return "一覧"
         case .month: return "月"
         case .threeDay: return "3日"
-        case .timeline: return "タイムライン"
+        // デザイン正本の推奨 (「タイムライン」は狭い幅で2行に折れる)
+        case .timeline: return "時間軸"
         }
     }
 }
@@ -68,19 +69,22 @@ struct MonthGridView: View {
                             let dayEvents = byDay[Self.df.string(from: date)] ?? []
                             let isToday = cal.isDateInToday(date)
                             let isFocus = cal.isDate(date, inSameDayAs: focusDate)
+                            // テーマ色は「鳴る/オン」専用なので中立色にする (#51 PR3)。
+                            // 今日 = 文字色で塗った丸、選択日 = surfaceVariant の塗りに outline の枠
+                            let selected = isFocus && !isToday
                             VStack(spacing: 2) {
                                 ZStack {
                                     Circle()
-                                        .fill(isToday ? Color.accentColor : Color.clear)
+                                        .fill(isToday ? NightTheme.onNight : selected ? NightTheme.surfaceVariant : Color.clear)
                                         .frame(width: 34, height: 34)
                                     Circle()
-                                        .stroke(Color.accentColor, lineWidth: isFocus ? 1.5 : 0)
+                                        .stroke(NightTheme.outline, lineWidth: selected ? 1.5 : 0)
                                         .frame(width: 34, height: 34)
                                     Text("\(cal.component(.day, from: date))")
                                         .font(NightTheme.numFont(17,
-                                            weight: isToday ? .semibold : .regular))
+                                            weight: isToday || isFocus ? .semibold : .regular))
                                         .foregroundStyle(
-                                            isToday ? Color.white
+                                            isToday ? NightTheme.nightSurface
                                             : !inMonth ? Color.secondary.opacity(0.35)
                                             // 列番号ではなく実際の曜日で色を決める (週の始まりを変えても日曜は赤)
                                             : cal.component(.weekday, from: date) == 1 ? sundayRed
@@ -150,14 +154,14 @@ struct ThreeDayColumnsView: View {
                 let date = cal.date(byAdding: .day, value: i, to: startDate)!
                 let dayEvents = byDay[Self.df.string(from: date)] ?? []
                 VStack(spacing: 6) {
-                    // Night UI: 今日は accent-soft 背景 + Outfit 22
+                    // 今日の見出しは surfaceVariant。テーマ色は「鳴る/オン」専用なので使わない (#51 PR3)
                     Text(Self.wdFmt.string(from: date))
                         .font(NightTheme.numFont(22,
                             weight: cal.isDateInToday(date) ? .semibold : .medium))
-                        .foregroundStyle(cal.isDateInToday(date) ? Color.accentColor : .primary)
+                        .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 4)
-                        .background(cal.isDateInToday(date) ? Color.accentColor.opacity(0.15) : Color.clear,
+                        .background(cal.isDateInToday(date) ? NightTheme.surfaceVariant : Color.clear,
                                     in: RoundedRectangle(cornerRadius: 12))
                     ForEach(dayEvents) { ev in
                         VStack(alignment: .leading, spacing: 2) {
@@ -193,74 +197,115 @@ struct DayTimelineViewIOS: View {
     let events: [DisplayEvent]
     let calendarColor: (DisplayEvent) -> Color
     let onSelect: (DisplayEvent) -> Void
+    /// 予定画面全体の縦スクロール。時間軸は自分では縦に送らず、予定画面のスクロールに乗る。
+    /// 同じ向きの ScrollView を入れ子にすると外側だけが動き、内側の scrollTo が効かないため (#51 PR3)
+    let pageScroll: ScrollViewProxy
 
     private let hourH: CGFloat = 48
     private var cal: Calendar { Calendar.current }
+
+    static func hourID(_ h: Int) -> String { "timeline-hour-\(h)" }
 
     var body: some View {
         let dayEvents = events.filter { cal.isDate($0.startDate, inSameDayAs: date) }
         let allDay = dayEvents.filter { $0.event.allDay || $0.event.endMillis - $0.event.startMillis >= 23 * 3_600_000 }
         let timed = dayEvents.filter { !allDay.contains($0) }
 
-        ScrollView {
-            VStack(spacing: 8) {
-                if !allDay.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(allDay) { ev in
-                            Text(ev.event.title)
-                                .font(NightTheme.font(12))
-                                .padding(6)
-                                .background(calendarColor(ev).opacity(0.2),
-                                            in: RoundedRectangle(cornerRadius: 8))
-                                .onTapGesture { onSelect(ev) }
-                        }
+        VStack(spacing: 8) {
+            if !allDay.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(allDay) { ev in
+                        Text(ev.event.title)
+                            .font(NightTheme.font(12))
+                            .padding(6)
+                            .background(calendarColor(ev).opacity(0.2),
+                                        in: RoundedRectangle(cornerRadius: 8))
+                            .onTapGesture { onSelect(ev) }
                     }
                 }
-                ZStack(alignment: .topLeading) {
-                    // 時間目盛り
-                    VStack(spacing: 0) {
-                        ForEach(0..<24, id: \.self) { h in
-                            HStack(alignment: .top, spacing: 8) {
-                                Text(String(format: "%02d:00", h))
-                                    .font(NightTheme.font(10))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 40, alignment: .leading)
-                                Rectangle().fill(Color.secondary.opacity(0.15)).frame(height: 1)
-                            }
-                            .frame(height: hourH, alignment: .top)
-                        }
-                    }
-                    // イベントブロック
-                    ForEach(timed) { ev in
-                        let s = ev.startDate
-                        let e = max(ev.endDate, s.addingTimeInterval(15 * 60))
-                        let startMin = minutesOfDay(s)
-                        let dur = min((e.timeIntervalSince(s) / 60), 1440 - startMin)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(ev.event.title)
-                                .font(NightTheme.font(12))
-                                .lineLimit(dur < 45 ? 1 : 3)
-                            if dur >= 45 {
-                                Text("\(hm(s))〜\(hm(e))")
-                                    .font(NightTheme.font(10))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(height: hourH * CGFloat(dur / 60))
-                        .background(calendarColor(ev).opacity(0.25),
-                                    in: RoundedRectangle(cornerRadius: 6))
-                        .offset(y: hourH * CGFloat(startMin / 60))
-                        .padding(.leading, 48)
-                        .onTapGesture { onSelect(ev) }
-                    }
-                }
-                .frame(height: hourH * 24)
             }
-            .padding(.horizontal, 12)
+            ZStack(alignment: .topLeading) {
+                // 時間目盛り
+                VStack(spacing: 0) {
+                    ForEach(0..<24, id: \.self) { h in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text(String(format: "%02d:00", h))
+                                .font(NightTheme.font(10))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 40, alignment: .leading)
+                            Rectangle().fill(Color.secondary.opacity(0.15)).frame(height: 1)
+                        }
+                        .frame(height: hourH, alignment: .top)
+                        .id(Self.hourID(h))
+                    }
+                }
+                // イベントブロック
+                ForEach(timed) { ev in
+                    let s = ev.startDate
+                    let e = max(ev.endDate, s.addingTimeInterval(15 * 60))
+                    let startMin = minutesOfDay(s)
+                    let dur = min((e.timeIntervalSince(s) / 60), 1440 - startMin)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(ev.event.title)
+                            .font(NightTheme.font(12))
+                            .lineLimit(dur < 45 ? 1 : 3)
+                        if dur >= 45 {
+                            Text("\(hm(s))〜\(hm(e))")
+                                .font(NightTheme.font(10))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: hourH * CGFloat(dur / 60))
+                    .background(calendarColor(ev).opacity(0.25),
+                                in: RoundedRectangle(cornerRadius: 6))
+                    .offset(y: hourH * CGFloat(startMin / 60))
+                    .padding(.leading, 48)
+                    .onTapGesture { onSelect(ev) }
+                }
+                // 今の時刻の線 (#51 PR3)。予定のブロックより上に描く。今日を見ている時だけ。
+                // テーマ色は「鳴る/オン」専用なので色表の赤で引く
+                // 開いた時刻の秒に合わせると分の境目から次の更新までラベルが1分前のままになるので、分の頭で更新する
+                TimelineView(.everyMinute) { ctx in
+                    // 日付の判定も1分ごとにやり直す (開いたまま日付が変わったら前日の画面から線を消す)
+                    if cal.isDate(date, inSameDayAs: ctx.date) {
+                        let label = "今 \(Self.nowFmt.string(from: ctx.date))"
+                        HStack(spacing: 0) {
+                            // 時刻目盛りの文字に重なるので、面の色で下地を敷いて読めるようにする
+                            Text(label)
+                                .font(NightTheme.numFont(10, weight: .semibold))
+                                .foregroundStyle(NightTheme.nowLine)
+                                .lineLimit(1)
+                                .frame(width: 44, alignment: .leading)
+                                .background(Color(uiColor: .systemGroupedBackground))
+                            Circle().fill(NightTheme.nowLine).frame(width: 8, height: 8)
+                            Rectangle().fill(NightTheme.nowLine).frame(height: 2)
+                        }
+                        .frame(height: 16)
+                        .offset(y: hourH * CGFloat(minutesOfDay(ctx.date)) / 60 - 8)
+                        // 線は表示だけ。重なった予定へのタップを奪わない
+                        .allowsHitTesting(false)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(label)
+                    }
+                }
+            }
+            .frame(height: hourH * 24)
+        }
+        .padding(.horizontal, 12)
+        // 今日を開いた時は、今の時刻の1時間前の目盛りが上に来るところまで送る (#51 PR3)。
+        // 出た直後はまだ配置が決まっていないので、次の描画で送る
+        .onAppear {
+            guard cal.isDateInToday(date) else { return }
+            let target = Self.hourID(max(0, cal.component(.hour, from: Date()) - 1))
+            DispatchQueue.main.async { pageScroll.scrollTo(target, anchor: .top) }
         }
     }
+
+    private static let nowFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
+    }()
 
     private func minutesOfDay(_ d: Date) -> Double {
         Double(cal.component(.hour, from: d) * 60 + cal.component(.minute, from: d))

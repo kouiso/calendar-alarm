@@ -101,9 +101,12 @@ final class Engine: ObservableObject {
         for (id, rec) in store.state.scheduled {
             let uuid = AlarmKitScheduler.uuid(from: id)
             guard let state = live[uuid] else {
+                // 通知のみの予定は、予約時に .fired で記録され、もともと AlarmKit に無い。止めたことにして履歴に載せない
+                if rec.instance.delivery == EventAction.notify.rawValue { continue }
                 // AlarmKit から消えた = ユーザーがアラートUIで完全に止めた
                 if rec.state == .fired || rec.state == .snoozed {
                     store.markState(id, .dismissed)
+                    store.audit("DISMISS_OFFAPP", rec.instance.title, ring: rec.instance)
                     // スヌーズ子が pending で残っている限り単発は消費扱いにしない。
                     // ここで親を OFF にすると子の温存条件 (sa: 親 enabled) を壊し、
                     // 次回 resync で子が捨てられてスヌーズが鳴らなくなる。
@@ -127,7 +130,7 @@ final class Engine: ObservableObject {
                 // postAlert カウントダウン中 = ユーザーがアラートUIでスヌーズを押した
                 if rec.state == .fired {
                     store.markState(id, .snoozed)
-                    store.audit("SNOOZE", "\(id) (native)")
+                    store.audit("SNOOZE", "\(id) (native)", ring: rec.instance)
                 }
                 alertingIds.remove(id)
             default:
@@ -258,7 +261,7 @@ final class Engine: ObservableObject {
         var missedAlarmIds: Set<Int64> = []
         for rec in s.scheduled.values where rec.state == .pending && rec.instance.triggerAtMillis < now - graceMillis {
             store.markState(rec.instance.id, .missed)
-            store.audit("MISSED", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis))")
+            store.audit("MISSED", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis))", ring: rec.instance)
             notifyMissed(rec.instance)
             if let aid = rec.instance.standaloneAlarmId { missedAlarmIds.insert(aid) }
         }
@@ -536,7 +539,7 @@ final class Engine: ObservableObject {
         alertingIds.remove(inst.id)
         store.markState(inst.id, .dismissed)
         if let aid = inst.standaloneAlarmId { disableConsumedOneShots([aid]) }
-        store.audit("DISMISS", inst.title)
+        store.audit("DISMISS", inst.title, ring: inst)
     }
 
     /// スヌーズ: AlarmKit なら countdown() でネイティブスヌーズ (postAlert 後に再アラート)。
@@ -549,7 +552,7 @@ final class Engine: ObservableObject {
            (try? ak.countdown(uuid: AlarmKitScheduler.uuid(from: inst.id))) != nil {
             alertingIds.remove(inst.id)
             store.markState(inst.id, .snoozed)
-            store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m (native)")
+            store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m (native)", ring: inst)
             return nil
         }
         return scheduleSnoozeChild(inst, minutes: inst.snoozeMinutes)
@@ -624,7 +627,7 @@ final class Engine: ObservableObject {
                     let r = try await self.reserve(next)
                     rid = r.id
                     sound = r.sound
-                    self.store.audit("SNOOZE", "\(inst.id) +\(minutes)m → \(next.id)")
+                    self.store.audit("SNOOZE", "\(inst.id) +\(minutes)m → \(next.id)", ring: inst)
                 } catch {
                     self.store.audit("SCHEDULE_ERR", "snooze \(next.id): \(error.localizedDescription)")
                 }

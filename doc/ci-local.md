@@ -10,6 +10,8 @@ JDK 17 と既存の Android SDK を使う。`GRADLE_USER_HOME` は変更しな�
 
 `task ci:ios` は既存手順と同じ iOS simulator ビルドである。
 Xcode と xcodegen が必要である。署名、端末登録、配布は行わない。
+`bash scripts/ci.sh ios-logic` は iOS の画面や SharedKit に依存しない計算（`iosApp/iosApp/ring-history.swift`）を
+macOS の swiftc で動かす単体テストである。シミュレータは要らない。
 Android の検査成功を iOS や emulator の成功とは扱わない。
 
 ## Emulator の各レーン

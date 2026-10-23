@@ -168,7 +168,8 @@ final class SlideToStopLogicTests: XCTestCase {
     }
 }
 
-/// 低い窓では「スヌーズ時間を選ぶ」を出さない。出すと下に固定した操作群が高くなり、停止の丸が窓の外へ出る
+/// 低い窓では「スヌーズ時間を選ぶ」を出さない。出すと下に固定した操作群が 287pt になり、上の時刻と件名の領域が潰れる。
+/// 停止の丸は隠さなくても窓に収まる (RingingWindowRenderTests で実測)
 final class RingingLayoutTests: XCTestCase {
     func testPresetPickerNeedsEnoughWindowHeight() {
         // iPhone SE (667pt) でも、ふつうの窓では出す
@@ -177,5 +178,14 @@ final class RingingLayoutTests: XCTestCase {
         // 小さいウィンドウ (iPad の Stage Manager など) では出さない
         XCTAssertFalse(RingingLayout.showsPresetPicker(windowHeight: RingingLayout.minHeightForPresetPicker - 1))
         XCTAssertFalse(RingingLayout.showsPresetPicker(windowHeight: 320))
+    }
+
+    /// 選べる分数が 1 つも無い時は、窓が十分高くても開閉ボタンを出さない (押しても何も出ない死んだボタンになる)
+    func testPresetToggleNeedsAtLeastOnePreset() {
+        XCTAssertFalse(RingingLayout.showsPresetToggle(presets: [], windowHeight: 667))
+        XCTAssertTrue(RingingLayout.showsPresetToggle(presets: [10], windowHeight: 667))
+        XCTAssertTrue(RingingLayout.showsPresetToggle(presets: [10], windowHeight: RingingLayout.minHeightForPresetPicker))
+        XCTAssertFalse(RingingLayout.showsPresetToggle(presets: [10], windowHeight: RingingLayout.minHeightForPresetPicker - 1))
+        XCTAssertFalse(RingingLayout.showsPresetToggle(presets: [], windowHeight: 320))
     }
 }

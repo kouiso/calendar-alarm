@@ -12,7 +12,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.calendaralarm.R
 import com.calendaralarm.ai.AiConfig
 import com.calendaralarm.ai.ShareImport
 import com.calendaralarm.shared.ai.MailEventExtractor
@@ -35,10 +38,11 @@ fun SharedTextImportDialog(
     onResult: (event: ExtractedEvent, note: String?) -> Unit,
     onCancel: () -> Unit,
 ) {
+    val context = LocalContext.current
     LaunchedEffect(text) {
         val api = AiConfig.api()
         if (api == null) {
-            onResult(ShareImport.draftFrom(text), "このビルドでは AI の読み取りを使えません。日時を入れて追加してください")
+            onResult(ShareImport.draftFrom(text), context.getString(R.string.share_import_ai_unavailable))
             return@LaunchedEffect
         }
         val nowIso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(Date())
@@ -50,22 +54,25 @@ fun SharedTextImportDialog(
             ev != null -> onResult(ev, null)
             result.isFailure -> onResult(
                 ShareImport.draftFrom(text),
-                "読み取りに失敗しました（${result.exceptionOrNull()?.message ?: "不明"}）。日時を入れて追加してください",
+                context.getString(
+                    R.string.share_import_read_failed,
+                    result.exceptionOrNull()?.message ?: context.getString(R.string.share_import_unknown),
+                ),
             )
-            else -> onResult(ShareImport.draftFrom(text), "本文から予定を見つけられませんでした。日時を入れて追加してください")
+            else -> onResult(ShareImport.draftFrom(text), context.getString(R.string.share_import_no_event))
         }
     }
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("予定に変換") },
+        title = { Text(stringResource(R.string.share_import_title)) },
         text = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(12.dp))
-                Text("本文から予定を読み取っています")
+                Text(stringResource(R.string.share_import_reading))
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onCancel) { Text("やめる") } },
+        dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.share_import_cancel)) } },
     )
 }

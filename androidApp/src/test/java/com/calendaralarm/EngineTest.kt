@@ -8,14 +8,19 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import android.provider.CalendarContract
+import androidx.datastore.preferences.core.edit
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.calendar.CalendarContractReader
 import com.calendaralarm.data.db.AppDatabase
+import com.calendaralarm.data.db.CalendarPrefEntity
+import com.calendaralarm.data.db.EventOverrideEntity
 import com.calendaralarm.data.db.ScheduledInstanceEntity
+import com.calendaralarm.data.settingsDataStore
 import com.calendaralarm.engine.AlarmScheduler
+import com.calendaralarm.shared.model.AccountSetting
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmState
@@ -23,6 +28,8 @@ import com.calendaralarm.shared.model.StandaloneAlarm
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DayOfWeek
@@ -85,6 +92,8 @@ class EngineTest {
         companion object {
             var instanceRows: List<Map<String, Any?>> = emptyList()
             var reminderRows: List<Map<String, Any?>> = emptyList()
+            /** カレンダー一覧。空ならアカウントへ当てはめない (アカウント設定を見る試験だけ入れる) */
+            var calendarRows: List<Map<String, Any?>> = emptyList()
         }
         override fun onCreate() = true
         override fun query(
@@ -94,6 +103,7 @@ class EngineTest {
             val rows = when {
                 uri.path?.contains("instances") == true -> instanceRows
                 uri.path?.contains("reminders") == true -> reminderRows
+                uri.path?.contains("calendars") == true -> calendarRows
                 else -> emptyList()
             }
             val cols = projection ?: emptyArray()
@@ -128,7 +138,7 @@ class EngineTest {
     }
 
     @Test
-    fun `未予約の過去evインスタンスはMISSEDが保存され次回resyncで除外される`() = runBlocking {
+    fun `未予約の過去evインスタンスはSKIPPEDが保存され次回resyncで除外される`() = runBlocking {
         // applyPlan の不意打ち防止と同じ手順: setState は行が無いと更新0なので
         // 先に行を作ってから終端化する。保存されないと次回 resync で再展開される。
         val inst = AlarmInstance(
@@ -137,16 +147,16 @@ class EngineTest {
             "予定", AlarmKind.EVENT,
         )
         db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(inst)))
-        repository.markMissed(inst.id)
-        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(inst.id)?.state)
+        repository.markSkipped(inst.id, "予約前に通知時刻が過ぎていた")
+        assertEquals(AlarmState.SKIPPED.name, db.scheduledInstances().byId(inst.id)?.state)
         // 終端行が残る限り同じ入力の次回 resync でも蘇生しない
         repository.resync("test")
         repository.resync("test")
-        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(inst.id)!!.state)
+        assertEquals(AlarmState.SKIPPED.name, db.scheduledInstances().byId(inst.id)!!.state)
     }
 
     @Test
-    fun `未予約の過去evインスタンスは実resyncでMISSED化され2回目で再処理されない`() = runBlocking {
+    fun `未予約の過去evインスタンスは実resyncでSKIPPED化され2回目で再処理されず見逃しに数えない`() = runBlocking {
         // 本番の applyPlan 分岐を通す回帰: reader(fake provider) → expand → plan →
         // applyPlan。production の upsert+MISSED 分岐が無いと、過去分は
         // AlarmManager に予約され DB は PENDING のまま残るので RED になる。
@@ -176,7 +186,9 @@ class EngineTest {
             .create(CalendarContract.AUTHORITY)
         repositoryWithCalendar.resync("test")
         val pastId = "ev:1:1:$start:b60"
-        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(pastId)?.state)
+        assertEquals(AlarmState.SKIPPED.name, db.scheduledInstances().byId(pastId)?.state)
+        // わざと鳴らさなかった分なので「鳴らせなかった」バナーの件数に入らない
+        assertEquals(0, repositoryWithCalendar.recentMissedFlow().first())
         // 開始分だけが予約され、過去の通知分は鳴動予約を持たない
         val startId = "ev:1:1:$start:b0"
         assertEquals(AlarmState.PENDING.name, db.scheduledInstances().byId(startId)?.state)
@@ -184,7 +196,7 @@ class EngineTest {
         // 同じ入力で2回呼んでも終端行が残るため再処理されない
         repositoryWithCalendar.resync("test")
         repositoryWithCalendar.resync("test")
-        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(pastId)!!.state)
+        assertEquals(AlarmState.SKIPPED.name, db.scheduledInstances().byId(pastId)!!.state)
         assertEquals(1, scheduledCount())
     }
 
@@ -358,6 +370,460 @@ class EngineTest {
         val row = db.scheduledInstances().byId(inst.id)
         assertEquals(AlarmState.DISMISSED.name, row!!.state)
         assertEquals(0, scheduledCount())
+    }
+
+    @Test
+    fun `見逃しの件数は24時間以内に鳴らせなかった予約だけを数える`() = runBlocking {
+        val now = System.currentTimeMillis()
+        // 予約したのに鳴らせなかった (期限切れ PENDING → MISSED) は数える
+        val stale = AlarmInstance("ev:c1:e1:1:b0", now - 2 * 3_600_000L, "会議", AlarmKind.EVENT)
+        repository.scheduleAdhoc(stale)
+        repository.markMissed()
+        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId(stale.id)!!.state)
+        assertEquals(1, repository.recentMissedFlow().first())
+        // 24時間より前の見逃しと、わざと鳴らさなかった分 (SKIPPED) は数えない
+        db.scheduledInstances().upsert(
+            listOf(
+                ScheduledInstanceEntity.of(
+                    AlarmInstance("ev:c1:e2:2:b0", now - 25 * 3_600_000L, "昨日", AlarmKind.EVENT),
+                    AlarmState.MISSED,
+                ),
+                ScheduledInstanceEntity.of(
+                    AlarmInstance("ev:c1:e3:3:b30", now - 3_600_000L, "取込", AlarmKind.EVENT),
+                    AlarmState.SKIPPED,
+                ),
+            ),
+        )
+        assertEquals(1, repository.recentMissedFlow().first())
+        // 窓の端: ちょうど24時間前は数え、それより1ミリ秒でも古ければ数えない
+        val edge = stale.triggerAtMillis + 24 * 3_600_000L
+        assertEquals(1, repository.recentMissedFlow(nowMillis = { edge }).first())
+        assertEquals(0, repository.recentMissedFlow(nowMillis = { edge + 1 }).first())
+    }
+
+    @Test
+    fun `見逃しの件数は画面を開いたままでも時間が進めば24時間を過ぎた分を外す`() = runBlocking {
+        val now = System.currentTimeMillis()
+        // 見逃しは鳴動ログの MISS 行で数える (#51 PR3) ので、実際の経路 (期限切れ PENDING → MISSED) で作る
+        repository.scheduleAdhoc(AlarmInstance("ev:c1:e9:9:b0", now - 2 * 3_600_000L, "会議", AlarmKind.EVENT))
+        repository.markMissed()
+        // 1回目は今、2回目は23時間後 (見逃しから25時間後) の時計で数える
+        val clocks = ArrayDeque(listOf(now, now + 23 * 3_600_000L))
+        var last = now
+        val counts = repository.recentMissedFlow(
+            nowMillis = { clocks.removeFirstOrNull()?.also { last = it } ?: last },
+            refreshMillis = 300L,
+        ).take(2).toList()
+        assertEquals(listOf(1, 0), counts)
+    }
+
+    @Test
+    fun `予定一覧のスイッチはカレンダーOFFと終日OFFの予定で押せず、鳴らない側に出る`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        val allDayStart = (Clock.System.now().toEpochMilliseconds() / 86_400_000L + 1) * 86_400_000L
+        fun row(eventId: Long, calId: Long, begin: Long, allDay: Boolean) = mapOf(
+            CalendarContract.Instances.EVENT_ID to eventId,
+            CalendarContract.Instances.CALENDAR_ID to calId,
+            CalendarContract.Instances.TITLE to "予定$eventId",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to begin,
+            CalendarContract.Instances.END to begin + if (allDay) 86_400_000L else 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to if (allDay) 1 else 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        FakeCalendarProvider.instanceRows = listOf(
+            row(1, 1, start, allDay = false),
+            row(2, 1, allDayStart, allDay = true),
+            row(3, 2, start, allDay = false),
+        )
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        // カレンダー1は終日を鳴らさない、カレンダー2は丸ごと鳴らさない
+        db.calendarPrefs().upsert(CalendarPrefEntity("1", enabled = true, minutesBefore = 0, allDayMinutes = -1))
+        db.calendarPrefs().upsert(CalendarPrefEntity("2", enabled = false, minutesBefore = 0))
+        // スイッチを一度 OFF→ON した後と同じ: 予定ごとの ALARM 指定があっても鳴らない
+        db.eventOverrides().upsert(EventOverrideEntity("1:2:$allDayStart", action = "ALARM", minutesBefore = null))
+
+        val items = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }
+        val timed = items.getValue("1")
+        assertEquals(false, timed.muted)
+        assertEquals(false, timed.lockedByCalendar)
+        val allDay = items.getValue("2")
+        assertTrue(allDay.allDayOff)
+        assertTrue(allDay.muted)
+        assertTrue(allDay.lockedByCalendar)
+        val calOff = items.getValue("3")
+        assertTrue(calOff.calendarOff)
+        assertTrue(calOff.muted)
+        assertTrue(calOff.lockedByCalendar)
+        // 一覧の表示と実際の予約が一致する: 終日の予定とカレンダー2の予定は予約されない
+        repositoryWithCalendar.resync("test")
+        val pendingIds = db.scheduledInstances().pending().map { it.id }
+        assertEquals(listOf("ev:1:1:$start:b0"), pendingIds)
+    }
+
+    @Test
+    fun `開始が鳴らずリマインダーの時刻も無い予定は、行のスイッチを鳴らない側に出す`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        fun row(eventId: Long) = mapOf(
+            CalendarContract.Instances.EVENT_ID to eventId,
+            CalendarContract.Instances.CALENDAR_ID to 1L,
+            CalendarContract.Instances.TITLE to "予定$eventId",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to start,
+            CalendarContract.Instances.END to start + 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        FakeCalendarProvider.instanceRows = listOf(row(1), row(2))
+        // 予定2だけカレンダー側に 10 分前の通知がある
+        FakeCalendarProvider.reminderRows = listOf(
+            mapOf(
+                CalendarContract.Reminders.EVENT_ID to 2L,
+                CalendarContract.Reminders.MINUTES to 10,
+                CalendarContract.Reminders.METHOD to CalendarContract.Reminders.METHOD_ALERT,
+            ),
+        )
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        // 開始は鳴らさない、リマインダーは鳴らす。追加の何分前は無し
+        db.calendarPrefs().upsert(
+            CalendarPrefEntity("1", enabled = true, minutesBefore = 0, startAction = "MUTE", reminderAction = "ALARM"),
+        )
+
+        val items = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }
+        // 予定1は鳴る時刻が1つも無いので、スイッチは鳴らない側
+        assertTrue(items.getValue("1").muted)
+        // 予定2はカレンダーの通知 (10 分前) で鳴るので、スイッチは鳴る側
+        assertEquals(false, items.getValue("2").muted)
+        // 一覧の表示と実際の予約が一致する
+        repositoryWithCalendar.resync("test")
+        val pendingIds = db.scheduledInstances().pending().map { it.id }
+        assertEquals(listOf("ev:1:2:$start:b10"), pendingIds)
+    }
+
+    @Test
+    fun `カレンダーの通知がシステム既定 (-1) だけの予定も、鳴るなら行のスイッチを鳴る側に出す`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        FakeCalendarProvider.instanceRows = listOf(
+            mapOf(
+                CalendarContract.Instances.EVENT_ID to 2L,
+                CalendarContract.Instances.CALENDAR_ID to 1L,
+                CalendarContract.Instances.TITLE to "予定2",
+                CalendarContract.Instances.DESCRIPTION to "",
+                CalendarContract.Instances.EVENT_LOCATION to "",
+                CalendarContract.Instances.BEGIN to start,
+                CalendarContract.Instances.END to start + 3_600_000L,
+                CalendarContract.Instances.ALL_DAY to 0,
+                CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                    CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+                CalendarContract.Instances.ORGANIZER to null,
+            ),
+        )
+        // 予約側は -1 を既定分数 (defaultMinutesBefore) に置き換えて鳴らすので、一覧も同じ扱いにする
+        FakeCalendarProvider.reminderRows = listOf(
+            mapOf(
+                CalendarContract.Reminders.EVENT_ID to 2L,
+                CalendarContract.Reminders.MINUTES to CalendarContract.Reminders.MINUTES_DEFAULT,
+                CalendarContract.Reminders.METHOD to CalendarContract.Reminders.METHOD_ALERT,
+            ),
+        )
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        db.calendarPrefs().upsert(
+            CalendarPrefEntity("1", enabled = true, minutesBefore = 0, startAction = "MUTE", reminderAction = "ALARM"),
+        )
+
+        // 既定分数を開始の 0 分と違う値にして、-1 がこの設定に解決されたことを予約の ID で確かめる
+        val settings = SettingsRepository(context)
+        val before = settings.flow.first().defaultMinutesBefore
+        settings.setDefaultMinutesBefore(15)
+        try {
+            val item = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }.getValue("2")
+            repositoryWithCalendar.resync("test")
+            val pendingIds = db.scheduledInstances().pending().map { it.id }
+            assertEquals(listOf("ev:1:2:$start:b15"), pendingIds)
+            // 予約があるので、スイッチは鳴る側 (鳴らないと出して鳴るのが一番まずい)
+            assertEquals(false, item.muted)
+            assertTrue(item.hasReminderTriggers)
+        } finally {
+            // 設定は DataStore に残り他の試験へ漏れるので戻す
+            settings.setDefaultMinutesBefore(before)
+        }
+    }
+
+    @Test
+    fun `通知だけのカレンダーの予定は行のスイッチを OFF から ON に戻しても通知のまま、鳴らさないカレンダーの予定だけアラームを書く`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        fun row(eventId: Long, calId: Long) = mapOf(
+            CalendarContract.Instances.EVENT_ID to eventId,
+            CalendarContract.Instances.CALENDAR_ID to calId,
+            CalendarContract.Instances.TITLE to "予定$eventId",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to start,
+            CalendarContract.Instances.END to start + 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        // カレンダー1は通知だけ、カレンダー2は開始もリマインダーも鳴らさない (予定側の絞り込みではなくカレンダーの既定)
+        FakeCalendarProvider.instanceRows = listOf(row(1, 1), row(2, 2))
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        db.calendarPrefs().upsert(CalendarPrefEntity("1", enabled = true, minutesBefore = 0, startAction = "NOTIFY", reminderAction = "NOTIFY"))
+        db.calendarPrefs().upsert(CalendarPrefEntity("2", enabled = true, minutesBefore = 0, startAction = "MUTE", reminderAction = "MUTE"))
+
+        suspend fun item(id: String) = repositoryWithCalendar.upcomingEvents().first { it.event.id == id }
+        suspend fun deliveries() = db.scheduledInstances().pending().associate { it.id to it.delivery }
+
+        // 通知だけの予定: 最初から ON で、予約は NOTIFY
+        val notify0 = item("1")
+        assertEquals(false, notify0.muted)
+        assertEquals(false, notify0.defaultSilenced)
+        repositoryWithCalendar.resync("test")
+        assertEquals(com.calendaralarm.shared.model.EventAction.NOTIFY.name, deliveries().getValue("ev:1:1:$start:b0"))
+
+        // OFF にすると予約が消える
+        repositoryWithCalendar.setEventSwitch(notify0, on = false)
+        assertTrue(item("1").muted)
+        assertEquals(null, deliveries()["ev:1:1:$start:b0"])
+
+        // ON に戻す: アラームの指定は書かず、予約は通知のまま (全画面のアラームに格上げしない)
+        repositoryWithCalendar.setEventSwitch(item("1"), on = true)
+        val notifyBack = item("1")
+        assertEquals(false, notifyBack.muted)
+        assertEquals(false, notifyBack.hasOverride)
+        assertEquals(com.calendaralarm.shared.model.EventAction.NOTIFY, notifyBack.startAction)
+        assertEquals(com.calendaralarm.shared.model.EventAction.NOTIFY.name, deliveries().getValue("ev:1:1:$start:b0"))
+        assertEquals(null, db.eventOverrides().all().firstOrNull { it.instanceKey == "1:1:$start" })
+
+        // 鳴らさないカレンダーの予定: ON は「アラーム」を書く (書かないと ON にならない)
+        val off = item("2")
+        assertEquals(true, off.muted)
+        assertEquals(true, off.defaultSilenced)
+        repositoryWithCalendar.setEventSwitch(off, on = true)
+        val on = item("2")
+        assertEquals(false, on.muted)
+        assertEquals(com.calendaralarm.shared.model.EventAction.ALARM, on.startAction)
+        assertEquals(com.calendaralarm.shared.model.EventAction.ALARM.name, deliveries().getValue("ev:2:2:$start:b0"))
+    }
+
+    @Test
+    fun `行のスイッチを ON に戻す時、予定ごとの何分前の指定は残してアクションの指定だけ外す`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        FakeCalendarProvider.instanceRows = listOf(
+            mapOf(
+                CalendarContract.Instances.EVENT_ID to 1L,
+                CalendarContract.Instances.CALENDAR_ID to 1L,
+                CalendarContract.Instances.TITLE to "予定1",
+                CalendarContract.Instances.DESCRIPTION to "",
+                CalendarContract.Instances.EVENT_LOCATION to "",
+                CalendarContract.Instances.BEGIN to start,
+                CalendarContract.Instances.END to start + 3_600_000L,
+                CalendarContract.Instances.ALL_DAY to 0,
+                CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                    CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+                CalendarContract.Instances.ORGANIZER to null,
+            ),
+        )
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        db.calendarPrefs().upsert(CalendarPrefEntity("1", enabled = true, minutesBefore = 0, startAction = "NOTIFY", reminderAction = "NOTIFY"))
+        db.eventOverrides().upsert(EventOverrideEntity("1:1:$start", action = "MUTE", minutesBefore = 10))
+
+        val muted = repositoryWithCalendar.upcomingEvents().first()
+        assertTrue(muted.muted)
+        repositoryWithCalendar.setEventSwitch(muted, on = true)
+
+        val kept = db.eventOverrides().all().single { it.instanceKey == "1:1:$start" }
+        assertEquals(null, kept.action)
+        assertEquals(10, kept.minutesBefore)
+        val back = repositoryWithCalendar.upcomingEvents().first()
+        assertEquals(false, back.muted)
+        assertEquals(com.calendaralarm.shared.model.EventAction.NOTIFY, back.startAction)
+        assertEquals(10, back.minutesBefore)
+    }
+
+    @Test
+    fun `すべてミュート中はアラームの予定を鳴らない側に出してスイッチを押せなくし、通知の予定は鳴る側に残して切れるようにする`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        fun row(eventId: Long, calId: Long) = mapOf(
+            CalendarContract.Instances.EVENT_ID to eventId,
+            CalendarContract.Instances.CALENDAR_ID to calId,
+            CalendarContract.Instances.TITLE to "予定$eventId",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to start,
+            CalendarContract.Instances.END to start + 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        FakeCalendarProvider.instanceRows = listOf(row(1, 1), row(2, 2))
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        // カレンダー1はアラーム、カレンダー2は通知だけ
+        db.calendarPrefs().upsert(CalendarPrefEntity("1", enabled = true, minutesBefore = 0, startAction = "ALARM"))
+        db.calendarPrefs().upsert(CalendarPrefEntity("2", enabled = true, minutesBefore = 0, startAction = "NOTIFY"))
+        // スイッチを一度 OFF→ON した後と同じ: 予定ごとの ALARM 指定があってもすべてミュートで外れる
+        db.eventOverrides().upsert(EventOverrideEntity("1:1:$start", action = "ALARM", minutesBefore = null))
+
+        val settings = SettingsRepository(context)
+        settings.setMuteAll(true)
+        try {
+            val items = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }
+            val alarm = items.getValue("1")
+            assertTrue(alarm.muted)
+            assertTrue(alarm.switchLocked)
+            val notify = items.getValue("2")
+            assertEquals(false, notify.muted)
+            // 通知はすべてミュート中も鳴るので、行のスイッチで切れる
+            assertEquals(false, notify.switchLocked)
+            // 一覧の表示と実際の予約が一致する: 通知の予定だけ予約される
+            repositoryWithCalendar.resync("test")
+            val pendingIds = db.scheduledInstances().pending().map { it.id }
+            assertEquals(listOf("ev:2:2:$start:b0"), pendingIds)
+        } finally {
+            // 設定は DataStore に残り他の試験へ漏れるので戻す
+            settings.setMuteAll(false)
+        }
+    }
+
+    @Test
+    fun `すべてミュート中に通知の行を OFF にしても ON に戻せる。アラームの既定の行は OFF でも ON に戻せない`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        fun row(eventId: Long, calId: Long) = mapOf(
+            CalendarContract.Instances.EVENT_ID to eventId,
+            CalendarContract.Instances.CALENDAR_ID to calId,
+            CalendarContract.Instances.TITLE to "予定$eventId",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to start,
+            CalendarContract.Instances.END to start + 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        FakeCalendarProvider.instanceRows = listOf(row(1, 1), row(2, 2), row(3, 3))
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        // カレンダー1は通知だけ、2はアラーム、3は鳴らさない
+        db.calendarPrefs().upsert(CalendarPrefEntity("1", enabled = true, minutesBefore = 0, startAction = "NOTIFY", reminderAction = "NOTIFY"))
+        db.calendarPrefs().upsert(CalendarPrefEntity("2", enabled = true, minutesBefore = 0, startAction = "ALARM", reminderAction = "ALARM"))
+        db.calendarPrefs().upsert(CalendarPrefEntity("3", enabled = true, minutesBefore = 0, startAction = "MUTE", reminderAction = "MUTE"))
+
+        val settings = SettingsRepository(context)
+        settings.setMuteAll(true)
+        try {
+            suspend fun item(id: String) = repositoryWithCalendar.upcomingEvents().first { it.event.id == id }
+            suspend fun deliveries() = db.scheduledInstances().pending().associate { it.id to it.delivery }
+
+            // 通知の行: ON で切れる -> OFF で予約が消える -> OFF のままでも押せる -> ON で通知に戻る
+            val notify0 = item("1")
+            assertEquals(false, notify0.muted)
+            assertEquals(false, notify0.switchLocked)
+            repositoryWithCalendar.setEventSwitch(notify0, on = false)
+            val notifyOff = item("1")
+            assertTrue(notifyOff.muted)
+            assertEquals(false, notifyOff.switchLocked)
+            repositoryWithCalendar.setEventSwitch(notifyOff, on = true)
+            val notifyBack = item("1")
+            assertEquals(false, notifyBack.muted)
+            assertEquals(false, notifyBack.hasOverride)
+            assertEquals(false, notifyBack.switchLocked)
+            repositoryWithCalendar.resync("test")
+            assertEquals(
+                com.calendaralarm.shared.model.EventAction.NOTIFY.name,
+                deliveries().getValue("ev:1:1:$start:b0"),
+            )
+
+            // アラームの既定の行は、すべてミュート中は ON に戻しても外れるので、OFF の前後どちらも押せない
+            val alarm = item("2")
+            assertTrue(alarm.muted)
+            assertTrue(alarm.switchLocked)
+            // 鳴らさない既定の行も、ON で書く ALARM が外れるので押せない
+            val mute = item("3")
+            assertTrue(mute.muted)
+            assertTrue(mute.switchLocked)
+        } finally {
+            settings.setMuteAll(false)
+        }
+    }
+
+    @Test
+    fun `鳴らさないアカウントの予定は、個別にアラームを指定していても行のスイッチを押せず鳴らない側に出る`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        fun row(eventId: Long, calId: Long) = mapOf(
+            CalendarContract.Instances.EVENT_ID to eventId,
+            CalendarContract.Instances.CALENDAR_ID to calId,
+            CalendarContract.Instances.TITLE to "予定$eventId",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to start,
+            CalendarContract.Instances.END to start + 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        fun calendar(id: Long, account: String) = mapOf(
+            CalendarContract.Calendars._ID to id,
+            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME to "カレンダー$id",
+            CalendarContract.Calendars.ACCOUNT_NAME to account,
+            CalendarContract.Calendars.CALENDAR_COLOR to 0,
+            CalendarContract.Calendars.IS_PRIMARY to 1,
+            CalendarContract.Calendars.VISIBLE to 1,
+        )
+        FakeCalendarProvider.instanceRows = listOf(row(1, 1), row(2, 2))
+        FakeCalendarProvider.reminderRows = emptyList()
+        FakeCalendarProvider.calendarRows = listOf(calendar(1, "off@example.com"), calendar(2, "on@example.com"))
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        db.calendarPrefs().upsert(CalendarPrefEntity("1", enabled = true, minutesBefore = 0))
+        db.calendarPrefs().upsert(CalendarPrefEntity("2", enabled = true, minutesBefore = 0))
+        // 行のスイッチを入れた後と同じ: 予定ごとの ALARM 指定があっても、展開はアカウント単位で先に外す
+        db.eventOverrides().upsert(EventOverrideEntity("1:1:$start", action = "ALARM", minutesBefore = null))
+
+        val settings = SettingsRepository(context)
+        settings.setAccountSetting("off@example.com", AccountSetting(ring = false))
+        try {
+            val items = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }
+            val off = items.getValue("1")
+            assertTrue(off.accountOff)
+            assertEquals(false, off.calendarOff)
+            assertTrue(off.muted)
+            assertTrue(off.lockedByCalendar)
+            assertTrue(off.switchLocked)
+            val on = items.getValue("2")
+            assertEquals(false, on.accountOff)
+            assertEquals(false, on.muted)
+            assertEquals(false, on.switchLocked)
+            // 一覧の表示と実際の予約が一致する: 鳴らすアカウントの予定だけ予約される
+            repositoryWithCalendar.resync("test")
+            val pendingIds = db.scheduledInstances().pending().map { it.id }
+            assertEquals(listOf("ev:2:2:$start:b0"), pendingIds)
+        } finally {
+            // 設定は DataStore に、カレンダー一覧は companion に残り他の試験へ漏れるので戻す。
+            // 既定値の行を書き戻すだけだとアカウント設定が空でなくなり、カレンダー一覧を返さない他の試験の resync が
+            // 「一覧の読み取り失敗」として前回の予約を残す側に倒れるので、行ごと消す
+            context.settingsDataStore.edit { it.clear() }
+            FakeCalendarProvider.calendarRows = emptyList()
+        }
     }
 
     @Test

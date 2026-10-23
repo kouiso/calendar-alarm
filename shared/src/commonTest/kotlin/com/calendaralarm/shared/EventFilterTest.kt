@@ -16,6 +16,63 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+/** 一覧の行のスイッチを ON に戻す時の分かれ目 (#51 PR2): 指定を外して鳴るなら外す、鳴らないなら ALARM を書く。 */
+class SilencedWithoutOverrideTest {
+
+    private val event = CalendarEvent(
+        id = "e", calendarId = "c1", title = "会議",
+        startMillis = 1_800_000_000_000L, endMillis = 1_800_003_600_000L, allDay = false,
+    )
+
+    private fun silenced(
+        rule: AlarmRule,
+        title: String = event.title,
+        codes: com.calendaralarm.shared.model.TitleCodeSettings = com.calendaralarm.shared.model.TitleCodeSettings(),
+        types: EventTypeFilter = EventTypeFilter(),
+        hasReminderTriggers: Boolean = false,
+        muteAll: Boolean = false,
+    ) = AlarmExpander.silencedWithoutOverride(event.copy(title = title), rule, codes, InviteFilter(), types, hasReminderTriggers, muteAll)
+
+    @Test
+    fun `すべてミュート中は、指定を外して戻る先がアラームなら鳴らない側、通知なら鳴る側`() {
+        assertFalse(silenced(AlarmRule(startAction = EventAction.NOTIFY, reminderAction = EventAction.NOTIFY), muteAll = true))
+        assertTrue(silenced(AlarmRule(startAction = EventAction.ALARM, reminderAction = EventAction.ALARM), muteAll = true, hasReminderTriggers = true))
+        assertTrue(silenced(AlarmRule(startAction = EventAction.ALARM), muteAll = true))
+        // すべてミュートでなければアラームの既定は鳴る側
+        assertFalse(silenced(AlarmRule(startAction = EventAction.ALARM), muteAll = false))
+        // 開始がアラームでも、リマインダーが通知で時刻があれば、通知が残る
+        assertFalse(silenced(AlarmRule(startAction = EventAction.ALARM, reminderAction = EventAction.NOTIFY), muteAll = true, hasReminderTriggers = true))
+    }
+
+    @Test
+    fun `通知だけのカレンダーは指定を外せば鳴る側なので ALARM を書かない`() {
+        assertFalse(silenced(AlarmRule(startAction = EventAction.NOTIFY, reminderAction = EventAction.NOTIFY)))
+    }
+
+    @Test
+    fun `開始もリマインダーも鳴らさないカレンダーは指定を外すと鳴らない`() {
+        assertTrue(silenced(AlarmRule(startAction = EventAction.MUTE, reminderAction = EventAction.MUTE), hasReminderTriggers = true))
+    }
+
+    @Test
+    fun `開始だけ鳴らさず、リマインダーの時刻があって通知なら鳴る側`() {
+        val rule = AlarmRule(startAction = EventAction.MUTE, reminderAction = EventAction.NOTIFY)
+        assertFalse(silenced(rule, hasReminderTriggers = true))
+        assertTrue(silenced(rule, hasReminderTriggers = false))
+    }
+
+    @Test
+    fun `種類の絞り込みで外れる予定は指定を外すと鳴らない`() {
+        val rule = AlarmRule(startAction = EventAction.NOTIFY)
+        val birthday = event.copy(googleEventType = "birthday")
+        assertTrue(
+            AlarmExpander.silencedWithoutOverride(
+                birthday, rule, com.calendaralarm.shared.model.TitleCodeSettings(), InviteFilter(), EventTypeFilter(), false,
+            ),
+        )
+    }
+}
+
 /** 予定の種類と「予定あり／なし」で鳴らす・鳴らさないを決める判定 (#79)。 */
 class EventFilterTest {
 

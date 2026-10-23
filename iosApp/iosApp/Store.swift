@@ -11,6 +11,8 @@ final class Store: ObservableObject {
         // settings
         var defaultMinutesBefore: Int = 0
         var defaultSnoozeMinutes: Int = 10
+        /// 鳴動画面の「スヌーズ時間を選ぶ」に出す分数。Android の snoozePresets と同じ既定値
+        var snoozePresets: [Int] = SnoozePresets.defaults
         var weatherEnabled: Bool = true
         var defaultStartAction: String = EventAction.alarm.rawValue
         var defaultReminderAction: String = EventAction.alarm.rawValue
@@ -55,6 +57,9 @@ final class Store: ObservableObject {
         // scheduled_instances: id -> ScheduledRecord
         var scheduled: [String: ScheduledRecord] = [:]
         var audit: [AuditEntry] = []
+        /// 停止・スヌーズ・鳴らずの記録 (7日分)。監査ログ (50件) や予約の行
+        /// (単発を使い直すと消える) とは別に持ち、設定先頭の「最近の鳴動」と見逃しの数に使う
+        var ringHistory: [AuditEntry] = []
         var nextAlarmId: Int64 = 1
         var nextAuditId: Int64 = 1
         // 直近に読み取ったカレンダー/イベントのキャッシュ (予定画面表示用)
@@ -137,6 +142,7 @@ final class Store: ObservableObject {
 
     func setDefaultMinutes(_ v: Int) { mutate { $0.defaultMinutesBefore = v } }
     func setDefaultSnooze(_ v: Int) { mutate { $0.defaultSnoozeMinutes = v } }
+    func toggleSnoozePreset(_ m: Int) { mutate { $0.snoozePresets = SnoozePresets.toggled($0.snoozePresets, m) } }
     func setWeatherEnabled(_ v: Bool) { mutate { $0.weatherEnabled = v } }
     /// 既定のアラーム音を変える。前の音のファイルは、どの予約の記録も指さなくなってから Engine が消す
     /// (鳴る直前・鳴動中・スヌーズ中の予約は前の音のまま鳴るため)
@@ -201,7 +207,10 @@ final class Store: ObservableObject {
 
     /// カレンダー単位のルール。何分前はカレンダーで選んだ値、無ければアカウントの「何分前」→ アプリの既定の順
     func rule(for calendarId: String) -> AlarmRuleDTO {
-        var r = state.calendarRules[calendarId] ?? AlarmRuleDTO(minutesBefore: state.defaultMinutesBefore)
+        // 保存したルールが無いカレンダーは、展開 (SharedBridge の defaultRule) と同じ全体の既定を使う
+        var r = state.calendarRules[calendarId] ?? AlarmRuleDTO(minutesBefore: state.defaultMinutesBefore,
+                                                                startAction: state.defaultStartAction,
+                                                                reminderAction: state.defaultReminderAction)
         if !state.calendarMinutesChosen.contains(calendarId) {
             r.minutesBefore = accountSetting(forCalendar: calendarId).minutesBefore ?? state.defaultMinutesBefore
         }
@@ -279,6 +288,12 @@ final class Store: ObservableObject {
         mutate { $0.overrides[instanceKey] = EventOverrideDTO(action: action.rawValue, minutesBefore: minutes, extraOffsets: extras) }
     }
     func removeOverride(instanceKey: String) { mutate { $0.overrides.removeValue(forKey: instanceKey) } }
+    /// 予定ごとの個別指定を丸ごと置き換える。nil なら指定ごと消す
+    func replaceOverride(instanceKey: String, with ov: EventOverrideDTO?) {
+        mutate { s in
+            if let ov { s.overrides[instanceKey] = ov } else { s.overrides.removeValue(forKey: instanceKey) }
+        }
+    }
 
     // MARK: - standalone alarms
 
@@ -362,15 +377,24 @@ final class Store: ObservableObject {
 
     // MARK: - audit
 
+    /// 鳴動時刻が直近24時間の「鳴らず」の件数 (予定画面と設定の「鳴動の状態」で同じものを使う)
+    func recentMissedCount(nowMillis: Int64) -> Int {
+        RingHistory.recentMissedCount(state.ringHistory, nowMillis: nowMillis)
+    }
+
     /// atMillis は後から分かった出来事 (閉じている間に届いた通知) を起きた時刻で残す時だけ渡す。
-    /// 一覧が時刻順のままになるよう、その時刻の位置に差し込む
-    func audit(_ type: String, _ detail: String, atMillis: Int64? = nil) {
+    /// 一覧が時刻順のままになるよう、その時刻の位置に差し込む。
+    /// ring には停止・スヌーズ・鳴らずの対象の予約を渡す。予約の行が後で消えても記録に残すため
+    func audit(_ type: String, _ detail: String, atMillis: Int64? = nil, ring: AlarmInstanceDTO? = nil) {
         mutate { s in
             let at = atMillis ?? Int64(Date().timeIntervalSince1970 * 1000)
+            let entry = AuditEntry(id: s.nextAuditId, atMillis: at, type: type, detail: detail, instanceId: ring?.id,
+                                   triggerAtMillis: ring?.triggerAtMillis, title: ring?.title)
             let index = s.audit.lastIndex { $0.atMillis <= at }.map { $0 + 1 } ?? 0
-            s.audit.insert(AuditEntry(id: s.nextAuditId, atMillis: at, type: type, detail: detail), at: index)
+            s.audit.insert(entry, at: index)
             s.nextAuditId += 1
             if s.audit.count > 50 { s.audit.removeFirst(s.audit.count - 50) }
+            s.ringHistory = RingHistory.appending(s.ringHistory, entry)
         }
     }
 
@@ -405,6 +429,7 @@ extension Store.Persisted {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         defaultMinutesBefore = try c.decodeIfPresent(Int.self, forKey: .defaultMinutesBefore) ?? 0
         defaultSnoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .defaultSnoozeMinutes) ?? 10
+        snoozePresets = try c.decodeIfPresent([Int].self, forKey: .snoozePresets) ?? SnoozePresets.defaults
         weatherEnabled = try c.decodeIfPresent(Bool.self, forKey: .weatherEnabled) ?? true
         defaultStartAction = try c.decodeIfPresent(String.self, forKey: .defaultStartAction) ?? EventAction.alarm.rawValue
         defaultReminderAction = try c.decodeIfPresent(String.self, forKey: .defaultReminderAction) ?? EventAction.alarm.rawValue
@@ -434,9 +459,44 @@ extension Store.Persisted {
         standaloneAlarms = try c.decodeIfPresent([StandaloneAlarmDTO].self, forKey: .standaloneAlarms) ?? []
         scheduled = try c.decodeIfPresent([String: ScheduledRecord].self, forKey: .scheduled) ?? [:]
         audit = try c.decodeIfPresent([AuditEntry].self, forKey: .audit) ?? []
+        if let saved = try c.decodeIfPresent([AuditEntry].self, forKey: .ringHistory) {
+            ringHistory = saved
+        } else {
+            // 前の版の保存データ: 記録が無いので、残っている予約の行と監査ログから作り直す。
+            // detail は Engine の MISSED と同じ書式 (Engine は MainActor なのでここでは自前で整形する)
+            let fmt = DateFormatter()
+            fmt.dateFormat = "M/d HH:mm"
+            ringHistory = RingHistory.seed(
+                audit: audit,
+                missed: scheduled.values.filter { $0.state == .missed }.map {
+                    let at = Date(timeIntervalSince1970: TimeInterval($0.instance.triggerAtMillis) / 1000)
+                    return ($0.instance.id, $0.instance.triggerAtMillis, $0.instance.title,
+                            "\($0.instance.title) @\(fmt.string(from: at))")
+                },
+                nowMillis: Int64(Date().timeIntervalSince1970 * 1000),
+                titleById: Dictionary(scheduled.values.map { ($0.instance.id, $0.instance.title) }, uniquingKeysWith: { first, _ in first }))
+        }
         nextAlarmId = try c.decodeIfPresent(Int64.self, forKey: .nextAlarmId) ?? 1
         nextAuditId = try c.decodeIfPresent(Int64.self, forKey: .nextAuditId) ?? 1
         calendars = try c.decodeIfPresent([CalendarSource].self, forKey: .calendars) ?? []
         lastEvents = try c.decodeIfPresent([CalendarEventDTO].self, forKey: .lastEvents) ?? []
+    }
+}
+
+/// スヌーズ分数の候補。Android の `SettingsRepository.snoozePresets` と設定画面の選択肢に揃える
+enum SnoozePresets {
+    static let defaults = [5, 10, 15, 30, 45, 60]
+    /// 設定画面で選べる分数 (Android `SettingsScreen` と同じ並び)
+    static let choices = [1, 5, 10, 15, 20, 30, 45, 60, 90]
+    /// 鳴動画面に並べる上限。Android の `snoozePresets.take(6)` と同じ
+    static let maxOnRingingScreen = 6
+
+    /// 鳴動画面に並べる分数。保存した一覧を先頭から [maxOnRingingScreen] 件まで使う (空なら空)
+    static func onRingingScreen(_ saved: [Int]) -> [Int] {
+        Array(saved.prefix(maxOnRingingScreen))
+    }
+
+    static func toggled(_ current: [Int], _ m: Int) -> [Int] {
+        current.contains(m) ? current.filter { $0 != m } : (current + [m]).sorted()
     }
 }

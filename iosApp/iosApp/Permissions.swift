@@ -56,6 +56,23 @@ enum PermissionState: Equatable {
 
 /// 「1つずつ頼む」の進め方。画面から切り離しておく。
 enum PermissionPlan {
+    /// 鳴らすのに足りない許可の数 (予定画面の鳴動の状態)。通知の許可は普段は見逃しを知らせるためだけなので数えないが、
+    /// 通知だけで届く予約 (NOTIFY) がこの先にある時は、それを届けるのに要るので数える。
+    /// iOS 26 未満はアラームの許可が通知の許可を写している (`refresh`) ので、二重に数えない
+    static func missingForRinging(_ states: [AppPermission: PermissionState], notifyDeliveryAhead: Bool,
+                                  alarmMirrorsNotify: Bool) -> Int {
+        states.filter {
+            $0.value != .granted
+                && neededForRinging($0.key, notifyDeliveryAhead: notifyDeliveryAhead, alarmMirrorsNotify: alarmMirrorsNotify)
+        }.count
+    }
+
+    /// その許可が今の予約を鳴らすのに要るか。設定の許可一覧で「足りない」と赤く出すのは要る物だけにして、
+    /// 見出しの数と赤い行の数を同じ規則で揃える (#51 PR3)
+    static func neededForRinging(_ p: AppPermission, notifyDeliveryAhead: Bool, alarmMirrorsNotify: Bool) -> Bool {
+        p != .notify || (notifyDeliveryAhead && !alarmMirrorsNotify)
+    }
+
     /// 次に頼む許可。断られたものは同じ流れの中で二度頼まない。
     static func next(_ states: [AppPermission: PermissionState], declined: Set<AppPermission>) -> AppPermission? {
         AppPermission.allCases.first { states[$0] != .granted && !declined.contains($0) }

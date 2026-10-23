@@ -23,8 +23,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.calendaralarm.R
 import com.calendaralarm.shared.model.ExtractedEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -69,11 +71,11 @@ fun ExtractedEventDialog(
     // カレンダー書き込み権限は確定時のみ要求する (読み取りとは別権限)
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) insert() else error = "カレンダー書き込み権限がありません" }
+    ) { granted -> if (granted) insert() else error = context.getString(R.string.extracted_no_write_permission) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("予定に追加") },
+        title = { Text(stringResource(R.string.extracted_title)) },
         text = {
             Column {
                 // 共有から来て AI で読めなかった時など、なぜ空欄があるかを先に伝える
@@ -84,27 +86,27 @@ fun ExtractedEventDialog(
                 }
                 OutlinedTextField(
                     value = title, onValueChange = { title = it },
-                    label = { Text("タイトル") }, singleLine = true,
+                    label = { Text(stringResource(R.string.extracted_field_title)) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = start, onValueChange = { start = it },
-                    label = { Text(if (event.allDay) "日付 (YYYY-MM-DD)" else "開始 (YYYY-MM-DDTHH:mm)") },
+                    label = { Text(stringResource(if (event.allDay) R.string.extracted_field_date else R.string.extracted_field_start)) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
                 if (!event.allDay) {
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = end, onValueChange = { end = it },
-                        label = { Text("終了 (空=1時間)") }, singleLine = true,
+                        label = { Text(stringResource(R.string.extracted_field_end)) }, singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = location, onValueChange = { location = it },
-                    label = { Text("場所") }, singleLine = true,
+                    label = { Text(stringResource(R.string.extracted_field_location)) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 error?.let {
@@ -120,9 +122,9 @@ fun ExtractedEventDialog(
                     context, Manifest.permission.WRITE_CALENDAR,
                 ) == PackageManager.PERMISSION_GRANTED
                 if (granted) insert() else permissionLauncher.launch(Manifest.permission.WRITE_CALENDAR)
-            }) { Text("追加") }
+            }) { Text(stringResource(R.string.common_add)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("戻る") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_back)) } },
     )
 }
 
@@ -136,7 +138,7 @@ private fun insertEvent(context: android.content.Context, ev: ExtractedEvent): S
         arrayOf(CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR.toString()),
         CalendarContract.Calendars.IS_PRIMARY + " DESC",
     )?.use { c -> if (c.moveToFirst()) c.getLong(0) else null }
-        ?: return "書き込み可能なカレンダーがありません"
+        ?: return context.getString(R.string.extracted_no_calendar)
 
     val (dtStart, dtEnd) = try {
         if (ev.allDay) {
@@ -157,7 +159,7 @@ private fun insertEvent(context: android.content.Context, ev: ExtractedEvent): S
             )
         }
     } catch (e: Exception) {
-        return "日時の形式が不正です (${ev.start})"
+        return context.getString(R.string.extracted_bad_datetime, ev.start)
     }
 
     val values = ContentValues().apply {
@@ -174,5 +176,5 @@ private fun insertEvent(context: android.content.Context, ev: ExtractedEvent): S
         )
     }
     return context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
-        ?.let { null } ?: "カレンダーへの書き込みに失敗しました"
+        ?.let { null } ?: context.getString(R.string.extracted_write_failed)
 }
