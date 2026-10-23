@@ -58,6 +58,9 @@ final class FakeScheduler: AlarmScheduler {
         }
         return booked[instanceId] != nil
     }
+
+    /// この偽物は AlarmKit の一覧を持たない経路 (nil) として振る舞う
+    var liveReservationIdsIfReadable: Set<UUID>? { nil }
 }
 
 @MainActor

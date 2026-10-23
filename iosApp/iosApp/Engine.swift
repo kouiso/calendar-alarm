@@ -20,6 +20,10 @@ final class Engine: ObservableObject {
     /// 展開ホライズン (Android と同じ 14 日)
     private let horizonDays = 14
 
+    /// 端末の最終起動時刻。書き残しが無くても、起動し続けたまま消えた予約を止めた扱いにする判定に使う (#118)。
+    /// テストが差し替える
+    var bootMillis: Int64? = SystemBoot.millis
+
     /// 鳴動中のインスタンス id (RingingView 用)
     @Published var alertingIds: Set<String> = []
 
@@ -216,6 +220,44 @@ final class Engine: ObservableObject {
         // 期限切れ PENDING → MISSED + 通知。Android 同様 resync の先頭で処理する:
         // 終端判定・preserved ・プランは全てこれ以降の状態を見る (逆順だと
         // MISSED 化した行が preserved 経由で desired に復活して鳴り直す)。
+        // アプリが見ていない間に停止ボタンで止められたアラームを先に終端化する (#61)。
+        // 見逃し判定より前にやる: 先に見逃しにすると、止めたのに「見逃し」通知が出る。
+        // 止めたかどうかは停止ボタンの intent の書き残しで決める。書き残しが付かない停止 (実機のロック画面スライド, #118) は、
+        // 予約した時刻から端末が起動し続けている (起動時刻 <= 予約した時刻) のに、鳴る時刻を過ぎて予約だけ消えた行を
+        // 止めた扱いにして拾う。予約のあとに再起動した行は決めない
+        let stopLog = OffAppStopLog()
+        if let liveIds = scheduler.liveReservationIdsIfReadable {
+            let rows = Self.offAppRows(s)
+            let decision = OffAppStopPlan.decide(pending: rows, nowMillis: now, stopped: Set(stopLog.entries.keys),
+                                                 bootMillis: bootMillis) {
+                liveIds.contains(ReservationUUID.from($0))
+            }
+            for id in decision.consumed {
+                guard let rec = store.state.scheduled[id] else { continue }
+                store.markState(id, .dismissed)
+                let via = stopLog.entries[id] != nil ? "intent" : "boot"
+                store.audit("DISMISS_OFFAPP", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis)) via=\(via)", ring: rec.instance)
+            }
+            disableConsumedOneShots(decision.oneShotAlarmIds)
+            // 停止済みの保存は直列キューで遅れて書かれるが、書き残しの削除は UserDefaults へ即座に効く。
+            // 保存が済む前にアプリが落ちると、行は PENDING のまま戻って止めた証拠だけが無くなり、拾い直されて鳴り直す。
+            // なのでディスクに「停止済み」が載ったのを読み戻して確かめ、載っていない行の書き残しは残す
+            // 今回止めた行だけでなく、前の回で止めたのにまだ載っていない行も数える。数えないと、保存が失敗し続ける間の
+            // 2 回目の resync で、残したはずの書き残しを消してしまう (その行はもう PENDING ではなく rows に入らない)
+            let onDisk = store.savedState()?.scheduled
+            let unsaved = Set(stopLog.entries.keys.filter {
+                store.state.scheduled[$0]?.state == .dismissed && onDisk?[$0]?.state != .dismissed
+            })
+            let newlyUnsaved = unsaved.intersection(decision.consumed)
+            if !newlyUnsaved.isEmpty {
+                store.audit("DISMISS_OFFAPP_UNSAVED", "停止済みがディスクに載らず書き残しを残した: \(newlyUnsaved.sorted().joined(separator: ","))")
+            }
+            // 使った書き残しと、待っている行がもう無い書き残しは消す (同じ id の別の回に効かせないため)
+            let stillPending = Set(rows.map { $0.id }).subtracting(decision.consumed)
+            stopLog.remove(Set(stopLog.entries.keys).subtracting(stillPending).subtracting(unsaved), nowMillis: now)
+            s = store.state
+        }
+
         let graceMillis = Int64(60 * 60 * 1000)
         var missedAlarmIds: Set<Int64> = []
         for rec in s.scheduled.values where rec.state == .pending && rec.instance.triggerAtMillis < now - graceMillis {
@@ -344,7 +386,10 @@ final class Engine: ObservableObject {
             store.removeScheduled(id)
             unreserved.remove(id)
         }
-        if !unreserved.isEmpty { store.audit("RECOVER", "予約喪失 \(unreserved.count)件→再予約") }
+        // どの行を取り直したかを残す。止めた行を取り直していないことを、監査の記録から確かめられるように (#61)
+        if !unreserved.isEmpty {
+            store.audit("RECOVER", "予約喪失 \(unreserved.count)件→再予約: \(unreserved.sorted().joined(separator: ","))")
+        }
         // 予約 id を空にしておく。取り直しに失敗した行が「予約済み」に見えると、通知の照合 (notificationOutcome) が
         // OS から消えた行と取り違えて、見逃しではなく鳴った扱いにしてしまう。取り直しに成功すれば上書きされる
         for id in unreserved {
@@ -411,7 +456,7 @@ final class Engine: ObservableObject {
             )
             do {
                 let r = try await reserve(shifted)
-                store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: r.id, soundFile: r.sound))
+                store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: r.id, soundFile: r.sound), reserved: true)
                 scheduledCount += 1
             } catch {
                 store.audit("SCHEDULE_ERR", "\(inst.id): \(error.localizedDescription)")
@@ -438,7 +483,7 @@ final class Engine: ObservableObject {
             }
             do {
                 let r = try await reserve(inst)
-                store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: r.id, soundFile: r.sound))
+                store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: r.id, soundFile: r.sound), reserved: true)
                 scheduledCount += 1
             } catch {
                 store.audit("SCHEDULE_ERR", "\(inst.id): \(error.localizedDescription)")
@@ -459,6 +504,15 @@ final class Engine: ObservableObject {
     }
 
     // MARK: - 鳴動/停止/スヌーズ
+
+    private static func offAppRows(_ state: Store.Persisted) -> [OffAppStopPlan.Row] {
+        state.scheduled.values.filter { $0.state == .pending }.map {
+            OffAppStopPlan.Row(id: $0.instance.id, triggerAtMillis: $0.instance.triggerAtMillis,
+                               wasReserved: $0.alarmKitId != nil,
+                               reservedAtMillis: $0.reservedAtMillis,
+                               standaloneAlarmId: $0.instance.standaloneAlarmId)
+        }
+    }
 
     /// 単発アラームの終端到達をアラーム本体の OFF に反映する (Android 側と同じ)。
     /// 「1回のみ」は鳴らし切った/見逃した時点で消費済み。再有効化は消費リセットで復活できる。
@@ -578,7 +632,7 @@ final class Engine: ObservableObject {
                 } catch {
                     self.store.audit("SCHEDULE_ERR", "snooze \(next.id): \(error.localizedDescription)")
                 }
-                self.store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: rid, soundFile: sound))
+                self.store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: rid, soundFile: sound), reserved: rid != nil)
             }
         }
     }
@@ -672,7 +726,7 @@ final class Engine: ObservableObject {
         )
         do {
             let r = try await reserve(inst)
-            store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: r.id, soundFile: r.sound))
+            store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: r.id, soundFile: r.sound), reserved: true)
             store.audit("TIMER_SET", "\(durationMillis / 1000)s")
             return true
         } catch {
@@ -714,7 +768,7 @@ final class Engine: ObservableObject {
             do {
                 let r = try await reserve(current.instance)
                 store.putScheduled(ScheduledRecord(instance: current.instance, state: .pending,
-                                                   alarmKitId: r.id ?? current.alarmKitId, soundFile: r.sound))
+                                                   alarmKitId: r.id ?? current.alarmKitId, soundFile: r.sound), reserved: r.id != nil)
                 count += 1
             } catch {
                 store.audit("SCHEDULE_ERR", "sound \(id): \(error.localizedDescription)")
@@ -747,7 +801,7 @@ final class Engine: ObservableObject {
         do {
             let r = try await reserve(rec.instance, sound: rec.soundFile)
             store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending,
-                                               alarmKitId: r.id ?? rec.alarmKitId, soundFile: r.sound))
+                                               alarmKitId: r.id ?? rec.alarmKitId, soundFile: r.sound), reserved: r.id != nil)
             store.audit("SOUND_RESTORE", "\(id): 前の音で予約し直し")
             return true
         } catch {

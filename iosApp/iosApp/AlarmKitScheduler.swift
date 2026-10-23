@@ -27,6 +27,9 @@ protocol AlarmScheduler {
     /// @returns AlarmKit UUID など予約側の識別子 (通知経路は nil)
     func schedule(_ inst: AlarmInstanceDTO, sound: String?) async throws -> String?
     func cancel(instanceId: String, reservationId: String?) async
+    /// OS に今入っている予約の UUID。許可が無い・一覧を読めない・予約を一覧できない経路では nil。
+    /// nil の時に空として扱うと、全部「消えた」と誤判定するため分ける (#61)
+    var liveReservationIdsIfReadable: Set<UUID>? { get }
     /// OS にこのインスタンスの予約がまだ残っているか
     func hasReservation(instanceId: String) async -> Bool
     /// OS の予約一覧と突き合わせて、予約が消えている PENDING 行の id を返す (一覧を1回だけ取る経路)。
@@ -39,6 +42,19 @@ protocol AlarmScheduler {
 enum ReservationGap {
     static func unreserved(_ scheduled: [String: ScheduledRecord], isLive: (String) -> Bool) -> Set<String> {
         Set(scheduled.filter { $0.value.state == .pending && !isLive($0.key) }.map { $0.key })
+    }
+}
+
+/// インスタンス id から決める予約の UUID。AlarmKit の型に置くと iOS 26 未満の分岐から呼べないので外に置く
+enum ReservationUUID {
+    /// AlarmKit は UUID 必須。差分適用のため id から決定的に作る
+    static func from(_ instanceId: String) -> UUID {
+        var bytes = [UInt8](Insecure.MD5.hash(data: Data(instanceId.utf8)))
+        bytes[6] = (bytes[6] & 0x0F) | 0x40
+        bytes[8] = (bytes[8] & 0x3F) | 0x80
+        let t = uuid_t(bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                       bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15])
+        return UUID(uuid: t)
     }
 }
 
@@ -80,6 +96,14 @@ final class AlarmKitScheduler: AlarmScheduler {
 
     /// 全アラーム (id, state) のスナップショット。
     var allAlarms: [Alarm] { (try? manager.alarms) ?? [] }
+
+    /// 読めた時だけ全アラームを返す。読めない時に空として扱うと、全部「止められた」と誤判定するため分ける
+    var allAlarmsIfReadable: [Alarm]? { try? manager.alarms }
+
+    var liveReservationIdsIfReadable: Set<UUID>? {
+        guard authorizationGranted, let live = allAlarmsIfReadable else { return nil }
+        return Set(live.map { $0.id })
+    }
 
     /// 鳴動中アラームを停止。
     func stop(uuid: UUID) throws { try manager.stop(id: uuid) }
@@ -135,6 +159,12 @@ final class AlarmKitScheduler: AlarmScheduler {
         let uuid = Self.uuid(from: inst.id)
         if existingIds.contains(uuid) { try? manager.cancel(id: uuid) }
 
+        _ = try await manager.schedule(id: uuid, configuration: Self.configuration(for: inst, sound: sound))
+        return uuid.uuidString
+    }
+
+    /// 予約に渡す設定。停止ボタンの intent を付け忘れると #61 が戻るので、テストで中身を確かめられるよう分けている
+    static func configuration(for inst: AlarmInstanceDTO, sound: String? = nil) -> AlarmManager.AlarmConfiguration<AppAlarmMetadata> {
         let date = Date(timeIntervalSince1970: TimeInterval(inst.triggerAtMillis) / 1000)
         let meta = AppAlarmMetadata(instanceId: inst.id, title: inst.title, snoozeMinutes: inst.snoozeMinutes)
         let alert: AlarmPresentation.Alert
@@ -178,14 +208,14 @@ final class AlarmKitScheduler: AlarmScheduler {
         )
         // AlarmKit で指定できるのは音だけ (音量・だんだん大きく・バイブは iPhone の設定に従う)
         let alertSound: AlertConfiguration.AlertSound = sound.map { .named($0) } ?? .default
-        let config = AlarmManager.AlarmConfiguration<AppAlarmMetadata>(
+        return AlarmManager.AlarmConfiguration<AppAlarmMetadata>(
             countdownDuration: countdown,
             schedule: .fixed(date),
             attributes: attrs,
+            // 停止ボタンで「止めた」を書き残す。アプリが見ていない間に止めた行を、予約が消えた行と見分けるため (#61)
+            stopIntent: AlarmStopIntent(instanceId: inst.id),
             sound: alertSound
         )
-        _ = try await manager.schedule(id: uuid, configuration: config)
-        return uuid.uuidString
     }
 
     func cancel(instanceId: String, reservationId: String?) async {
@@ -206,14 +236,7 @@ final class AlarmKitScheduler: AlarmScheduler {
     }
 
     /// インスタンス id 文字列から決定論的 UUID (AlarmKit は UUID 必須、差分適用のため決定的に)。
-    static func uuid(from instanceId: String) -> UUID {
-        var bytes = [UInt8](Insecure.MD5.hash(data: Data(instanceId.utf8)))
-        bytes[6] = (bytes[6] & 0x0F) | 0x40
-        bytes[8] = (bytes[8] & 0x3F) | 0x80
-        let t = uuid_t(bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-                       bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15])
-        return UUID(uuid: t)
-    }
+    static func uuid(from instanceId: String) -> UUID { ReservationUUID.from(instanceId) }
 }
 
 // MARK: - UNUserNotificationCenter フォールバック (iOS < 26)
@@ -262,6 +285,9 @@ final class NotificationScheduler: AlarmScheduler {
     func cancel(instanceId: String, reservationId: String?) async {
         port.removePending([instanceId])
     }
+
+    /// 通知の経路は AlarmKit の一覧を持たないので、消えた予約の判定 (#61) はしない
+    var liveReservationIdsIfReadable: Set<UUID>? { nil }
 
     func hasReservation(instanceId: String) async -> Bool {
         await port.pendingRequestIds().contains(instanceId)

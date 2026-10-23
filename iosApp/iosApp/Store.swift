@@ -348,7 +348,26 @@ final class Store: ObservableObject {
         }
     }
 
-    func putScheduled(_ r: ScheduledRecord) { mutate { $0.scheduled[r.instance.id] = r } }
+    /// 予約 id が新しく入った行 (初回・付け替え) と、OS へ予約を入れ直した直後 (`reserved: true`) には予約した時刻を押す。
+    /// それ以外で同じ id のままなら前の時刻を引き継ぐ。呼び出し側が時刻を持ち回らなくても、再起動の前後を判定できるようにするため (#118)
+    /// 同じ UUID で予約し直した時に前の時刻のままだと、再起動をまたいだ行を起動し続けた扱いにしてしまう
+    /// 予約した時刻の時計。試験で「予約が過去」の行を作るために差し替える
+    var reservedClockMillis: () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
+
+    func putScheduled(_ r: ScheduledRecord, reserved: Bool = false) {
+        let reservedNow = reservedClockMillis()
+        mutate {
+            var rec = r
+            if rec.alarmKitId == nil {
+                rec.reservedAtMillis = nil
+            } else if !reserved, let old = $0.scheduled[r.instance.id], old.alarmKitId == rec.alarmKitId {
+                rec.reservedAtMillis = old.reservedAtMillis
+            } else {
+                rec.reservedAtMillis = reservedNow
+            }
+            $0.scheduled[r.instance.id] = rec
+        }
+    }
     func removeScheduled(_ id: String) { mutate { $0.scheduled.removeValue(forKey: id) } }
 
     /// 7日より古い終了行を実削除 (Android 側と同じ保持期間)。

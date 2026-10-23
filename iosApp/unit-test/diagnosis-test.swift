@@ -10,6 +10,7 @@ final class NotificationPathScheduler: AlarmScheduler {
     func requestAuthorization() async {}
     func schedule(_ inst: AlarmInstanceDTO, sound: String?) async throws -> String? { inst.id }
     func cancel(instanceId: String, reservationId: String?) async {}
+    var liveReservationIdsIfReadable: Set<UUID>? { nil }
     func hasReservation(instanceId: String) async -> Bool { true }
     func unreservedPendingIds(_ scheduled: [String: ScheduledRecord]) async -> Set<String>? { nil }
 }
