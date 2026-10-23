@@ -35,10 +35,18 @@ enum OffAppStopPlan {
     }
 
     /// 鳴って止められた行の id。[stopped] は停止ボタンの intent が書き残した id、[isLive] は AlarmKit に予約が残っているか
-    static func consumedWhileAway(pending: [Row], nowMillis: Int64, stopped: Set<String>,
+    ///
+    /// [bootMillis] は端末が最後に起動した時刻。書き残しが無くても、鳴る時刻より前から端末が起動し続けていて
+    /// 予約だけ消えているなら、再起動で消えたのではなく鳴って止められたと見なす。
+    /// 実機 (iOS 26.5.2) で、ロック画面のスライド停止後に書き残しが付かず鳴り直したため (#118)。
+    /// nil (読めない) の時はこの見なしをしない
+    static func consumedWhileAway(pending: [Row], nowMillis: Int64, stopped: Set<String>, bootMillis: Int64? = nil,
                                   isLive: (String) -> Bool) -> [String] {
         pending
-            .filter { $0.wasReserved && $0.triggerAtMillis <= nowMillis && stopped.contains($0.id) && !isLive($0.id) }
+            .filter {
+                $0.wasReserved && $0.triggerAtMillis <= nowMillis && !isLive($0.id)
+                    && (stopped.contains($0.id) || Self.stayedUpThrough($0.triggerAtMillis, bootMillis: bootMillis))
+            }
             .map { $0.id }
             .sorted()
     }
@@ -46,9 +54,10 @@ enum OffAppStopPlan {
     /// 停止済みにする行と、それで消費される単発アラームを決める。
     /// スヌーズ子がまだ待っている単発は消費しない。アプリ内で止めた時 (dismiss / reconcileAlarmKitState) は
     /// すぐ無効化するので、この経路だけの新しい規則。単発を無効化すると、待っているスヌーズ子が resync で持ち越されず鳴らなくなるため
-    static func decide(pending: [Row], nowMillis: Int64, stopped: Set<String>,
+    static func decide(pending: [Row], nowMillis: Int64, stopped: Set<String>, bootMillis: Int64? = nil,
                        isLive: (String) -> Bool) -> Decision {
-        let consumed = consumedWhileAway(pending: pending, nowMillis: nowMillis, stopped: stopped, isLive: isLive)
+        let consumed = consumedWhileAway(pending: pending, nowMillis: nowMillis, stopped: stopped,
+                                         bootMillis: bootMillis, isLive: isLive)
         let consumedSet = Set(consumed)
         let stillPending = pending.filter { !consumedSet.contains($0.id) }.map { $0.id }
         var oneShot: Set<Int64> = []
@@ -57,6 +66,24 @@ enum OffAppStopPlan {
             if !stillPending.contains(where: { $0.hasPrefix("\(row.id):snz") }) { oneShot.insert(aid) }
         }
         return Decision(consumed: consumed, oneShotAlarmIds: oneShot)
+    }
+}
+
+extension OffAppStopPlan {
+    /// 鳴る時刻の前から端末が起動したままか。再起動をまたいでいないので、予約が消えた理由は「鳴って止められた」しか残らない
+    static func stayedUpThrough(_ triggerAtMillis: Int64, bootMillis: Int64?) -> Bool {
+        guard let boot = bootMillis else { return false }
+        return boot <= triggerAtMillis
+    }
+}
+
+/// 端末の最終起動時刻 (kern.boottime)
+enum SystemBoot {
+    static var millis: Int64? {
+        var tv = timeval()
+        var size = MemoryLayout<timeval>.stride
+        guard sysctlbyname("kern.boottime", &tv, &size, nil, 0) == 0, tv.tv_sec > 0 else { return nil }
+        return Int64(tv.tv_sec) * 1000 + Int64(tv.tv_usec) / 1000
     }
 }
 

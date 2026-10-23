@@ -53,6 +53,8 @@ final class EngineOffAppStopTests: XCTestCase {
             $0.standaloneAlarms = []
         }
         UserDefaults.standard.removeObject(forKey: OffAppStopLog.key)
+        // 既定では起動時刻を使わない (書き残しだけで決める経路を単独で確かめるため)
+        engine.bootMillis = nil
     }
 
     override func tearDown() async throws {
@@ -146,6 +148,34 @@ final class EngineOffAppStopTests: XCTestCase {
         // 拾い直した行は実際に予約し直されて鳴る。監査の文言だけでなく、予約が入ったことを見る
         XCTAssertTrue(fake.scheduledIds.contains(id), "拾い直したのに予約し直していない (鳴らない)")
         XCTAssertEqual(engine.store.state.scheduled[id]?.state, .pending)
+    }
+
+    /// #118: 実機 (iOS 26.5.2) のロック画面スライド停止では書き残しが付かず、開き直すと鳴り直した。
+    /// 書き残しが無くても、鳴る前から起動し続けていて予約だけ消えた行は止めた扱いにし、鳴り直さない (実機と同じタイマー行)
+    func testStopWithoutRecordAfterContinuousUptimeIsNotRungAgain() async throws {
+        let id = placeRungRow(minutesAgo: 1, timer: true)
+        engine.bootMillis = Engine.nowMillis - 24 * 3_600_000
+
+        await engine.resync(reason: "test")
+
+        XCTAssertNil(OffAppStopLog().entries[id])
+        XCTAssertEqual(engine.store.state.scheduled[id]?.state, .dismissed, "起動し続けた端末で消えた行が停止済みになっていない")
+        XCTAssertTrue(audited("DISMISS_OFFAPP", id))
+        XCTAssertFalse(audited("RECOVER", id), "止めたのに拾い直した (鳴り直す)")
+        XCTAssertFalse(audited("MISSED", id))
+        XCTAssertFalse(fake.scheduledIds.contains(id), "止めたのに OS へ予約し直した")
+    }
+
+    /// 同じ行でも、鳴る時刻の後に再起動していれば予約が OS に消された可能性があるので、従来どおり拾い直す
+    func testRebootAfterTriggerStillRecovers() async throws {
+        let id = placeRungRow(minutesAgo: 1, timer: true)
+        engine.bootMillis = Engine.nowMillis - 30_000
+
+        await engine.resync(reason: "test")
+
+        XCTAssertTrue(audited("RECOVER", id))
+        XCTAssertFalse(audited("DISMISS_OFFAPP", id))
+        XCTAssertTrue(fake.scheduledIds.contains(id))
     }
 
     /// 停止済みの保存がディスクに載らないまま落ちても、止めた証拠 (書き残し) は残る。

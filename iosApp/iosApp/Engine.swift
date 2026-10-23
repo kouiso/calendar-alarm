@@ -20,6 +20,10 @@ final class Engine: ObservableObject {
     /// 展開ホライズン (Android と同じ 14 日)
     private let horizonDays = 14
 
+    /// 端末の最終起動時刻。書き残しが無くても、起動し続けたまま消えた予約を止めた扱いにする判定に使う (#118)。
+    /// テストが差し替える
+    var bootMillis: Int64? = SystemBoot.millis
+
     /// 鳴動中のインスタンス id (RingingView 用)
     @Published var alertingIds: Set<String> = []
 
@@ -215,17 +219,20 @@ final class Engine: ObservableObject {
         // MISSED 化した行が preserved 経由で desired に復活して鳴り直す)。
         // アプリが見ていない間に停止ボタンで止められたアラームを先に終端化する (#61)。
         // 見逃し判定より前にやる: 先に見逃しにすると、止めたのに「見逃し」通知が出る。
-        // 止めたかどうかは停止ボタンの intent の書き残しで決め、AlarmKit から消えたことだけでは決めない
+        // 止めたかどうかは停止ボタンの intent の書き残しで決める。書き残しが付かない停止 (実機のロック画面スライド, #118) は、
+        // 鳴る時刻の前から端末が起動し続けているのに予約だけ消えた行を止めた扱いにして拾う。再起動をまたいだ行は決めない
         let stopLog = OffAppStopLog()
         if let liveIds = scheduler.liveReservationIdsIfReadable {
             let rows = Self.offAppRows(s)
-            let decision = OffAppStopPlan.decide(pending: rows, nowMillis: now, stopped: Set(stopLog.entries.keys)) {
+            let decision = OffAppStopPlan.decide(pending: rows, nowMillis: now, stopped: Set(stopLog.entries.keys),
+                                                 bootMillis: bootMillis) {
                 liveIds.contains(ReservationUUID.from($0))
             }
             for id in decision.consumed {
                 guard let rec = store.state.scheduled[id] else { continue }
                 store.markState(id, .dismissed)
-                store.audit("DISMISS_OFFAPP", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis))")
+                let via = stopLog.entries[id] != nil ? "intent" : "boot"
+                store.audit("DISMISS_OFFAPP", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis)) via=\(via)")
             }
             disableConsumedOneShots(decision.oneShotAlarmIds)
             // 停止済みの保存は直列キューで遅れて書かれるが、書き残しの削除は UserDefaults へ即座に効く。
