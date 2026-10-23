@@ -17,7 +17,8 @@ enum AgendaViewMode: String, CaseIterable, Identifiable {
         case .list: return "一覧"
         case .month: return "月"
         case .threeDay: return "3日"
-        case .timeline: return "タイムライン"
+        // デザイン正本の推奨 (「タイムライン」は狭い幅で2行に折れる)
+        case .timeline: return "時間軸"
         }
     }
 }

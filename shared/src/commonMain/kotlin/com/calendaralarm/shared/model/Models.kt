@@ -283,8 +283,12 @@ data class AlarmInstance(
         copy(id = "$id:snz${snoozeSeq + 1}", triggerAtMillis = nextTriggerMillis, snoozeSeq = snoozeSeq + 1)
 }
 
-/** 鳴動結果の状態。ScheduledInstanceEntity.state と対応。 */
-enum class AlarmState { PENDING, FIRED, DISMISSED, SNOOZED, MISSED, CANCELLED }
+/**
+ * 鳴動結果の状態。ScheduledInstanceEntity.state と対応。
+ * MISSED は鳴らすはずが鳴らせなかったもの。SKIPPED は予約する前に時刻が過ぎていて、
+ * わざと鳴らさなかったもの (元のカレンダーが通知済み)。見逃しの件数に SKIPPED は入れない
+ */
+enum class AlarmState { PENDING, FIRED, DISMISSED, SNOOZED, MISSED, CANCELLED, SKIPPED }
 
 @Serializable
 data class DailyForecast(

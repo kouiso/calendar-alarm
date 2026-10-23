@@ -70,7 +70,7 @@ struct SettingsView: View {
                             // アラーム音 (#101)。AlarmKit で指定できるのは音だけ
                             IconRow("music.note") {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("アラーム音: \(store.state.alarmSoundLabel ?? "iPhone の標準")")
+                                    Text("アラーム音: \(store.state.alarmSoundLabel ?? String(localized: "iPhone の標準"))")
                                         .font(NightTheme.font(13)).foregroundStyle(.secondary)
                                         .lineLimit(1)
                                     if let soundError {
@@ -98,10 +98,10 @@ struct SettingsView: View {
                                 let name = try AlarmSoundLibrary.importSound(from: url)
                                 changeSound(file: name, label: url.deletingPathExtension().lastPathComponent)
                             } catch {
-                                soundError = "この音声は使えませんでした: \(error.localizedDescription)"
+                                soundError = String(localized: "この音声は使えませんでした: \(error.localizedDescription)")
                             }
                         case .failure(let error):
-                            soundError = "音声を開けませんでした: \(error.localizedDescription)"
+                            soundError = String(localized: "音声を開けませんでした: \(error.localizedDescription)")
                         }
                     }
 
@@ -424,6 +424,18 @@ struct SettingsView: View {
                     HStack {
                         Image(systemName: "checkmark.shield").foregroundStyle(NightTheme.indigo)
                         Text("権限画面を開く").font(NightTheme.font(13))
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
+                    }
+                }
+                // 鳴らなかった時の自己診断 (#104): 許可・集中モード・裏の更新・予約の状態をまとめて見る
+                Divider().padding(.vertical, 8)
+                NavigationLink {
+                    DiagnosticsView()
+                } label: {
+                    HStack {
+                        Image(systemName: "stethoscope").foregroundStyle(NightTheme.indigo)
+                        Text("鳴らない時の診断").font(NightTheme.font(13))
                         Spacer()
                         Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
                     }

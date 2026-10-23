@@ -51,6 +51,16 @@
         <item quantity="other">%1$d分前です</item>
     </plurals>
     <string name="event_starts_now">開始時刻です</string>
+    <string name="extracted_bad_datetime">日時の形式が不正です (%1$s)</string>
+    <string name="extracted_field_date">日付 (YYYY-MM-DD)</string>
+    <string name="extracted_field_end">終了 (空=1時間)</string>
+    <string name="extracted_field_location">場所</string>
+    <string name="extracted_field_start">開始 (YYYY-MM-DDTHH:mm)</string>
+    <string name="extracted_field_title">タイトル</string>
+    <string name="extracted_no_calendar">書き込み可能なカレンダーがありません</string>
+    <string name="extracted_no_write_permission">カレンダー書き込み権限がありません</string>
+    <string name="extracted_title">予定に追加</string>
+    <string name="extracted_write_failed">カレンダーへの書き込みに失敗しました</string>
     <string name="mail_add_event">%1$s を予定に追加</string>
     <string name="mail_ai_unavailable">このビルドでは AI の読み取りを使えません</string>
     <string name="mail_channel">メール→予定</string>
@@ -110,6 +120,18 @@
     <string name="repeat_monthly_day">毎月%1$d日</string>
     <string name="repeat_once">1回のみ</string>
     <string name="repeat_weekly_days">毎週 %1$s</string>
+    <string name="rule_template_breaking_news">ニュース速報</string>
+    <string name="rule_template_delivery">配達通知</string>
+    <string name="rule_template_flight">フライト・ゲート変更</string>
+    <string name="rule_template_gmail">Gmail 重要なメール</string>
+    <string name="rule_template_google_tasks">Google タスク</string>
+    <string name="rule_template_outlook">Outlook 重要なメール</string>
+    <string name="rule_template_security">セキュリティ・確認コード</string>
+    <string name="rule_template_telegram">Telegram 緊急連絡</string>
+    <string name="rule_template_twitch">Twitch 配信開始</string>
+    <string name="rule_template_whatsapp">WhatsApp 優先連絡先</string>
+    <string name="rule_template_x_posts">X (Twitter) 投稿</string>
+    <string name="rule_template_youtube_live">YouTube ライブ開始</string>
     <string name="rules_add">＋ルール</string>
     <string name="rules_ai_failed">生成に失敗しました</string>
     <string name="rules_ai_generate">AI生成</string>
@@ -128,6 +150,13 @@
     <string name="rules_target_apps">対象アプリ (空=全アプリ)</string>
     <string name="rules_title">通知アラーム</string>
     <string name="rules_title_needs_permission">通知アラーム (要権限)</string>
+    <string name="share_import_ai_unavailable">このビルドでは AI の読み取りを使えません。日時を入れて追加してください</string>
+    <string name="share_import_cancel">やめる</string>
+    <string name="share_import_no_event">本文から予定を見つけられませんでした。日時を入れて追加してください</string>
+    <string name="share_import_read_failed">読み取りに失敗しました（%1$s）。日時を入れて追加してください</string>
+    <string name="share_import_reading">本文から予定を読み取っています</string>
+    <string name="share_import_title">予定に変換</string>
+    <string name="share_import_unknown">不明</string>
     <string name="share_to_event">予定に変換</string>
     <string name="sync_channel">同期</string>
     <string name="sync_running">カレンダーを同期しています</string>
