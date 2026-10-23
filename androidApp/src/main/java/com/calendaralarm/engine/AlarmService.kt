@@ -346,6 +346,7 @@ class AlarmService : Service() {
             RingingOverlay.show(
                 this, instance.id, instance.title,
                 instance.snoozeMinutes.takeIf { it > 0 } ?: ringSettings.defaultSnoozeMinutes,
+                ringSettings.snoozePresets,
                 stillValid = { synchronized(ringLock) { !destroyed && ringGen == gen } },
             )
         }

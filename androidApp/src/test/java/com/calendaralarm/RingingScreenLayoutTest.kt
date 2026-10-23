@@ -4,7 +4,9 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onRoot
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -42,6 +44,10 @@ class RingingScreenLayoutTest {
     @get:Rule
     val compose = createEmptyComposeRule(effectContext = StandardTestDispatcher())
 
+    private companion object {
+        const val STOP_SLIDER = "スライドして停止"
+    }
+
     private lateinit var app: CalendarAlarmApp
     private var scenario: ActivityScenario<RingingActivity>? = null
 
@@ -75,9 +81,10 @@ class RingingScreenLayoutTest {
     }
 
     private fun assertStopFullyOnScreen() {
-        compose.onNodeWithText("停止").assertIsDisplayed()
+        // 停止はスライド式 (トラック全体が contentDescription "スライドして停止")
+        compose.onNodeWithContentDescription(STOP_SLIDER).assertIsDisplayed()
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
-        val stop = compose.onNodeWithText("停止").fetchSemanticsNode().boundsInRoot
+        val stop = compose.onNodeWithContentDescription(STOP_SLIDER).fetchSemanticsNode().boundsInRoot
         assertTrue("停止ボタンが画面下端からはみ出さないこと: stop=$stop root=$root", stop.bottom <= root.bottom)
         assertTrue("停止ボタンが押せる高さを保つこと: stop=$stop", stop.height >= 48f)
     }
@@ -85,6 +92,20 @@ class RingingScreenLayoutTest {
     @Test
     fun `小さい画面でも停止ボタンが画面内に収まる`() {
         launch("tm:small", "EmuStop_locked_screen_on")
+        assertStopFullyOnScreen()
+    }
+
+    @Test
+    fun `スヌーズ時間を開いた状態でも停止ボタンが画面内に収まる`() {
+        launch("tm:open", "EmuStop_presets_open")
+        compose.onNodeWithText("スヌーズ時間を選ぶ ▾").performClick()
+        compose.waitForIdle()
+        // 展開できていなければ閉じた状態と同じ配置で緑になってしまうので、開いたこととチップの存在を確かめる
+        compose.onNodeWithText("スヌーズ時間を選ぶ ▴").assertExists()
+        assertTrue(
+            "プリセットのチップが1つ以上出ること",
+            compose.onAllNodesWithText("+", substring = true).fetchSemanticsNodes().isNotEmpty(),
+        )
         assertStopFullyOnScreen()
     }
 

@@ -1,0 +1,174 @@
+package com.calendaralarm
+
+import android.content.Intent
+import android.os.Looper
+import android.os.SystemClock
+import android.view.MotionEvent
+import android.graphics.PixelFormat
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.view.accessibility.AccessibilityNodeInfo
+import androidx.test.core.app.ApplicationProvider
+import com.calendaralarm.engine.AlarmReceiver
+import com.calendaralarm.engine.AlarmService
+import com.calendaralarm.engine.RingingOverlay
+import com.calendaralarm.engine.RingingSlideSpec
+import com.calendaralarm.shared.logic.SlideToStopRule
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
+
+/**
+ * 代わりの画面 (RingingOverlay) の停止スライダーの操作契約。
+ * Compose の鳴動画面とは別に View で組んでいるため、RingingSlideStopTest とは別に固定する。
+ * 止めてよいのは「丸を掴んで閾値まで引いた時」と「TalkBack のダブルタップ」だけ。
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], qualifiers = "w360dp-h740dp-mdpi")
+class RingingOverlaySlideStopTest {
+
+    private lateinit var app: CalendarAlarmApp
+    private lateinit var root: View
+    private lateinit var slider: View
+
+    private companion object {
+        const val SLIDER = "スライドして停止"
+        const val ID = "tm:overlay"
+
+        // 鳴動画面・iOS と同じ寸法を RingingSlideSpec から読む (mdpi なので dp = px)。
+        // 自前の定数を持つと、画面側が寸法を変えてもテストが緑のままになる
+        val THUMB = RingingSlideSpec.THUMB_DP.toFloat()
+        val PAD = RingingSlideSpec.PAD_DP.toFloat()
+    }
+
+    @Before
+    fun setup() {
+        app = ApplicationProvider.getApplicationContext()
+        root = RingingOverlay.buildView(app, ID, "OverlaySlideTest", 10, listOf(5, 10, 15))
+        // 窓に載っていない View はアクセシビリティ操作を受け付けないので、本番と同じく WindowManager に載せる
+        wm().addView(
+            root,
+            WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                0,
+                PixelFormat.TRANSLUCENT,
+            ),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+        root.measure(
+            View.MeasureSpec.makeMeasureSpec(360, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(740, View.MeasureSpec.EXACTLY),
+        )
+        root.layout(0, 0, 360, 740)
+        val found = ArrayList<View>()
+        root.findViewsWithText(found, SLIDER, View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION)
+        assertEquals("停止スライダーは1つだけ", 1, found.size)
+        slider = found.single()
+        assertTrue("掴める幅より広いトラックが要る: width=${slider.width}", slider.width > grabLimit() + 40f)
+    }
+
+    @After
+    fun tearDown() {
+        wm().removeView(root)
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    private fun wm() = app.getSystemService(WindowManager::class.java)
+
+    private fun grabLimit() = THUMB + PAD * SlideToStopRule.GRAB_PAD_MULTIPLIER
+
+    private fun travel() = slider.width - THUMB - PAD * 2
+
+    private fun dismissBroadcasts(): List<Intent> {
+        shadowOf(Looper.getMainLooper()).idle()
+        return shadowOf(app).broadcastIntents.filter { it.action == AlarmService.ACTION_DISMISS }
+    }
+
+    private fun touch(action: Int, x: Float) {
+        val t = SystemClock.uptimeMillis()
+        val ev = MotionEvent.obtain(t, t, action, x, slider.height / 2f, 0)
+        slider.dispatchTouchEvent(ev)
+        ev.recycle()
+    }
+
+    /** [fromX] で触れて、丸を [progress] (トラックの移動量に対する割合) まで引いて離す。 */
+    private fun drag(fromX: Float, progress: Float) {
+        val toX = fromX + progress * travel()
+        touch(MotionEvent.ACTION_DOWN, fromX)
+        touch(MotionEvent.ACTION_MOVE, (fromX + toX) / 2f)
+        touch(MotionEvent.ACTION_MOVE, toX)
+        touch(MotionEvent.ACTION_UP, toX)
+    }
+
+    private val thumbCenter get() = PAD + THUMB / 2f
+
+    @Test
+    fun `TalkBack のダブルタップで AlarmReceiver に停止を送る`() {
+        val info = slider.createAccessibilityNodeInfo()
+        assertTrue("TalkBack から押せる項目になっていない", info.isClickable)
+
+        assertTrue(slider.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+
+        val sent = dismissBroadcasts()
+        assertEquals(1, sent.size)
+        assertEquals(AlarmReceiver::class.java.name, sent.single().component?.className)
+        assertEquals(ID, sent.single().getStringExtra(AlarmService.EXTRA_INSTANCE_ID))
+    }
+
+    @Test
+    fun `停止トラックとスヌーズと丸が鳴動画面と iOS の寸法になっている`() {
+        // 掴める幅 (丸 + 余白×3 = 88) が両 OS で揃うのは、丸と余白がこの寸法の時だけ (#52)
+        assertEquals("停止トラックの高さ", RingingSlideSpec.TRACK_HEIGHT_DP, slider.height)
+        val thumb = (slider as ViewGroup).getChildAt(1)
+        assertEquals("丸の幅", RingingSlideSpec.THUMB_DP, thumb.width)
+        assertEquals("丸の高さ", RingingSlideSpec.THUMB_DP, thumb.height)
+        assertEquals("丸の左余白", RingingSlideSpec.PAD_DP, thumb.left)
+        val snooze = ArrayList<View>()
+        root.findViewsWithText(snooze, "スヌーズ 10分", View.FIND_VIEWS_WITH_TEXT)
+        assertEquals("スヌーズボタンは1つだけ", 1, snooze.size)
+        assertEquals("スヌーズボタンの高さ", RingingSlideSpec.SNOOZE_HEIGHT_DP, snooze.single().height)
+        assertEquals("掴める幅", 88f, grabLimit(), 0f)
+    }
+
+    @Test
+    fun `掴める幅の内側ぎりぎりから引いても停止を送る`() {
+        drag(fromX = grabLimit() - 2f, progress = 1f)
+        assertEquals(1, dismissBroadcasts().size)
+    }
+
+    @Test
+    fun `丸をタップしただけでは止まらない`() {
+        touch(MotionEvent.ACTION_DOWN, thumbCenter)
+        touch(MotionEvent.ACTION_UP, thumbCenter)
+        assertEquals(0, dismissBroadcasts().size)
+    }
+
+    @Test
+    fun `掴める幅の外から引き始めると止まらない`() {
+        drag(fromX = grabLimit() + 20f, progress = 1f)
+        assertEquals(0, dismissBroadcasts().size)
+    }
+
+    @Test
+    fun `閾値の手前で離すと止まらない`() {
+        drag(fromX = thumbCenter, progress = SlideToStopRule.STOP_THRESHOLD - 0.1f)
+        assertEquals(0, dismissBroadcasts().size)
+    }
+
+    @Test
+    fun `丸を閾値を超えて引くと停止を送る`() {
+        drag(fromX = thumbCenter, progress = SlideToStopRule.STOP_THRESHOLD + 0.1f)
+        val sent = dismissBroadcasts()
+        assertEquals(1, sent.size)
+        assertEquals(ID, sent.single().getStringExtra(AlarmService.EXTRA_INSTANCE_ID))
+    }
+}
