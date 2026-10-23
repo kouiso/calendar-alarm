@@ -23,6 +23,7 @@
 		4E485751888C27D65F6C4ABA /* MailImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B399458D4913DD152149CADA /* MailImportView.swift */; };
 		54E5C67790C94D5298C69492 /* CalendarAlarmWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		56C929D3E057A4F1B62C284A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70278C1DA89E0C3594F39E2A /* SettingsView.swift */; };
+		5A07798B1780DD37A04D83F4 /* ringing-window-render-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF88FE737D7DF6DAF9D183AD /* ringing-window-render-test.swift */; };
 		5D99C358A61DC29A7E4BB564 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 6D6BF153DA3AEE3B1A413B7E /* Localizable.xcstrings */; };
 		60F95E5171F583E80686583F /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBC7C20D6CC306ED12728299 /* Permissions.swift */; };
 		61495687E00D3BDC4E29BB9B /* EventDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */; };
@@ -35,8 +36,10 @@
 		84CB7D0E16454D83E7DD74BE /* SharedKitBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5CB9C72F79CDC56058DD028 /* SharedKitBridge.swift */; };
 		86B15B16E50DEF7BDFC0FC23 /* alarm-sound-import-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22FA71EC8E0871C65511A60 /* alarm-sound-import-test.swift */; };
 		88AD950DD0441ABF8DBADCAE /* AlarmsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4F003771A83A79DB1D7C14D /* AlarmsView.swift */; };
+		8BC62EA88163A9C19DEA60E3 /* ringing-localization-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = AECCA8E3197BA59E900D5152 /* ringing-localization-test.swift */; };
 		8DA98EC782D9732A40A26D31 /* outfit_regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9B5EFAB358775E656E932A66 /* outfit_regular.ttf */; };
 		8F780525F00F3096C5364349 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE03925928578DE0F3DE47BB /* ShareViewController.swift */; };
+		966320DEE11E9E181F326ACE /* engine-snooze-minutes-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AC8EE707421AED144DFAD38 /* engine-snooze-minutes-test.swift */; };
 		A18B776969A5B61C602C3D89 /* outfit_semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C694CCA1128C6527CB1476DC /* outfit_semibold.ttf */; };
 		A6D274A92BA0F9A706CB3085 /* CalendarAlarmWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */; };
 		A793851C3CD7E4B1FDBE5794 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F8642EDA4CA9194F126132 /* Store.swift */; };
@@ -94,6 +97,7 @@
 /* Begin PBXFileReference section */
 		01AB4C06EB145E37B770350C /* OpenRouterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterService.swift; sourceTree = "<group>"; };
 		1664780F463A19E9DA0C56BA /* CalendarAlarmApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAlarmApp.swift; sourceTree = "<group>"; };
+		1AC8EE707421AED144DFAD38 /* engine-snooze-minutes-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "engine-snooze-minutes-test.swift"; sourceTree = "<group>"; };
 		218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = CalendarAlarmWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		24F9472624F7ECEBFD26FF3E /* Engine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Engine.swift; sourceTree = "<group>"; };
 		2F0A11DC2B493DF079DC6BD6 /* CalendarAlarmWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CalendarAlarmWidget.entitlements; sourceTree = "<group>"; };
@@ -119,6 +123,7 @@
 		9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "diagnosis-test.swift"; sourceTree = "<group>"; };
 		A22FA71EC8E0871C65511A60 /* alarm-sound-import-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "alarm-sound-import-test.swift"; sourceTree = "<group>"; };
 		A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerView.swift; sourceTree = "<group>"; };
+		AECCA8E3197BA59E900D5152 /* ringing-localization-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ringing-localization-test.swift"; sourceTree = "<group>"; };
 		B399458D4913DD152149CADA /* MailImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailImportView.swift; sourceTree = "<group>"; };
 		BAB229DAF4F036F5841F17AE /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		C59894E1200D6FB530B33BED /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -138,6 +143,7 @@
 		F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_medium.ttf; sourceTree = "<group>"; };
 		F4F8642EDA4CA9194F126132 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
 		F5CB9C72F79CDC56058DD028 /* SharedKitBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedKitBridge.swift; sourceTree = "<group>"; };
+		FF88FE737D7DF6DAF9D183AD /* ringing-window-render-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ringing-window-render-test.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -173,7 +179,10 @@
 			children = (
 				A22FA71EC8E0871C65511A60 /* alarm-sound-import-test.swift */,
 				9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */,
+				1AC8EE707421AED144DFAD38 /* engine-snooze-minutes-test.swift */,
 				6AD851BAB943D3DB6E272879 /* engine-sound-change-test.swift */,
+				AECCA8E3197BA59E900D5152 /* ringing-localization-test.swift */,
+				FF88FE737D7DF6DAF9D183AD /* ringing-window-render-test.swift */,
 			);
 			path = "unit-test";
 			sourceTree = "<group>";
@@ -461,7 +470,10 @@
 			files = (
 				86B15B16E50DEF7BDFC0FC23 /* alarm-sound-import-test.swift in Sources */,
 				2C48431DBDA0DF45F9D75583 /* diagnosis-test.swift in Sources */,
+				966320DEE11E9E181F326ACE /* engine-snooze-minutes-test.swift in Sources */,
 				00FE057011931AD95770F145 /* engine-sound-change-test.swift in Sources */,
+				8BC62EA88163A9C19DEA60E3 /* ringing-localization-test.swift in Sources */,
+				5A07798B1780DD37A04D83F4 /* ringing-window-render-test.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

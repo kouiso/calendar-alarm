@@ -32,6 +32,13 @@ final class Engine: ObservableObject {
     /// どちらも途中で await するので、並んで走ると片方が古い写しで相手の予約を上書きする
     private var reservationQueueTail: Task<Void, Never>?
 
+    /// 記録だけ先に置いて、OS への予約を列で待っているスヌーズの子の id。
+    /// 待っている間に走った resync は、この子を計画に入れていない (計画を作った後に置かれた) ので、
+    /// 記録を外すことがある。外れても予約の側が取り直せるよう、印は記録と別に持つ
+    private var snoozeChildrenAwaitingBooking: Set<String> = []
+    /// 予約を待つ間に取り消された子の id。予約の側はこれを見て、書き戻さずに終わる
+    private var cancelledAwaitingChildren: Set<String> = []
+
     /// アプリ自身が作った Engine の数 (差し替え口なしで作ったもの)。試験の母体が自分の Engine を動かしていないことの確認用
     private(set) static var appEngineCount = 0
 
@@ -93,7 +100,14 @@ final class Engine: ObservableObject {
                 // AlarmKit から消えた = ユーザーがアラートUIで完全に止めた
                 if rec.state == .fired || rec.state == .snoozed {
                     store.markState(id, .dismissed)
-                    if let aid = rec.instance.standaloneAlarmId { disableConsumedOneShots([aid]) }
+                    // スヌーズ子が pending で残っている限り単発は消費扱いにしない。
+                    // ここで親を OFF にすると子の温存条件 (sa: 親 enabled) を壊し、
+                    // 次回 resync で子が捨てられてスヌーズが鳴らなくなる。
+                    let snoozeChildPending = rec.state == .snoozed
+                        && Self.hasPendingSnoozeChild(of: id, in: store.state.scheduled)
+                    if let aid = rec.instance.standaloneAlarmId, !snoozeChildPending {
+                        disableConsumedOneShots([aid])
+                    }
                     alertingIds.remove(id)
                 }
                 continue
@@ -306,22 +320,39 @@ final class Engine: ObservableObject {
             store.audit("NOTIFY_CANCEL", "\(staleReqIds.count)件")
         }
 
-        // AlarmKit 側で予約だけが消えた PENDING 行を拾い直す (再起動や OS 内部の
-        // 破棄でストア上は PENDING だが実体は無い → 二度と鳴らない穴を塞ぐ。
-        // Android は毎回全件 AlarmManager へ再主張する方式で同じ問題を潰している)。
-        if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler, ak.authorizationGranted {
-            let liveIds = Set(ak.allAlarms.map { $0.id })
-            for (id, rec) in store.state.scheduled where rec.state == .pending {
-                if !liveIds.contains(AlarmKitScheduler.uuid(from: id)) {
-                    store.removeScheduled(id)
-                    store.audit("RECOVER", "\(id): AlarmKit予約喪失→再予約")
-                }
+        // OS 側で予約だけが消えた PENDING 行を拾い直す (再起動や OS 内部の破棄でストア上は PENDING だが
+        // 実体は無い → 二度と鳴らない穴を塞ぐ。Android は毎回全件 AlarmManager へ再主張する方式で同じ問題を潰している)。
+        // 記録は外さず、プランの入力から外して取り直させる: 取り直しに失敗しても、展開で作り直せないタイマーと
+        // スヌーズ子の記録が残り、次の resync でまた試せる (外すと、権限が戻っても拾う相手が居ない)
+        var unreserved: Set<String> = []
+        if let lost = await scheduler.unreservedPendingIds(store.state.scheduled) {
+            unreserved = lost
+        } else if !scheduler.usesRealAlarms {
+            // 通知の予約 (iOS 26 未満) も同じ。鳴る前なのに予約が無い行だけを見る
+            for (id, rec) in store.state.scheduled
+            where rec.state == .pending && rec.instance.delivery != EventAction.notify.rawValue
+                && rec.instance.triggerAtMillis > now {
+                if await !scheduler.hasReservation(instanceId: id) { unreserved.insert(id) }
             }
+        }
+        // 予約が無く、もう鳴らす理由も無い行 (予定を消した等) は、取り消す相手が居ないのでここで外す
+        let desiredNow = Set(desired.map { $0.id })
+        for id in unreserved where !desiredNow.contains(id) {
+            store.removeScheduled(id)
+            unreserved.remove(id)
+        }
+        if !unreserved.isEmpty { store.audit("RECOVER", "予約喪失 \(unreserved.count)件→再予約") }
+        // 予約 id を空にしておく。取り直しに失敗した行が「予約済み」に見えると、通知の照合 (notificationOutcome) が
+        // OS から消えた行と取り違えて、見逃しではなく鳴った扱いにしてしまう。取り直しに成功すれば上書きされる
+        for id in unreserved {
+            guard let rec = store.state.scheduled[id], rec.alarmKitId != nil else { continue }
+            store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending,
+                                               alarmKitId: nil, soundFile: rec.soundFile))
         }
 
         let plan = SharedDomain.plan(PlanRequest(
             desired: desired,
-            scheduled: store.pendingScheduled(),
+            scheduled: store.pendingScheduled().filter { !unreserved.contains($0.key) },
             nowMillis: now
         )) ?? PlanResult(toSchedule: desired, toCancel: [], toFireNow: [])
 
@@ -458,52 +489,94 @@ final class Engine: ObservableObject {
     /// スヌーズ: AlarmKit なら countdown() でネイティブスヌーズ (postAlert 後に再アラート)。
     /// countdown が失敗した時は子インスタンス予約に落ちる (黙って消さない)。
     /// 通知経路は snoozeSeq+1 の子インスタンスを新規予約 (Android の snoozed() と同じ id 規則)。
-    func snooze(_ inst: AlarmInstanceDTO) {
+    /// 戻り値は子の予約を待つための Task (テストが予約の完了を待つ)。ネイティブスヌーズと失敗時は nil
+    @discardableResult
+    func snooze(_ inst: AlarmInstanceDTO) -> Task<Void, Never>? {
         if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler,
            (try? ak.countdown(uuid: AlarmKitScheduler.uuid(from: inst.id))) != nil {
             alertingIds.remove(inst.id)
             store.markState(inst.id, .snoozed)
             store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m (native)")
-            return
+            return nil
         }
-        // countdown が投げた = 元アラームが alerting でない/居ない。
-        // まだ鳴り続けているのに UI だけ閉じると二重鳴動の元を残すので、
-        // 子予約の前に元を静かにしておく (止められないなら子も足さない)。
+        return scheduleSnoozeChild(inst, minutes: inst.snoozeMinutes)
+    }
+
+    /// プリセット分数のスヌーズ (鳴動画面の「スヌーズ時間を選ぶ」チップ)。
+    /// AlarmKit の countdown は予約時の分数固定で上書きできないため、
+    /// 既定と異なる分数は常に子インスタンス予約で実現する (Android の
+    /// ACTION_SNOOZE + EXTRA_SNOOZE_MINUTES と同じく子の snoozeMinutes も上書きする)。
+    @discardableResult
+    func snooze(_ inst: AlarmInstanceDTO, minutes: Int) -> Task<Void, Never>? {
+        if minutes == inst.snoozeMinutes {
+            return snooze(inst)
+        }
+        return scheduleSnoozeChild(inst, minutes: minutes)
+    }
+
+    /// [id] のスヌーズ子 (id:snz1, id:snz2 …) がまだ鳴る前 (pending) で残っているか
+    static func hasPendingSnoozeChild(of id: String, in scheduled: [String: ScheduledRecord]) -> Bool {
+        scheduled.contains { $0.key.hasPrefix("\(id):snz") && $0.value.state == .pending }
+    }
+
+    /// 子インスタンス予約によるスヌーズ本体。まだ鳴り続けているのに UI だけ閉じると
+    /// 二重鳴動の元を残すので、子予約の前に元を静かにしておく (止められないなら子も足さない)。
+    private func scheduleSnoozeChild(_ inst: AlarmInstanceDTO, minutes: Int) -> Task<Void, Never>? {
         if #available(iOS 26.0, *), let ak = scheduler as? AlarmKitScheduler,
            !ak.silence(uuid: AlarmKitScheduler.uuid(from: inst.id)) {
             store.audit("ERROR", "スヌーズ失敗(元アラーム鳴動継続): \(inst.id)")
-            return
+            return nil
         }
         alertingIds.remove(inst.id)
         let next = AlarmInstanceDTO(
             id: "\(inst.id):snz\(inst.snoozeSeq + 1)",
-            triggerAtMillis: Self.nowMillis + Int64(inst.snoozeMinutes) * 60_000,
+            triggerAtMillis: Self.nowMillis + Int64(minutes) * 60_000,
             title: inst.title,
             kind: inst.kind,
             eventId: inst.eventId,
             standaloneAlarmId: inst.standaloneAlarmId,
-            snoozeMinutes: inst.snoozeMinutes,
+            snoozeMinutes: minutes,
             soundUri: inst.soundUri,
             minutesBefore: inst.minutesBefore,
             eventStartMillis: inst.eventStartMillis,
             snoozeSeq: inst.snoozeSeq + 1
         )
         store.markState(inst.id, .snoozed)
-        Task {
-            // 予約失敗 (権限剥奪等) でも記録は .pending で残す — 次回 resync の
-            // 温存経路で再予約され権限が戻れば自律回復する。ただし失敗は監査に残す
-            // (try? で握り潰すとゾンビ予約がサイレントのまま二度と鳴らない)。
-            var rid: String? = nil
-            var sound: String? = nil
-            do {
-                let r = try await reserve(next)
-                rid = r.id
-                sound = r.sound
-                store.audit("SNOOZE", "\(inst.id) +\(inst.snoozeMinutes)m → \(next.id)")
-            } catch {
-                store.audit("SCHEDULE_ERR", "snooze \(next.id): \(error.localizedDescription)")
+        // 子レコードは await を挟まずここで先行登録する。親の AlarmKit 予約を
+        // 止めた直後に reconcile が走ると「snoozed + AlarmKit 消滅 + 子なし」と
+        // 誤判定されて単発親が消費OFFになり、登録済みなら温存条件を保てる。
+        store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: nil))
+        snoozeChildrenAwaitingBooking.insert(next.id)
+        cancelledAwaitingChildren.remove(next.id)
+        return Task {
+            // 取り消し (cancelInstance) と同じ列で予約する。列の外だと、予約の await の間に取り消された子を
+            // このあとの putScheduled が書き戻し、取り消したタイマーが鳴る
+            await self.runExclusively {
+                defer {
+                    self.snoozeChildrenAwaitingBooking.remove(next.id)
+                    self.cancelledAwaitingChildren.remove(next.id)
+                }
+                // 列で先に取り消されていたら、予約も書き戻しもしない。
+                // 記録の有無では決めない: 待つ間に走った resync が記録を外していても、取り消されていない子は取り直す
+                if self.cancelledAwaitingChildren.contains(next.id) {
+                    self.store.audit("SNOOZE_SKIP", "\(next.id): 予約の前に取り消された")
+                    return
+                }
+                // 予約失敗 (権限剥奪等) でも記録は .pending で残す — 次回 resync の
+                // 温存経路で再予約され権限が戻れば自律回復する。ただし失敗は監査に残す
+                // (try? で握り潰すとゾンビ予約がサイレントのまま二度と鳴らない)。
+                var rid: String? = nil
+                var sound: String? = nil
+                do {
+                    let r = try await self.reserve(next)
+                    rid = r.id
+                    sound = r.sound
+                    self.store.audit("SNOOZE", "\(inst.id) +\(minutes)m → \(next.id)")
+                } catch {
+                    self.store.audit("SCHEDULE_ERR", "snooze \(next.id): \(error.localizedDescription)")
+                }
+                self.store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: rid, soundFile: sound))
             }
-            store.putScheduled(ScheduledRecord(instance: next, state: .pending, alarmKitId: rid, soundFile: sound))
         }
     }
 
@@ -608,6 +681,7 @@ final class Engine: ObservableObject {
     /// 音の入れ直しと同じ列で取り消す。列の外だと、入れ直しの途中で取り消したタイマーを入れ直しが書き戻して鳴らす
     func cancelInstance(_ id: String) async {
         await runExclusively {
+            if self.snoozeChildrenAwaitingBooking.contains(id) { self.cancelledAwaitingChildren.insert(id) }
             await self.scheduler.cancel(instanceId: id, reservationId: self.store.state.scheduled[id]?.alarmKitId)
             self.notifications.removePending(["notify-\(id)"])
             self.store.removeScheduled(id)
@@ -675,7 +749,8 @@ final class Engine: ObservableObject {
             return true
         } catch {
             if !Self.isRegeneratedByExpand(rec.instance, calendarReadable: reader.authorizationGranted) {
-                // 展開で作り直せない行は、記録を消すと二度と鳴らない。予約 id を空にして、次の resync で拾い直させる
+                // 展開で作り直せない行 (カレンダーを読めない間の予定を含む) は、記録を消すと二度と鳴らない。
+                // 予約 id を空にして、次の resync で拾い直させる
                 store.putScheduled(ScheduledRecord(instance: rec.instance, state: .pending,
                                                    alarmKitId: nil, soundFile: rec.soundFile))
             } else {
@@ -717,7 +792,12 @@ final class Engine: ObservableObject {
     /// 写しを読んだ後に置かれたファイルも残す
     func removeUnusedSounds() {
         var keep = Self.soundsInUse(store.state)
-        if let saved = store.savedState() { keep.formUnion(Self.soundsInUse(saved)) }
+        if let saved = store.savedState() {
+            keep.formUnion(Self.soundsInUse(saved))
+        } else if store.hasSavedFile {
+            // 保存済みの状態があるのに読めない時は、別の Engine が書いた分を確かめられない。消さずに次の機会へ回す
+            return
+        }
         keep.formUnion(Self.inFlightSounds.keys)
         AlarmSoundLibrary.removeAll(except: keep, createdBefore: store.loadedAt)
     }

@@ -70,7 +70,7 @@ struct SettingsView: View {
                             // アラーム音 (#101)。AlarmKit で指定できるのは音だけ
                             IconRow("music.note") {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("アラーム音: \(store.state.alarmSoundLabel ?? "iPhone の標準")")
+                                    Text("アラーム音: \(store.state.alarmSoundLabel ?? String(localized: "iPhone の標準"))")
                                         .font(NightTheme.font(13)).foregroundStyle(.secondary)
                                         .lineLimit(1)
                                     if let soundError {
@@ -98,10 +98,10 @@ struct SettingsView: View {
                                 let name = try AlarmSoundLibrary.importSound(from: url)
                                 changeSound(file: name, label: url.deletingPathExtension().lastPathComponent)
                             } catch {
-                                soundError = "この音声は使えませんでした: \(error.localizedDescription)"
+                                soundError = String(localized: "この音声は使えませんでした: \(error.localizedDescription)")
                             }
                         case .failure(let error):
-                            soundError = "音声を開けませんでした: \(error.localizedDescription)"
+                            soundError = String(localized: "音声を開けませんでした: \(error.localizedDescription)")
                         }
                     }
 
