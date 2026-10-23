@@ -4,6 +4,7 @@ import SwiftUI
 struct AgendaView: View {
     @EnvironmentObject var engine: Engine
     @EnvironmentObject var store: Store
+    @EnvironmentObject var center: PermissionCenter
     @State private var selected: DisplayEvent?
     @State private var weatherByLoc: [String: [WeatherService.Forecast]] = [:]
     @State private var nowForecast: WeatherService.NowForecast? = nil
@@ -11,6 +12,9 @@ struct AgendaView: View {
     @State private var searchText = ""
     @State private var searchOpen = false
     @State private var focusDate = Date()
+    /// 開いたままでも24時間を過ぎた見逃しを外すため、1分ごとに数え直す
+    @State private var clockTick = Date()
+    private static let minuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
         NavigationStack {
@@ -20,8 +24,20 @@ struct AgendaView: View {
                     Text(Self.todayLabel)
                         .font(NightTheme.font(30, weight: .semibold))
                         .padding(.top, 6)
-                    if let next = nextAlarm {
-                        NextAlarmBanner(instance: next, accent: accent)
+                    // 次のアラーム欄は小さくし、その下に鳴動の状態を1行出す (#51 PR2)
+                    AgendaNextAlarmCard(instance: nextAlarm, accent: accent, statusLine: ringStatus.line)
+                    if ringStatus.missingPermissions > 0 {
+                        NavigationLink { PermissionsView() } label: {
+                            StatusBanner(message: "許可が\(ringStatus.missingPermissions)つ足りません。鳴らない・止められないことがあります", action: "直す")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if ringStatus.recentMissed > 0 {
+                        // 行き先は件数と同じ予約の行 (24時間分が必ず残る)。件数で消える監査ログには送らない
+                        NavigationLink { MissedAlarmsView(records: recentMissedRecords) } label: {
+                            StatusBanner(message: "直近24時間に鳴らせなかったアラームが\(ringStatus.recentMissed)件あります", action: "見る")
+                        }
+                        .buttonStyle(.plain)
                     }
                     // ヘッダー天気 (元アプリ: 現在気温+時間別予報)。地点設定がある時だけ。
                     if let nf = nowForecast {
@@ -50,7 +66,8 @@ struct AgendaView: View {
                     switch viewMode {
                     case .list:
                         ForEach(groupedDays, id: \.0) { day, events in
-                            DayCard(dayLabel: dayLabel(day), weekNumber: weekNumber(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev })
+                            DayCard(dayLabel: dayLabel(day), weekNumber: weekNumber(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev },
+                                    onToggle: { ev, on in toggleRing(ev, on) })
                         }
                         if groupedDays.isEmpty { emptyState }
                     case .month:
@@ -64,6 +81,7 @@ struct AgendaView: View {
                 .padding()
             }
             .background(Color(uiColor: .systemGroupedBackground))
+            .onReceive(Self.minuteTimer) { clockTick = $0 }
             .safeAreaInset(edge: .top) {
                 if searchOpen {
                     TextField("タイトルで絞り込み", text: $searchText)
@@ -78,6 +96,7 @@ struct AgendaView: View {
             EventDetailSheet(display: ev, weather: weatherByLoc[ev.event.location])
         }
         .task { await refreshWeather() }
+        .task { await center.refresh(engine) }
     }
 
     // MARK: - データ整形
@@ -103,15 +122,41 @@ struct AgendaView: View {
                 let ov = store.state.overrides[ev.instanceKey]
                 let rule = store.rule(for: ev.calendarId)
                 let cal = store.state.calendars.first { $0.id == ev.calendarId }
+                // 終日を鳴らさないカレンダーの終日予定は、個別指定より先に展開で外れる (shared `AlarmExpander.allDaySuppressed`)
+                let allDayOff = ev.allDay && rule.allDayMinutes < 0
+                // 鳴らさないアカウント (#74) の予定も、展開 (effectiveCalendarRules で enabled=false) が個別指定より先に外す
+                let accountOff = !store.accountAllowsRing(ev.calendarId)
+                // 展開が予定ごとの指定より先に外す予定 (カレンダー・アカウント・終日・種類と招待のフィルタ)
+                let dropped = !rule.enabled || accountOff || allDayOff
+                    || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter)
+                let actions = resolvedRingActions(ev, rule, ov, store.state.titleCodes,
+                                                  importReminders: store.state.importEventReminders)
                 return DisplayEvent(
                     event: ev,
                     calendarName: cal?.name ?? "",
                     calendarColor: cal?.color ?? 0xFF888888,
                     // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
                     // 予約の展開と同じ判定を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
-                    muted: !rule.enabled || !store.accountAllowsRing(ev.calendarId)
-                        || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter),
-                    effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore
+                    // 行のスイッチが実際の予約と食い違わないよう、開始とリマインダーの解決後の動作まで見る
+                    muted: dropped
+                        || resolvedActionsMuted(ev, rule, ov, store.state.titleCodes,
+                                                importReminders: store.state.importEventReminders,
+                                                muteAll: store.state.muteAll),
+                    effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore,
+                    calendarOff: !rule.enabled,
+                    accountOff: accountOff,
+                    allDayOff: allDayOff,
+                    muteAll: store.state.muteAll,
+                    // 始まる前の予定で通知の動作を使うものは、通知の許可が無いと届かない
+                    notifies: !dropped && notificationDeliveryAhead(ev, rule, ov, actions: actions, importReminders: store.state.importEventReminders, muteAll: store.state.muteAll, nowMillis: now),
+                    defaultSilenced: silencedWithoutOverride(ev, rule, ov, store.state.titleCodes,
+                                                             invite: store.state.inviteFilter, types: store.state.eventTypeFilter,
+                                                             importReminders: store.state.importEventReminders),
+                    // ON で戻る先がすべてミュートで外れるなら押せなくする (今の muted ではなく戻る先で決める)
+                    restoreSilenced: silencedWithoutOverride(ev, rule, ov, store.state.titleCodes,
+                                                             invite: store.state.inviteFilter, types: store.state.eventTypeFilter,
+                                                             importReminders: store.state.importEventReminders,
+                                                             muteAll: store.state.muteAll)
                 )
             }
     }
@@ -159,6 +204,35 @@ struct AgendaView: View {
         return out.string(from: d)
     }
 
+    /// 鳴動の状態 (#51 PR2)。Android と同じ優先順 (shared `RingStatus`)
+    private var ringStatus: RingStatusSummary {
+        // 通知で届く予定がこの先にある時だけ、通知の許可も鳴らすのに要る側に数える。
+        // 予約の行は予定を消しても日数で消えるまで残るので、今の予定一覧から決める
+        let missing = PermissionPlan.missingForRinging(center.states,
+                                                       notifyDeliveryAhead: displayEvents.contains { $0.notifies },
+                                                       alarmMirrorsNotify: !engine.usesRealAlarms)
+        return RingStatusSummary(missingPermissions: missing, recentMissed: recentMissedRecords.count, hasNextAlarm: nextAlarm != nil)
+    }
+
+    /// 直近24時間に鳴らせなかった予約。監査ログは件数で古い順に消えるので、7日残る予約の行 (MISSED) で数える
+    private var recentMissedRecords: [ScheduledRecord] {
+        _ = clockTick
+        let since = Engine.nowMillis - 24 * 60 * 60 * 1000
+        return store.state.scheduled.values
+            .filter { $0.state == .missed && $0.instance.triggerAtMillis >= since }
+            .sorted { $0.instance.triggerAtMillis > $1.instance.triggerAtMillis }
+    }
+
+    /// 行のスイッチ: その予定だけ鳴らす／鳴らさない (個別指定は種類などの設定より優先される)。
+    /// ON は、指定を外すとそのまま鳴る予定なら指定を外す (通知だけの予定を全画面のアラームに格上げしない)。
+    /// 外すと鳴らない予定だけ「アラーム」を書く
+    private func toggleRing(_ ev: DisplayEvent, _ on: Bool) {
+        let key = ev.event.instanceKey
+        let ov = store.state.overrides[key]
+        store.replaceOverride(instanceKey: key, with: overrideAfterRingSwitch(ov, on: on, defaultSilenced: ev.defaultSilenced))
+        Task { await engine.resync(reason: "event toggle") }
+    }
+
     /// 週番号を出す設定の時だけ、その日の ISO 週番号を返す (#106)
     private func weekNumber(_ key: String) -> Int? {
         guard store.state.showWeekNumbers else { return nil }
@@ -173,8 +247,14 @@ struct AgendaView: View {
             Image(systemName: "calendar.badge.checkmark")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
-            Text("2週間内に予定なし")
+            Text("この先2週間の予定はありません")
+                .font(NightTheme.font(15, weight: .medium))
                 .foregroundStyle(.secondary)
+            // 予定が無い時の画面 (#51 PR2): 何をすれば鳴るようになるかを1行で
+            Text("カレンダーに予定を入れると、ここに並んで前もって鳴ります")
+                .font(NightTheme.font(12))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
@@ -236,6 +316,112 @@ struct WeatherHeaderRow: View {
 
 // MARK: - 部品
 
+/// 予定画面の次のアラーム欄 (#51 PR2 で小さくした): タイトルと時刻を1段に、下に鳴動の状態を1行。
+/// アラーム一覧の大きい欄 (NextAlarmBanner) はそのまま
+struct AgendaNextAlarmCard: View {
+    let instance: AlarmInstanceDTO?
+    let accent: Color
+    let statusLine: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("次のアラーム")
+                        .font(NightTheme.font(12, weight: .semibold))
+                        .tracking(1)
+                        .foregroundStyle(accent)
+                    Text(instance?.title ?? "なし")
+                        .font(NightTheme.font(15))
+                        .foregroundStyle(NightTheme.muted)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if let instance {
+                    Text(Self.timeStr(instance.triggerAtMillis))
+                        .font(NightTheme.numFont(36, weight: .light))
+                        .foregroundStyle(NightTheme.onNight)
+                }
+            }
+            Text(statusLine)
+                .font(NightTheme.font(12))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .accessibilityLabel("鳴動の状態: \(statusLine)")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18).padding(.vertical, 12)
+        .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 22))
+    }
+
+    static func timeStr(_ millis: Int64) -> String {
+        let f = DateFormatter(); f.dateFormat = "H:mm"
+        return f.string(from: Date(timeIntervalSince1970: TimeInterval(millis) / 1000))
+    }
+}
+
+/// 許可が足りない時・鳴らせなかった時のバナー (#51 PR2)
+struct StatusBanner: View {
+    let message: String
+    let action: String?
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            Text(message).font(NightTheme.font(12)).foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let action {
+                Text(action).font(NightTheme.font(12, weight: .semibold)).foregroundStyle(NightTheme.indigo)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+/// 直近24時間に鳴らせなかったアラームの一覧 (見逃しバナーの行き先)。件数と同じ予約の行を並べる
+struct MissedAlarmsView: View {
+    let records: [ScheduledRecord]
+    var body: some View {
+        List {
+            if records.isEmpty {
+                Text("直近24時間に鳴らせなかったアラームはありません").foregroundStyle(.secondary)
+            }
+            ForEach(records, id: \.instance.id) { rec in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(rec.instance.title.isEmpty ? "(タイトルなし)" : rec.instance.title)
+                    Text(Self.label(rec.instance.triggerAtMillis))
+                        .font(NightTheme.font(12)).foregroundStyle(.secondary)
+                }
+            }
+            Section {
+                Text("端末の電源が切れていた、通知の許可が外れていた、などで鳴らせなかった分です")
+                    .font(NightTheme.font(12)).foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle("鳴らせなかったアラーム")
+    }
+
+    static func label(_ millis: Int64) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ja_JP")
+        f.dateFormat = "M/d (E) HH:mm に鳴る予定でした"
+        return f.string(from: Date(timeIntervalSince1970: TimeInterval(millis) / 1000))
+    }
+}
+
+/// 鳴動の状態の1行 (Android と同じ文言・優先順。正本は shared の `RingStatus`)
+struct RingStatusSummary {
+    let missingPermissions: Int
+    let recentMissed: Int
+    let hasNextAlarm: Bool
+
+    var line: String {
+        if missingPermissions > 0 { return "許可が\(missingPermissions)つ足りません。このままだと鳴らないことがあります" }
+        if recentMissed > 0 { return "直近24時間に鳴らせなかったアラームが\(recentMissed)件あります" }
+        if !hasNextAlarm { return "予約中のアラームはありません" }
+        return "鳴る準備ができています"
+    }
+}
+
 /// Night UI hero card: accent-soft 背景 r28 + Outfit 64 時刻 + ドット+タイトル
 struct NextAlarmBanner: View {
     let instance: AlarmInstanceDTO
@@ -274,6 +460,8 @@ struct DayCard: View {
     let events: [DisplayEvent]
     let calendarColor: (DisplayEvent) -> Color
     let onTap: (DisplayEvent) -> Void
+    /// 渡された時は行の右端を鳴らす／鳴らさないのスイッチにする
+    var onToggle: ((DisplayEvent, Bool) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -291,7 +479,7 @@ struct DayCard: View {
             .padding(.bottom, 6)
             VStack(spacing: 0) {
                 ForEach(events) { ev in
-                    EventRow(ev: ev, accent: calendarColor(ev))
+                    EventRow(ev: ev, accent: calendarColor(ev), onToggle: onToggle.map { t in { on in t(ev, on) } })
                         .onTapGesture { onTap(ev) }
                 }
             }
@@ -304,6 +492,7 @@ struct DayCard: View {
 struct EventRow: View {
     let ev: DisplayEvent
     let accent: Color
+    var onToggle: ((Bool) -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -327,9 +516,13 @@ struct EventRow: View {
             }
             Spacer()
             if ev.muted {
-                Image(systemName: "bell.slash").foregroundStyle(.secondary).font(.system(size: 14))
+                if onToggle == nil {
+                    Image(systemName: "bell.slash").foregroundStyle(.secondary).font(.system(size: 14))
+                }
             } else {
-                Image(systemName: "bell.fill").foregroundStyle(accent).font(.system(size: 14))
+                if onToggle == nil {
+                    Image(systemName: "bell.fill").foregroundStyle(accent).font(.system(size: 14))
+                }
                 if ev.effectiveMinutes > 0 {
                     Text("\(ev.effectiveMinutes)分前")
                         .font(NightTheme.font(11))
@@ -337,6 +530,18 @@ struct EventRow: View {
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
                 }
+            }
+            if let onToggle {
+                // カレンダーごと・アカウントごと・終日の予定を鳴らさない設定・すべてミュート中の鳴らない行は、スイッチを入れても鳴らないので押せなくする
+                // (すべてミュート中でも通知で鳴る行は切れる)
+                Toggle("", isOn: Binding(get: { !ev.muted }, set: { onToggle($0) }))
+                    .labelsHidden()
+                    .disabled(ev.switchLocked)
+                    .accessibilityLabel(ev.calendarOff ? "カレンダーが鳴らさない設定です。設定のカレンダー欄で変えられます"
+                        : ev.accountOff ? "このアカウントは鳴らさない設定です。設定のカレンダー欄のアカウントで変えられます"
+                        : ev.allDayOff ? "このカレンダーは終日の予定を鳴らさない設定です。設定のカレンダー欄で変えられます"
+                        : ev.muteAll && ev.muted ? "アラームをすべてミュート中です。設定で解除できます"
+                        : "\(ev.event.title)で鳴らす")
             }
         }
         .padding(.horizontal, 14)

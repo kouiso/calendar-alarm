@@ -204,7 +204,10 @@ final class Store: ObservableObject {
 
     /// カレンダー単位のルール。何分前はカレンダーで選んだ値、無ければアカウントの「何分前」→ アプリの既定の順
     func rule(for calendarId: String) -> AlarmRuleDTO {
-        var r = state.calendarRules[calendarId] ?? AlarmRuleDTO(minutesBefore: state.defaultMinutesBefore)
+        // 保存したルールが無いカレンダーは、展開 (SharedBridge の defaultRule) と同じ全体の既定を使う
+        var r = state.calendarRules[calendarId] ?? AlarmRuleDTO(minutesBefore: state.defaultMinutesBefore,
+                                                                startAction: state.defaultStartAction,
+                                                                reminderAction: state.defaultReminderAction)
         if !state.calendarMinutesChosen.contains(calendarId) {
             r.minutesBefore = accountSetting(forCalendar: calendarId).minutesBefore ?? state.defaultMinutesBefore
         }
@@ -282,6 +285,12 @@ final class Store: ObservableObject {
         mutate { $0.overrides[instanceKey] = EventOverrideDTO(action: action.rawValue, minutesBefore: minutes, extraOffsets: extras) }
     }
     func removeOverride(instanceKey: String) { mutate { $0.overrides.removeValue(forKey: instanceKey) } }
+    /// 予定ごとの個別指定を丸ごと置き換える。nil なら指定ごと消す
+    func replaceOverride(instanceKey: String, with ov: EventOverrideDTO?) {
+        mutate { s in
+            if let ov { s.overrides[instanceKey] = ov } else { s.overrides.removeValue(forKey: instanceKey) }
+        }
+    }
 
     // MARK: - standalone alarms
 
