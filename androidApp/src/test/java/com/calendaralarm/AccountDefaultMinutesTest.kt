@@ -208,10 +208,15 @@ class AccountDefaultMinutesTest {
     fun `v5のDBをアプリと同じ移行一覧で開くとRoomのスキーマ検査を通って読める`() = runBlocking {
         val name = "migration-5-6-room.db"
         context.deleteDatabase(name)
-        // いったん今の版で作り、calendar_prefs だけ v5 の形へ戻して版を 5 にする
+        // いったん今の版で作り、calendar_prefs と audit_log を v5 の形へ戻して版を 5 にする (v6→v7 も続けて通す)
         Room.databaseBuilder(context, AppDatabase::class.java, name).build().also { it.openHelper.writableDatabase }.close()
         val file = context.getDatabasePath(name)
         android.database.sqlite.SQLiteDatabase.openDatabase(file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READWRITE).use { raw ->
+            raw.execSQL("DROP TABLE audit_log")
+            raw.execSQL(
+                "CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "atMillis INTEGER NOT NULL, action TEXT NOT NULL, detail TEXT NOT NULL)",
+            )
             raw.execSQL("DROP TABLE calendar_prefs")
             raw.execSQL(
                 "CREATE TABLE calendar_prefs (calendarId TEXT NOT NULL PRIMARY KEY, enabled INTEGER NOT NULL, " +

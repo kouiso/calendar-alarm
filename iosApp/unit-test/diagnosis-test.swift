@@ -200,6 +200,34 @@ final class DiagnosisPlanTests: XCTestCase {
         XCTAssertNil(DiagnosisPlan.items(input).first { $0.id == "unconfirmed" })
     }
 
+    /// 見逃しは設定・予定画面と同じ ringHistory で数える。単発をオンに戻して予約の行が消えても、診断だけ 0 件にならない
+    func testRecentFailuresCountsMissedFromRingHistoryLikeSettings() {
+        let hour: Int64 = 60 * 60 * 1000
+        let missed = AuditEntry(id: 1, atMillis: now - hour, type: "MISSED", detail: "朝",
+                                instanceId: "one-shot", triggerAtMillis: now - 2 * hour, title: "朝")
+        let history = [missed]
+        // 予約の行は引数に無い (オンに戻して消えた後と同じ) のに、設定画面と同じ 1 件になる
+        XCTAssertEqual(DiagnosisPlan.recentFailures([], ringHistory: history, nowMillis: now), 1)
+        XCTAssertEqual(DiagnosisPlan.recentFailures([], ringHistory: history, nowMillis: now),
+                       RingHistory.recentMissedCount(history, nowMillis: now))
+        // 同じ予約の MISSED が監査ログにもあっても二重に数えない
+        XCTAssertEqual(DiagnosisPlan.recentFailures([missed], ringHistory: history, nowMillis: now), 1)
+        // 鳴るはずだった時刻が24時間より前なら、今見つけても直近に入れない
+        let old = AuditEntry(id: 2, atMillis: now, type: "MISSED", detail: "昨日",
+                             instanceId: "old", triggerAtMillis: now - 30 * hour, title: "昨日")
+        XCTAssertEqual(DiagnosisPlan.recentFailures([], ringHistory: [old], nowMillis: now), 0)
+    }
+
+    /// 予約の失敗 (MISSED 以外の失敗の種類) は監査ログから数え、見逃しと足す
+    func testRecentFailuresAddsScheduleErrorsFromAudit() {
+        let hour: Int64 = 60 * 60 * 1000
+        let err = AuditEntry(id: 3, atMillis: now - hour, type: "SCHEDULE_ERR", detail: "x")
+        let tooOld = AuditEntry(id: 4, atMillis: now - 30 * hour, type: "RESYNC_FAIL", detail: "y")
+        let missed = AuditEntry(id: 5, atMillis: now, type: "MISSED", detail: "朝",
+                                instanceId: "a", triggerAtMillis: now - hour, title: "朝")
+        XCTAssertEqual(DiagnosisPlan.recentFailures([err, tooOld], ringHistory: [missed], nowMillis: now), 2)
+    }
+
     private func baseInput(usesRealAlarms: Bool) -> DiagnosisInput {
         DiagnosisInput(
             calendar: .granted, alarm: .granted, notify: .granted,

@@ -41,11 +41,13 @@
 		8DA98EC782D9732A40A26D31 /* outfit_regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9B5EFAB358775E656E932A66 /* outfit_regular.ttf */; };
 		8F780525F00F3096C5364349 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE03925928578DE0F3DE47BB /* ShareViewController.swift */; };
 		966320DEE11E9E181F326ACE /* engine-snooze-minutes-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AC8EE707421AED144DFAD38 /* engine-snooze-minutes-test.swift */; };
+		9C344CBDC2CF3887BCBC5775 /* weather-forecast-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B43BAA08286BC866F901A9 /* weather-forecast-test.swift */; };
 		A18B776969A5B61C602C3D89 /* outfit_semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C694CCA1128C6527CB1476DC /* outfit_semibold.ttf */; };
 		A6D274A92BA0F9A706CB3085 /* CalendarAlarmWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */; };
 		A793851C3CD7E4B1FDBE5794 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F8642EDA4CA9194F126132 /* Store.swift */; };
 		AAFC4648F481E8E284EC4F80 /* outfit_light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8DD3A0F17E4F13654090ABE8 /* outfit_light.ttf */; };
 		AEC3BD02501412B8D0E8D7E5 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = BAB229DAF4F036F5841F17AE /* Localizable.xcstrings */; };
+		AFFCC564CECA94EEBC56CA98 /* ring-history.swift in Sources */ = {isa = PBXBuildFile; fileRef = D910DFCFDA9A98A380AC51E6 /* ring-history.swift */; };
 		B35722F57D8E88FD64454F34 /* PermissionAsker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D9FE2D91349946227BD8E55 /* PermissionAsker.swift */; };
 		B419682EEBC47B0FA0D3144C /* AgendaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66A4F7800854676434D761F4 /* AgendaView.swift */; };
 		BD5D619B846CB9BA9C171212 /* TitleCodesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3A04452A7A85976807934D /* TitleCodesSheet.swift */; };
@@ -135,6 +137,8 @@
 		D2AF8727D8A981996E1355D9 /* plex_sans_jp_regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_regular.ttf; sourceTree = "<group>"; };
 		D2D9928A082C610D9B0A9D67 /* plex_sans_jp_semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_semibold.ttf; sourceTree = "<group>"; };
 		D8EB8DEF9DAD9CCF3FED35DE /* AlarmSoundLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmSoundLibrary.swift; sourceTree = "<group>"; };
+		D910DFCFDA9A98A380AC51E6 /* ring-history.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ring-history.swift"; sourceTree = "<group>"; };
+		D9B43BAA08286BC866F901A9 /* weather-forecast-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "weather-forecast-test.swift"; sourceTree = "<group>"; };
 		DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAlarmWidget.swift; sourceTree = "<group>"; };
 		E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitReader.swift; sourceTree = "<group>"; };
 		E42B1C06A0E446C3B4F2DCD4 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
@@ -186,6 +190,7 @@
 				AECCA8E3197BA59E900D5152 /* ringing-localization-test.swift */,
 				FF88FE737D7DF6DAF9D183AD /* ringing-window-render-test.swift */,
 				6CF0A04B53494A2C1258428E /* snooze-presets-test.swift */,
+				D9B43BAA08286BC866F901A9 /* weather-forecast-test.swift */,
 			);
 			path = "unit-test";
 			sourceTree = "<group>";
@@ -220,6 +225,7 @@
 				01AB4C06EB145E37B770350C /* OpenRouterService.swift */,
 				8D9FE2D91349946227BD8E55 /* PermissionAsker.swift */,
 				EBC7C20D6CC306ED12728299 /* Permissions.swift */,
+				D910DFCFDA9A98A380AC51E6 /* ring-history.swift */,
 				8688F25F9579677C2080FB0E /* RingingView.swift */,
 				70278C1DA89E0C3594F39E2A /* SettingsView.swift */,
 				F5CB9C72F79CDC56058DD028 /* SharedKitBridge.swift */,
@@ -478,6 +484,7 @@
 				8BC62EA88163A9C19DEA60E3 /* ringing-localization-test.swift in Sources */,
 				5A07798B1780DD37A04D83F4 /* ringing-window-render-test.swift in Sources */,
 				62477EB76C5B27D505648E4F /* snooze-presets-test.swift in Sources */,
+				9C344CBDC2CF3887BCBC5775 /* weather-forecast-test.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -517,6 +524,7 @@
 				BD5D619B846CB9BA9C171212 /* TitleCodesSheet.swift in Sources */,
 				C85633A926A38048ACF31244 /* WeatherBackdropView.swift in Sources */,
 				78335F051083F14CA2C916EE /* WeatherService.swift in Sources */,
+				AFFCC564CECA94EEBC56CA98 /* ring-history.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

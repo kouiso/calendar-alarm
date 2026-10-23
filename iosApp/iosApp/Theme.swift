@@ -17,6 +17,21 @@ enum NightTheme {
     static let segmentTrack = adaptive(dark: 0x141821, light: 0xE6E8EE)
     static let segmentSelected = adaptive(dark: 0x262C38, light: 0xFFFFFF)
 
+    // カレンダーの中立色 (#51 PR3)。テーマ色は「鳴る/オン」専用なので、今日・選択日・今日の見出しはこれで塗る
+    // (Android の Material surfaceVariant / outline に当たる)
+    static let surfaceVariant = adaptive(dark: 0x262C38, light: 0xE6E8EE)
+    static let outline = adaptive(dark: 0x9AA3B2, light: 0x5B6372)
+
+    // 状態を伝える固定色 (#51 デザイン改修の色表)。Android の StatusColors と同じ値
+    static let statusOk = adaptive(dark: 0x6FD6A6, light: 0x18734B)
+    static let statusWarn = adaptive(dark: 0xFF8A80, light: 0xB3261E)
+    static let statusWarnBackground = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: 138 / 255, blue: 128 / 255, alpha: 0.10) : UIColor(Color(hex: 0xFDECEA))
+    })
+    /// 時間軸の今の時刻の線
+    static let nowLine = adaptive(dark: 0xFF6B6B, light: 0xD32F2F)
+
     /// ライト/ダークで色を切り替える (Night UI スペックのペア値)。
     static func adaptive(dark: UInt32, light: UInt32) -> Color {
         Color(UIColor { trait in

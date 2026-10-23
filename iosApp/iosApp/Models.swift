@@ -446,13 +446,6 @@ struct DisplayEvent: Identifiable, Hashable {
     var switchLocked: Bool { calendarOff || accountOff || allDayOff || (muteAll && restoreSilenced) }
 }
 
-struct AuditEntry: Codable, Identifiable, Hashable {
-    var id: Int64
-    var atMillis: Int64
-    var type: String
-    var detail: String
-}
-
 enum InstanceState: String, Codable {
     case pending = "PENDING"
     case fired = "FIRED"

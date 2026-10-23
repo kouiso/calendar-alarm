@@ -122,11 +122,18 @@ class AlarmRepository(
      * 呼び出し元の多くは鳴動・停止の経路にある独立コルーチンで、そこで例外が漏れると
      * プロセスごと落ちて鳴動と停止を巻き込む (#46)。ログが欠けるより鳴動が止まる方が重い。
      */
-    suspend fun audit(action: String, detail: String) {
+    suspend fun audit(action: String, detail: String, ring: ScheduledInstanceEntity? = null) {
         try {
             withContext(Dispatchers.IO) {
                 db.auditLog().insert(
-                    AuditLogEntity(atMillis = System.currentTimeMillis(), action = action, detail = detail),
+                    AuditLogEntity(
+                        atMillis = System.currentTimeMillis(),
+                        action = action,
+                        detail = detail,
+                        instanceId = ring?.id,
+                        triggerAtMillis = ring?.triggerAtMillis,
+                        title = ring?.title,
+                    ),
                 )
             }
         } catch (e: CancellationException) {
@@ -143,8 +150,13 @@ class AlarmRepository(
 
     fun auditFlow(limit: Int = 100) = db.auditLog().recentFlow(limit)
 
+    /** 停止・スヌーズ・鳴らず の記録だけを新しい順に (設定先頭の「最近の鳴動」と「すべて見る」用) */
+    fun recentRingLogFlow(limit: Int = 3) =
+        db.auditLog().recentByActionsFlow(RING_OUTCOME_ACTIONS, limit)
+
     /**
-     * 直近24時間に鳴らせなかった予約の件数 (予定画面と設定の「鳴動の状態」用)。
+     * 鳴動時刻が直近24時間の「鳴らず」の件数 (予定画面と設定の「鳴動の状態」用)。
+     * 予約の行は単発アラームを使い直すと消えるので、鳴動ログの MISS 行で数える (#51 PR3)。
      * 画面を開いたままでも24時間を過ぎた見逃しが外れるよう、窓の起点を一定間隔で進め直す
      */
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -158,7 +170,7 @@ class AlarmRepository(
                 delay(refreshMillis)
             }
         }.flatMapLatest { now ->
-            db.scheduledInstances().missedSinceFlow(now - com.calendaralarm.shared.logic.RingStatus.MISSED_WINDOW_MILLIS)
+            db.auditLog().missedSinceFlow(now - com.calendaralarm.shared.logic.RingStatus.MISSED_WINDOW_MILLIS)
         }.distinctUntilChanged()
 
     /** アジェンダ画面用: イベント + 有効な鳴動ルールと解決済みアクション。 */
@@ -342,7 +354,7 @@ class AlarmRepository(
         if (id == null) return
         setState(id, AlarmState.DISMISSED)
         scheduler.cancel(id)
-        audit("DISMISS", id)
+        audit("DISMISS", id, db.scheduledInstances().byId(id))
         // 単発アラームは終端到達=消費。アラーム本体も OFF に倒して
         // 「有効表示なのに二度と鳴らない」状態を残さない
         db.scheduledInstances().byId(id)?.standaloneAlarmId?.let {
@@ -473,7 +485,7 @@ class AlarmRepository(
         db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(snoozed)))
         if (!scheduler.schedule(snoozed)) audit("EXACT_DENIED", snoozed.id)
         setState(instance.id, AlarmState.SNOOZED)
-        audit("SNOOZE", "${instance.id} +${minutes}m → ${snoozed.id}")
+        audit("SNOOZE", "${instance.id} +${minutes}m → ${snoozed.id}", entity)
         onScheduleChanged?.invoke()
     }
 
@@ -740,8 +752,9 @@ class AlarmRepository(
     /** 単発指定で MISSED 化する。鳴動を試みたが起動を OS に拒否された時などに使う。 */
     suspend fun markMissed(id: String, detail: String? = null) {
         setState(id, AlarmState.MISSED)
-        audit("MISS", if (detail == null) id else "$id: $detail")
-        db.scheduledInstances().byId(id)?.standaloneAlarmId?.let {
+        val row = db.scheduledInstances().byId(id)
+        audit("MISS", if (detail == null) id else "$id: $detail", row)
+        row?.standaloneAlarmId?.let {
             disableConsumedOneShots(setOf(it))
         }
         onScheduleChanged?.invoke()
@@ -761,7 +774,7 @@ class AlarmRepository(
             .filter { it.triggerAtMillis < cutoff }
         stale.forEach {
             setState(it.id, AlarmState.MISSED)
-            audit("MISS", it.id)
+            audit("MISS", it.id, it)
         }
         if (stale.isNotEmpty()) {
             disableConsumedOneShots(stale.mapNotNull { it.standaloneAlarmId }.toSet())
@@ -951,6 +964,9 @@ class AlarmRepository(
         /** 待ちが複数ある時の発火のずらし幅。同じ時刻に重ねず、押し出しの順を安定させる */
         private const val REARM_STAGGER_MS = 500L
         private const val TAG = "AlarmRepository"
+
+        /** 「最近の鳴動」に出す結果 (停止・スヌーズ・鳴らず)。鳴った (FIRE) は必ずどれかと対になるので出さない */
+        val RING_OUTCOME_ACTIONS = listOf("DISMISS", "SNOOZE", "MISS")
 
         // ビット: 1=SUN,2=MON,4=TUE,8=WED,16=THU,32=FRI,64=SAT
         fun daysToMask(days: Set<DayOfWeek>): Int = days.fold(0) { acc, d ->

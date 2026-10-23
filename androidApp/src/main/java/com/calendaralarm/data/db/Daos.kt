@@ -18,13 +18,6 @@ interface ScheduledInstanceDao {
     @Query("SELECT * FROM scheduled_instances WHERE state = 'PENDING' ORDER BY triggerAtMillis ASC")
     fun pendingFlow(): Flow<List<ScheduledInstanceEntity>>
 
-    /**
-     * 鳴らせなかった (MISSED) 予約の件数。終了行は7日残るので、24時間の窓を欠けなく数えられる。
-     * 予約前に時刻が過ぎてわざと鳴らさなかった行は SKIPPED なので数えない
-     */
-    @Query("SELECT COUNT(*) FROM scheduled_instances WHERE state = 'MISSED' AND triggerAtMillis >= :since")
-    fun missedSinceFlow(since: Long): Flow<Int>
-
     @Query("SELECT * FROM scheduled_instances WHERE id = :id")
     suspend fun byId(id: String): ScheduledInstanceEntity?
 
@@ -129,6 +122,18 @@ interface AuditLogDao {
 
     @Query("SELECT * FROM audit_log ORDER BY atMillis DESC LIMIT :limit")
     fun recentFlow(limit: Int): Flow<List<AuditLogEntity>>
+
+    /** 種類で絞ってから件数を切る (再同期などの記録に押し出されて鳴動の記録が消えないように) */
+    @Query("SELECT * FROM audit_log WHERE action IN (:actions) ORDER BY atMillis DESC LIMIT :limit")
+    fun recentByActionsFlow(actions: List<String>, limit: Int): Flow<List<AuditLogEntity>>
+
+    /**
+     * 鳴動時刻が since 以降の「鳴らず」を予約ごとに1件で数える。
+     * 予約の行は単発アラームを使い直すと消えるので、30日残るこのログで数える。
+     * 同じ予約が複数の経路から鳴らずと記録されても1件にする
+     */
+    @Query("SELECT COUNT(DISTINCT instanceId) FROM audit_log WHERE action = 'MISS' AND triggerAtMillis >= :since")
+    fun missedSinceFlow(since: Long): Flow<Int>
 
     @Query("DELETE FROM audit_log WHERE atMillis < :before")
     suspend fun prune(before: Long)

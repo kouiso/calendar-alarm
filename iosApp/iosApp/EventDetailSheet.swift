@@ -9,6 +9,7 @@ struct EventDetailSheet: View {
 
     let display: DisplayEvent
     let weather: [WeatherService.Forecast]?
+    let weatherAt: Date?
 
     private let timingOptions = [("開始時", 0), ("5分前", 5), ("10分前", 10), ("15分前", 15), ("30分前", 30), ("1時間前", 60)]
     private let extraOptions = [5, 10, 15, 30, 60]
@@ -30,8 +31,9 @@ struct EventDetailSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    if let f = weather?.first { weatherHero(f) }
+                    // タイトルを主役にして一番上に置く。天気はその下の小さいカード (#51 PR3)
                     header
+                    if let f = eventForecast { weatherCard(f) }
                     actionPicker
                     if !muted { timingPicker }
                     extraChips
@@ -54,7 +56,8 @@ struct EventDetailSheet: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(ev.title).font(NightTheme.font(20, weight: .semibold))
+            // 予定詳細はタイトルを主役にする (#51 PR3: 28〜34 の太字)
+            Text(ev.title).font(NightTheme.font(30, weight: .bold)).lineLimit(3)
             Text(Self.dateStr(ev)).font(NightTheme.font(14)).foregroundStyle(.secondary)
             if !display.calendarName.isEmpty {
                 HStack(spacing: 6) {
@@ -140,35 +143,46 @@ struct EventDetailSheet: View {
         }
     }
 
-    /// Night UI: 天気ヒーロー (グラデ + Outfit 84 気温 + グリフ)
-    private func weatherHero(_ f: WeatherService.Forecast) -> some View {
-        let dark = UITraitCollection.current.userInterfaceStyle == .dark
-        let top = dark ? Color(red: 0.09, green: 0.16, blue: 0.27) : Color(red: 0.79, green: 0.87, blue: 0.97)
-        let bottom = dark ? Color(red: 0.08, green: 0.13, blue: 0.23) : Color(red: 0.82, green: 0.91, blue: 0.97)
-        return ZStack(alignment: .bottomLeading) {
-            LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom)
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(Int(f.tempMax))°")
-                        .font(NightTheme.numFont(84, weight: .ultraLight))
-                    HStack(spacing: 10) {
-                        Text("最高 \(Int(f.tempMax))° / 最低 \(Int(f.tempMin))°")
-                        if let p = f.precipitationProbability { Text("降水 \(p)%") }
-                    }
-                    .font(NightTheme.font(13, weight: .medium))
-                    .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: WeatherService.icon(f.weatherCode))
-                    .font(.system(size: 60))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .shadow(radius: 8)
-            }
-            .padding(20)
-        }
-        .frame(maxWidth: .infinity).frame(height: 200)
-        .clipShape(RoundedRectangle(cornerRadius: 24))
+    /// 予定の日の予報。予報は今日から3日分あり、先頭 (今日) ではなく予定の日の分を使う。
+    /// 予定の日が予報の範囲の外なら天気は出さない。
+    /// 取得時に気温が欠けた日は .nan が入っていて、Int(.nan) は落ちるので出さない
+    private var eventForecast: WeatherService.Forecast? {
+        let start = Date(timeIntervalSince1970: TimeInterval(ev.startMillis) / 1000)
+        guard let f = WeatherService.forecast(on: start, allDay: ev.allDay, in: weather),
+              f.tempMax.isFinite, f.tempMin.isFinite else { return nil }
+        return f
     }
+
+    /// 小さい天気カード: アイコン40 + 気温34 + 天気・降水 + 「地点・HH:mm の予報」 (#51 PR3)。
+    /// HH:mm は予報を取った時刻 (日ごとの予報なので、予定の時刻の予報ではない)
+    private func weatherCard(_ f: WeatherService.Forecast) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: WeatherService.icon(f.weatherCode))
+                .symbolRenderingMode(.multicolor)
+                .font(.system(size: 40))
+            Text("\(Int(f.tempMax))°")
+                .font(NightTheme.numFont(34, weight: .light))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text(SharedDomain.weatherDescription(f.weatherCode))
+                    Text("\(Int(f.tempMax))°/\(Int(f.tempMin))°")
+                    if let p = f.precipitationProbability { Text("降水\(p)%") }
+                }
+                .font(NightTheme.font(13, weight: .medium))
+                Text("\(ev.location)・\(weatherAt.map { Self.hmFmt.string(from: $0) } ?? "--:--") の予報")
+                    .font(NightTheme.font(11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(NightTheme.nightSurface, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private static let hmFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f
+    }()
 
     private var resetButton: some View {
         Button {

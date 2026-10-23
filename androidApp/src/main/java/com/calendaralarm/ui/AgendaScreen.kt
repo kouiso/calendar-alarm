@@ -1,7 +1,6 @@
 package com.calendaralarm.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -143,12 +142,15 @@ fun AgendaScreen(
     // 鳴動の状態 (#51 PR2): 足りない許可と直近24時間の見逃しから1行にまとめる
     val resumeTick = rememberResumeTick()
     val missingPermissions = remember(resumeTick) { probePermissions(context).count { !it.value } }
+    // 設定の「鳴動の状態」と同じ1行にするため、アラーム音量0も同じく拾う
+    val alarmMuted = remember(resumeTick) { !alarmVolumeOk(context) }
     val recentMissedFlow = remember(resumeTick) { repository.recentMissedFlow() }
     val recentMissed by recentMissedFlow.collectAsState(initial = 0)
     val ringStatus = com.calendaralarm.shared.logic.RingStatus.summarize(
         missingPermissions = missingPermissions,
         recentMissed = recentMissed,
         hasNextAlarm = nextAlarm != null,
+        alarmMuted = alarmMuted,
     )
 
     Column(Modifier.fillMaxSize()) {
@@ -633,16 +635,27 @@ private fun EventDetailSheet(
     var minutes by remember { mutableIntStateOf(item.minutesBefore) }
     var extras by remember { mutableStateOf(item.extraOffsets) }
     var forecast by remember { mutableStateOf<List<DailyForecast>?>(null) }
+    // 「HH:mm の予報」に出す取得時刻。日ごとの予報なので、予定の時刻ではなくいつ取った予報かを出す
+    var forecastAtMillis by remember { mutableStateOf(0L) }
 
     LaunchedEffect(ev.location, weatherEnabled) {
         if (weatherEnabled && ev.location.isNotBlank()) {
             forecast = weatherLoader(ev.location)
+            forecastAtMillis = System.currentTimeMillis()
         }
     }
 
     Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
-        Text(ev.title.ifBlank { "(タイトルなし)" }, style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(4.dp))
+        // 予定詳細はタイトルを主役にする (#51 PR3: 28〜34 の太字)
+        Text(
+            ev.title.ifBlank { "(タイトルなし)" },
+            fontSize = 30.sp,
+            lineHeight = 36.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 3,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(6.dp))
         Text(
             "${eventDate(ev).let { "${it.monthNumber}/${it.dayOfMonth}(${it.dayOfWeek.jaShort()})" }}  ${timeLabel(ev.startMillis, ev.allDay)}" +
                 (if (ev.allDay) "" else "〜${timeLabel(ev.endMillis, false)}") +
@@ -676,42 +689,12 @@ private fun EventDetailSheet(
             )
         }
 
-        // Night UI: 天気ヒーロー (グラデ + Outfit 84 気温)
+        // 予定の日の天気を小さいカードで出す (#51 PR3: 84 の大きい気温はやめる)
         forecast?.let { fc ->
             val day = eventDate(ev)
             fc.firstOrNull { it.date == day }?.let { f ->
-                Spacer(Modifier.height(8.dp))
-                val dark = isSystemInDarkTheme()
-                val g = if (dark) {
-                    listOf(Color(0xFF182A44), Color(0xFF14203A))
-                } else {
-                    listOf(Color(0xFFC9DDF7), Color(0xFFD0E8F8))
-                }
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .background(
-                            androidx.compose.ui.graphics.Brush.verticalGradient(g),
-                            androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                        )
-                        .padding(20.dp),
-                ) {
-                    Column(Modifier.align(Alignment.BottomStart)) {
-                        Text(
-                            "${f.tempMax.toInt()}°",
-                            fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
-                            fontWeight = FontWeight.ExtraLight,
-                            fontSize = 84.sp,
-                        )
-                        Text(
-                            weatherText(f),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                Spacer(Modifier.height(12.dp))
+                EventWeatherCard(f, ev.location, forecastAtMillis)
             }
         }
 
@@ -796,6 +779,47 @@ private fun timeLabel(millis: Long, allDay: Boolean): String =
 internal fun eventDate(ev: CalendarEvent): LocalDate {
     val inst = Instant.fromEpochMilliseconds(ev.startMillis)
     return if (ev.allDay) inst.toLocalDateTime(TimeZone.UTC).date else inst.toLocalDateTime(tz).date
+}
+
+/** 予定詳細の小さい天気カード: アイコン40 + 気温34 + 天気・降水 + 「地点・HH:mm の予報」 */
+@Composable
+private fun EventWeatherCard(f: DailyForecast, location: String, forecastAtMillis: Long) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(weatherEmoji(f.weatherCode), fontSize = 40.sp)
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "${f.tempMax.toInt()}°",
+                fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
+                fontWeight = FontWeight.Light,
+                fontSize = 34.sp,
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    weatherText(f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    "$location・${SimpleDateFormat("HH:mm", Locale.JAPAN).format(Date(forecastAtMillis))} の予報",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
 }
 
 private fun weatherText(f: DailyForecast): String =

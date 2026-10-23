@@ -404,14 +404,9 @@ class EngineTest {
     @Test
     fun `見逃しの件数は画面を開いたままでも時間が進めば24時間を過ぎた分を外す`() = runBlocking {
         val now = System.currentTimeMillis()
-        db.scheduledInstances().upsert(
-            listOf(
-                ScheduledInstanceEntity.of(
-                    AlarmInstance("ev:c1:e9:9:b0", now - 2 * 3_600_000L, "会議", AlarmKind.EVENT),
-                    AlarmState.MISSED,
-                ),
-            ),
-        )
+        // 見逃しは鳴動ログの MISS 行で数える (#51 PR3) ので、実際の経路 (期限切れ PENDING → MISSED) で作る
+        repository.scheduleAdhoc(AlarmInstance("ev:c1:e9:9:b0", now - 2 * 3_600_000L, "会議", AlarmKind.EVENT))
+        repository.markMissed()
         // 1回目は今、2回目は23時間後 (見逃しから25時間後) の時計で数える
         val clocks = ArrayDeque(listOf(now, now + 23 * 3_600_000L))
         var last = now

@@ -28,9 +28,17 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,19 +109,22 @@ fun MonthView(
                             .clickable { onSelectDay(date) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        // 34px 日付サークル: 今日=accent塗り, 選択=accentリング
+                        // 34px 日付サークル。テーマ色は「鳴る/オン」だけに使うので中立色にする (#51 PR3)
+                        // 今日 = 文字色で塗った丸、選択日 = surfaceVariant の塗りに outline の枠
+                        val selected = date == focusDate && date != today
                         Box(
                             Modifier.size(34.dp)
                                 .background(
-                                    if (date == today) MaterialTheme.colorScheme.primary
-                                    else Color.Transparent,
+                                    when {
+                                        date == today -> MaterialTheme.colorScheme.onSurface
+                                        selected -> MaterialTheme.colorScheme.surfaceVariant
+                                        else -> Color.Transparent
+                                    },
                                     CircleShape,
                                 )
                                 .border(
-                                    width = if (date == focusDate && date != today) 1.5.dp else 0.dp,
-                                    color = if (date == focusDate && date != today) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else Color.Transparent,
+                                    width = if (selected) 1.5.dp else 0.dp,
+                                    color = if (selected) MaterialTheme.colorScheme.outline else Color.Transparent,
                                     shape = CircleShape,
                                 ),
                             contentAlignment = Alignment.Center,
@@ -126,7 +137,7 @@ fun MonthView(
                                     FontWeight.SemiBold
                                 } else FontWeight.Normal,
                                 color = when {
-                                    date == today -> MaterialTheme.colorScheme.onPrimary
+                                    date == today -> MaterialTheme.colorScheme.surface
                                     !inMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
                                     date.dayOfWeek == DayOfWeek.SUNDAY -> sundayRed
                                     date.dayOfWeek == DayOfWeek.SATURDAY -> saturdayBlue
@@ -200,25 +211,19 @@ fun ThreeDayView(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 4.dp),
             ) {
-                // 日ヘッダカード: 今日は accent-soft (Night UI スペック)
+                // 日ヘッダカード: 今日は surfaceVariant。テーマ色は「鳴る/オン」専用なので使わない (#51 PR3)
                 Text(
                     "${date.dayOfMonth}(${date.dayOfWeek.jaShort()})",
                     Modifier.fillMaxWidth().padding(vertical = 6.dp)
                         .background(
-                            if (date == today) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            } else Color.Transparent,
+                            if (date == today) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
                             RoundedCornerShape(12.dp),
                         ).padding(vertical = 4.dp),
                     textAlign = TextAlign.Center,
                     fontSize = 22.sp,
                     fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
-                    fontWeight = if (date == today) FontWeight.Medium else FontWeight.Normal,
-                    color = if (date == today) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
+                    fontWeight = if (date == today) FontWeight.SemiBold else FontWeight.Normal,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 dayItems.forEach { item ->
                     val allDay = item.event.allDay ||
@@ -271,7 +276,26 @@ fun DayTimelineView(
         it.event.allDay || it.event.endMillis - it.event.startMillis >= 23L * 3_600_000L
     }
     val timed = dayItems - allDayItems.toSet()
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {
+    // 1分ごとに今の時刻を取り直す。開いたまま日付が変わったら前日の画面から線を消すため、今日かどうかもここから出す
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L - System.currentTimeMillis() % 60_000L)
+            nowMillis = System.currentTimeMillis()
+        }
+    }
+    val isToday = date == kotlinx.datetime.Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(viewTz).date
+    val nowMinute = minuteOfDay(nowMillis)
+    val scroll = rememberScrollState()
+    val density = LocalDensity.current
+    // 今日を開いた時は今の時刻が上から少し下に来るところまで送る (#51 PR3)
+    LaunchedEffect(date) {
+        if (isToday) {
+            val y = with(density) { (hourHeight * (nowMinute / 60f) - hourHeight * 2).toPx() }
+            scroll.scrollTo(y.toInt().coerceAtLeast(0))
+        }
+    }
+    Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 12.dp)) {
         if (allDayItems.isNotEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 allDayItems.forEach { item ->
@@ -338,6 +362,30 @@ fun DayTimelineView(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+            }
+            // 今の時刻の線 (#51 PR3)。予定のブロックより上に描く。今日を見ている時だけ出す。
+            // テーマ色は「鳴る/オン」専用なので、色表の赤で引く
+            if (isToday) {
+                val lineColor = com.calendaralarm.ui.theme.StatusColors.nowLine
+                val label = "今 %02d:%02d".format(nowMinute / 60, nowMinute % 60)
+                Row(
+                    Modifier.fillMaxWidth().offset(y = hourHeight * (nowMinute / 60f) - 8.dp)
+                        .semantics { contentDescription = label },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // 時刻目盛りの文字に重なるので、面の色で下地を敷いて読めるようにする
+                    Text(
+                        label,
+                        Modifier.width(44.dp).background(MaterialTheme.colorScheme.surface),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
+                        color = lineColor,
+                        maxLines = 1,
+                    )
+                    Box(Modifier.size(8.dp).background(lineColor, CircleShape))
+                    Box(Modifier.weight(1f).height(2.dp).background(lineColor))
                 }
             }
         }

@@ -7,6 +7,8 @@ struct AgendaView: View {
     @EnvironmentObject var center: PermissionCenter
     @State private var selected: DisplayEvent?
     @State private var weatherByLoc: [String: [WeatherService.Forecast]] = [:]
+    /// 予報を取った時刻 (予定詳細の「地点・HH:mm の予報」)
+    @State private var weatherAtByLoc: [String: Date] = [:]
     @State private var nowForecast: WeatherService.NowForecast? = nil
     @State private var viewMode: AgendaViewMode = .list
     @State private var searchText = ""
@@ -18,82 +20,86 @@ struct AgendaView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    // Night UI: 日付 H1
-                    Text(Self.todayLabel)
-                        .font(NightTheme.font(30, weight: .semibold))
-                        .padding(.top, 6)
-                    // 次のアラーム欄は小さくし、その下に鳴動の状態を1行出す (#51 PR2)
-                    AgendaNextAlarmCard(instance: nextAlarm, accent: accent, statusLine: ringStatus.line)
-                    if ringStatus.missingPermissions > 0 {
-                        NavigationLink { PermissionsView() } label: {
-                            StatusBanner(message: "許可が\(ringStatus.missingPermissions)つ足りません。鳴らない・止められないことがあります", action: "直す")
+            ScrollViewReader { pageScroll in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        // Night UI: 日付 H1
+                        Text(Self.todayLabel)
+                            .font(NightTheme.font(30, weight: .semibold))
+                            .padding(.top, 6)
+                        // 次のアラーム欄は小さくし、その下に鳴動の状態を1行出す (#51 PR2)
+                        AgendaNextAlarmCard(instance: nextAlarm, accent: accent, statusLine: ringStatus.line)
+                        if ringStatus.missingPermissions > 0 {
+                            NavigationLink { PermissionsView() } label: {
+                                StatusBanner(message: "許可が\(ringStatus.missingPermissions)つ足りません。鳴らない・止められないことがあります", action: "直す")
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
-                    }
-                    if ringStatus.recentMissed > 0 {
-                        // 行き先は件数と同じ予約の行 (24時間分が必ず残る)。件数で消える監査ログには送らない
-                        NavigationLink { MissedAlarmsView(records: recentMissedRecords) } label: {
-                            StatusBanner(message: "直近24時間に鳴らせなかったアラームが\(ringStatus.recentMissed)件あります", action: "見る")
+                        if ringStatus.recentMissed > 0 {
+                            // 行き先は件数と同じ鳴動の記録 (24時間分が必ず残る)。件数で消える監査ログには送らない
+                            NavigationLink { MissedAlarmsView(records: recentMissedRecords) } label: {
+                                StatusBanner(message: "直近24時間に鳴らせなかったアラームが\(ringStatus.recentMissed)件あります", action: "見る")
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
-                    }
-                    // ヘッダー天気 (元アプリ: 現在気温+時間別予報)。地点設定がある時だけ。
-                    if let nf = nowForecast {
-                        WeatherHeaderRow(forecast: nf)
-                    }
-                    // Night UI: 4-way セグメント (一覧/3日/月/タイムライン) + 検索/同期
-                    HStack(spacing: 10) {
-                        NightSegment(labels: modes.map { $0.label }, selected: Binding(
-                            get: { modes.firstIndex(of: viewMode) ?? 0 },
-                            set: { i in
-                                viewMode = modes[i]
-                                if modes[i] != .list { focusDate = Date() }
-                            }))
-                        Button {
-                            searchOpen.toggle()
-                            if !searchOpen { searchText = "" }
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundStyle(searchOpen ? accent : .secondary)
+                        // ヘッダー天気 (元アプリ: 現在気温+時間別予報)。地点設定がある時だけ。
+                        if let nf = nowForecast {
+                            WeatherHeaderRow(forecast: nf)
                         }
-                        Button { Task { await engine.resync(reason: "manual") } } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .foregroundStyle(.secondary)
+                        // Night UI: 4-way セグメント (一覧/3日/月/タイムライン) + 検索/同期
+                        HStack(spacing: 10) {
+                            NightSegment(labels: modes.map { $0.label }, selected: Binding(
+                                get: { modes.firstIndex(of: viewMode) ?? 0 },
+                                set: { i in
+                                    viewMode = modes[i]
+                                    if modes[i] != .list { focusDate = Date() }
+                                }))
+                            Button {
+                                searchOpen.toggle()
+                                if !searchOpen { searchText = "" }
+                            } label: {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundStyle(searchOpen ? accent : .secondary)
+                            }
+                            Button { Task { await engine.resync(reason: "manual") } } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        switch viewMode {
+                        case .list:
+                            ForEach(groupedDays, id: \.0) { day, events in
+                                DayCard(dayLabel: dayLabel(day), weekNumber: weekNumber(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev },
+                                        onToggle: { ev, on in toggleRing(ev, on) })
+                            }
+                            if groupedDays.isEmpty { emptyState }
+                        case .month:
+                            MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 }, firstWeekday: store.state.firstWeekday)
+                        case .threeDay:
+                            ThreeDayColumnsView(startDate: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
+                        case .timeline:
+                            DayTimelineViewIOS(date: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 },
+                                               pageScroll: pageScroll)
                         }
                     }
-                    switch viewMode {
-                    case .list:
-                        ForEach(groupedDays, id: \.0) { day, events in
-                            DayCard(dayLabel: dayLabel(day), weekNumber: weekNumber(day), events: events, calendarColor: calColor, onTap: { ev in selected = ev },
-                                    onToggle: { ev, on in toggleRing(ev, on) })
-                        }
-                        if groupedDays.isEmpty { emptyState }
-                    case .month:
-                        MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 }, firstWeekday: store.state.firstWeekday)
-                    case .threeDay:
-                        ThreeDayColumnsView(startDate: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
-                    case .timeline:
-                        DayTimelineViewIOS(date: focusDate, events: filteredEvents, calendarColor: calColor, onSelect: { selected = $0 })
-                    }
+                    .padding()
                 }
-                .padding()
-            }
-            .background(Color(uiColor: .systemGroupedBackground))
-            .onReceive(Self.minuteTimer) { clockTick = $0 }
-            .safeAreaInset(edge: .top) {
-                if searchOpen {
-                    TextField("タイトルで絞り込み", text: $searchText)
-                        .textFieldStyle(.roundedBorder)
-                        .padding(.horizontal)
-                        .padding(.vertical, 4)
-                        .background(.bar)
+                .background(Color(uiColor: .systemGroupedBackground))
+                .onReceive(Self.minuteTimer) { clockTick = $0 }
+                .safeAreaInset(edge: .top) {
+                    if searchOpen {
+                        TextField("タイトルで絞り込み", text: $searchText)
+                            .textFieldStyle(.roundedBorder)
+                            .padding(.horizontal)
+                            .padding(.vertical, 4)
+                            .background(.bar)
+                    }
                 }
             }
         }
         .sheet(item: $selected) { ev in
-            EventDetailSheet(display: ev, weather: weatherByLoc[ev.event.location])
+            EventDetailSheet(display: ev, weather: weatherByLoc[ev.event.location],
+                             weatherAt: weatherAtByLoc[ev.event.location])
         }
         .task { await refreshWeather() }
         .task { await center.refresh(engine) }
@@ -110,56 +116,7 @@ struct AgendaView: View {
         return f.string(from: Date())
     }
 
-    private var displayEvents: [DisplayEvent] {
-        let now = Engine.nowMillis
-        let horizon = now + 14 * 86_400_000
-        return store.state.lastEvents
-            .filter { $0.endMillis >= now && $0.startMillis < horizon }
-            // このアプリで使わないアカウントの予定は出さない (#74)
-            .filter { !store.isHiddenCalendar($0.calendarId) }
-            .sorted { $0.startMillis < $1.startMillis }
-            .map { ev in
-                let ov = store.state.overrides[ev.instanceKey]
-                let rule = store.rule(for: ev.calendarId)
-                let cal = store.state.calendars.first { $0.id == ev.calendarId }
-                // 終日を鳴らさないカレンダーの終日予定は、個別指定より先に展開で外れる (shared `AlarmExpander.allDaySuppressed`)
-                let allDayOff = ev.allDay && rule.allDayMinutes < 0
-                // 鳴らさないアカウント (#74) の予定も、展開 (effectiveCalendarRules で enabled=false) が個別指定より先に外す
-                let accountOff = !store.accountAllowsRing(ev.calendarId)
-                // 展開が予定ごとの指定より先に外す予定 (カレンダー・アカウント・終日・種類と招待のフィルタ)
-                let dropped = !rule.enabled || accountOff || allDayOff
-                    || !passesEventFilters(ev, ov, store.state.inviteFilter, store.state.eventTypeFilter)
-                let actions = resolvedRingActions(ev, rule, ov, store.state.titleCodes,
-                                                  importReminders: store.state.importEventReminders)
-                return DisplayEvent(
-                    event: ev,
-                    calendarName: cal?.name ?? "",
-                    calendarColor: cal?.color ?? 0xFF888888,
-                    // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
-                    // 予約の展開と同じ判定を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
-                    // 行のスイッチが実際の予約と食い違わないよう、開始とリマインダーの解決後の動作まで見る
-                    muted: dropped
-                        || resolvedActionsMuted(ev, rule, ov, store.state.titleCodes,
-                                                importReminders: store.state.importEventReminders,
-                                                muteAll: store.state.muteAll),
-                    effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore,
-                    calendarOff: !rule.enabled,
-                    accountOff: accountOff,
-                    allDayOff: allDayOff,
-                    muteAll: store.state.muteAll,
-                    // 始まる前の予定で通知の動作を使うものは、通知の許可が無いと届かない
-                    notifies: !dropped && notificationDeliveryAhead(ev, rule, ov, actions: actions, importReminders: store.state.importEventReminders, muteAll: store.state.muteAll, nowMillis: now),
-                    defaultSilenced: silencedWithoutOverride(ev, rule, ov, store.state.titleCodes,
-                                                             invite: store.state.inviteFilter, types: store.state.eventTypeFilter,
-                                                             importReminders: store.state.importEventReminders),
-                    // ON で戻る先がすべてミュートで外れるなら押せなくする (今の muted ではなく戻る先で決める)
-                    restoreSilenced: silencedWithoutOverride(ev, rule, ov, store.state.titleCodes,
-                                                             invite: store.state.inviteFilter, types: store.state.eventTypeFilter,
-                                                             importReminders: store.state.importEventReminders,
-                                                             muteAll: store.state.muteAll)
-                )
-            }
-    }
+    private var displayEvents: [DisplayEvent] { store.displayEvents(nowMillis: Engine.nowMillis) }
 
     /// 検索クエリ適用後のイベント (タイトル部分一致)
     private var filteredEvents: [DisplayEvent] {
@@ -214,13 +171,11 @@ struct AgendaView: View {
         return RingStatusSummary(missingPermissions: missing, recentMissed: recentMissedRecords.count, hasNextAlarm: nextAlarm != nil)
     }
 
-    /// 直近24時間に鳴らせなかった予約。監査ログは件数で古い順に消えるので、7日残る予約の行 (MISSED) で数える
-    private var recentMissedRecords: [ScheduledRecord] {
+    /// 直近24時間に鳴らせなかった予約 (件数と一覧の両方の元)。監査ログ (50件) や予約の行 (単発を使い直すと消える)
+    /// ではなく、鳴動の結果だけの記録から鳴動時刻で取る (#51 PR3)。clockTick で1分ごとに取り直す
+    private var recentMissedRecords: [AuditEntry] {
         _ = clockTick
-        let since = Engine.nowMillis - 24 * 60 * 60 * 1000
-        return store.state.scheduled.values
-            .filter { $0.state == .missed && $0.instance.triggerAtMillis >= since }
-            .sorted { $0.instance.triggerAtMillis > $1.instance.triggerAtMillis }
+        return RingHistory.recentMissed(store.state.ringHistory, nowMillis: Engine.nowMillis)
     }
 
     /// 行のスイッチ: その予定だけ鳴らす／鳴らさない (個別指定は種類などの設定より優先される)。
@@ -274,6 +229,7 @@ struct AgendaView: View {
         for loc in locs {
             if let f = await svc.forecast(for: loc) {
                 weatherByLoc[loc] = f
+                weatherAtByLoc[loc] = Date()
             }
         }
     }
@@ -379,16 +335,16 @@ struct StatusBanner: View {
 
 /// 直近24時間に鳴らせなかったアラームの一覧 (見逃しバナーの行き先)。件数と同じ予約の行を並べる
 struct MissedAlarmsView: View {
-    let records: [ScheduledRecord]
+    let records: [AuditEntry]
     var body: some View {
         List {
             if records.isEmpty {
                 Text("直近24時間に鳴らせなかったアラームはありません").foregroundStyle(.secondary)
             }
-            ForEach(records, id: \.instance.id) { rec in
+            ForEach(records) { rec in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(rec.instance.title.isEmpty ? "(タイトルなし)" : rec.instance.title)
-                    Text(Self.label(rec.instance.triggerAtMillis))
+                    Text((rec.title ?? "").isEmpty ? "(タイトルなし)" : rec.title ?? "")
+                    Text(Self.label(rec.triggerAtMillis ?? rec.atMillis))
                         .font(NightTheme.font(12)).foregroundStyle(.secondary)
                 }
             }
@@ -555,5 +511,59 @@ struct EventRow: View {
         // 0:00〜0:00 の実質終日は「終日」に統一 (Android と同じ表示規則)
         let e = f.string(from: Date(timeIntervalSince1970: TimeInterval(ev.endMillis) / 1000))
         return s == "00:00" && e == "00:00" ? "終日" : s
+    }
+}
+
+/// 予定画面の行と、設定の「鳴動の状態」が同じ予定の一覧から数えるための入口 (#51 PR2/PR3)。
+/// 予約の記録は予定を消しても日数で消えるまで残るので、通知の許可が要るかは記録ではなくこの一覧で決める
+extension Store {
+    func displayEvents(nowMillis now: Int64) -> [DisplayEvent] {
+        let horizon = now + 14 * 86_400_000
+        return state.lastEvents
+            .filter { $0.endMillis >= now && $0.startMillis < horizon }
+            // このアプリで使わないアカウントの予定は出さない (#74)
+            .filter { !isHiddenCalendar($0.calendarId) }
+            .sorted { $0.startMillis < $1.startMillis }
+            .map { ev in
+                let ov = state.overrides[ev.instanceKey]
+                let rule = self.rule(for: ev.calendarId)
+                let cal = state.calendars.first { $0.id == ev.calendarId }
+                // 終日を鳴らさないカレンダーの終日予定は、個別指定より先に展開で外れる (shared `AlarmExpander.allDaySuppressed`)
+                let allDayOff = ev.allDay && rule.allDayMinutes < 0
+                // 鳴らさないアカウント (#74) の予定も、展開 (effectiveCalendarRules で enabled=false) が個別指定より先に外す
+                let accountOff = !accountAllowsRing(ev.calendarId)
+                // 展開が予定ごとの指定より先に外す予定 (カレンダー・アカウント・終日・種類と招待のフィルタ)
+                let dropped = !rule.enabled || accountOff || allDayOff
+                    || !passesEventFilters(ev, ov, state.inviteFilter, state.eventTypeFilter)
+                let actions = resolvedRingActions(ev, rule, ov, state.titleCodes,
+                                                  importReminders: state.importEventReminders)
+                return DisplayEvent(
+                    event: ev,
+                    calendarName: cal?.name ?? "",
+                    calendarColor: cal?.color ?? 0xFF888888,
+                    // 招待フィルタもミュート判定に含める (一覧表示と鳴動の一致)
+                    // 予約の展開と同じ判定を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
+                    // 行のスイッチが実際の予約と食い違わないよう、開始とリマインダーの解決後の動作まで見る
+                    muted: dropped
+                        || resolvedActionsMuted(ev, rule, ov, state.titleCodes,
+                                                importReminders: state.importEventReminders,
+                                                muteAll: state.muteAll),
+                    effectiveMinutes: ov?.minutesBefore ?? rule.minutesBefore,
+                    calendarOff: !rule.enabled,
+                    accountOff: accountOff,
+                    allDayOff: allDayOff,
+                    muteAll: state.muteAll,
+                    // 始まる前の予定で通知の動作を使うものは、通知の許可が無いと届かない
+                    notifies: !dropped && notificationDeliveryAhead(ev, rule, ov, actions: actions, importReminders: state.importEventReminders, muteAll: state.muteAll, nowMillis: now),
+                    defaultSilenced: silencedWithoutOverride(ev, rule, ov, state.titleCodes,
+                                                             invite: state.inviteFilter, types: state.eventTypeFilter,
+                                                             importReminders: state.importEventReminders),
+                    // ON で戻る先がすべてミュートで外れるなら押せなくする (今の muted ではなく戻る先で決める)
+                    restoreSilenced: silencedWithoutOverride(ev, rule, ov, state.titleCodes,
+                                                             invite: state.inviteFilter, types: state.eventTypeFilter,
+                                                             importReminders: state.importEventReminders,
+                                                             muteAll: state.muteAll)
+                )
+            }
     }
 }

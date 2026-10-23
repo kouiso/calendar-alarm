@@ -67,11 +67,12 @@ enum DiagnosisPlan {
     /// 失敗とみなす監査ログの種類
     static let failureTypes: Set<String> = ["SCHEDULE_ERR", "RESYNC_FAIL", "MISSED", "CAPACITY_SKIP"]
 
-    /// 監査ログは50件で古い順に消えるため、見逃しは予約の行 (7日残る) で数え、
-    /// 予約の失敗は残っている記録の範囲で数える (画面の文言もそう書く)
-    static func recentFailures(_ audit: [AuditEntry], scheduled: [ScheduledRecord], nowMillis: Int64) -> Int {
+    /// 見逃しは設定・予定画面と同じ数え方 (鳴動の記録 ringHistory を鳴動時刻で数える) で数える。
+    /// 予約の行は単発アラームをオンに戻すと消えるので、行から数えると画面ごとに件数がずれる。
+    /// 予約の失敗は監査ログに残っている範囲で数える (画面の文言もそう書く)
+    static func recentFailures(_ audit: [AuditEntry], ringHistory: [AuditEntry], nowMillis: Int64) -> Int {
         let since = nowMillis - 24 * 60 * 60 * 1000
-        let missed = scheduled.filter { $0.state == .missed && $0.instance.triggerAtMillis >= since }.count
+        let missed = RingHistory.recentMissedCount(ringHistory, nowMillis: nowMillis)
         let errors = audit.filter { $0.atMillis >= since && failureTypes.contains($0.type) && $0.type != "MISSED" }.count
         return missed + errors
     }
@@ -347,7 +348,7 @@ struct DiagnosticsView: View {
             lastFired: DiagnosisPlan.lastFired(store.state.audit),
             unconfirmedCount: DiagnosisPlan.unconfirmedCount(store.state.audit, nowMillis: now),
             auditCount: store.state.audit.count,
-            recentFailures: DiagnosisPlan.recentFailures(store.state.audit, scheduled: rows, nowMillis: now),
+            recentFailures: DiagnosisPlan.recentFailures(store.state.audit, ringHistory: store.state.ringHistory, nowMillis: now),
             nowMillis: now)
         items = DiagnosisPlan.items(input)
     }
