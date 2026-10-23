@@ -200,6 +200,27 @@ final class EngineOffAppStopTests: XCTestCase {
         XCTAssertEqual(engine.store.state.scheduled[id]?.reservedAtMillis, now, "状態だけの更新で時刻を押し直した")
     }
 
+    /// Store 単体ではなく Engine の入れ直し (既定音の変更) を通して、同じ UUID の予約し直しで予約した時刻が押し直されること。
+    /// Engine の putScheduled から `reserved:` が落ちても Store の試験は通るので、配線そのものをここで見る
+    func testSoundChangeRebookRestampsReservedTimeThroughEngine() async throws {
+        let id = "sa:offapp-sound-\(UUID().uuidString.lowercased())"
+        let inst = AlarmInstanceDTO(id: id, triggerAtMillis: Engine.nowMillis + 3_600_000, title: id, kind: "STANDALONE")
+        let uuid = ReservationUUID.from(id).uuidString
+        let old = Engine.nowMillis - 2 * 3_600_000
+        engine.store.reservedClockMillis = { old }
+        // 前の音 (old-sound.caf) で入った予約。いまの既定音と違うので入れ直しの対象になる
+        engine.store.putScheduled(ScheduledRecord(instance: inst, state: .pending, alarmKitId: uuid, soundFile: "old-sound.caf"))
+        XCTAssertEqual(engine.store.state.scheduled[id]?.reservedAtMillis, old, "試験の前提: 古い時刻が押されている")
+
+        let now = Engine.nowMillis
+        engine.store.reservedClockMillis = { now }
+        await engine.rescheduleForSoundChange()
+
+        XCTAssertTrue(fake.scheduledIds.contains(id), "試験の前提: 入れ直しが OS の予約まで届いている")
+        XCTAssertEqual(engine.store.state.scheduled[id]?.alarmKitId, uuid, "試験の前提: 同じ UUID での予約し直し")
+        XCTAssertEqual(engine.store.state.scheduled[id]?.reservedAtMillis, now, "Engine の入れ直しで予約した時刻が前のまま")
+    }
+
     /// 同じ行でも、予約を入れたあとに再起動していれば予約が OS に消された可能性があるので、従来どおり拾い直す (#118 の P2)。
     /// 判定を「鳴る時刻」との比較に戻すと、予約後・鳴る前の再起動で消えた行が止めた扱いになり、鳴らず通知も出ない
     func testRebootBetweenBookingAndTriggerStillRecovers() async throws {
