@@ -27,6 +27,7 @@
 		5D99C358A61DC29A7E4BB564 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 6D6BF153DA3AEE3B1A413B7E /* Localizable.xcstrings */; };
 		60F95E5171F583E80686583F /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBC7C20D6CC306ED12728299 /* Permissions.swift */; };
 		61495687E00D3BDC4E29BB9B /* EventDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */; };
+		62477EB76C5B27D505648E4F /* snooze-presets-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CF0A04B53494A2C1258428E /* snooze-presets-test.swift */; };
 		626990B5CF8E3DC8C227D393 /* OpenRouterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01AB4C06EB145E37B770350C /* OpenRouterService.swift */; };
 		6FD84B70A4880BED419DDD24 /* AgendaViewsIOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A431831DE81C49A75897127 /* AgendaViewsIOS.swift */; };
 		70C15B080DE1D75F672A4741 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C59894E1200D6FB530B33BED /* Theme.swift */; };
@@ -109,6 +110,7 @@
 		66A4F7800854676434D761F4 /* AgendaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgendaView.swift; sourceTree = "<group>"; };
 		677F076778749AB892413A64 /* iosAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = iosAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6AD851BAB943D3DB6E272879 /* engine-sound-change-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "engine-sound-change-test.swift"; sourceTree = "<group>"; };
+		6CF0A04B53494A2C1258428E /* snooze-presets-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "snooze-presets-test.swift"; sourceTree = "<group>"; };
 		6D6BF153DA3AEE3B1A413B7E /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		70278C1DA89E0C3594F39E2A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7384BC516B1FE4FB2F672E67 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
@@ -187,6 +189,7 @@
 				6AD851BAB943D3DB6E272879 /* engine-sound-change-test.swift */,
 				AECCA8E3197BA59E900D5152 /* ringing-localization-test.swift */,
 				FF88FE737D7DF6DAF9D183AD /* ringing-window-render-test.swift */,
+				6CF0A04B53494A2C1258428E /* snooze-presets-test.swift */,
 				D9B43BAA08286BC866F901A9 /* weather-forecast-test.swift */,
 			);
 			path = "unit-test";
@@ -480,6 +483,7 @@
 				00FE057011931AD95770F145 /* engine-sound-change-test.swift in Sources */,
 				8BC62EA88163A9C19DEA60E3 /* ringing-localization-test.swift in Sources */,
 				5A07798B1780DD37A04D83F4 /* ringing-window-render-test.swift in Sources */,
+				62477EB76C5B27D505648E4F /* snooze-presets-test.swift in Sources */,
 				9C344CBDC2CF3887BCBC5775 /* weather-forecast-test.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

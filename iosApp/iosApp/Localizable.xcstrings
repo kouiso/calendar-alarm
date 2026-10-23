@@ -1069,6 +1069,16 @@
           }
         }
       }
+    },
+    "鳴動画面で選べるスヌーズ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snooze choices on the ringing screen"
+          }
+        }
+      }
     }
   }
 }

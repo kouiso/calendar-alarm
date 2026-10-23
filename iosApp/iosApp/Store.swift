@@ -11,6 +11,8 @@ final class Store: ObservableObject {
         // settings
         var defaultMinutesBefore: Int = 0
         var defaultSnoozeMinutes: Int = 10
+        /// 鳴動画面の「スヌーズ時間を選ぶ」に出す分数。Android の snoozePresets と同じ既定値
+        var snoozePresets: [Int] = SnoozePresets.defaults
         var weatherEnabled: Bool = true
         var defaultStartAction: String = EventAction.alarm.rawValue
         var defaultReminderAction: String = EventAction.alarm.rawValue
@@ -140,6 +142,7 @@ final class Store: ObservableObject {
 
     func setDefaultMinutes(_ v: Int) { mutate { $0.defaultMinutesBefore = v } }
     func setDefaultSnooze(_ v: Int) { mutate { $0.defaultSnoozeMinutes = v } }
+    func toggleSnoozePreset(_ m: Int) { mutate { $0.snoozePresets = SnoozePresets.toggled($0.snoozePresets, m) } }
     func setWeatherEnabled(_ v: Bool) { mutate { $0.weatherEnabled = v } }
     /// 既定のアラーム音を変える。前の音のファイルは、どの予約の記録も指さなくなってから Engine が消す
     /// (鳴る直前・鳴動中・スヌーズ中の予約は前の音のまま鳴るため)
@@ -412,6 +415,7 @@ extension Store.Persisted {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         defaultMinutesBefore = try c.decodeIfPresent(Int.self, forKey: .defaultMinutesBefore) ?? 0
         defaultSnoozeMinutes = try c.decodeIfPresent(Int.self, forKey: .defaultSnoozeMinutes) ?? 10
+        snoozePresets = try c.decodeIfPresent([Int].self, forKey: .snoozePresets) ?? SnoozePresets.defaults
         weatherEnabled = try c.decodeIfPresent(Bool.self, forKey: .weatherEnabled) ?? true
         defaultStartAction = try c.decodeIfPresent(String.self, forKey: .defaultStartAction) ?? EventAction.alarm.rawValue
         defaultReminderAction = try c.decodeIfPresent(String.self, forKey: .defaultReminderAction) ?? EventAction.alarm.rawValue
@@ -462,5 +466,23 @@ extension Store.Persisted {
         nextAuditId = try c.decodeIfPresent(Int64.self, forKey: .nextAuditId) ?? 1
         calendars = try c.decodeIfPresent([CalendarSource].self, forKey: .calendars) ?? []
         lastEvents = try c.decodeIfPresent([CalendarEventDTO].self, forKey: .lastEvents) ?? []
+    }
+}
+
+/// スヌーズ分数の候補。Android の `SettingsRepository.snoozePresets` と設定画面の選択肢に揃える
+enum SnoozePresets {
+    static let defaults = [5, 10, 15, 30, 45, 60]
+    /// 設定画面で選べる分数 (Android `SettingsScreen` と同じ並び)
+    static let choices = [1, 5, 10, 15, 20, 30, 45, 60, 90]
+    /// 鳴動画面に並べる上限。Android の `snoozePresets.take(6)` と同じ
+    static let maxOnRingingScreen = 6
+
+    /// 鳴動画面に並べる分数。保存した一覧を先頭から [maxOnRingingScreen] 件まで使う (空なら空)
+    static func onRingingScreen(_ saved: [Int]) -> [Int] {
+        Array(saved.prefix(maxOnRingingScreen))
+    }
+
+    static func toggled(_ current: [Int], _ m: Int) -> [Int] {
+        current.contains(m) ? current.filter { $0 != m } : (current + [m]).sorted()
     }
 }
