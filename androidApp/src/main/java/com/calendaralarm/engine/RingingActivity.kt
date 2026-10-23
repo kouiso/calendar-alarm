@@ -7,24 +7,36 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.core.view.WindowCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,18 +44,32 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
+import com.calendaralarm.shared.logic.SlideToStopRule
 import com.calendaralarm.shared.model.CurrentWeather
 import com.calendaralarm.ui.WeatherBackdrop
 import com.calendaralarm.ui.theme.OutfitFontFamily
@@ -67,6 +93,7 @@ class RingingActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         applyLockscreenFlags()
+        useLightSystemBarIcons()
         instanceIdState.value = intent.getStringExtra(EXTRA_INSTANCE_ID)
         // FSI経由で本画面が出せたなら、フォールバックのオーバーレイ停止UIは畳む
         // (オーバーレイは常に最前面に描画されるので共存すると二重UIになる)。
@@ -76,7 +103,8 @@ class RingingActivity : ComponentActivity() {
 
         setContent {
             val settings by app.container.settings.flow.collectAsState(initial = null)
-            CalendarAlarmTheme(themeId = settings?.themeId ?: "default") {
+            // 鳴動画面は端末設定に依らず常時ダーク固定 (半睡状態で眩しくしないため)
+            CalendarAlarmTheme(themeId = settings?.themeId ?: "default", darkTheme = true) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     // 鳴動中に別アラームが座席を奪った時、通知は張替え (FSI が再起動
                     // されないことがある) なので onNewIntent が来ない場合がある。
@@ -125,19 +153,34 @@ class RingingActivity : ComponentActivity() {
                     val canOpenSource = instKind ==
                         com.calendaralarm.shared.model.AlarmKind.NOTIFICATION &&
                         NotificationAlarmService.pendingOpens.containsKey(instanceIdState.value)
-                    RingingScreen(
-                        weather = weather,
-                        title = instance?.title ?: "アラーム",
-                        triggerAtMillis = instance?.triggerAtMillis ?: System.currentTimeMillis(),
-                        eventStartMillis = instance?.eventStartMillis,
-                        snoozeMinutes = instance?.snoozeMinutes ?: 10,
-                        snoozePresets = presets,
-                        canOpenSource = canOpenSource,
-                        onOpenSource = { openSourcePendingIntent() },
-                        onDismiss = { sendAction(AlarmService.ACTION_DISMISS) },
-                        onSnooze = { sendAction(AlarmService.ACTION_SNOOZE) },
-                        onSnoozeAt = { m -> sendAction(AlarmService.ACTION_SNOOZE, m) },
-                    )
+                    // 鳴動ごとに画面の状態 (スライダーの丸の位置を含む) を分ける。ドラッグ中に
+                    // 別の鳴動へ切り替わった時、離した指で見ていない方を止めてしまわないため
+                    androidx.compose.runtime.key(watchedId) {
+                        // 操作は「この画面が表示している鳴動」に固定する。離した瞬間に
+                        // instanceIdState が差し替わっていても別の鳴動を止めない
+                        val pinned = { action: String, minutes: Int? ->
+                            sendAction(
+                                action, minutes,
+                                // id 不明 (null) の時は従来どおり null を送り、サービス側で
+                                // 「今鳴っている鳴動」に解決させる (空文字だと解決されず止まらない)
+                                targetId = watchedId.ifEmpty { null },
+                                finishScreen = watchedId == (instanceIdState.value ?: ""),
+                            )
+                        }
+                        RingingScreen(
+                            weather = weather,
+                            title = instance?.title ?: "アラーム",
+                            triggerAtMillis = instance?.triggerAtMillis ?: System.currentTimeMillis(),
+                            eventStartMillis = instance?.eventStartMillis,
+                            snoozeMinutes = instance?.snoozeMinutes ?: 10,
+                            snoozePresets = presets,
+                            canOpenSource = canOpenSource,
+                            onOpenSource = { openSourcePendingIntent() },
+                            onDismiss = { pinned(AlarmService.ACTION_DISMISS, null) },
+                            onSnooze = { pinned(AlarmService.ACTION_SNOOZE, null) },
+                            onSnoozeAt = { m -> pinned(AlarmService.ACTION_SNOOZE, m) },
+                        )
+                    }
                 }
             }
         }
@@ -255,6 +298,18 @@ class RingingActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
+    /**
+     * 画面は常時ダークで描くので、時計・電池・電波のアイコンは明るい色にする。
+     * アプリのテーマは windowLightStatusBar=true (ライト用の暗いアイコン) のままなので、
+     * この画面だけ上書きしないと、暗い背景に暗いアイコンで見えなくなる。
+     */
+    private fun useLightSystemBarIcons() {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
+    }
+
     companion object {
         const val EXTRA_INSTANCE_ID = "instance_id"
 
@@ -291,6 +346,8 @@ private fun RingingScreen(
         } else {
             Box(Modifier.fillMaxSize().background(Color(0xFF0A0C11)))
         }
+        // AlarmKit 同様、小画面でも停止操作が隠れないよう上部 (日付/時刻/件名) は
+        // スクロール領域、下部の操作群 (スヌーズ/スライド停止) はピン留めする構造。
         Column(
             // targetSdk 35 は edge-to-edge 強制なので、停止ボタンがナビゲーションバーの下に潜らないよう避ける
             modifier = Modifier
@@ -299,6 +356,18 @@ private fun RingingScreen(
                 .padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val viewportHeight = maxHeight
+                Column(
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    // 内容が窓より低い時は余白を両端の weight で埋めて見た目を維持し、
+                    // 高い時はスクロールに任せる (minHeight=viewport が境界条件)
+                    Column(
+                        modifier = Modifier.defaultMinSize(minHeight = viewportHeight),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
             // 日付チップ
             Surface(
                 color = Color.White.copy(alpha = 0.06f),
@@ -389,45 +458,54 @@ private fun RingingScreen(
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            // スヌーズプリセット 6列チップ
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                snoozePresets.take(6).forEach { m ->
-                    Surface(
-                        onClick = { onSnoozeAt(m) },
-                        modifier = Modifier.weight(1f).height(40.dp),
-                        color = Color.White.copy(alpha = 0.08f),
-                        shape = RoundedCornerShape(14.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("+${m}分", fontSize = 14.sp, color = Color(0xFFECEEF3))
-                        }
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            // スヌーズ pill → 停止 pill (72h, 半径=高さ/2)
+            // スヌーズは大きい1ボタンのみ: プリセット常時表示は押し間違いの元なので畳む
             Surface(
                 onClick = onSnooze,
-                modifier = Modifier.fillMaxWidth().height(72.dp),
+                modifier = Modifier.fillMaxWidth().height(RingingSlideSpec.SNOOZE_HEIGHT_DP.dp),
                 color = Color.White.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(36.dp),
+                shape = RoundedCornerShape(RingingSlideSpec.TRACK_CORNER_DP.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text("スヌーズ ${snoozeMinutes}分", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFECEEF3))
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開
+            var presetsOpen by remember { mutableStateOf(false) }
             Surface(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().height(72.dp),
-                color = accent,
-                shape = RoundedCornerShape(36.dp),
+                onClick = { presetsOpen = !presetsOpen },
+                color = Color.Transparent,
+                shape = RoundedCornerShape(14.dp),
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text("停止", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = onAccent)
+                Text(
+                    if (presetsOpen) "スヌーズ時間を選ぶ ▴" else "スヌーズ時間を選ぶ ▾",
+                    fontSize = 14.sp,
+                    color = Color(0xFFB7BECB),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+            if (presetsOpen) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    snoozePresets.take(6).forEach { m ->
+                        Surface(
+                            onClick = { onSnoozeAt(m) },
+                            modifier = Modifier.weight(1f).height(40.dp),
+                            color = Color.White.copy(alpha = 0.08f),
+                            shape = RoundedCornerShape(14.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("+${m}分", fontSize = 14.sp, color = Color(0xFFECEEF3))
+                            }
+                        }
+                    }
                 }
             }
+            Spacer(Modifier.height(12.dp))
+            // 停止はスライド式: 誤タップで止まらないよう左端の丸を右へドラッグ
+            SlideToStop(accent = accent, onAccent = onAccent, onStop = onDismiss)
             Spacer(Modifier.height(10.dp))
             Row(
                 horizontalArrangement = Arrangement.Center,
@@ -441,6 +519,106 @@ private fun RingingScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+internal const val SLIDE_THUMB_TAG = "slide-stop-thumb"
+
+/**
+ * 「スライドして停止」トラック。左端の丸を右へドラッグし、トラック幅の80%を
+ * 超えた時点で停止を実行する (誤タップ防止の閾値)。TalkBack ではトラックの
+ * ダブルタップ (semantics onClick) がそのまま停止になる。
+ */
+@Composable
+private fun SlideToStop(
+    accent: Color,
+    onAccent: Color,
+    onStop: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val progress = remember { Animatable(0f) }
+    var trackWidthPx by remember { mutableStateOf(0f) }
+    var downX by remember { mutableStateOf(0f) }
+    val density = LocalDensity.current
+    val thumbPx = with(density) { RingingSlideSpec.THUMB_DP.dp.toPx() }
+    val padPx = with(density) { RingingSlideSpec.PAD_DP.dp.toPx() }
+    val travel = (trackWidthPx - thumbPx - padPx * 2).coerceAtLeast(1f)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(RingingSlideSpec.TRACK_HEIGHT_DP.dp)
+            .clip(RoundedCornerShape(RingingSlideSpec.TRACK_CORNER_DP.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(RingingSlideSpec.TRACK_CORNER_DP.dp))
+            .onSizeChanged { trackWidthPx = it.width.toFloat() }
+            .semantics(mergeDescendants = true) {
+                contentDescription = "スライドして停止"
+                onClick(label = "停止", action = { onStop(); true })
+            }
+            .pointerInput(Unit) {
+                // onDragStart はタッチスロップを越えた後の位置しか渡さない。速いスワイプだと
+                // 丸の上で触れても判定幅の外になるので、指を置いた位置を先に覚えておく
+                awaitEachGesture {
+                    downX = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial).position.x
+                }
+            }
+            .pointerInput(trackWidthPx) {
+                // 掴み始めが丸の範囲内の時だけ受理: トラック右側からの横スワイプで
+                // 止まってしまうと誤停止になるため起点を縛る。幅と閾値は iOS と共通の SlideToStopRule
+                var grabbed = false
+                detectDragGestures(
+                    onDragStart = { grabbed = SlideToStopRule.isGrab(downX, thumbPx, padPx) },
+                    onDragEnd = {
+                        if (grabbed) {
+                            scope.launch {
+                                if (SlideToStopRule.shouldStop(progress.value)) {
+                                    progress.snapTo(1f)
+                                    onStop()
+                                } else {
+                                    progress.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                }
+                            }
+                        }
+                        grabbed = false
+                    },
+                    onDragCancel = {
+                        if (grabbed) {
+                            scope.launch { progress.animateTo(0f, spring(stiffness = Spring.StiffnessMedium)) }
+                        }
+                        grabbed = false
+                    },
+                ) { change, dragAmount ->
+                    if (grabbed) {
+                        change.consume()
+                        scope.launch {
+                            progress.snapTo((progress.value + dragAmount.x / travel).coerceIn(0f, 1f))
+                        }
+                    }
+                }
+            },
+        // 掴み判定とドラッグ量は左端起点・右向きの物理座標なので、丸の配置も RTL で反転させない
+        contentAlignment = AbsoluteAlignment.CenterLeft,
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                "スライドして停止 ›",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFECEEF3).copy(alpha = (1f - progress.value).coerceIn(0f, 1f)),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .absoluteOffset { IntOffset((padPx + progress.value * travel).toInt(), 0) }
+                .testTag(SLIDE_THUMB_TAG)
+                .size(RingingSlideSpec.THUMB_DP.dp)
+                .clip(CircleShape)
+                .background(accent),
+            contentAlignment = Alignment.Center,
+        ) {
+            // 丸の中は停止の■ (デザイン正本: 矢印ではなく停止アイコン)
+            Box(Modifier.size(RingingSlideSpec.STOP_ICON_DP.dp).clip(RoundedCornerShape(4.dp)).background(onAccent))
         }
     }
 }
