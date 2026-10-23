@@ -112,6 +112,8 @@ final class Store: ObservableObject {
     }
 
     /// ディスクに保存済みの状態。別の Store (バックグラウンドの Engine) が書いた分も入る。手元の state は変えない
+    var hasSavedFile: Bool { FileManager.default.fileExists(atPath: fileURL.path) }
+
     func savedState() -> Persisted? {
         saveQueue.sync {}
         guard let data = try? Data(contentsOf: fileURL) else { return nil }
