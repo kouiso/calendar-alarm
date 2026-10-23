@@ -350,7 +350,11 @@ final class Store: ObservableObject {
 
     /// 予約 id が新しく入った行 (初回・付け替え) には予約した時刻を押し、同じ id のままなら前の時刻を引き継ぐ。
     /// 呼び出し側が時刻を持ち回らなくても、再起動の前後を判定できるようにするため (#118)
+    /// 予約した時刻の時計。試験で「予約が過去」の行を作るために差し替える
+    var reservedClockMillis: () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
+
     func putScheduled(_ r: ScheduledRecord) {
+        let reservedNow = reservedClockMillis()
         mutate {
             var rec = r
             if rec.alarmKitId == nil {
@@ -358,7 +362,7 @@ final class Store: ObservableObject {
             } else if let old = $0.scheduled[r.instance.id], old.alarmKitId == rec.alarmKitId {
                 rec.reservedAtMillis = old.reservedAtMillis
             } else {
-                rec.reservedAtMillis = Int64(Date().timeIntervalSince1970 * 1000)
+                rec.reservedAtMillis = reservedNow
             }
             $0.scheduled[r.instance.id] = rec
         }

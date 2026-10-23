@@ -169,10 +169,12 @@ final class EngineOffAppStopTests: XCTestCase {
     /// 同じ行でも、予約を入れたあとに再起動していれば予約が OS に消された可能性があるので、従来どおり拾い直す (#118 の P2)。
     /// 判定を「鳴る時刻」との比較に戻すと、予約後・鳴る前の再起動で消えた行が止めた扱いになり、鳴らず通知も出ない
     func testRebootBetweenBookingAndTriggerStillRecovers() async throws {
+        // 2時間前に予約し、1時間前に再起動し、1分前が鳴る時刻。鳴る時刻との比較だと 1時間前 <= 1分前 で止めた扱いになってしまう
+        engine.store.reservedClockMillis = { Engine.nowMillis - 2 * 3_600_000 }
         let id = placeRungRow(minutesAgo: 1, timer: true)
-        let reservedAt = try XCTUnwrap(engine.store.state.scheduled[id]?.reservedAtMillis, "予約した時刻が押されていない")
-        // 予約のあとに再起動した
-        engine.bootMillis = reservedAt + 1_000
+        engine.store.reservedClockMillis = { Engine.nowMillis }
+        XCTAssertNotNil(engine.store.state.scheduled[id]?.reservedAtMillis, "予約した時刻が押されていない")
+        engine.bootMillis = Engine.nowMillis - 3_600_000
 
         await engine.resync(reason: "test")
 
