@@ -166,6 +166,40 @@ final class EngineOffAppStopTests: XCTestCase {
         XCTAssertFalse(fake.scheduledIds.contains(id), "止めたのに OS へ予約し直した")
     }
 
+    /// 設定の「最近の鳴動」は監査の題名と鳴る時刻から名前を出す。止めた扱いにした監査がそれを持たないと、名前が空になる
+    func testOffAppDismissCarriesTitleAndTriggerInRingHistory() async throws {
+        let id = placeRungRow(minutesAgo: 10)
+        let trigger = try XCTUnwrap(engine.store.state.scheduled[id]?.instance.triggerAtMillis)
+        try await pressStop(id)
+
+        await engine.resync(reason: "test")
+
+        let entry = engine.store.state.ringHistory.last { $0.type == "DISMISS_OFFAPP" && $0.instanceId == id }
+        XCTAssertEqual(entry?.title, id, "最近の鳴動に載る題名が空")
+        XCTAssertEqual(entry?.triggerAtMillis, trigger, "最近の鳴動に載る鳴る時刻が違う")
+    }
+
+    /// 同じ UUID で予約し直した行は、予約した時刻を押し直す。前の時刻のままだと、予約し直す前に起きた再起動を
+    /// またいだ行が「起動し続けた」扱いになり、止めた扱いにされて鳴らず通知も出ない
+    func testRebookingSameReservationRestampsReservedTime() async throws {
+        let id = placeRungRow(minutesAgo: 1, timer: true)
+        let old = Engine.nowMillis - 2 * 3_600_000
+        let now = Engine.nowMillis
+        let rec = try XCTUnwrap(engine.store.state.scheduled[id])
+        engine.store.reservedClockMillis = { old }
+        engine.store.putScheduled(rec, reserved: true)
+        XCTAssertEqual(engine.store.state.scheduled[id]?.reservedAtMillis, old)
+
+        engine.store.reservedClockMillis = { now }
+        engine.store.putScheduled(rec, reserved: true)
+
+        XCTAssertEqual(engine.store.state.scheduled[id]?.reservedAtMillis, now, "同じ UUID の予約し直しで時刻が前のまま")
+        // 予約を入れ直したのではない更新 (状態だけの書き戻し) は、前の時刻を引き継ぐ
+        engine.store.reservedClockMillis = { now + 1_000 }
+        engine.store.putScheduled(rec)
+        XCTAssertEqual(engine.store.state.scheduled[id]?.reservedAtMillis, now, "状態だけの更新で時刻を押し直した")
+    }
+
     /// 同じ行でも、予約を入れたあとに再起動していれば予約が OS に消された可能性があるので、従来どおり拾い直す (#118 の P2)。
     /// 判定を「鳴る時刻」との比較に戻すと、予約後・鳴る前の再起動で消えた行が止めた扱いになり、鳴らず通知も出ない
     func testRebootBetweenBookingAndTriggerStillRecovers() async throws {
