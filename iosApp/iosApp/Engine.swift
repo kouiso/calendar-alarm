@@ -505,6 +505,7 @@ final class Engine: ObservableObject {
         state.scheduled.values.filter { $0.state == .pending }.map {
             OffAppStopPlan.Row(id: $0.instance.id, triggerAtMillis: $0.instance.triggerAtMillis,
                                wasReserved: $0.alarmKitId != nil,
+                               reservedAtMillis: $0.reservedAtMillis,
                                standaloneAlarmId: $0.instance.standaloneAlarmId)
         }
     }

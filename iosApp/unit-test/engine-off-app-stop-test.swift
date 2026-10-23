@@ -166,15 +166,18 @@ final class EngineOffAppStopTests: XCTestCase {
         XCTAssertFalse(fake.scheduledIds.contains(id), "止めたのに OS へ予約し直した")
     }
 
-    /// 同じ行でも、鳴る時刻の後に再起動していれば予約が OS に消された可能性があるので、従来どおり拾い直す
-    func testRebootAfterTriggerStillRecovers() async throws {
+    /// 同じ行でも、予約を入れたあとに再起動していれば予約が OS に消された可能性があるので、従来どおり拾い直す (#118 の P2)。
+    /// 判定を「鳴る時刻」との比較に戻すと、予約後・鳴る前の再起動で消えた行が止めた扱いになり、鳴らず通知も出ない
+    func testRebootBetweenBookingAndTriggerStillRecovers() async throws {
         let id = placeRungRow(minutesAgo: 1, timer: true)
-        engine.bootMillis = Engine.nowMillis - 30_000
+        let reservedAt = try XCTUnwrap(engine.store.state.scheduled[id]?.reservedAtMillis, "予約した時刻が押されていない")
+        // 予約のあとに再起動した
+        engine.bootMillis = reservedAt + 1_000
 
         await engine.resync(reason: "test")
 
         XCTAssertTrue(audited("RECOVER", id))
-        XCTAssertFalse(audited("DISMISS_OFFAPP", id))
+        XCTAssertFalse(audited("DISMISS_OFFAPP", id), "予約後に再起動した行を止めた扱いにした (鳴らず通知も出ない)")
         XCTAssertTrue(fake.scheduledIds.contains(id))
     }
 

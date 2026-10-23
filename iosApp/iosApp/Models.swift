@@ -452,6 +452,9 @@ struct ScheduledRecord: Codable, Hashable {
     /// OS の予約に渡した取り込み音のファイル名 (#101)。nil = iPhone の既定音。
     /// どの予約がまだその音で鳴るかを知る手掛かりで、使われていない音だけを消すのに使う
     var soundFile: String? = nil
+    /// この予約 id を OS に入れた時刻 (ms)。書き込みは `Store.putScheduled` が予約 id の変わり目で押す。
+    /// 再起動で予約が消えたのか鳴って止められたのかを分けるのに使う (#118)。nil = 旧版の行で不明
+    var reservedAtMillis: Int64? = nil
 }
 
 // MARK: - JSON エンコード規約

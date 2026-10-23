@@ -333,7 +333,21 @@ final class Store: ObservableObject {
         }
     }
 
-    func putScheduled(_ r: ScheduledRecord) { mutate { $0.scheduled[r.instance.id] = r } }
+    /// 予約 id が新しく入った行 (初回・付け替え) には予約した時刻を押し、同じ id のままなら前の時刻を引き継ぐ。
+    /// 呼び出し側が時刻を持ち回らなくても、再起動の前後を判定できるようにするため (#118)
+    func putScheduled(_ r: ScheduledRecord) {
+        mutate {
+            var rec = r
+            if rec.alarmKitId == nil {
+                rec.reservedAtMillis = nil
+            } else if let old = $0.scheduled[r.instance.id], old.alarmKitId == rec.alarmKitId {
+                rec.reservedAtMillis = old.reservedAtMillis
+            } else {
+                rec.reservedAtMillis = Int64(Date().timeIntervalSince1970 * 1000)
+            }
+            $0.scheduled[r.instance.id] = rec
+        }
+    }
     func removeScheduled(_ id: String) { mutate { $0.scheduled.removeValue(forKey: id) } }
 
     /// 7日より古い終了行を実削除 (Android 側と同じ保持期間)。

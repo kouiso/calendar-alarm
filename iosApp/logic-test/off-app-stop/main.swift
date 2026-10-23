@@ -114,21 +114,30 @@ if let defaults = UserDefaults(suiteName: suite) {
     check(false, "試験用の UserDefaults を作れない")
 }
 
-// 書き残しが付かなかった停止 (実機 iOS 26.5.2 のロック画面スライド停止, #118)。鳴る前から起動し続けていれば止めた扱い
-let rang = [Row(id: "tm:rang", triggerAtMillis: now - 60_000, wasReserved: true)]
-let bootedBefore: Int64 = now - 3_600_000
+// 書き残しが付かなかった停止 (実機 iOS 26.5.2 のロック画面スライド停止, #118)。予約した時から起動し続けていれば止めた扱い
+let reservedAt: Int64 = now - 2 * 3_600_000
+let rang = [Row(id: "tm:rang", triggerAtMillis: now - 60_000, wasReserved: true, reservedAtMillis: reservedAt)]
+let bootedBefore: Int64 = now - 3 * 3_600_000
 check(OffAppStopPlan.decide(pending: rang, nowMillis: now, stopped: [], bootMillis: bootedBefore) { _ in false }.consumed == ["tm:rang"],
-      "書き残しが無くても、鳴る前から起動し続けていて予約だけ消えた行は止めた扱い (鳴り直さない)")
+      "書き残しが無くても、予約した時から起動し続けていて予約だけ消えた行は止めた扱い (鳴り直さない)")
+// Codex P2: 8:00 予約、9:00 再起動、10:00 予定、10:05 resync。鳴る時刻との比較では 9:00 <= 10:00 で止めた扱いになってしまう
+check(OffAppStopPlan.decide(pending: rang, nowMillis: now, stopped: [], bootMillis: now - 90 * 60_000) { _ in false }.consumed.isEmpty,
+      "予約のあと鳴る前に再起動していれば、止めた扱いにしない (予約喪失として拾い直す)")
 check(OffAppStopPlan.decide(pending: rang, nowMillis: now, stopped: [], bootMillis: now - 30_000) { _ in false }.consumed.isEmpty,
-      "鳴る時刻の後に再起動していれば、止めた扱いにしない (予約喪失として拾い直す)")
+      "鳴る時刻の後に再起動していても、止めた扱いにしない")
+check(OffAppStopPlan.decide(pending: rang, nowMillis: now, stopped: [], bootMillis: reservedAt) { _ in false }.consumed == ["tm:rang"],
+      "起動時刻と予約時刻が同じなら起動し続けた側 (境界)")
 check(OffAppStopPlan.decide(pending: rang, nowMillis: now, stopped: [], bootMillis: nil) { _ in false }.consumed.isEmpty,
       "起動時刻が読めない時は止めた扱いにしない")
+check(OffAppStopPlan.decide(pending: [Row(id: "tm:legacy", triggerAtMillis: now - 60_000, wasReserved: true)],
+                            nowMillis: now, stopped: [], bootMillis: bootedBefore) { _ in false }.consumed.isEmpty,
+      "予約した時刻が分からない旧版の行は、書き残しが無ければ止めた扱いにしない")
 check(OffAppStopPlan.decide(pending: rang, nowMillis: now, stopped: [], bootMillis: bootedBefore) { _ in true }.consumed.isEmpty,
       "起動し続けていても、AlarmKit に残る (鳴動中・スヌーズ中) 行は止めた扱いにしない")
-check(OffAppStopPlan.decide(pending: [Row(id: "tm:future", triggerAtMillis: now + 60_000, wasReserved: true)],
+check(OffAppStopPlan.decide(pending: [Row(id: "tm:future", triggerAtMillis: now + 60_000, wasReserved: true, reservedAtMillis: reservedAt)],
                             nowMillis: now, stopped: [], bootMillis: bootedBefore) { _ in false }.consumed.isEmpty,
       "鳴る時刻がまだ先の行は、起動し続けていても止めた扱いにしない")
-check(OffAppStopPlan.decide(pending: [Row(id: "tm:norsv", triggerAtMillis: now - 60_000, wasReserved: false)],
+check(OffAppStopPlan.decide(pending: [Row(id: "tm:norsv", triggerAtMillis: now - 60_000, wasReserved: false, reservedAtMillis: reservedAt)],
                             nowMillis: now, stopped: [], bootMillis: bootedBefore) { _ in false }.consumed.isEmpty,
       "予約に失敗したまま残した行は、起動し続けていても止めた扱いにしない")
 

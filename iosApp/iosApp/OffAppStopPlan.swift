@@ -17,12 +17,16 @@ enum OffAppStopPlan {
         let triggerAtMillis: Int64
         /// AlarmKit への予約が成功したか (ScheduledRecord.alarmKitId が入っているか)
         let wasReserved: Bool
+        /// 予約を OS に入れた時刻。nil (旧版の行) は再起動をまたいだか分からないので、書き残しが無い限り止めた扱いにしない
+        let reservedAtMillis: Int64?
         let standaloneAlarmId: Int64?
 
-        init(id: String, triggerAtMillis: Int64, wasReserved: Bool, standaloneAlarmId: Int64? = nil) {
+        init(id: String, triggerAtMillis: Int64, wasReserved: Bool, reservedAtMillis: Int64? = nil,
+             standaloneAlarmId: Int64? = nil) {
             self.id = id
             self.triggerAtMillis = triggerAtMillis
             self.wasReserved = wasReserved
+            self.reservedAtMillis = reservedAtMillis
             self.standaloneAlarmId = standaloneAlarmId
         }
     }
@@ -36,7 +40,7 @@ enum OffAppStopPlan {
 
     /// 鳴って止められた行の id。[stopped] は停止ボタンの intent が書き残した id、[isLive] は AlarmKit に予約が残っているか
     ///
-    /// [bootMillis] は端末が最後に起動した時刻。書き残しが無くても、鳴る時刻より前から端末が起動し続けていて
+    /// [bootMillis] は端末が最後に起動した時刻。書き残しが無くても、予約を入れた時から端末が起動し続けていて
     /// 予約だけ消えているなら、再起動で消えたのではなく鳴って止められたと見なす。
     /// 実機 (iOS 26.5.2) で、ロック画面のスライド停止後に書き残しが付かず鳴り直したため (#118)。
     /// nil (読めない) の時はこの見なしをしない
@@ -45,7 +49,7 @@ enum OffAppStopPlan {
         pending
             .filter {
                 $0.wasReserved && $0.triggerAtMillis <= nowMillis && !isLive($0.id)
-                    && (stopped.contains($0.id) || Self.stayedUpThrough($0.triggerAtMillis, bootMillis: bootMillis))
+                    && (stopped.contains($0.id) || Self.stayedUpThrough($0.reservedAtMillis, bootMillis: bootMillis))
             }
             .map { $0.id }
             .sorted()
@@ -70,10 +74,12 @@ enum OffAppStopPlan {
 }
 
 extension OffAppStopPlan {
-    /// 鳴る時刻の前から端末が起動したままか。再起動をまたいでいないので、予約が消えた理由は「鳴って止められた」しか残らない
-    static func stayedUpThrough(_ triggerAtMillis: Int64, bootMillis: Int64?) -> Bool {
-        guard let boot = bootMillis else { return false }
-        return boot <= triggerAtMillis
+    /// 予約を入れた時から端末が起動したままか。予約後に再起動していれば OS が予約を捨てた可能性があり、
+    /// 鳴る時刻と比べると「予約後・鳴る前の再起動」を見逃して、鳴らず通知も出ない行を作ってしまう (#118)。
+    /// 予約した時刻が分からない (nil) 時は決められないので false
+    static func stayedUpThrough(_ reservedAtMillis: Int64?, bootMillis: Int64?) -> Bool {
+        guard let reserved = reservedAtMillis, let boot = bootMillis else { return false }
+        return boot <= reserved
     }
 }
 
