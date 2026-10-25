@@ -26,6 +26,8 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- 天気 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 広告 (AdMob): 広告ID。アプリは権限ダイアログを出さず、OS が必要時に宣言として使う -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 
     <application
         android:name=".CalendarAlarmApp"
@@ -36,6 +38,18 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.CalendarAlarm"
         tools:targetApi="35">
+
+        <!-- AdMob (#140)。実際の ID は manifestPlaceholder で差し替え (既定は Google 公式テストID) -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}" />
+        <!-- アプリ起動を広告の計測で遅らせない。初期化は裏スレッドで行う -->
+        <meta-data
+            android:name="com.google.android.gms.ads.flag.OPTIMIZE_INITIALIZATION"
+            android:value="true" />
+        <meta-data
+            android:name="com.google.android.gms.ads.flag.OPTIMIZE_AD_LOADING"
+            android:value="true" />
 
         <activity
             android:name=".MainActivity"

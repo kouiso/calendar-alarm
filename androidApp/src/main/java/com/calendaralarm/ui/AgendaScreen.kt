@@ -153,6 +153,10 @@ fun AgendaScreen(
         alarmMuted = alarmMuted,
     )
 
+    // 広告枠は一覧の末尾に1枠だけ (#140)。AdView は画面単位で作り、
+    // 末尾アイテムが付け替えて使う (スクロールで消えても読み直さない)
+    val bannerAdView = com.calendaralarm.ads.rememberBannerAdView()
+
     Column(Modifier.fillMaxSize()) {
         // Night UI: 日付 H1 + 天気ピルは WeatherHeaderRow が担う
         Text(
@@ -295,6 +299,7 @@ fun AgendaScreen(
                         }
                     },
                     showWeekNumbers = settings?.showWeekNumbers == true,
+                    bannerSlot = { com.calendaralarm.ads.BannerAdSlot(bannerAdView) },
                 )
                 ViewMode.MONTH -> MonthView(
                     month = focusDate,
@@ -427,6 +432,8 @@ private fun AgendaList(
     onSelect: (AlarmRepository.AgendaItem) -> Unit,
     onToggle: ((AlarmRepository.AgendaItem, Boolean) -> Unit)? = null,
     showWeekNumbers: Boolean = false,
+    /** 末尾に出す広告枠 (#140)。null なら何も出さない */
+    bannerSlot: (@Composable () -> Unit)? = null,
 ) {
     val grouped = items.groupBy { eventDate(it.event) }
     LazyColumn {
@@ -451,6 +458,10 @@ private fun AgendaList(
                     }
                 }
             }
+        }
+        // 広告は一覧の末尾に1枠だけ。末尾への追記なので既存行・ボタンの位置は動かない
+        bannerSlot?.let { slot ->
+            item(key = "banner_ad") { slot() }
         }
         item { Spacer(Modifier.height(24.dp)) }
     }

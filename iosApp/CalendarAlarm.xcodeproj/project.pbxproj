@@ -14,6 +14,7 @@
 		1AC90D4E8D2703925A409766 /* EventKitReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E327F22CF200C73E0FB08AA7 /* EventKitReader.swift */; };
 		1CE003037AC626E59CCD42F8 /* AlarmStopIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 718CE6D806B5B18E35707156 /* AlarmStopIntent.swift */; };
 		1FE6A64E84AB17C9C5EC1DEE /* AlarmSoundLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EB8DEF9DAD9CCF3FED35DE /* AlarmSoundLibrary.swift */; };
+		232F5F81F1865CD7D2BE5590 /* GoogleUserMessagingPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = 74EEF5B9C7679DEFBD48E68A /* GoogleUserMessagingPlatform */; };
 		29622F303C81E6C8561DA830 /* outfit_extralight.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CF4FE1923E95F87EA8A05028 /* outfit_extralight.ttf */; };
 		2C48431DBDA0DF45F9D75583 /* diagnosis-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */; };
 		2DF8005728D2E0319C73F77B /* plex_sans_jp_medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */; };
@@ -24,6 +25,7 @@
 		4E485751888C27D65F6C4ABA /* MailImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B399458D4913DD152149CADA /* MailImportView.swift */; };
 		4F6BD3C9781EB50C7D026E32 /* OffAppStopPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EEE1565D963DCF58E797F77 /* OffAppStopPlan.swift */; };
 		54E5C67790C94D5298C69492 /* CalendarAlarmWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		56581CC8A21360368B1593B0 /* AdSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2683FC9C13770D132297D6B /* AdSupport.swift */; };
 		56C929D3E057A4F1B62C284A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70278C1DA89E0C3594F39E2A /* SettingsView.swift */; };
 		5A07798B1780DD37A04D83F4 /* ringing-window-render-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF88FE737D7DF6DAF9D183AD /* ringing-window-render-test.swift */; };
 		5D99C358A61DC29A7E4BB564 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 6D6BF153DA3AEE3B1A413B7E /* Localizable.xcstrings */; };
@@ -35,6 +37,7 @@
 		70C15B080DE1D75F672A4741 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C59894E1200D6FB530B33BED /* Theme.swift */; };
 		7121EA4333EF57BBD17EF851 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3906726812F9FD3E5895AD2A /* DiagnosticsView.swift */; };
 		78335F051083F14CA2C916EE /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7384BC516B1FE4FB2F672E67 /* WeatherService.swift */; };
+		7E5494B2C605CF89CCCFEEF2 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 89CA988CC8A3C31F9E217EAB /* GoogleMobileAds */; };
 		83DF4A4775FDA2DFD643DF85 /* MailShareExt.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 90ED19FA826B4A1503E171A1 /* MailShareExt.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		84CB7D0E16454D83E7DD74BE /* SharedKitBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5CB9C72F79CDC56058DD028 /* SharedKitBridge.swift */; };
 		86B15B16E50DEF7BDFC0FC23 /* alarm-sound-import-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22FA71EC8E0871C65511A60 /* alarm-sound-import-test.swift */; };
@@ -152,11 +155,24 @@
 		E77D9C74BAD6E368F79E4264 /* WeatherBackdropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherBackdropView.swift; sourceTree = "<group>"; };
 		EBC7C20D6CC306ED12728299 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
 		EE03925928578DE0F3DE47BB /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		F2683FC9C13770D132297D6B /* AdSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdSupport.swift; sourceTree = "<group>"; };
 		F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_medium.ttf; sourceTree = "<group>"; };
 		F4F8642EDA4CA9194F126132 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
 		F5CB9C72F79CDC56058DD028 /* SharedKitBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedKitBridge.swift; sourceTree = "<group>"; };
 		FF88FE737D7DF6DAF9D183AD /* ringing-window-render-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ringing-window-render-test.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4F6A305900E89A6463FF89B5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7E5494B2C605CF89CCCFEEF2 /* GoogleMobileAds in Frameworks */,
+				232F5F81F1865CD7D2BE5590 /* GoogleUserMessagingPlatform in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		292CEE1BCE2BA19DFEAD3CBA /* Fonts */ = {
@@ -216,6 +232,7 @@
 		CE3DB46906063622E3F3C390 /* iosApp */ = {
 			isa = PBXGroup;
 			children = (
+				F2683FC9C13770D132297D6B /* AdSupport.swift */,
 				66A4F7800854676434D761F4 /* AgendaView.swift */,
 				9A431831DE81C49A75897127 /* AgendaViewsIOS.swift */,
 				982C5C9DA1E0E6814EDAD684 /* AlarmKitScheduler.swift */,
@@ -296,6 +313,7 @@
 				4B614228051DD131E5DF1FD2 /* Build SharedKit (KMP) */,
 				FEAF916E19AC90424FEAC526 /* Sources */,
 				1D78743548E72CEA38FE3563 /* Resources */,
+				4F6A305900E89A6463FF89B5 /* Frameworks */,
 				618126C3CFF053A5283862C7 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -306,6 +324,8 @@
 			);
 			name = iosApp;
 			packageProductDependencies = (
+				89CA988CC8A3C31F9E217EAB /* GoogleMobileAds */,
+				74EEF5B9C7679DEFBD48E68A /* GoogleUserMessagingPlatform */,
 			);
 			productName = iosApp;
 			productReference = 9BC0FA0EA0069BF21E257989 /* iosApp.app */;
@@ -385,6 +405,10 @@
 			);
 			mainGroup = BE0919C17107C5FCF3FF9118;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C48BE0EB1FA003B461D51FF7 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
+				6FA6EC5F19DF8AC730C26603 /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2B3FE666FD202320B4348FCD /* Products */;
 			projectDirPath = "";
@@ -510,6 +534,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				56581CC8A21360368B1593B0 /* AdSupport.swift in Sources */,
 				B419682EEBC47B0FA0D3144C /* AgendaView.swift in Sources */,
 				6FD84B70A4880BED419DDD24 /* AgendaViewsIOS.swift in Sources */,
 				06DB54446C328E66FFD1A494 /* AlarmKitScheduler.swift in Sources */,
@@ -672,6 +697,8 @@
 		80467D985FF0C4B7F51C5ECD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ADMOB_APP_ID = "ca-app-pub-3940256099942544~1458002511";
+				ADMOB_BANNER_UNIT_ID = "ca-app-pub-3940256099942544/2934735716";
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -750,6 +777,8 @@
 		9A525BFF8273FF3623566D62 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ADMOB_APP_ID = "ca-app-pub-3940256099942544~1458002511";
+				ADMOB_BANNER_UNIT_ID = "ca-app-pub-3940256099942544/2934735716";
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -881,6 +910,38 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6FA6EC5F19DF8AC730C26603 /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-user-messaging-platform.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.0;
+			};
+		};
+		C48BE0EB1FA003B461D51FF7 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.11.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		74EEF5B9C7679DEFBD48E68A /* GoogleUserMessagingPlatform */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6FA6EC5F19DF8AC730C26603 /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */;
+			productName = GoogleUserMessagingPlatform;
+		};
+		89CA988CC8A3C31F9E217EAB /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C48BE0EB1FA003B461D51FF7 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DE0179BC75C1681044CE6A86 /* Project object */;
 }

@@ -179,6 +179,8 @@ struct RootView: View {
             .presentationDetents([.medium])
         }
         .task { await asker.advance(center: permissions, engine: engine) }
+        // 広告 (#140): 同意確認と SDK 初期化は裏で進める。鳴動・停止・スヌーズは待たせない
+        .task { AdCoordinator.shared.startIfNeeded() }
         .onChange(of: engine.alertingIds.isEmpty) { _, idle in
             if idle { Task { await asker.advance(center: permissions, engine: engine) } }
         }
