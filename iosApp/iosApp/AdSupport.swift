@@ -99,6 +99,8 @@ struct AdBannerSlot: View {
                     .frame(height: 50)
             }
             .frame(maxWidth: .infinity)
+            // フローティングタブバーと重ならないよう下に余白 (SE等の小画面で末端に来ても隠れない)
+            .padding(.bottom, 24)
         }
     }
 }
