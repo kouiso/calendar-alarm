@@ -17,21 +17,55 @@ final class AdCoordinator: ObservableObject {
 
     private var started = false
 
+    /// 同意フォームを表示している間だけ true。鳴動時にフォームを閉じる判定に使う
+    private var isPresentingConsentForm = false
+    /// 鳴動中かどうかを呼び出し側に委ねる述語 (engine.alertingIds の中身を見る)
+    private var isAlerting: () -> Bool = { false }
+
     /// GDPR/EEA の同意状態を確認し、必要なら同意フォームを出してから GMA SDK を初期化する。
     /// 合意不要の地域ではフォームは出ずそのまま進む。1度だけ呼ぶ。
-    func startIfNeeded() {
+    /// 鳴動・停止・スヌーズ操作を同意フォームで塞がないよう、鳴動中は表示を待つ。
+    func startIfNeeded(isAlerting: @escaping () -> Bool = { false }) {
         guard !started else { return }
         started = true
+        self.isAlerting = isAlerting
         ConsentInformation.shared.requestConsentInfoUpdate(with: RequestParameters()) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
+                while self.isAlerting() {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                }
+                self.isPresentingConsentForm = true
                 ConsentForm.loadAndPresentIfRequired(from: Self.topRootViewController()) { [weak self] _ in
                     Task { @MainActor in
+                        self?.isPresentingConsentForm = false
                         self?.finishConsent()
                     }
                 }
             }
         }
+    }
+
+    /// 同意フォーム表示中に鳴動したらフォームを閉じて停止操作を優先させる (#140)。
+    /// UMP のフォームしか対象にしないよう、表示中フラグと VC の型名の両方を確認する。
+    func dismissConsentFormForRinging() {
+        guard isPresentingConsentForm, let top = Self.topRootViewController() else { return }
+        let name = String(describing: type(of: top))
+        guard name.contains("ConsentForm") || name.contains("UMP") else { return }
+        top.dismiss(animated: true)
+    }
+
+    /// ビュー切替のたびに作り直して広告リクエストが増えないよう、バナーを共有する
+    private var cachedBannerView: BannerView?
+
+    func sharedBannerView() -> BannerView {
+        if let cachedBannerView { return cachedBannerView }
+        let banner = BannerView(adSize: AdSizeBanner)
+        banner.adUnitID = AdConfig.bannerUnitID
+        banner.rootViewController = Self.topRootViewController()
+        banner.load(GoogleMobileAds.Request())
+        cachedBannerView = banner
+        return banner
     }
 
     private func finishConsent() {
@@ -62,16 +96,10 @@ enum AdConfig {
 
 /// バナーの GADBannerView ラッパ。
 private struct AdBannerViewRepresentable: UIViewRepresentable {
-    let unitID: String
-
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> BannerView {
-        let banner = BannerView(adSize: AdSizeBanner)
-        banner.adUnitID = unitID
-        banner.rootViewController = AdCoordinator.topRootViewController()
-        banner.load(GoogleMobileAds.Request())
-        return banner
+        AdCoordinator.shared.sharedBannerView()
     }
 
     func updateUIView(_ uiView: BannerView, context: Context) {
@@ -95,7 +123,7 @@ struct AdBannerSlot: View {
                 Text("広告")
                     .font(NightTheme.font(11))
                     .foregroundStyle(.secondary)
-                AdBannerViewRepresentable(unitID: AdConfig.bannerUnitID)
+                AdBannerViewRepresentable()
                     .frame(height: 50)
             }
             .frame(maxWidth: .infinity)

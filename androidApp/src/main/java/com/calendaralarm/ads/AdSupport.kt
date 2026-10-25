@@ -25,8 +25,9 @@ object AdSupport {
     private var started = false
 
     /** GDPR/EEA の同意状態を確認し、必要なら同意フォームを出してから GMA SDK を初期化する。
-     *  同意不要の地域ではフォームは出ずそのまま進む。1度だけ呼ぶ。 */
-    fun gatherConsentAndInit(activity: Activity) {
+     *  同意不要の地域ではフォームは出ずそのまま進む。1度だけ呼ぶ。
+     *  鳴動・停止・スヌーズ操作を同意フォームで塞がないよう、鳴動中は表示を待つ。 */
+    fun gatherConsentAndInit(activity: Activity, isAlerting: () -> Boolean = { false }) {
         if (started) return
         started = true
         val consentInfo = UserMessagingPlatform.getConsentInformation(activity)
@@ -35,15 +36,26 @@ object AdSupport {
             ConsentRequestParameters.Builder().build(),
             {
                 // 同意情報の更新に成功。フォームが要る地域だけここで出る
-                UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) {
-                    finishConsent(activity.applicationContext)
-                }
+                showConsentFormWhenIdle(activity, isAlerting)
             },
             { _ /* error: FormError */ ->
                 // 同意情報の取得失敗 (オフライン等) でも前回の状態を尊重して進める
                 finishConsent(activity.applicationContext)
             },
         )
+    }
+
+    private fun showConsentFormWhenIdle(activity: Activity, isAlerting: () -> Boolean) {
+        if (activity.isFinishing || activity.isDestroyed) return
+        if (isAlerting()) {
+            activity.window.decorView.postDelayed(
+                { showConsentFormWhenIdle(activity, isAlerting) }, 500,
+            )
+            return
+        }
+        UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) {
+            finishConsent(activity.applicationContext)
+        }
     }
 
     private fun finishConsent(appContext: Context) {

@@ -154,8 +154,11 @@ fun AgendaScreen(
     )
 
     // 広告枠は一覧の末尾に1枠だけ (#140)。AdView は画面単位で作り、
-    // 末尾アイテムが付け替えて使う (スクロールで消えても読み直さない)
-    val bannerAdView = com.calendaralarm.ads.rememberBannerAdView()
+    // 末尾アイテムが付け替えて使う (スクロールで消えても読み直さない)。
+    // 一覧モードを一度も開かない画面遷移では広告を読み込まない (作った後は保持して読み直ししない)
+    var adSlotNeeded by remember { mutableStateOf(viewMode == ViewMode.LIST) }
+    LaunchedEffect(viewMode) { if (viewMode == ViewMode.LIST) adSlotNeeded = true }
+    val bannerAdView = if (adSlotNeeded) com.calendaralarm.ads.rememberBannerAdView() else null
 
     Column(Modifier.fillMaxSize()) {
         // Night UI: 日付 H1 + 天気ピルは WeatherHeaderRow が担う
@@ -299,7 +302,7 @@ fun AgendaScreen(
                         }
                     },
                     showWeekNumbers = settings?.showWeekNumbers == true,
-                    bannerSlot = { com.calendaralarm.ads.BannerAdSlot(bannerAdView) },
+                    bannerSlot = bannerAdView?.let { v -> { com.calendaralarm.ads.BannerAdSlot(v) } },
                 )
                 ViewMode.MONTH -> MonthView(
                     month = focusDate,

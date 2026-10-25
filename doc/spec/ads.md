@@ -33,7 +33,9 @@ AdMob系のバナーを採っている。
 
 - **同意**: UMP SDK で GDPR/EEA/UK の同意を確認し、要る地域だけフォームを出す。
   iOS の ATT も UMP 経由 (`NSUserTrackingUsageDescription` は UMP 用に追加)。
-  同意を拒否してもアラームは使える (canRequestAds=false → 広告を出さないだけ)
+  同意を拒否してもアラームは使える (canRequestAds=false → 広告を出さないだけ)。
+  **同意フォームも広告扱い**: 鳴動中は表示を待ち、表示中に鳴動が始まったら閉じて
+  停止・スヌーズ操作を優先させる (両OS)
 - **権限**: Android は `com.google.android.gms.permission.AD_ID` を manifest に宣言
   (アプリ内ダイアログは出さない)。iOS は ATT の説明文を Info.plist に追加
 - **ストア申告 (本番配信時に要対応)**: Play のデータセーフティに広告SDKの項目を追加、
