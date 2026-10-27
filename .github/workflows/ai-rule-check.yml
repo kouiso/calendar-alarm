@@ -25,7 +25,7 @@ on:
 jobs:
   check:
     if: github.event.pull_request.draft != true
-    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
