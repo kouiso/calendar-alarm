@@ -73,6 +73,9 @@ class SettingsRepository(private val context: Context) {
         val firstWeekday: Int = WeekCalendar.DEFAULT_FIRST_WEEKDAY,
         /** テーマ ID。 */
         val themeId: String = "default",
+        /** 鳴動画面の停止UIを大ボタンにするか (競合の Large Button Mode, #154)。
+         *  OFF=従来のスライド停止、ON=誤タッチしにくい大きな停止ボタン。 */
+        val largeButtons: Boolean = false,
         /** カスタム背景画像 URI (鳴動画面/テーマ)。 */
         val backgroundImageUri: String? = null,
         /** 鳴動画面に天気を表示するか。 */
@@ -127,6 +130,7 @@ class SettingsRepository(private val context: Context) {
             showWeekNumbers = p[KEY_WEEK_NUMBERS] ?: false,
             firstWeekday = WeekCalendar.normalize(p[KEY_FIRST_WEEKDAY] ?: WeekCalendar.DEFAULT_FIRST_WEEKDAY),
             themeId = p[KEY_THEME_ID] ?: "default",
+            largeButtons = p[KEY_LARGE_BUTTONS] ?: false,
             backgroundImageUri = p[KEY_BG_IMAGE_URI],
             weatherOnAlarmScreen = p[KEY_WEATHER_ALARM] ?: true,
             weatherHeaderEnabled = p[KEY_WEATHER_HEADER] ?: true,
@@ -244,6 +248,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setShowWeekNumbers(v: Boolean) = edit { it[KEY_WEEK_NUMBERS] = v }
     suspend fun setFirstWeekday(v: Int) = edit { it[KEY_FIRST_WEEKDAY] = v }
     suspend fun setThemeId(v: String) = edit { it[KEY_THEME_ID] = v }
+    /** 鳴動画面の停止UIを大ボタンにするか (#154)。 */
+    suspend fun setLargeButtons(v: Boolean) = edit { it[KEY_LARGE_BUTTONS] = v }
     suspend fun setBackgroundImageUri(v: String?) = edit {
         if (v == null) it.remove(KEY_BG_IMAGE_URI) else it[KEY_BG_IMAGE_URI] = v
     }
@@ -358,6 +364,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
         val KEY_FIRST_WEEKDAY = intPreferencesKey("first_weekday")
         val KEY_THEME_ID = stringPreferencesKey("theme_id")
+        val KEY_LARGE_BUTTONS = booleanPreferencesKey("large_buttons")
         val KEY_BG_IMAGE_URI = stringPreferencesKey("background_image_uri")
         val KEY_WEATHER_ALARM = booleanPreferencesKey("weather_on_alarm_screen")
         val KEY_WEATHER_HEADER = booleanPreferencesKey("weather_header_enabled")

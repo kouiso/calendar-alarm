@@ -1350,6 +1350,23 @@ private fun AppearanceCard(
                 onShowWeekNumbers = { scope.launch { settings.setShowWeekNumbers(it) } },
                 onFirstWeekday = { scope.launch { settings.setFirstWeekday(it) } },
             )
+            // 大ボタンモード (競合の Large Button Mode, #154)。
+            // 鳴動画面の停止をスライドから押しやすい大ボタンに変える
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "停止ボタンを大きくする",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = p.largeButtons,
+                    onCheckedChange = { scope.launch { settings.setLargeButtons(it) } },
+                )
+            }
         }
     }
 }
