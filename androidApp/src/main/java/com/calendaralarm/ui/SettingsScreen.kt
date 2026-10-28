@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.DoNotDisturbOn
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
@@ -1223,6 +1224,19 @@ private fun RingingCard(
                 Switch(
                     checked = p.vibrateWhileRinging,
                     onCheckedChange = { scope.launch { settings.setVibrateWhileRinging(it) } },
+                )
+            }
+            // ON は通知チャンネルの bypassDnd。効くには通知ポリシーへのアクセス許可が要る (検査画面で案内)
+            IconSettingRow(Icons.Default.DoNotDisturbOn) {
+                Text(
+                    "おやすみモードを無視",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                Switch(
+                    checked = p.ignoreDnd,
+                    onCheckedChange = { scope.launch { settings.setIgnoreDnd(it) } },
                 )
             }
             // 全アラーム一括ミュート (通知・タイマーは止めない)

@@ -83,7 +83,7 @@ data class TroubleshootItem(
  */
 object TroubleshootChecks {
 
-    fun collect(context: Context, vibrate: Boolean): List<TroubleshootItem> {
+    fun collect(context: Context, vibrate: Boolean, ignoreDnd: Boolean = true): List<TroubleshootItem> {
         val pkg = context.packageName
         val pkgUri = Uri.parse("package:$pkg")
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -98,7 +98,7 @@ object TroubleshootChecks {
 
         // 鳴動に使うチャンネル (バイブ設定で切替) を検査する。未作成なら作ってから見る
         AlarmService.ensureChannels(context)
-        val channelId = if (vibrate) AlarmService.CHANNEL_ID else AlarmService.CHANNEL_ID_NOVIB
+        val channelId = AlarmService.channelIdFor(vibrate, ignoreDnd)
         val channel = nm?.getNotificationChannel(channelId)
         val channelOk = channel != null &&
             channel.importance >= NotificationManager.IMPORTANCE_HIGH &&
@@ -206,6 +206,23 @@ object TroubleshootChecks {
                 context.getString(R.string.trouble_dnd_desc),
                 dndFix,
             ),
+            // #149: 「おやすみモードを無視」ON の時だけ意味を持つ。
+            // 通知ポリシーへのアクセス未許可だとチャンネルの bypassDnd が OS に無視される
+            TroubleshootItem(
+                "dnd_policy",
+                if (!ignoreDnd) CheckState.NA
+                else s(runCatching { nm?.isNotificationPolicyAccessGranted }.getOrNull() == true),
+                context.getString(
+                    when {
+                        !ignoreDnd -> R.string.trouble_dnd_policy_na
+                        runCatching { nm?.isNotificationPolicyAccessGranted }.getOrNull() == true ->
+                            R.string.trouble_dnd_policy_ok
+                        else -> R.string.trouble_dnd_policy_ng
+                    },
+                ),
+                context.getString(R.string.trouble_dnd_policy_desc),
+                Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS),
+            ),
         )
     }
 }
@@ -221,8 +238,12 @@ fun TroubleshootingScreen(settings: SettingsRepository, onBack: () -> Unit) {
     var items by remember { mutableStateOf<List<TroubleshootItem>>(emptyList()) }
     var tick by remember { mutableStateOf(0) }
     LaunchedEffect(tick) {
-        val vibrate = runCatching { settings.flow.first().vibrateWhileRinging }.getOrDefault(true)
-        items = TroubleshootChecks.collect(context, vibrate)
+        val st = runCatching { settings.flow.first() }.getOrNull()
+        items = TroubleshootChecks.collect(
+            context,
+            vibrate = st?.vibrateWhileRinging ?: true,
+            ignoreDnd = st?.ignoreDnd ?: true,
+        )
     }
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
