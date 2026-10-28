@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -25,13 +26,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.AddAlert
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
@@ -50,8 +55,10 @@ import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -79,6 +86,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.calendaralarm.data.AlarmRepository
@@ -1015,6 +1023,57 @@ private fun EventRulesCard(
                     },
                 )
             }
+            // 全イベント共通の追加リマインダー (競合の Default Alarms, #143)。
+            // 日:時:分で登録し、個別予定の設定で上書き可能
+            var showAddReminder by remember { mutableStateOf(false) }
+            IconSettingRow(Icons.Default.AddAlert) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "全イベントへの追加リマインダー",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        "予定ごとの指定とは別に、全ての予定に共通で鳴らす時刻を登録します。同じ時刻は1回だけ鳴ります",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                        prefs.extraReminderOffsets.forEach { minutes ->
+                            InputChip(
+                                selected = false,
+                                onClick = {
+                                    scope.launch {
+                                        settings.setExtraReminderOffsets(prefs.extraReminderOffsets - minutes)
+                                        repository.resync("settings")
+                                    }
+                                },
+                                label = { Text(reminderOffsetLabel(minutes)) },
+                                trailingIcon = {
+                                    Icon(Icons.Default.Close, contentDescription = "削除", modifier = Modifier.size(16.dp))
+                                },
+                                modifier = Modifier.padding(end = 6.dp),
+                            )
+                        }
+                        AssistChip(
+                            onClick = { showAddReminder = true },
+                            label = { Text("追加") },
+                        )
+                    }
+                }
+            }
+            if (showAddReminder) {
+                ExtraReminderDialog(
+                    existing = prefs.extraReminderOffsets,
+                    onDismiss = { showAddReminder = false },
+                    onAdd = { minutes ->
+                        scope.launch {
+                            settings.setExtraReminderOffsets(prefs.extraReminderOffsets + minutes)
+                            repository.resync("settings")
+                        }
+                        showAddReminder = false
+                    },
+                )
+            }
         }
     }
     if (showCodes) {
@@ -1646,4 +1705,67 @@ private fun AddGoogleAccountRow() {
         },
         modifier = Modifier.padding(top = 4.dp),
     ) { Text("Google アカウントを追加") }
+}
+
+/** オフセットの表示名 (20分前 / 2時間前 / 1日前 など)。競合の D:H:M 表記と同じ粒度 (#143)。 */
+private fun reminderOffsetLabel(minutes: Int): String {
+    val d = minutes / 1440
+    val h = (minutes % 1440) / 60
+    val m = minutes % 60
+    val parts = buildList {
+        if (d > 0) add("${d}日")
+        if (h > 0) add("${h}時間")
+        if (m > 0 || (d == 0 && h == 0)) add("${m}分")
+    }
+    return parts.joinToString("") + "前"
+}
+
+/** 共通リマインダーの追加ダイアログ: 競合の DAYS:HRS:MIN ホイール相当を数値入力で (#143)。 */
+@Composable
+private fun ExtraReminderDialog(
+    existing: List<Int>,
+    onDismiss: () -> Unit,
+    onAdd: (Int) -> Unit,
+) {
+    var days by remember { mutableStateOf("") }
+    var hours by remember { mutableStateOf("") }
+    var mins by remember { mutableStateOf("") }
+    val total = (days.toIntOrNull() ?: 0) * 1440 + (hours.toIntOrNull() ?: 0) * 60 + (mins.toIntOrNull() ?: 0)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                // 0分と登録済みは追加できない (0分は開始時刻の鳴動と同じなので意味を持たない)
+                enabled = total > 0 && total !in existing,
+                onClick = { onAdd(total) },
+            ) { Text("追加") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } },
+        title = { Text("追加リマインダー") },
+        text = {
+            Column {
+                Text("予定の開始の何日前・何時間前・何分前に鳴らすかを入力してください", style = MaterialTheme.typography.bodySmall)
+                Row(Modifier.padding(top = 12.dp)) {
+                    OutlinedTextField(
+                        value = days, onValueChange = { days = it.filter(Char::isDigit).take(3) },
+                        label = { Text("日") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f).padding(end = 6.dp), singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = hours, onValueChange = { hours = it.filter(Char::isDigit).take(2) },
+                        label = { Text("時間") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f).padding(end = 6.dp), singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = mins, onValueChange = { mins = it.filter(Char::isDigit).take(2) },
+                        label = { Text("分") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f), singleLine = true,
+                    )
+                }
+                if (total > 0 && total in existing) {
+                    Text("同じ時刻はすでに登録済みです", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        },
+    )
 }

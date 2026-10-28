@@ -303,7 +303,8 @@ final class Engine: ObservableObject {
             inviteFilter: s.inviteFilter,
             eventTypeFilter: s.eventTypeFilter,
             importEventReminders: s.importEventReminders,
-            muteAll: s.muteAll
+            muteAll: s.muteAll,
+            commonExtraOffsets: s.extraReminderOffsets
         )
         guard var desired = SharedDomain.expand(expandReq)?.instances else {
             store.audit("RESYNC_FAIL", "shared expand returned nil")

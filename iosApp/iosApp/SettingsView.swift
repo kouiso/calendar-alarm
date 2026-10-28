@@ -21,6 +21,7 @@ struct SettingsView: View {
     @State private var weatherLocDraft = ""
     @State private var showSoundPicker = false
     @State private var soundError: String? = nil
+    @State private var showExtraReminderSheet = false
 
     private let actionOptions: [(EventAction, String)] =
         [(.alarm, "アラーム"), (.notify, "通知"), (.mute, "OFF")]
@@ -328,6 +329,47 @@ struct SettingsView: View {
                                     get: { store.state.importEventReminders },
                                     set: { store.setImportEventReminders($0); resync("import reminders") }
                                 )).labelsHidden()
+                            }
+                            // 全イベント共通の追加リマインダー (競合の Default Alarms, #143)。
+                            // 日:時:分のホイールで登録。個別予定の設定で上書き可能
+                            IconRow("bell.and.waveform.fill") {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("全イベントへの追加リマインダー")
+                                        .font(NightTheme.font(13))
+                                    Text("全ての予定に共通で鳴らす時刻。同じ時刻は1回だけ鳴ります")
+                                        .font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                    ScrollView(.horizontal) {
+                                        HStack(spacing: 6) {
+                                            ForEach(store.state.extraReminderOffsets, id: \.self) { m in
+                                                Button {
+                                                    store.setExtraReminderOffsets(store.state.extraReminderOffsets.filter { $0 != m })
+                                                    resync("common reminders")
+                                                } label: {
+                                                    HStack(spacing: 3) {
+                                                        Text(reminderOffsetLabel(m))
+                                                        Image(systemName: "xmark.circle.fill")
+                                                    }
+                                                    .font(NightTheme.font(11))
+                                                    .padding(.horizontal, 8).padding(.vertical, 4)
+                                                    .background(NightTheme.nightSurface, in: Capsule())
+                                                }
+                                                .buttonStyle(.plain)
+                                            }
+                                            Button { showExtraReminderSheet = true } label: {
+                                                Text("＋ 追加").font(NightTheme.font(11))
+                                                    .padding(.horizontal, 8).padding(.vertical, 4)
+                                                    .background(NightTheme.indigo.opacity(0.18), in: Capsule())
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                }
+                            }
+                            .sheet(isPresented: $showExtraReminderSheet) {
+                                ExtraReminderSheet(existing: store.state.extraReminderOffsets) { m in
+                                    store.setExtraReminderOffsets(store.state.extraReminderOffsets + [m])
+                                    resync("common reminders")
+                                }
                             }
                         }
                     }
@@ -846,6 +888,69 @@ struct RingTimesCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// オフセットの表示名 (20分前 / 2時間前 / 1日前 など)。競合の D:H:M 表記と同じ粒度 (#143)
+private func reminderOffsetLabel(_ minutes: Int) -> String {
+    let d = minutes / 1440
+    let h = (minutes % 1440) / 60
+    let m = minutes % 60
+    var parts: [String] = []
+    if d > 0 { parts.append("\(d)日") }
+    if h > 0 { parts.append("\(h)時間") }
+    if m > 0 || parts.isEmpty { parts.append("\(m)分") }
+    return parts.joined() + "前"
+}
+
+/// 共通リマインダーの追加シート: 競合の DAYS:HRS:MIN ホイール相当 (#143)
+private struct ExtraReminderSheet: View {
+    let existing: [Int]
+    let onAdd: (Int) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var days = 0
+    @State private var hours = 0
+    @State private var mins = 20
+
+    private var total: Int { days * 1440 + hours * 60 + mins }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack(spacing: 0) {
+                        Picker("日", selection: $days) {
+                            ForEach(0..<31, id: \.self) { Text("\($0)日").tag($0) }
+                        }
+                        .pickerStyle(.wheel)
+                        Picker("時間", selection: $hours) {
+                            ForEach(0..<24, id: \.self) { Text("\($0)時間").tag($0) }
+                        }
+                        .pickerStyle(.wheel)
+                        Picker("分", selection: $mins) {
+                            ForEach(0..<60, id: \.self) { Text("\($0)分").tag($0) }
+                        }
+                        .pickerStyle(.wheel)
+                    }
+                    .frame(height: 140)
+                }
+                if total > 0 && existing.contains(total) {
+                    Text("同じ時刻はすでに登録済みです").foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("追加リマインダー")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("やめる") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    // 0分と登録済みは追加できない (0分は開始時刻の鳴動と同じ)
+                    Button("追加") { onAdd(total); dismiss() }
+                        .disabled(total <= 0 || existing.contains(total))
+                }
+            }
         }
     }
 }

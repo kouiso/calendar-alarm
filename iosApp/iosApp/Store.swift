@@ -40,6 +40,8 @@ final class Store: ObservableObject {
         var alarmSoundLabel: String? = nil
         /// 予定一覧に週番号を出すか (旧版の「Show Calendar Week」)
         var showWeekNumbers: Bool = false
+        /// 全イベント共通の追加リマインダー (開始何分前かの分数リスト, #143)
+        var extraReminderOffsets: [Int] = []
         /// 週の開始曜日 (ISO: 1=月 … 7=日)。既定はこれまでの月表示と同じ日曜
         var firstWeekday: Int = WeekDisplay.defaultFirstWeekday
         var timerPresets: [TimerPresetDTO] = TimerPresets.defaults
@@ -180,6 +182,8 @@ final class Store: ObservableObject {
         }
     }
     func setImportEventReminders(_ v: Bool) { mutate { $0.importEventReminders = v } }
+    /// 全イベント共通の追加リマインダー (分リスト, #143)。重複は展開側で弾く
+    func setExtraReminderOffsets(_ v: [Int]) { mutate { $0.extraReminderOffsets = Array(Set(v)).sorted() } }
     func setMuteAll(_ v: Bool) { mutate { $0.muteAll = v } }
     func setThemeId(_ v: String) { mutate { $0.themeId = v } }
     func setWeatherLocation(_ v: String) { mutate { $0.weatherLocation = v.trimmingCharacters(in: .whitespacesAndNewlines) } }
@@ -452,6 +456,7 @@ extension Store.Persisted {
         alarmSoundFile = try c.decodeIfPresent(String.self, forKey: .alarmSoundFile)
         alarmSoundLabel = try c.decodeIfPresent(String.self, forKey: .alarmSoundLabel)
         showWeekNumbers = try c.decodeIfPresent(Bool.self, forKey: .showWeekNumbers) ?? false
+        extraReminderOffsets = try c.decodeIfPresent([Int].self, forKey: .extraReminderOffsets) ?? []
         firstWeekday = WeekDisplay.normalize(try c.decodeIfPresent(Int.self, forKey: .firstWeekday) ?? WeekDisplay.defaultFirstWeekday)
         timerPresets = try c.decodeIfPresent([TimerPresetDTO].self, forKey: .timerPresets) ?? TimerPresets.defaults
         calendarRules = try c.decodeIfPresent([String: AlarmRuleDTO].self, forKey: .calendarRules) ?? [:]

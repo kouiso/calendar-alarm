@@ -65,6 +65,11 @@ object AlarmExpander {
         /** 元アプリの「一括ミュート」: ALARM 鳴動を全て抑止する。
          *  NOTIFY (通知のみ) は鳴動ではないので残す。 */
         muteAll: Boolean = false,
+        /** 全イベント共通の追加リマインダー (開始何分前かの分数リスト, #143)。
+         *  カレンダー既定の extraOffsets と併合して効く。予定個別の extraOffsets を
+         *  指定したイベントはそれが全体を置き換える (個別設定の上書き, #160 引継)。
+         *  triggerAtMillis が同じ鳴動は開始オフセット側を優先して重複させない。 */
+        commonExtraOffsets: List<Int> = emptyList(),
     ): List<AlarmInstance> {
         val result = mutableListOf<AlarmInstance>()
         for (event in events) {
@@ -88,7 +93,8 @@ object AlarmExpander {
             }
             val startMillis = Instant.fromEpochMilliseconds(eventStart)
             val minutesBefore = override?.minutesBefore ?: rule.minutesBefore
-            val extras = override?.extraOffsets ?: rule.extraOffsets
+            // 個別指定があればそれが共通・カレンダー既定より優先 (個別で上書き可能, #143)
+            val extras = override?.extraOffsets ?: (rule.extraOffsets + commonExtraOffsets).distinct()
             val (startAction, reminderAction) = resolveActions(event, rule, override, titleCodes)
             val title = event.title.ifBlank { "(タイトルなし)" }
             // triggerAt 重複を避けるため時刻単位で集約 (開始オフセットを優先)
