@@ -69,6 +69,9 @@ class SettingsRepository(private val context: Context) {
         val defaultSoundUri: String? = null,
         /** 週番号を予定一覧に表示するか。 */
         val showWeekNumbers: Boolean = false,
+        /** 鳴動を常にフルスクリーン通知で出すか (競合の Force full-screen alarm, #153)。
+         *  false ならヘッズアップ通知のみ。既定 true = 従来どおり常時FSI。 */
+        val forceFullScreen: Boolean = true,
         /** 週の開始曜日 (1=月 … 7=日)。既定はこれまでの月表示と同じ日曜。 */
         val firstWeekday: Int = WeekCalendar.DEFAULT_FIRST_WEEKDAY,
         /** テーマ ID。 */
@@ -126,6 +129,8 @@ class SettingsRepository(private val context: Context) {
             defaultSoundUri = p[KEY_SOUND_URI],
             showWeekNumbers = p[KEY_WEEK_NUMBERS] ?: false,
             firstWeekday = WeekCalendar.normalize(p[KEY_FIRST_WEEKDAY] ?: WeekCalendar.DEFAULT_FIRST_WEEKDAY),
+            // 「フルスクリーンを強制」(#153)。既定ON=従来どおり常にFSIを付ける
+            forceFullScreen = p[KEY_FORCE_FSI] ?: true,
             themeId = p[KEY_THEME_ID] ?: "default",
             backgroundImageUri = p[KEY_BG_IMAGE_URI],
             weatherOnAlarmScreen = p[KEY_WEATHER_ALARM] ?: true,
@@ -243,6 +248,9 @@ class SettingsRepository(private val context: Context) {
     }
     suspend fun setShowWeekNumbers(v: Boolean) = edit { it[KEY_WEEK_NUMBERS] = v }
     suspend fun setFirstWeekday(v: Int) = edit { it[KEY_FIRST_WEEKDAY] = v }
+
+    /** 鳴動を常にフルスクリーン通知で出すか (#153)。 */
+    suspend fun setForceFullScreen(v: Boolean) = edit { it[KEY_FORCE_FSI] = v }
     suspend fun setThemeId(v: String) = edit { it[KEY_THEME_ID] = v }
     suspend fun setBackgroundImageUri(v: String?) = edit {
         if (v == null) it.remove(KEY_BG_IMAGE_URI) else it[KEY_BG_IMAGE_URI] = v
@@ -357,6 +365,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_SOUND_URI = stringPreferencesKey("default_sound_uri")
         val KEY_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
         val KEY_FIRST_WEEKDAY = intPreferencesKey("first_weekday")
+        val KEY_FORCE_FSI = booleanPreferencesKey("force_full_screen")
         val KEY_THEME_ID = stringPreferencesKey("theme_id")
         val KEY_BG_IMAGE_URI = stringPreferencesKey("background_image_uri")
         val KEY_WEATHER_ALARM = booleanPreferencesKey("weather_on_alarm_screen")
