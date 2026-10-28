@@ -66,6 +66,12 @@ class SettingsRepository(private val context: Context) {
         /** 鳴動の持続時間 (秒)。0=制限なし (従来どおり10分の安全上限で自動停止)。
          *  競合の Alarm Duration (5s〜infinite, #148) に対応。 */
         val ringDurationSec: Int = 0,
+        /** 放置で自動スヌーズするか (競合の Auto-snooze, #145)。
+         *  既定 OFF: ON にすると鳴動上限到達が「見逃し」ではなく既定分数の再鳴動になる
+         *  挙動を黙って変えないため、利用者が明示して有効化する。 */
+        val autoSnooze: Boolean = false,
+        /** 自動スヌーズの回数上限 (2/3/4)。スヌーズ連鎖の snoozeSeq と比較する。 */
+        val autoSnoozeMax: Int = 3,
         /** 一括ミュート: ALARM鳴動を全て止める (通知のみは残す)。 */
         val muteAll: Boolean = false,
         /** 既定の鳴動音 URI (カスタムMP3等)。null=システム既定。 */
@@ -127,6 +133,9 @@ class SettingsRepository(private val context: Context) {
             vibrateWhileRinging = p[KEY_VIBRATE] ?: true,
             // 鳴動持続時間 (#148)。負数は来ないはずだが、来ても「制限なし」と同じ扱いに倒す
             ringDurationSec = (p[KEY_RING_DURATION] ?: 0).coerceAtLeast(0),
+            autoSnooze = p[KEY_AUTO_SNOOZE] ?: false,
+            // 自動スヌーズ上限 (#145) は競合の選択肢 2/3/4 に丸める。それ以外は既定3
+            autoSnoozeMax = (p[KEY_AUTO_SNOOZE_MAX] ?: 3).coerceIn(2, 4),
             muteAll = p[KEY_MUTE_ALL] ?: false,
             defaultSoundUri = p[KEY_SOUND_URI],
             showWeekNumbers = p[KEY_WEEK_NUMBERS] ?: false,
@@ -221,6 +230,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setVibrateWhileRinging(v: Boolean) = edit { it[KEY_VIBRATE] = v }
     /** 鳴動持続時間 (秒)。0=制限なし (#148)。 */
     suspend fun setRingDurationSec(v: Int) = edit { it[KEY_RING_DURATION] = v.coerceAtLeast(0) }
+    /** 放置で自動スヌーズするか (#145)。 */
+    suspend fun setAutoSnooze(v: Boolean) = edit { it[KEY_AUTO_SNOOZE] = v }
+    /** 自動スヌーズの回数上限 (2/3/4, #145)。 */
+    suspend fun setAutoSnoozeMax(v: Int) = edit { it[KEY_AUTO_SNOOZE_MAX] = v.coerceIn(2, 4) }
     suspend fun setMuteAll(v: Boolean) = edit { it[KEY_MUTE_ALL] = v }
 
     /** Googleカレンダー連携のアカウントを足す。旧版の1アカウントのキーはここで新しいキーへ移す */
@@ -361,6 +374,8 @@ class SettingsRepository(private val context: Context) {
         val KEY_VOL_CRESCENDO = booleanPreferencesKey("volume_crescendo")
         val KEY_VIBRATE = booleanPreferencesKey("vibrate_while_ringing")
         val KEY_RING_DURATION = intPreferencesKey("ring_duration_sec")
+        val KEY_AUTO_SNOOZE = booleanPreferencesKey("auto_snooze")
+        val KEY_AUTO_SNOOZE_MAX = intPreferencesKey("auto_snooze_max")
         val KEY_MUTE_ALL = booleanPreferencesKey("mute_all")
         val KEY_SOUND_URI = stringPreferencesKey("default_sound_uri")
         val KEY_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")

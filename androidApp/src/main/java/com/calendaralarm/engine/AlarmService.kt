@@ -381,13 +381,31 @@ class AlarmService : Service() {
                 // 畳みの中でこのジョブ自身もキャンセルされるので、以降は NonCancellable で行う
                 if (!stopIfCurrent(gen)) return@launch
                 withContext(NonCancellable) {
-                    runCatching {
-                        app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
+                    // 自動スヌーズ (#145): 放置時に既定分数の再鳴動へ置き換える。
+                    // 上限 (snoozeSeq が回数に達した連鎖) または OFF なら従来どおり MISSED。
+                    // 「Alarm missed」相当の扱いは MISSED 一本化 — 上限到達後は
+                    // 鳴らせなかった履歴として残すのが競合の見え方と同じ。
+                    val autoSnooze = ringSettings.autoSnooze &&
+                        instance.snoozeSeq < ringSettings.autoSnoozeMax
+                    if (autoSnooze) {
+                        val mins = instance.snoozeMinutes.takeIf { it > 0 }
+                            ?: ringSettings.defaultSnoozeMinutes
+                        runCatching {
+                            app.container.repository.audit(
+                                "SNOOZE", "${instance.id}: 放置${ringTimeoutMs / 1000}秒で自動スヌーズ ${mins}分 (seq ${instance.snoozeSeq})")
+                        }
+                        runCatching {
+                            app.container.repository.onSnoozed(instance.id, mins)
+                        }
+                    } else {
+                        runCatching {
+                            app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
+                        }
+                        runCatching {
+                            app.container.repository.markMissed(instance.id, "鳴動が${ringTimeoutMs / 1000}秒続き自動停止")
+                        }
+                        MissedNotifier.post(this@AlarmService, instance.title)
                     }
-                    runCatching {
-                        app.container.repository.markMissed(instance.id, "鳴動が${ringTimeoutMs / 1000}秒続き自動停止")
-                    }
-                    MissedNotifier.post(this@AlarmService, instance.title)
                     releaseWaitingRings(instance.id)
                     finishIfIdle()
                 }
