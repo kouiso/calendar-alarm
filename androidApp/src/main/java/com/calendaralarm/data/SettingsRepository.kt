@@ -107,11 +107,13 @@ class SettingsRepository(private val context: Context) {
                 applyToStart = (p[KEY_CODE_SCOPE] ?: 0) != 2,
                 applyToReminders = (p[KEY_CODE_SCOPE] ?: 0) != 1,
             ),
+            // キー未保存 (一度も触っていない) 人の既定は元アプリと同じ「承諾した招待のみ」(#155)。
+            // 保存済みの選択はそのまま残る
             inviteFilter = InviteFilter(
-                accepted = (p[KEY_INVITE_MASK] ?: 7) and 1 != 0,
-                tentative = (p[KEY_INVITE_MASK] ?: 7) and 2 != 0,
-                needsAction = (p[KEY_INVITE_MASK] ?: 7) and 4 != 0,
-                declined = (p[KEY_INVITE_MASK] ?: 7) and 8 != 0,
+                accepted = (p[KEY_INVITE_MASK] ?: 1) and 1 != 0,
+                tentative = (p[KEY_INVITE_MASK] ?: 1) and 2 != 0,
+                needsAction = (p[KEY_INVITE_MASK] ?: 1) and 4 != 0,
+                declined = (p[KEY_INVITE_MASK] ?: 1) and 8 != 0,
             ),
             eventTypeFilter = eventTypeFilterOf(p),
             googleAccountEmails = googleAccountsOf(p),

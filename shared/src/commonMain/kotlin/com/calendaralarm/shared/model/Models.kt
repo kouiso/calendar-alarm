@@ -41,12 +41,13 @@ data class TitleCodeSettings(
 /**
  * 招待予定のフィルタ (元アプリ仕様)。
  * 各ステータスを鳴らすかどうか。招待でない予定は常に対象。
+ * 既定は元アプリと同じ「承諾した招待のみ」(Current Selection: Accepted Invitations)。
  */
 @Serializable
 data class InviteFilter(
     val accepted: Boolean = true,
-    val tentative: Boolean = true,
-    val needsAction: Boolean = true,
+    val tentative: Boolean = false,
+    val needsAction: Boolean = false,
     val declined: Boolean = false,
 ) {
     fun allows(status: InviteStatus?): Boolean = when (status) {
