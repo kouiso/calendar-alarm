@@ -1,7 +1,7 @@
 name: AI rules drift check
 
 # なぜ: Android CI は .md の変更で走らないので、AGENTS.md だけを変えた PR で
-#       生成物 (CLAUDE.md など) が古いまま入るのを別に止める
+#       生成物 (GEMINI.md など) が古いまま入るのを別に止める
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
