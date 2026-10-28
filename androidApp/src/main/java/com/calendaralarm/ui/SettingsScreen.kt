@@ -1162,6 +1162,19 @@ private fun RingingCard(
     repository: AlarmRepository,
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
+    val context = LocalContext.current
+    // 既定の鳴動音 (#146)。個別アラーム単位の音は編集画面に既にある。永続権を取って
+    // URI を保持する (失効した URI でも鳴動側がシステム既定へ落ちるので無音にはならない)
+    val soundPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            context.contentResolver.takePersistableUriPermission(
+                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+            scope.launch { settings.setDefaultSoundUri(uri.toString()) }
+        }
+    }
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -1186,6 +1199,27 @@ private fun RingingCard(
                 },
                 modifier = Modifier.padding(horizontal = 12.dp),
             )
+            IconSettingRow(Icons.Default.Notifications) {
+                Text(
+                    if (p.defaultSoundUri == null) "アラーム音: 標準" else "アラーム音: カスタム",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                if (p.defaultSoundUri != null) {
+                    FilterChip(
+                        selected = false,
+                        onClick = { scope.launch { settings.setDefaultSoundUri(null) } },
+                        label = { Text("標準に戻す", maxLines = 1) },
+                        modifier = Modifier.padding(end = 4.dp),
+                    )
+                }
+                FilterChip(
+                    selected = p.defaultSoundUri != null,
+                    onClick = { soundPicker.launch(arrayOf("audio/*")) },
+                    label = { Text("選ぶ", maxLines = 1) },
+                )
+            }
             // スヌーズプリセット (鳴動画面の +N分 ボタンに出る一覧)
             IconSettingRow(Icons.Default.Snooze) {
                 listOf(1, 5, 10, 15, 20, 30, 45, 60, 90).forEach { m ->
