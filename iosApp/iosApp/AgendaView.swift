@@ -28,7 +28,8 @@ struct AgendaView: View {
                             .font(NightTheme.font(30, weight: .semibold))
                             .padding(.top, 6)
                         // 次のアラーム欄は小さくし、その下に鳴動の状態を1行出す (#51 PR2)
-                        AgendaNextAlarmCard(instance: nextAlarm, accent: accent, statusLine: ringStatus.line)
+                        AgendaNextAlarmCard(instance: nextAlarm, accent: accent, statusLine: ringStatus.line,
+                                            showEvent: store.state.showNextEvent)
                         if ringStatus.missingPermissions > 0 {
                             NavigationLink { PermissionsView() } label: {
                                 StatusBanner(message: "許可が\(ringStatus.missingPermissions)つ足りません。鳴らない・止められないことがあります", action: "直す")
@@ -278,24 +279,28 @@ struct AgendaNextAlarmCard: View {
     let instance: AlarmInstanceDTO?
     let accent: Color
     let statusLine: String
+    /// 「メイン画面に次の予定を出す」OFF の時は予定の欄だけ隠し、鳴動の状態の1行は残す (#151)
+    var showEvent: Bool = true
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("次のアラーム")
-                        .font(NightTheme.font(12, weight: .semibold))
-                        .tracking(1)
-                        .foregroundStyle(accent)
-                    Text(instance?.title ?? "なし")
-                        .font(NightTheme.font(15))
-                        .foregroundStyle(NightTheme.muted)
-                        .lineLimit(1)
-                }
-                Spacer()
-                if let instance {
-                    Text(Self.timeStr(instance.triggerAtMillis))
-                        .font(NightTheme.numFont(36, weight: .light))
-                        .foregroundStyle(NightTheme.onNight)
+            if showEvent {
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("次のアラーム")
+                            .font(NightTheme.font(12, weight: .semibold))
+                            .tracking(1)
+                            .foregroundStyle(accent)
+                        Text(instance?.title ?? "なし")
+                            .font(NightTheme.font(15))
+                            .foregroundStyle(NightTheme.muted)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    if let instance {
+                        Text(Self.timeStr(instance.triggerAtMillis))
+                            .font(NightTheme.numFont(36, weight: .light))
+                            .foregroundStyle(NightTheme.onNight)
+                    }
                 }
             }
             Text(statusLine)
