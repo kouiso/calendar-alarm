@@ -37,6 +37,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -137,6 +139,9 @@ class RingingActivity : ComponentActivity() {
                     val presets by app.container.settings.flow
                         .map { it.snoozePresets }
                         .collectAsState(initial = listOf(instance?.snoozeMinutes ?: 10))
+                    val largeButtons by app.container.settings.flow
+                        .map { it.largeButtons }
+                        .collectAsState(initial = false)
                     // 鳴動画面の天気演出: 地点設定がある時だけ引く。
                     // 鳴動画面でネットが遅くても鳴動自体を待たせないよう非同期読み。
                     var weather by androidx.compose.runtime.remember {
@@ -174,6 +179,7 @@ class RingingActivity : ComponentActivity() {
                             eventStartMillis = instance?.eventStartMillis,
                             snoozeMinutes = instance?.snoozeMinutes ?: 10,
                             snoozePresets = presets,
+                            largeButtons = largeButtons,
                             canOpenSource = canOpenSource,
                             onOpenSource = { openSourcePendingIntent() },
                             onDismiss = { pinned(AlarmService.ACTION_DISMISS, null) },
@@ -329,6 +335,7 @@ private fun RingingScreen(
     snoozeMinutes: Int,
     snoozePresets: List<Int>,
     weather: CurrentWeather?,
+    largeButtons: Boolean = false,
     canOpenSource: Boolean = false,
     onOpenSource: () -> Unit = {},
     onDismiss: () -> Unit,
@@ -504,8 +511,23 @@ private fun RingingScreen(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            // 停止はスライド式: 誤タップで止まらないよう左端の丸を右へドラッグ
-            SlideToStop(accent = accent, onAccent = onAccent, onStop = onDismiss)
+            // 停止は既定でスライド式: 誤タップで止まらないよう左端の丸を右へドラッグ。
+            // 大ボタンモード (#154) ではスライドを止めて押しやすい大きなボタンにする
+            if (largeButtons) {
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().height(96.dp),
+                    shape = RoundedCornerShape(RingingSlideSpec.TRACK_CORNER_DP.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accent,
+                        contentColor = onAccent,
+                    ),
+                ) {
+                    Text("停止", fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                SlideToStop(accent = accent, onAccent = onAccent, onStop = onDismiss)
+            }
             Spacer(Modifier.height(10.dp))
             Row(
                 horizontalArrangement = Arrangement.Center,
