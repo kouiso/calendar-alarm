@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Snooze
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Vibration
@@ -1154,7 +1155,8 @@ private fun AuditRow(log: AuditLogEntity) {
     }
 }
 
-// ---- 鳴動設定: 元アプリの音量系 (独立音量・徐々に音量UP・バイブ) + 一括ミュート ----
+// ---- 鳴動設定: 元アプリの音量系 (独立音量・徐々に音量UP・バイブ・持続時間) + 一括ミュート ----
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RingingCard(
     p: SettingsRepository.Settings,
@@ -1224,6 +1226,29 @@ private fun RingingCard(
                     checked = p.vibrateWhileRinging,
                     onCheckedChange = { scope.launch { settings.setVibrateWhileRinging(it) } },
                 )
+            }
+            // 鳴動持続時間 (競合の Alarm Duration, #148)。時間切れで自動停止し
+            // 「鳴らせなかった」扱いにする。制限なしは従来どおり10分の安全上限
+            IconSettingRow(Icons.Default.Timer) {
+                FlowRow {
+                    listOf(5, 10, 30, 60, 120, 300, 0).forEach { sec ->
+                        FilterChip(
+                            selected = p.ringDurationSec == sec,
+                            onClick = { scope.launch { settings.setRingDurationSec(sec) } },
+                            label = {
+                                Text(
+                                    when {
+                                        sec == 0 -> "制限なし"
+                                        sec < 60 -> "${sec}秒"
+                                        else -> "${sec / 60}分"
+                                    },
+                                    maxLines = 1,
+                                )
+                            },
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    }
+                }
             }
             // 全アラーム一括ミュート (通知・タイマーは止めない)
             IconSettingRow(Icons.Default.VolumeOff) {

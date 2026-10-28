@@ -85,6 +85,9 @@ class AlarmService : Service() {
     private val requestedIds = mutableSetOf<String>()
     // 鳴動通知のチャンネル選択に使う。前面化前に鳴動設定から確定させる
     @Volatile private var vibrateForRing = true
+    // 鳴動持続時間 (#148)。0=制限なし (従来どおり10分の安全上限)。
+    // 前面化前に鳴動設定から確定させる
+    @Volatile private var ringDurationSecForRing = 0
     // 直近に受け取ったコマンドの startId (ringLock 内のみ)。終了判定時点の値で
     // stopSelfResult すると、判定後に届いた ACTION_START があればサービスは止まらない
     // (引数なし stopSelf は判定〜停止の間に届いた新しい鳴動ごと殺す)
@@ -191,9 +194,10 @@ class AlarmService : Service() {
                         finishIfIdle()
                         return@launch
                     }
-                    // チャンネル (バイブ有無) は前面化の通知で決まるので先に設定を読む。
-                    // 前面化の期限があるので読めなければ既定 (バイブあり) で進む
+                    // チャンネル (バイブ有無) と持続時間は前面化の通知で決まるので先に設定を読む。
+                    // 前面化の期限があるので読めなければ既定 (バイブあり・制限なし) で進む
                     vibrateForRing = readVibrateSetting()
+                    ringDurationSecForRing = readRingDurationSetting()
                     if (!startForegroundWithNotification(id)) {
                         // BOOT_COMPLETED 処理中など、mediaPlayback FGS の起動が
                         // 禁止されているコンテキスト。ここで例外を上げると
@@ -357,13 +361,22 @@ class AlarmService : Service() {
         }
         // 最終防衛線: 通知権限なし + FSI拒否 だと停止UIが1つも存在せず
         // 電源断まで鳴り続ける。上限に達したら自動停止して MISSED 扱いにする。
+        // 「鳴動持続時間」(#148) を設定していればその秒数で自動停止。
+        // 制限なし (0) は従来どおり10分の安全上限とする — 停止UIが無い構成で
+        // 本当に無制限に鳴らすと電源断まで止まらないため、ここは競合の
+        // infinite 相当を安全側に読み替える。
         // 上限タイマーの差し替えも世代ゲートの内側で行う。ゲート外で
         // cancel/assign すると新世代のタイマーを殺したり、stale 世代の
         // タイマーが残って後から現行世代の鳴動を止め得る
+        val ringTimeoutMs = if (ringDurationSecForRing > 0) {
+            ringDurationSecForRing * 1000L
+        } else {
+            RING_TIMEOUT_MS
+        }
         adoptIfCurrent(gen) {
             ringTimeoutJob?.cancel()
             ringTimeoutJob = scope.launch {
-                kotlinx.coroutines.delay(RING_TIMEOUT_MS)
+                kotlinx.coroutines.delay(ringTimeoutMs)
                 // 発火時点で後始末権を奪取できた場合だけ、同じロック内で自分の鳴動を畳む。
                 // 畳みの中でこのジョブ自身もキャンセルされるので、以降は NonCancellable で行う
                 if (!stopIfCurrent(gen)) return@launch
@@ -372,7 +385,7 @@ class AlarmService : Service() {
                         app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
                     }
                     runCatching {
-                        app.container.repository.markMissed(instance.id, "鳴動が${RING_TIMEOUT_MS / 60_000}分続き自動停止")
+                        app.container.repository.markMissed(instance.id, "鳴動が${ringTimeoutMs / 1000}秒続き自動停止")
                     }
                     MissedNotifier.post(this@AlarmService, instance.title)
                     releaseWaitingRings(instance.id)
@@ -776,6 +789,18 @@ class AlarmService : Service() {
             throw e
         } catch (e: Exception) {
             true
+        }
+
+    /** 鳴動持続時間 (秒, #148)。読めなければ制限なし (従来どおり10分上限) で進む */
+    private suspend fun readRingDurationSetting(): Int =
+        try {
+            withTimeoutOrNull(SETTINGS_READ_TIMEOUT_MS) {
+                app.container.settings.flow.first().ringDurationSec
+            } ?: 0
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            0
         }
 
     /**
