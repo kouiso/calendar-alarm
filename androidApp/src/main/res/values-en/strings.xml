@@ -191,6 +191,8 @@
     <string name="trouble_exact_desc">The exact alarm permission is needed to ring on time.</string>
     <string name="trouble_exact_ng">Exact alarms not allowed</string>
     <string name="trouble_exact_ok">Exact alarms allowed</string>
+    <string name="trouble_force_fsi">Force full-screen notifications</string>
+    <string name="trouble_force_fsi_desc">When on, the ringing screen always appears full screen. When off, only a heads-up notification is shown and opening it brings up the ringing screen.</string>
     <string name="trouble_fsi_desc">Needed to show alarms full screen on the lock screen like a normal alarm clock.</string>
     <string name="trouble_fsi_ng">Full-screen alarms not allowed</string>
     <string name="trouble_fsi_ok">Full-screen alarms allowed</string>
