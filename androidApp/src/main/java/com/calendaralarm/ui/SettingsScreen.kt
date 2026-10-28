@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
@@ -1224,6 +1225,52 @@ private fun RingingCard(
                     checked = p.vibrateWhileRinging,
                     onCheckedChange = { scope.launch { settings.setVibrateWhileRinging(it) } },
                 )
+            }
+            // 「おやすみモードでも鳴らす」(競合の ignore_dnd_mode, #149)。鳴動チャンネルの
+            // bypassDnd で効かせる。権限 (おやすみモードへのアクセス) が無いと OS が
+            // bypass を無視するので、未許可の時はスイッチを無効にして誘導だけ出す
+            val dndContext = LocalContext.current
+            val dndTick = rememberResumeTick()
+            val dndAccess = remember(dndTick) {
+                dndContext.getSystemService(android.app.NotificationManager::class.java)
+                    ?.isNotificationPolicyAccessGranted ?: false
+            }
+            IconSettingRow(Icons.Default.DoNotDisturb) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "サイレントモードでも鳴らす",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Switch(
+                            checked = p.ignoreDnd,
+                            enabled = dndAccess,
+                            onCheckedChange = { v ->
+                                scope.launch {
+                                    settings.setIgnoreDnd(v)
+                                    // bypassDnd は作成後に変えられないので作り直す
+                                    com.calendaralarm.engine.AlarmService.recreateChannels(dndContext, v)
+                                }
+                            },
+                        )
+                    }
+                    if (!dndAccess) {
+                        Text(
+                            "使うには端末設定で「おやすみモードへのアクセス」を許可してください",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.clickable {
+                                runCatching {
+                                    dndContext.startActivity(
+                                        Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                                    )
+                                }
+                            },
+                        )
+                    }
+                }
             }
             // 全アラーム一括ミュート (通知・タイマーは止めない)
             IconSettingRow(Icons.Default.VolumeOff) {

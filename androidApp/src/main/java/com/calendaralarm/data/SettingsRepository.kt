@@ -75,6 +75,10 @@ class SettingsRepository(private val context: Context) {
         val themeId: String = "default",
         /** カスタム背景画像 URI (鳴動画面/テーマ)。 */
         val backgroundImageUri: String? = null,
+        /** おやすみモード (DND) を無視して鳴らすか (競合の ignore_dnd_mode, #149)。
+         *  既定 true = 従来どおり鳴動チャンネルに bypassDnd を付ける。
+         *  実際に DND を越えられるかは「おやすみモードへのアクセス」権限が必要。 */
+        val ignoreDnd: Boolean = true,
         /** 鳴動画面に天気を表示するか。 */
         val weatherOnAlarmScreen: Boolean = true,
         /** 予定一覧ヘッダーに現在の天気を出すか。 */
@@ -123,6 +127,7 @@ class SettingsRepository(private val context: Context) {
             volumeCrescendo = p[KEY_VOL_CRESCENDO] ?: false,
             vibrateWhileRinging = p[KEY_VIBRATE] ?: true,
             muteAll = p[KEY_MUTE_ALL] ?: false,
+            ignoreDnd = p[KEY_IGNORE_DND] ?: true,
             defaultSoundUri = p[KEY_SOUND_URI],
             showWeekNumbers = p[KEY_WEEK_NUMBERS] ?: false,
             firstWeekday = WeekCalendar.normalize(p[KEY_FIRST_WEEKDAY] ?: WeekCalendar.DEFAULT_FIRST_WEEKDAY),
@@ -215,6 +220,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setVolumeCrescendo(v: Boolean) = edit { it[KEY_VOL_CRESCENDO] = v }
     suspend fun setVibrateWhileRinging(v: Boolean) = edit { it[KEY_VIBRATE] = v }
     suspend fun setMuteAll(v: Boolean) = edit { it[KEY_MUTE_ALL] = v }
+    /** DND を無視して鳴らすか (#149)。 */
+    suspend fun setIgnoreDnd(v: Boolean) = edit { it[KEY_IGNORE_DND] = v }
 
     /** Googleカレンダー連携のアカウントを足す。旧版の1アカウントのキーはここで新しいキーへ移す */
     suspend fun addGoogleAccount(email: String) = edit {
@@ -354,6 +361,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_VOL_CRESCENDO = booleanPreferencesKey("volume_crescendo")
         val KEY_VIBRATE = booleanPreferencesKey("vibrate_while_ringing")
         val KEY_MUTE_ALL = booleanPreferencesKey("mute_all")
+        val KEY_IGNORE_DND = booleanPreferencesKey("ignore_dnd")
         val KEY_SOUND_URI = stringPreferencesKey("default_sound_uri")
         val KEY_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
         val KEY_FIRST_WEEKDAY = intPreferencesKey("first_weekday")

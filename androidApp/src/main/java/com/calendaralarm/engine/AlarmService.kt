@@ -85,6 +85,8 @@ class AlarmService : Service() {
     private val requestedIds = mutableSetOf<String>()
     // 鳴動通知のチャンネル選択に使う。前面化前に鳴動設定から確定させる
     @Volatile private var vibrateForRing = true
+    // 「おやすみモードでも鳴らす」(#149)。前面化前に鳴動設定から確定させる
+    @Volatile private var ignoreDndForRing = true
     // 直近に受け取ったコマンドの startId (ringLock 内のみ)。終了判定時点の値で
     // stopSelfResult すると、判定後に届いた ACTION_START があればサービスは止まらない
     // (引数なし stopSelf は判定〜停止の間に届いた新しい鳴動ごと殺す)
@@ -194,6 +196,7 @@ class AlarmService : Service() {
                     // チャンネル (バイブ有無) は前面化の通知で決まるので先に設定を読む。
                     // 前面化の期限があるので読めなければ既定 (バイブあり) で進む
                     vibrateForRing = readVibrateSetting()
+                    ignoreDndForRing = readIgnoreDndSetting()
                     if (!startForegroundWithNotification(id)) {
                         // BOOT_COMPLETED 処理中など、mediaPlayback FGS の起動が
                         // 禁止されているコンテキスト。ここで例外を上げると
@@ -535,7 +538,7 @@ class AlarmService : Service() {
             .build()
     }
 
-    private fun createChannel() = ensureChannels(this)
+    private fun createChannel() = ensureChannels(this, ignoreDndForRing)
 
     private fun startAudio(soundUri: String?, volumePercent: Int, crescendo: Boolean, gen: Int) {
         // カスタム音が失効していても無音にはしない。候補を順に試す。
@@ -778,6 +781,18 @@ class AlarmService : Service() {
             true
         }
 
+    /** 「おやすみモードでも鳴らす」(#149)。読めなければ従来どおりDNDを越える向きで進む */
+    private suspend fun readIgnoreDndSetting(): Boolean =
+        try {
+            withTimeoutOrNull(SETTINGS_READ_TIMEOUT_MS) {
+                app.container.settings.flow.first().ignoreDnd
+            } ?: true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            true
+        }
+
     /**
      * 世代前進から資源の畳みまでを ringLock 内で一続きに行う (呼び出し側がロック保持)。
      * 途中でロックを手放すと、その隙に座席確保・採用した後続鳴動の世代や資源を
@@ -884,8 +899,10 @@ class AlarmService : Service() {
          * 鳴動通知チャンネルを作る (冪等)。チャンネルの振動属性は作成後に変更できないため、
          * 鳴動中バイブの ON/OFF でチャンネルを分ける。旧 1 チャンネル (alarm_v1) は消す。
          * 鳴動前でもトラブルシューティング画面から検査・設定できるよう公開する
+         * [ignoreDnd] は「おやすみモードでも鳴らす」(#149)。bypassDnd も作成後は変えられ
+         * ないので、切替時は recreateChannels で作り直す
          */
-        fun ensureChannels(context: Context) {
+        fun ensureChannels(context: Context, ignoreDnd: Boolean = true) {
             val mgr = context.getSystemService(NotificationManager::class.java) ?: return
             mgr.deleteNotificationChannel(LEGACY_CHANNEL_ID)
             fun channel(id: String, label: String, vibrate: Boolean) =
@@ -895,7 +912,7 @@ class AlarmService : Service() {
                     setSound(null, null)
                     enableVibration(vibrate)
                     if (vibrate) vibrationPattern = VIBRATION_PATTERN
-                    setBypassDnd(true)
+                    setBypassDnd(ignoreDnd)
                     lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 }
             mgr.createNotificationChannels(
@@ -904,6 +921,18 @@ class AlarmService : Service() {
                     channel(CHANNEL_ID_NOVIB, "アラーム（バイブなし）", vibrate = false),
                 ),
             )
+        }
+
+        /**
+         * 「おやすみモードでも鳴らす」(#149) の切替用。チャンネル属性は作成後に変えられ
+         * ないので、両チャンネルを消して今の設定値で作り直す。
+         * 鳴動中に呼ばれても直前の通知は OS が残す (チャンネル削除で通知は消えない)
+         */
+        fun recreateChannels(context: Context, ignoreDnd: Boolean) {
+            val mgr = context.getSystemService(NotificationManager::class.java) ?: return
+            mgr.deleteNotificationChannel(CHANNEL_ID)
+            mgr.deleteNotificationChannel(CHANNEL_ID_NOVIB)
+            ensureChannels(context, ignoreDnd)
         }
 
         fun markDismissed(id: String?) {

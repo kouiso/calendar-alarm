@@ -83,7 +83,7 @@ data class TroubleshootItem(
  */
 object TroubleshootChecks {
 
-    fun collect(context: Context, vibrate: Boolean): List<TroubleshootItem> {
+    fun collect(context: Context, vibrate: Boolean, ignoreDnd: Boolean = true): List<TroubleshootItem> {
         val pkg = context.packageName
         val pkgUri = Uri.parse("package:$pkg")
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -96,8 +96,9 @@ object TroubleshootChecks {
 
         val notifOk = nm?.areNotificationsEnabled() ?: true
 
-        // 鳴動に使うチャンネル (バイブ設定で切替) を検査する。未作成なら作ってから見る
-        AlarmService.ensureChannels(context)
+        // 鳴動に使うチャンネル (バイブ設定で切替) を検査する。未作成なら作ってから見る。
+        // 「おやすみモードでも鳴らす」(#149) の設定値で作らないと、ここで勝手に bypassDnd を戻す
+        AlarmService.ensureChannels(context, ignoreDnd)
         val channelId = if (vibrate) AlarmService.CHANNEL_ID else AlarmService.CHANNEL_ID_NOVIB
         val channel = nm?.getNotificationChannel(channelId)
         val channelOk = channel != null &&
@@ -222,7 +223,8 @@ fun TroubleshootingScreen(settings: SettingsRepository, onBack: () -> Unit) {
     var tick by remember { mutableStateOf(0) }
     LaunchedEffect(tick) {
         val vibrate = runCatching { settings.flow.first().vibrateWhileRinging }.getOrDefault(true)
-        items = TroubleshootChecks.collect(context, vibrate)
+        val ignoreDnd = runCatching { settings.flow.first().ignoreDnd }.getOrDefault(true)
+        items = TroubleshootChecks.collect(context, vibrate, ignoreDnd)
     }
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
