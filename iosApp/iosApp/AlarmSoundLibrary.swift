@@ -13,6 +13,26 @@ enum AlarmSoundLibrary {
     /// 取り込んだ音のファイル名の頭。Library/Sounds の他のファイルと区別する
     static let prefix = "alarm-custom-"
 
+    /// アプリ同梱のプリセット音 (#147)。bundle の Sounds/ に置き、
+    /// AlertSound.named が読めるよう初回に Library/Sounds へコピーする。
+    /// custom- 接頭辞ではないので removeAll(except:) の対象外＝消えない
+    static let bundledPresets: [String] = [
+        "preset_bell.caf",
+        "preset_soft.caf",
+        "preset_beep.caf",
+    ]
+
+    /// バンドルのプリセットを Library/Sounds へ置く (冪等)。Store が状態を読む前に呼ぶ
+    static func installBundledPresets() {
+        try? FileManager.default.createDirectory(at: soundsDirectory, withIntermediateDirectories: true)
+        for name in bundledPresets {
+            let dest = soundsDirectory.appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: dest.path) { continue }
+            guard let src = Bundle.main.url(forResource: name, withExtension: nil) else { continue }
+            try? FileManager.default.copyItem(at: src, to: dest)
+        }
+    }
+
     /// 今の既定の音 (ファイル名)。Store が読み込みと変更の時に入れる。
     /// 予約側 (AlarmKit/通知) は Store を持たないので、ここを見る
     static var currentDefault: String?
