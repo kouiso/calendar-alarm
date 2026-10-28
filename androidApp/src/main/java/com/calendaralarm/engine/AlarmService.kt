@@ -85,6 +85,8 @@ class AlarmService : Service() {
     private val requestedIds = mutableSetOf<String>()
     // 鳴動通知のチャンネル選択に使う。前面化前に鳴動設定から確定させる
     @Volatile private var vibrateForRing = true
+    // 「フルスクリーンを強制」(#153)。既定ON=従来どおり常にFSI。OFFならヘッズアップのみ
+    @Volatile private var forceFullScreen = true
     // 直近に受け取ったコマンドの startId (ringLock 内のみ)。終了判定時点の値で
     // stopSelfResult すると、判定後に届いた ACTION_START があればサービスは止まらない
     // (引数なし stopSelf は判定〜停止の間に届いた新しい鳴動ごと殺す)
@@ -194,6 +196,7 @@ class AlarmService : Service() {
                     // チャンネル (バイブ有無) は前面化の通知で決まるので先に設定を読む。
                     // 前面化の期限があるので読めなければ既定 (バイブあり) で進む
                     vibrateForRing = readVibrateSetting()
+                    forceFullScreen = readForceFsiSetting()
                     if (!startForegroundWithNotification(id)) {
                         // BOOT_COMPLETED 処理中など、mediaPlayback FGS の起動が
                         // 禁止されているコンテキスト。ここで例外を上げると
@@ -527,7 +530,9 @@ class AlarmService : Service() {
             // setSilent(true) は入れない: Android 15 で「抑制グループ」扱いされ
             // フルスクリーン Intent が自動起動しない (E2E 実測)。無音化は
             // チャンネル側の setSound(null) に一本化し、音は MediaPlayer が出す。
-            .setFullScreenIntent(fullScreen, true)
+            // 「フルスクリーンを強制」OFF なら FSI を付けずヘッズアップだけにする (#153)。
+            // 既定ON=従来どおり。OFF中も「停止」アクションと contentIntent で止められる
+            .apply { if (forceFullScreen) setFullScreenIntent(fullScreen, true) }
             .setContentIntent(fullScreen)
             .setDeleteIntent(dismiss)
             // 鳴動画面に辿り着けなくても通知シェードから必ず止められる退路
@@ -771,6 +776,18 @@ class AlarmService : Service() {
         try {
             withTimeoutOrNull(SETTINGS_READ_TIMEOUT_MS) {
                 app.container.settings.flow.first().vibrateWhileRinging
+            } ?: true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            true
+        }
+
+    /** 「フルスクリーンを強制」設定 (#153)。読めなければ従来どおりFSIで進む */
+    private suspend fun readForceFsiSetting(): Boolean =
+        try {
+            withTimeoutOrNull(SETTINGS_READ_TIMEOUT_MS) {
+                app.container.settings.flow.first().forceFullScreen
             } ?: true
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

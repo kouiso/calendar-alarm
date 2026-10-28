@@ -188,6 +188,8 @@
     <string name="trouble_exact_desc">アラームを時間どおりに鳴らすには、正確なアラームの権限が必要です。</string>
     <string name="trouble_exact_ng">正確なアラームが許可されていません</string>
     <string name="trouble_exact_ok">正確なアラームを設定可能</string>
+    <string name="trouble_force_fsi">フルスクリーン通知を強制する</string>
+    <string name="trouble_force_fsi_desc">オンの時は鳴動画面を常に全画面で出します。オフだとヘッズアップ通知のみで、通知を開くと鳴動画面が出ます。</string>
     <string name="trouble_fsi_desc">通常の目覚まし時計と同じようにアラームをロック画面へ全画面表示するには、この許可が必要です。</string>
     <string name="trouble_fsi_ng">全画面アラーム通知が許可されていません</string>
     <string name="trouble_fsi_ok">全画面アラーム通知を表示可能</string>

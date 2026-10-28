@@ -37,12 +37,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -61,6 +64,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.engine.AlarmService
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 /**
  * 1項目の検査結果。OK=満たす / NG=要対応 (設定へ飛べる) / NA=この OS では不要 /
@@ -252,7 +256,35 @@ fun TroubleshootingScreen(settings: SettingsRepository, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(items, key = { it.key }) { item -> TroubleshootRow(item) { context.openSafely(item.fix) } }
+            item(key = "force_fsi") {
+                ForceFsiRow(settings)
+            }
         }
+    }
+}
+
+/** 競合の「Force full-screen alarm」相当 (#153)。既定ON=従来どおり常にFSIを付ける。 */
+@Composable
+private fun ForceFsiRow(settings: SettingsRepository) {
+    val scope = rememberCoroutineScope()
+    val prefs by settings.flow.collectAsState(initial = null)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.trouble_force_fsi),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(
+                checked = prefs?.forceFullScreen ?: true,
+                onCheckedChange = { v -> scope.launch { settings.setForceFullScreen(v) } },
+            )
+        }
+        Text(
+            stringResource(R.string.trouble_force_fsi_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
