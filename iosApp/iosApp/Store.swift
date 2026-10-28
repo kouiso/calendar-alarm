@@ -87,6 +87,9 @@ final class Store: ObservableObject {
             self.fileURL = dir.appendingPathComponent("store.json")
         }
         loadedAt = Date()
+        // 同梱プリセット (#147) を Library/Sounds へ先に置く。選択肢の表示と
+        // AlertSound.named の参照が、音の有無を Library/Sounds で見るため
+        AlarmSoundLibrary.installBundledPresets()
         if let data = try? Data(contentsOf: self.fileURL),
            let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = loaded

@@ -113,6 +113,18 @@ struct SettingsView: View {
                                         .font(NightTheme.font(13)).foregroundStyle(.secondary)
                                 }
                             }
+                            // 同梱プリセット (#147)。AlarmKit の AlertSound.named は
+                            // アプリが置いた .caf しか読めないので、選択肢は同梱音で用意する
+                            Chips(
+                                items: ["__default__"] + AlarmSoundLibrary.bundledPresets,
+                                current: store.state.alarmSoundFile ?? "__default__",
+                            ) { sel in
+                                if sel == "__default__" {
+                                    changeSound(file: nil, label: nil)
+                                } else {
+                                    changeSound(file: sel, label: Self.soundPresetLabel(sel))
+                                }
+                            } label: { Self.soundPresetLabel($0) }
                             // AlarmKit が受け付けない項目は、出来ないと画面に書く (Android にはある設定)
                             Text("音量・だんだん大きくする・バイブは、iPhone の「サウンドと触覚」の設定に従います。iPhone のアラーム機能では、アプリから変えられるのは音だけです。")
                                 .font(NightTheme.font(11)).foregroundStyle(.secondary)
@@ -666,6 +678,18 @@ struct SettingsView: View {
         soundError = nil
         store.setAlarmSound(file: file, label: label)
         Task { await engine.rescheduleForSoundChange() }
+    }
+
+    /// プリセット音の表示名 (#147)。取り込み音はファイル名が UUID なので対象外、
+    /// その場合はアラーム音行の alarmSoundLabel が表示を担う
+    static func soundPresetLabel(_ file: String) -> String {
+        switch file {
+        case "__default__": return String(localized: "標準")
+        case "preset_bell.caf": return String(localized: "ベル")
+        case "preset_soft.caf": return String(localized: "ゆっくり")
+        case "preset_beep.caf": return String(localized: "きっぱり")
+        default: return file
+        }
     }
 }
 
