@@ -162,7 +162,11 @@ fun AgendaScreen(
             modifier = Modifier.padding(start = 20.dp, top = 58.dp),
         )
         // 次のアラーム欄は小さくし、その下に鳴動の状態を1行出す (#51 PR2)
-        NextAlarmBanner(nextAlarm?.title, nextAlarm?.triggerAtMillis, ringStatus.line)
+        // 「メイン画面に次の予定を出す」OFF でも鳴動の状態の1行は残す (#151)
+        NextAlarmBanner(
+            nextAlarm?.title, nextAlarm?.triggerAtMillis, ringStatus.line,
+            showEvent = settings?.showNextEvent != false,
+        )
         if (ringStatus.showPermissionBanner) {
             StatusBanner(
                 "許可が${ringStatus.missingPermissions}つ足りません。鳴らない・止められないことがあります",
@@ -347,7 +351,7 @@ fun AgendaScreen(
 }
 
 @Composable
-private fun NextAlarmBanner(title: String?, triggerAtMillis: Long?, statusLine: String) {
+private fun NextAlarmBanner(title: String?, triggerAtMillis: Long?, statusLine: String, showEvent: Boolean = true) {
     val accent = MaterialTheme.colorScheme.primary
     Card(
         Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp),
@@ -357,33 +361,36 @@ private fun NextAlarmBanner(title: String?, triggerAtMillis: Long?, statusLine: 
         ),
     ) {
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "次のアラーム",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.sp,
-                        color = accent,
-                    )
-                    Text(
-                        title ?: "なし",
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                    )
+            // 「次の予定を出す」OFF の時は予定の欄だけ隠し、鳴動の状態の1行は残す (#151)
+            if (showEvent) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "次のアラーム",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 1.sp,
+                            color = accent,
+                        )
+                        Text(
+                            title ?: "なし",
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                    if (triggerAtMillis != null) {
+                        Text(
+                            SimpleDateFormat("H:mm", Locale.JAPAN).format(Date(triggerAtMillis)),
+                            fontSize = 36.sp,
+                            fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
+                            fontWeight = FontWeight.Light,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
-                if (triggerAtMillis != null) {
-                    Text(
-                        SimpleDateFormat("H:mm", Locale.JAPAN).format(Date(triggerAtMillis)),
-                        fontSize = 36.sp,
-                        fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
-                        fontWeight = FontWeight.Light,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                Spacer(Modifier.height(6.dp))
             }
-            Spacer(Modifier.height(6.dp))
             // 鳴動の状態 (1行)
             Text(
                 statusLine,

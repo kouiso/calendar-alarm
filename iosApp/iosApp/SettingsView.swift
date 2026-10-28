@@ -198,6 +198,14 @@ struct SettingsView: View {
                                 Toggle("", isOn: Binding(get: { store.state.showWeekNumbers },
                                                          set: { store.setShowWeekNumbers($0) })).labelsHidden()
                             }
+                            // 競合の「Show upcoming event」相当 (#151)
+                            IconRow("calendar.badge.clock") {
+                                Text("メイン画面に次の予定を出す")
+                                    .font(NightTheme.font(13)).foregroundStyle(.secondary)
+                                Spacer()
+                                Toggle("", isOn: Binding(get: { store.state.showNextEvent },
+                                                         set: { store.setShowNextEvent($0) })).labelsHidden()
+                            }
                             IconRow("calendar") {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("週の始まり")
