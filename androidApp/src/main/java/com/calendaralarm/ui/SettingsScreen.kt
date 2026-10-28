@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Snooze
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TrendingUp
@@ -1246,6 +1247,38 @@ private fun RingingCard(
                                 )
                             },
                             modifier = Modifier.padding(end = 4.dp),
+                        )
+                    }
+                }
+            }
+            // 自動スヌーズ (競合の Auto-snooze, #145)。放置で鳴動上限に達した時、
+            // ON なら既定分数で鳴り直し、OFF なら従来どおり「鳴らせなかった」扱い
+            IconSettingRow(Icons.Default.Snooze) {
+                Text(
+                    "放置したら自動でスヌーズ",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                Switch(
+                    checked = p.autoSnooze,
+                    onCheckedChange = { scope.launch { settings.setAutoSnooze(it) } },
+                )
+            }
+            // 自動スヌーズの回数上限。OFF の時は選んでも効かないので隠さず薄く効かせる
+            if (p.autoSnooze) {
+                IconSettingRow(Icons.Default.Repeat) {
+                    Text(
+                        "自動スヌーズの回数上限",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    listOf(2, 3, 4).forEach { n ->
+                        FilterChip(
+                            selected = p.autoSnoozeMax == n,
+                            onClick = { scope.launch { settings.setAutoSnoozeMax(n) } },
+                            label = { Text("${n}回", maxLines = 1) },
+                            modifier = Modifier.padding(start = 4.dp),
                         )
                     }
                 }
