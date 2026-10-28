@@ -633,6 +633,7 @@ class AlarmRepository(
                     eventTypeFilter = appSettings.eventTypeFilter,
                     importEventReminders = appSettings.importEventReminders,
                     muteAll = appSettings.muteAll,
+                    commonExtraOffsets = appSettings.extraReminderOffsets,
                 )
             }.getOrNull()
             if (expanded != null) {

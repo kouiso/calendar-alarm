@@ -208,6 +208,50 @@ class AlarmExpanderTest {
     }
 
     @Test
+    fun `共通リマインダーが全予定に効きカレンダー既定と併合される`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val ev2 = event("e2", start = ldt("2026-10-05T14:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev, ev2),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 15, extraOffsets = listOf(30))),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            commonExtraOffsets = listOf(60),
+        )
+        // 両方の予定に カレンダー既定30 + 共通60 が効く
+        assertEquals(6, out.size)
+        assertEquals(listOf(15, 30, 60), out.filter { it.eventId == ev.instanceKey }.map { it.minutesBefore })
+        assertEquals(listOf(15, 30, 60), out.filter { it.eventId == ev2.instanceKey }.map { it.minutesBefore })
+    }
+
+    @Test
+    fun `共通リマインダーは個別予定の指定で上書きできる`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 15, extraOffsets = listOf(30))),
+            overrides = mapOf(ev.instanceKey to EventOverride(extraOffsets = listOf(45))),
+            disabledCalendarIds = emptySet(), now = now, horizon = horizon, zone = TZ,
+            commonExtraOffsets = listOf(60),
+        )
+        // 個別指定があるイベントは共通もカレンダー既定も効かない (上書き, #160 引継)
+        assertEquals(listOf(15, 45), out.map { it.minutesBefore })
+    }
+
+    @Test
+    fun `共通リマインダーが開始や既存オフセットと同時刻なら重複しない`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 15, extraOffsets = listOf(30))),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            commonExtraOffsets = listOf(30, 15),
+        )
+        assertEquals(listOf(15, 30), out.map { it.minutesBefore })
+    }
+
+    @Test
     fun `曜日繰り返しと例外日`() {
         val alarm = StandaloneAlarm(
             id = 7, hour = 7, minute = 30,

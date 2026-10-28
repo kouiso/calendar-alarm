@@ -356,6 +356,8 @@ struct ExpandRequest: Codable {
     var importEventReminders: Bool = true
     /// 全アラームの一括ミュート (NOTIFY・タイマーには効かない)
     var muteAll: Bool = false
+    /// 全イベント共通の追加リマインダー (分リスト, #143)
+    var commonExtraOffsets: [Int] = []
 }
 
 struct ExpandResult: Codable {
