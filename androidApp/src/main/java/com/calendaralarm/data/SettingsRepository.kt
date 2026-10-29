@@ -55,6 +55,8 @@ class SettingsRepository(private val context: Context) {
         /** 予定側リマインダーを鳴動対象にするか。既定は ON —
          *  このアプリは元カレンダー通知の「何分前」を正本として鳴らす仕様。 */
         val importEventReminders: Boolean = true,
+        /** 全イベント共通の追加リマインダー (開始何分前かの分数リスト, #143)。 */
+        val extraReminderOffsets: List<Int> = emptyList(),
         /** 鳴動画面のスヌーズプリセット (分)。 */
         val snoozePresets: List<Int> = listOf(5, 10, 15, 30, 45, 60),
         /** アラーム音量。0以下はシステムの音量に追従、1〜100はアプリ固定音量。 */
@@ -117,6 +119,7 @@ class SettingsRepository(private val context: Context) {
             googleAccountEmails = googleAccountsOf(p),
             accountSettings = accountSettingsOf(p),
             importEventReminders = p[KEY_IMPORT_REMINDERS] ?: true,
+            extraReminderOffsets = p[KEY_COMMON_REMINDERS].toCsvIntList(),
             snoozePresets = (p[KEY_SNOOZE_PRESETS] ?: "5,10,15,30,45,60")
                 .toCsvList().mapNotNull { it.toIntOrNull() }.ifEmpty { listOf(10) },
             alarmVolumePercent = p[KEY_ALARM_VOLUME] ?: 0,
@@ -210,6 +213,11 @@ class SettingsRepository(private val context: Context) {
         p[KEY_RING_FREE] = v
     }
     suspend fun setImportEventReminders(v: Boolean) = edit { it[KEY_IMPORT_REMINDERS] = v }
+
+    /** 全イベント共通の追加リマインダー (分リスト, #143)。重複は展開側で弾く。 */
+    suspend fun setExtraReminderOffsets(v: List<Int>) = edit {
+        it[KEY_COMMON_REMINDERS] = v.sorted().distinct().joinToString(",")
+    }
     suspend fun setSnoozePresets(v: List<Int>) = edit { it[KEY_SNOOZE_PRESETS] = v.joinToString(",") }
     suspend fun setAlarmVolumePercent(v: Int) = edit { it[KEY_ALARM_VOLUME] = v }
     suspend fun setVolumeCrescendo(v: Boolean) = edit { it[KEY_VOL_CRESCENDO] = v }
@@ -349,6 +357,7 @@ class SettingsRepository(private val context: Context) {
             com.calendaralarm.shared.model.AccountSetting.serializer(),
         )
         val KEY_IMPORT_REMINDERS = booleanPreferencesKey("import_event_reminders")
+        val KEY_COMMON_REMINDERS = stringPreferencesKey("common_extra_reminders")
         val KEY_SNOOZE_PRESETS = stringPreferencesKey("snooze_presets")
         val KEY_ALARM_VOLUME = intPreferencesKey("alarm_volume_percent")
         val KEY_VOL_CRESCENDO = booleanPreferencesKey("volume_crescendo")
@@ -387,5 +396,8 @@ class SettingsRepository(private val context: Context) {
 
         fun String?.toCsvList(): List<String> =
             this?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+
+        fun String?.toCsvIntList(): List<Int> =
+            toCsvList().mapNotNull { it.toIntOrNull() }
     }
 }

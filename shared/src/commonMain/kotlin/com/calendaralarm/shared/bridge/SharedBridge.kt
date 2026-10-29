@@ -58,6 +58,8 @@ object SharedBridge {
         val importEventReminders: Boolean = false,
         /** 一括ミュート: ALARM 鳴動を全て抑止 (NOTIFYとタイマーは残す)。 */
         val muteAll: Boolean = false,
+        /** 全イベント共通の追加リマインダー (分リスト, #143)。 */
+        val commonExtraOffsets: List<Int> = emptyList(),
     )
 
     @Serializable
@@ -100,6 +102,7 @@ object SharedBridge {
             eventTypeFilter = req.eventTypeFilter,
             importEventReminders = req.importEventReminders,
             muteAll = req.muteAll,
+            commonExtraOffsets = req.commonExtraOffsets,
         )
         desired += expanded.map { it.copy(snoozeMinutes = req.defaultSnoozeMinutes) }
         // 一括ミュート: イベント側は expandEvents 内で ALARM を落としている。
