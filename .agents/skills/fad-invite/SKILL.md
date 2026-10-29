@@ -11,9 +11,12 @@ description: Firebase App Distribution (FAD) のテスターを追加・削除�
 
 | 環境 | Firebase プロジェクト | OS | アプリ ID | テスター |
 | --- | --- | --- | --- | --- |
-| 単一 (prod/stg の分離は見つからない) | unknown (このリポジトリに記載なし。上記ファイルを確認) | Android | unknown (GitHub secret `FIREBASE_ANDROID_APP_ID`) | `fad.yml` で `--testers kouiso@ritmo.co.jp` に固定。グループなし |
-| 単一 | `452308374396` (`ios-device-sync.yml` の `FAD_PROJECT_NUMBER`) | iOS | unknown (GitHub secret `FIREBASE_IOS_APP_ID`) | `fad.yml`: `--testers` で直接配布。`ios-device-sync.yml`: `testers:batchAdd` の後、`groups/…:batchJoin` で `beta-testers` (`FAD_GROUP`) に追加 |
+| 単一 (prod/stg の分離は見つからない) | `calendar-alarm-kouiso` (番号 `452308374396`) | Android | unknown (アプリは `android:com.calendaralarm`。完全な ID は GitHub secret `FIREBASE_ANDROID_APP_ID` で、実行ログでは伏せ字) | `fad.yml` で `--testers kouiso@ritmo.co.jp` に固定。グループなし |
+| 単一 | `calendar-alarm-kouiso` (番号 `452308374396`。`ios-device-sync.yml` の `FAD_PROJECT_NUMBER`) | iOS | unknown (アプリは `ios:com.calendaralarm.ios`。完全な ID は GitHub secret `FIREBASE_IOS_APP_ID` で、実行ログでは伏せ字) | `fad.yml`: `--testers` で直接配布。`ios-device-sync.yml`: `testers:batchAdd` の後、`groups/…:batchJoin` で `beta-testers` (`FAD_GROUP`) に追加 |
 
+- プロジェクト ID とアプリ名は、`fad.yml` の過去の実行ログ (Firebase CLI が出す `console.firebase.google.com/project/<ID>/appdistribution/app/<OS>:<パッケージ>` の URL) で確認した。
+  アプリ ID の末尾の英数字は Secret のため伏せられ、コミット済みの `google-services.json` は無い (`.gitignore` 対象)。unknown のままにする。
+  確認した場所: workflow 2本、過去の実行ログ、`.gitignore`、リポジトリ全体の grep。
 - `fad.yml` には、意図的に他者を FAD に追加しないと記載されている ("ユーザー指示: 他者は FAD に追加しない")。kouiso 以外を追加するには、
   その人を名指しした kouiso の明示的な発言が必要。このリポジトリの2つの経路 (`ios-device-sync.yml`、`fad.yml`) は
   `kouiso@ritmo.co.jp` 以外を受け付けない。他の人を追加するには、先に許可リスト (workflow) の変更とそのレビューが必要。
