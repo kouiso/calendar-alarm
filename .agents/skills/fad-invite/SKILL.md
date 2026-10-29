@@ -1,123 +1,129 @@
 ---
 name: fad-invite
-description: Use before adding, removing, or changing any tester in Firebase App Distribution (FAD) — inviting someone, adding to or removing from a tester group, editing a tester roster/workflow input, or acting on kouiso's message asking to invite people. Forces a one-person-at-a-time check of environment (prod/stg), project (app), OS (iOS/Android), and person against kouiso's own message, an independent reviewer subagent, and a multiple-choice question whenever anything is short of 100% certain.
+description: Firebase App Distribution (FAD) のテスターを追加・削除・変更する前に使う。招待、テスターグループへの追加・削除、テスター名簿や workflow 入力の編集、kouiso の招待依頼への対応が対象。環境 (prod/stg)、プロジェクト (アプリ)、OS (iOS/Android)、対象者を、kouiso 自身の発言と照合して1人ずつ確認する。独立したレビュー用サブエージェントによる確認を必須とし、100% 確実でない点は選択式で質問する。
 ---
 
-# fad-invite — invite testers exactly as kouiso said, one person at a time
+# fad-invite — kouiso の指示どおりに、1人ずつテスターを招待する
 
-## This repo
+## このリポジトリ
 
-Repo: kouiso/calendar-alarm. Looked at: `.github/workflows/fad.yml`, `ios-device-sync.yml`.
+リポジトリ: kouiso/calendar-alarm。確認したファイル: `.github/workflows/fad.yml`、`ios-device-sync.yml`。
 
-| env | Firebase project | OS | app id | tester |
+| 環境 | Firebase プロジェクト | OS | アプリ ID | テスター |
 | --- | --- | --- | --- | --- |
-| single (no prod/stg split found) | unknown (not in this repo; looked in the files above) | Android | unknown (GitHub secret `FIREBASE_ANDROID_APP_ID`) | `--testers kouiso@ritmo.co.jp` fixed in `fad.yml`; no group |
-| single | `452308374396` (`FAD_PROJECT_NUMBER` in `ios-device-sync.yml`) | iOS | unknown (GitHub secret `FIREBASE_IOS_APP_ID`) | `fad.yml`: direct distribution via `--testers`; `ios-device-sync.yml`: `testers:batchAdd`, then `groups/…:batchJoin` into `beta-testers` (`FAD_GROUP`) |
+| 単一 (prod/stg の分離は見つからない) | unknown (このリポジトリに記載なし。上記ファイルを確認) | Android | unknown (GitHub secret `FIREBASE_ANDROID_APP_ID`) | `fad.yml` で `--testers kouiso@ritmo.co.jp` に固定。グループなし |
+| 単一 | `452308374396` (`ios-device-sync.yml` の `FAD_PROJECT_NUMBER`) | iOS | unknown (GitHub secret `FIREBASE_IOS_APP_ID`) | `fad.yml`: `--testers` で直接配布。`ios-device-sync.yml`: `testers:batchAdd` の後、`groups/…:batchJoin` で `beta-testers` (`FAD_GROUP`) に追加 |
 
-- `fad.yml` states that others are not added to FAD on purpose ("ユーザー指示: 他者は FAD に追加しない"). Adding
-  anyone other than kouiso needs his explicit message naming that person. Direct distribution in `fad.yml`
-  uses `--testers`, not groups, so nobody receives that distribution through group membership.
-  The iOS invitation route in `ios-device-sync.yml` uses the `beta-testers` group as listed above.
+- `fad.yml` には、意図的に他者を FAD に追加しないと記載されている ("ユーザー指示: 他者は FAD に追加しない")。kouiso 以外を追加するには、
+  その人を名指しした kouiso の明示的な発言が必要。このリポジトリの2つの経路 (`ios-device-sync.yml`、`fad.yml`) は
+  `kouiso@ritmo.co.jp` 以外を受け付けない。他の人を追加するには、先に許可リスト (workflow) の変更とそのレビューが必要。
+  `fad.yml` の直接配布はグループではなく `--testers` を使うため、グループに所属しているだけでは、この配布を受け取れない。
+  `ios-device-sync.yml` の iOS 招待経路は、上表のとおり `beta-testers` グループを使う。
 
-kouiso states invites precisely. Past failures came from the AI reading them loosely, not from his wording:
-a tester was put on the stg (test) group as well as prod, opened the look-alike STG app, and got stuck
-on a forced-update screen. Nobody could tell who added her. Do not ask kouiso to change how he writes.
-The AI must read exactly.
+kouiso の招待指示は正確である。過去の失敗は、指示の書き方ではなく AI の読み違いによって起きた。
+あるテスターが prod に加えて stg (テスト) のグループにも入れられ、見た目が似た STG アプリを開いて
+強制アップデート画面から進めなくなった。誰が追加したのかも分からなかった。kouiso に書き方の変更を求めてはいけない。
+AI が指示を正確に読むこと。
 
-## Iron rules
+## 厳守事項
 
-- Never add a person to an environment, project, OS, or group that kouiso's message does not name for
-  **that person**. Env is YES only when he writes 本番 / prod, or stg / 検証版 / テスト版, for that person;
-  otherwise it is `?` (unless "## This repo" lists only one env). stg only when he says stg.
-- Never fill a gap by inference, by "the usual groups", by a previous roster, or by what another person
-  in the same message got.
-- One person = one check = one result line. A batch message is split into people before anything else.
-  A sentence that names several people applies to each one named; words about someone else never do.
-- "## This repo" (the mapping of env, project, OS, app id, group) is the only source for "which app / group".
-  If a value there is `unknown`, ask; never guess it. For Env, OS, and Project, a dimension with a single
-  known entry in "## This repo" scores YES without a question; `unknown` never scores YES.
-- No FAD write (console, API, CLI, workflow dispatch, roster edit) happens before the group-membership check in step 3a is recorded and step 4 passes for that person.
+- kouiso の発言が **その人について** 指定していない環境・プロジェクト・OS・グループに追加してはいけない。
+  環境を YES にできるのは、その人について 本番 / prod、または stg / 検証版 / テスト版 と書かれている場合だけ。
+  それ以外は `?` とする (「## このリポジトリ」の環境が1つだけの場合を除く)。stg は stg と指示された場合だけ。
+- 推測、「いつものグループ」、以前の名簿、同じ発言に出てくる別の人への対応で、
+  足りない情報を補ってはいけない。
+- 1人 = 1回の確認 = 結果1行。複数人への指示は、最初に1人ずつに分ける。
+  複数人を名指しした文は、名指しされた各人に適用する。別の人についての言葉は適用しない。
+- 「どのアプリ・グループか」の根拠は「## このリポジトリ」(環境・プロジェクト・OS・アプリ ID・グループの対応) だけとする。
+  値が `unknown` なら質問し、推測しない。環境・OS・プロジェクトの各項目について、「## このリポジトリ」の
+  既知の選択肢が1つだけなら質問せず YES とする。`unknown` は決して YES にしない。
+- その人について手順3aの所属グループ確認を記録し、手順4を通過するまでは、FAD に書き込まない (コンソール・API・CLI・workflow の実行・名簿の編集を含む)。
 
-## Flow (per person, in order)
+## 手順 (1人ずつ、順番どおりに)
 
-### 1. Copy the source
+### 1. 指示の原文を写す
 
-Quote kouiso's message verbatim into the work log (file or issue comment). Locate it exactly (chat
-timestamp / Slack link / issue comment URL). No paraphrase. If you cannot find his message, stop and ask.
+kouiso の発言を作業記録 (ファイルまたは Issue コメント) にそのまま引用する。発言の場所を正確に記す
+(チャットの日時 / Slack リンク / Issue コメント URL)。言い換えない。発言を見つけられなければ止まって質問する。
 
-### 2. Split into one row per person
+### 2. 1人1行に分ける
 
-| # | person (name as he wrote it) | address (as he wrote it; if he pointed to a message, quote that message and its locator) | env: prod / stg | project (app) | OS: iOS / Android | action: add / remove | quote (his exact words for this person) |
+| # | 対象者 (指示に書かれた名前) | アドレス (指示の表記どおり。別の発言が指定されていれば、その原文と場所を引用) | 環境: prod / stg | プロジェクト (アプリ) | OS: iOS / Android | 操作: add / remove | 引用 (その人についての原文) |
 
-Fill each cell **only** from his words for this person. Unknown = write `?`. Never leave a guess in a cell.
+各セルは、**その人についての言葉だけ**を根拠に埋める。不明なら `?` と書く。推測をセルに残さない。
 
-### 3. Score each row
+### 3. 各行を判定する
 
-For Env, OS, and Project, a dimension with a single known entry in "## This repo" scores YES without a
-question; `unknown` never scores YES. Otherwise, write YES only if his quote for this person states it
-directly and the mapping below is known:
+環境・OS・プロジェクトの各項目について、「## このリポジトリ」の既知の選択肢が1つだけなら、
+質問せず YES とする。`unknown` は決して YES にしない。それ以外は、その人についての引用に直接記されていて、
+以下の対応が判明している場合だけ YES とする。
 
-- **Env**: does he say 本番 / prod, or stg / 検証 / テスト版, for this person?
-- **Project**: does he name an app listed in "## This repo" for this person, and does it
-  map to exactly one Firebase project + app id?
-- **OS**: does he say iOS / iPhone or Android for this person? An app name alone does not decide the OS.
-- **Person**: does the address match his text character for character (no two candidates, no Android/iOS
-  address mix-up, no family/old address)?
+- **環境**: その人について 本番 / prod、または stg / 検証 / テスト版 と言っているか？
+- **プロジェクト**: その人について「## このリポジトリ」にあるアプリを指定していて、
+  Firebase プロジェクトとアプリ ID の組み合わせが1つに定まるか？
+- **OS**: その人について iOS / iPhone または Android と言っているか？ アプリ名だけでは OS は決まらない。
+- **対象者**: アドレスが原文と1文字ずつ一致するか (候補が2つないか、Android/iOS のアドレスを
+  取り違えていないか、家族のアドレスや古いアドレスではないか)？
 
-Any NO or `?` → confidence < 100% → go to step 5 for that row. Do not proceed on "probably".
+NO または `?` が1つでもある → 確信度が 100% 未満 → その行は手順5へ。「たぶん」で進めない。
 
-### 3a. Record current group membership (mandatory for every person)
+### 3a. 現在の所属グループを記録する (全員に必須)
 
-Before any write, list every FAD group this address currently belongs to in the target Firebase project
-and record the full list in that person's result row (write `none` if empty). Do this for every person,
-including rows with all YES checks. If the project or membership cannot be confirmed, go to step 5;
-do not write. Give the recorded list to the step-4 reviewer and show it in any step-5 question.
+書き込み前に、対象 Firebase プロジェクトで、そのアドレスが現在所属している FAD グループをすべて確認し、
+一覧をその人の結果行に記録する (所属がなければ `none` と書く)。すべて YES の行も含め、
+全員について行う。プロジェクトまたは所属を確認できなければ手順5へ進み、書き込まない。
+記録した一覧を手順4のレビュー担当に渡し、手順5で質問する場合にも示す。
 
-### 4. Independent review (mandatory, even at 100%)
+### 4. 独立したレビュー (100% でも必須)
 
-Use an independent reviewer who did not build the table (fresh context, the strongest model available
-in the execution environment; for example, opus in Claude). Give the reviewer only:
-kouiso's verbatim message, the table including each person's current group-membership list, and this skill's Iron rules. Ask it to try to break each row:
-"Find any cell not literally supported by the quote for that person. Answer per row: PASS or REJECT + reason."
+表を作った担当とは別のレビュー担当を使う (新しいコンテキストで、実行環境で利用できる最も強力なモデル。
+例えば Claude なら opus)。レビュー担当に渡すのは、kouiso の発言の原文、
+各人の現在の所属グループ一覧を含む表、このスキルの厳守事項だけとする。各行の誤りを探すよう、次のとおり依頼する。
+「その人についての引用が文字どおりには裏付けていないセルを探してください。行ごとに PASS または REJECT と理由を答えてください。」
 
-- Any REJECT → that row goes to step 5. Do not argue the reviewer down; ask kouiso.
-- All PASS → step 6.
+- REJECT が1つでもある → その行は手順5へ。レビュー担当を説得して通そうとせず、kouiso に聞く。
+- すべて PASS → 手順6へ。
 
-### 5. Ask kouiso — multiple choice, impossible to misread
+### 5. kouiso に聞く — 読み違えようのない選択式で
 
-Use the host's multiple-choice question feature. Only if it is unavailable, list the same options in
-prose and wait for an answer. Never proceed without the answer. One question per unclear check, per
-person (several in one call is fine, never merged into one question). Offer only options that exist in
-"## This repo", plus the unknown-mapping option below.
-If an item in the table is `unknown`, include this option: "Ask an authorized person how to map the
-unknown item; do not guess." Obtain the confirmed mapping before rescoring; do not infer a value.
-Options must be concrete and mutually exclusive, e.g.:
+実行環境の選択式質問機能を使う。利用できない場合だけ、同じ選択肢を文章で列挙して
+返答を待つ。返答なしで進めてはいけない。不明な確認項目ごと・人ごとに1問とする
+(1回で複数問聞いてよいが、1問にまとめない)。選択肢は「## このリポジトリ」にあるものと、
+以下の不明な対応を確認する選択肢だけにする。
+表の項目が `unknown` なら、「権限のある人に不明な項目の対応を確認する。推測しない。」
+という選択肢を含める。対応を確認してから再判定し、値を推測しない。
+選択肢は具体的で、互いに重ならないものにする。例:
 
 - "〇〇さん（xxx@example.com）を入れるのは？" → 「本番の <アプリ名> iPhone 版だけ」/「検証版の <アプリ名> iPhone 版だけ」/「両方」/「入れない」
 - "〇〇さんは iPhone？Android？" → 「iPhone だけ」/「Android だけ」/「両方」
-- "「△△さん」はどのアドレス？" → each candidate address as its own option
+- "「△△さん」はどのアドレス？" → 候補の各アドレスを、それぞれ別の選択肢にする
 
-Show the address so he can see it is the right person. Record his answer verbatim as the new source,
-then redo steps 3–4 for that row.
+本人を確認できるようアドレスを表示する。返答を新しい根拠としてそのまま記録し、
+その行について手順3〜4をやり直す。
 
-### 6. Apply, then read back
+### 6. 反映し、実際の状態を読み戻す
 
-Apply only the PASS rows, through the repo's normal route (roster file + PR / the invite workflow).
-"remove" means remove from the named group only; deleting the tester from the whole Firebase project
-(it drops every app and group) needs its own question to him.
-Then read the actual FAD state back (group membership per app/env, and which apps' releases each of those
-groups receives; groups are per project, so a shared group can leak another env) and report one line per person:
+PASS の行だけを対象とし、書き込み前に、その操作を反映できる経路がこのリポジトリにあることを必ず確認する。
+kouiso 以外の人を反映する行は、許可リスト (workflow) の変更とそのレビューが済んでいなければ、
+「この repo の経路では反映できない」として、書き込まずに止まる。質問が必要なら手順5の選択式で kouiso に聞く。
+このリポジトリには remove (グループからの削除) を反映する経路がない。remove の行は書き込まず、
+「この repo に経路が無い」として止め、手順5の選択式で kouiso に聞く (Firebase コンソールで行うかなど)。
+確認できた経路で、反映可能な PASS の行だけを反映する。
+"remove" は指定されたグループからの削除だけを意味する。Firebase プロジェクト全体からのテスター削除は、
+すべてのアプリ・グループから外すことになるため、別途 kouiso に質問する必要がある。
+その後、FAD の実際の状態を読み戻し (アプリ・環境ごとの所属グループと、各グループがどのアプリのリリースを受け取るか。
+グループはプロジェクト単位なので、共有グループ経由で別の環境が届くことがある)、1人1行で報告する。
 
 `✅ 名前 — アプリ — 本番/検証 — iPhone/Android — 追加/削除（FAD で確認済み）`
 
-Rows still waiting on kouiso are listed as `⬜ 名前 — 確認待ち: <the one question>`.
-iOS ad hoc: group membership alone is not done; the device UDID must be in the profile of the build
-distributed (otherwise the tester sees it but cannot install). Never say an invite is done or a tester's problem is solved until the read-back (and, for a problem,
-the tester's own confirmation) shows it.
+kouiso の返答待ちの行は `⬜ 名前 — 確認待ち: <確認したい1問>` と記す。
+iOS ad hoc では、グループへの所属だけでは完了にならない。配布したビルドのプロファイルに端末の UDID が
+含まれている必要がある (含まれなければ、テスターには表示されてもインストールできない)。読み戻しで確認できるまでは、
+招待完了や問題解決と報告してはいけない。問題解決にはテスター本人の確認も必要。
 
-## Red flags — stop
+## 次の場合は止まる
 
-- You are about to add someone to stg because "testers usually get both".
-- Two people in one message got different treatment and you are copying one person's groups to the other.
-- An address in the table does not appear in his message or in the reply he pointed to.
-- The reviewer was skipped because the case "looked obvious".
+- 「テスターは普通両方に入れるから」と、誰かを stg に追加しようとしている。
+- 同じ発言にいる2人への対応が異なるのに、一方のグループをもう一方にも適用している。
+- 表のアドレスが、kouiso の発言にも、指定された返信にも出てこない。
+- 「明らかだから」とレビューを省略した。

@@ -1,6 +1,6 @@
 ---
 name: fad-invite
-description: "Use before adding, removing, or changing any tester in Firebase App Distribution (FAD) — inviting someone, adding to or removing from a tester group, editing a tester roster/workflow input, or acting on kouiso's message asking to invite people. Forces a one-person-at-a-time check of environment (prod/stg), project (app), OS (iOS/Android), and person against kouiso's own message, an independent reviewer subagent, and a multiple-choice question whenever anything is short of 100% certain."
+description: "Firebase App Distribution (FAD) のテスターを追加・削除・変更する前に使う。招待、テスターグループへの追加・削除、テスター名簿や workflow 入力の編集、kouiso の招待依頼への対応が対象。環境 (prod/stg)、プロジェクト (アプリ)、OS (iOS/Android)、対象者を、kouiso 自身の発言と照合して1人ずつ確認する。独立したレビュー用サブエージェントによる確認を必須とし、100% 確実でない点は選択式で質問する。"
 ---
 
 <!-- AUTO-GENERATED from AGENTS.md / .agents/skills by scripts/sync-ai-rule.mjs — DO NOT EDIT DIRECTLY -->
