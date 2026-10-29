@@ -43,6 +43,7 @@ xcodebuild -project CalendarAlarm.xcodeproj -target iosApp -sdk iphonesimulator 
 
 ## Skills
 - `local-ci` — 変更の種類ごとに手元で回す検査（`.agents/skills/local-ci/SKILL.md`）
+- FAD のテスター追加・削除: `fad-invite`（`.agents/skills/fad-invite/SKILL.md`）
 
 ## GitHub Project での作業管理
 
