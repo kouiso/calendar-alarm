@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>AdMobBannerUnitID</key>
+	<string>$(ADMOB_BANNER_UNIT_ID)</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.calendaralarm.resync</string>
@@ -33,14 +35,25 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>GADApplicationIdentifier</key>
+	<string>$(ADMOB_APP_ID)</string>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>予定の時刻にアラームを鳴らすために使います</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>カレンダーの予定をアラームで鳴らすために読み取ります</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>通知によるアラームのために使います</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>アラームを無料で提供するため、お住まいの地域の規則に沿って広告を表示します</string>
 	<key>OpenRouterAPIKey</key>
 	<string>$(OPENROUTER_API_KEY)</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 	<key>UIAppFonts</key>
 	<array>
 		<string>plex_sans_jp_regular.ttf</string>

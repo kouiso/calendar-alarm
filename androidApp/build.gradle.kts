@@ -23,6 +23,16 @@ android {
             .orElse(providers.environmentVariable("OPENROUTER_API_KEY"))
             .getOrElse("")
         buildConfigField("String", "OPENROUTER_API_KEY", "\"${openRouterKey.replace("\"", "")}\"")
+        // AdMob (#140)。未指定 = Google 公式のテストID。本番配信では
+        // -PadmobAppId / -PadmobBannerUnitId (または環境変数) で実IDに差し替える
+        val admobAppId = providers.gradleProperty("admobAppId")
+            .orElse(providers.environmentVariable("ADMOB_APP_ID"))
+            .getOrElse("ca-app-pub-3940256099942544~3347511713")
+        manifestPlaceholders["admobAppId"] = admobAppId
+        val admobBannerUnitId = providers.gradleProperty("admobBannerUnitId")
+            .orElse(providers.environmentVariable("ADMOB_BANNER_UNIT_ID"))
+            .getOrElse("ca-app-pub-3940256099942544/6300978111")
+        buildConfigField("String", "ADMOB_BANNER_UNIT_ID", "\"$admobBannerUnitId\"")
     }
 
     buildTypes {
@@ -90,6 +100,9 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:21.3.0")
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.pdfbox.android)
+    // 広告 (#140): AdMob (GMA SDK) + GDPR/EEA 同意 (UMP)
+    implementation(libs.play.services.ads)
+    implementation(libs.user.messaging.platform)
 
     debugImplementation(libs.compose.ui.tooling)
 

@@ -189,8 +189,15 @@ struct RootView: View {
             .presentationDetents([.medium])
         }
         .task { await asker.advance(center: permissions, engine: engine) }
+        // 広告 (#140): 同意確認と SDK 初期化は裏で進める。鳴動・停止・スヌーズは待たせない。
+        // 同意フォームは鳴動中に出さず、鳴動が始まったら閉じて停止操作を優先させる
+        .task { AdCoordinator.shared.startIfNeeded(isAlerting: { !engine.alertingIds.isEmpty }) }
         .onChange(of: engine.alertingIds.isEmpty) { _, idle in
-            if idle { Task { await asker.advance(center: permissions, engine: engine) } }
+            if idle {
+                Task { await asker.advance(center: permissions, engine: engine) }
+            } else {
+                AdCoordinator.shared.dismissConsentFormForRinging()
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await asker.advance(center: permissions, engine: engine) } }

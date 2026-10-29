@@ -73,6 +73,9 @@ struct AgendaView: View {
                                         onToggle: { ev, on in toggleRing(ev, on) })
                             }
                             if groupedDays.isEmpty { emptyState }
+                            // 広告は一覧の末尾に1枠だけ (#140)。末尾への追記なので
+                            // 既存の行やボタンの位置は動かない (CLS対策)
+                            AdBannerSlot()
                         case .month:
                             MonthGridView(month: focusDate, events: filteredEvents, focusDate: $focusDate, calendarColor: calColor, onSelect: { selected = $0 }, firstWeekday: store.state.firstWeekday)
                         case .threeDay:

@@ -127,6 +127,11 @@ class MainActivity : ComponentActivity() {
             }
             takeSharedText(intent)
         }
+        // 広告 (#140): 同意確認と SDK 初期化は裏で進める。鳴動・停止・スヌーズは待たせない
+        // 同意フォームは鳴動中に出さず、鳴動が落ち着いてから表示する
+        com.calendaralarm.ads.AdSupport.gatherConsentAndInit(this) {
+            com.calendaralarm.engine.AlarmService.ringingInstanceId.value != null
+        }
         setContent {
             // recomposition 毎に Flow を作り直すと collectAsState が
             // リセットされるため remember で固定する
