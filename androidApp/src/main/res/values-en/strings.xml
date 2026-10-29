@@ -188,6 +188,10 @@
     <string name="trouble_dnd_desc">Allow “Alarms” in Do Not Disturb so alarms ring while it is on.</string>
     <string name="trouble_dnd_ng">Alarms won\'t ring in Do Not Disturb</string>
     <string name="trouble_dnd_ok">Alarms allowed in Do Not Disturb</string>
+    <string name="trouble_dnd_policy_desc">“Ignore Do Not Disturb” needs notification policy access. Tap to grant it for this app.</string>
+    <string name="trouble_dnd_policy_na">Not needed while “Ignore Do Not Disturb” is off</string>
+    <string name="trouble_dnd_policy_ng">Cannot ignore Do Not Disturb (policy access not granted)</string>
+    <string name="trouble_dnd_policy_ok">Can ignore Do Not Disturb</string>
     <string name="trouble_exact_desc">The exact alarm permission is needed to ring on time.</string>
     <string name="trouble_exact_ng">Exact alarms not allowed</string>
     <string name="trouble_exact_ok">Exact alarms allowed</string>
