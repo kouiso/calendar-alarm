@@ -12,11 +12,12 @@ Repo: kouiso/calendar-alarm. Looked at: `.github/workflows/fad.yml`, `ios-device
 | env | Firebase project | OS | app id | tester |
 | --- | --- | --- | --- | --- |
 | single (no prod/stg split found) | unknown (not in this repo; looked in the files above) | Android | unknown (GitHub secret `FIREBASE_ANDROID_APP_ID`) | `--testers kouiso@ritmo.co.jp` fixed in `fad.yml`; no group |
-| single | same | iOS | unknown (GitHub secret `FIREBASE_IOS_APP_ID`) | same |
+| single | `452308374396` (`FAD_PROJECT_NUMBER` in `ios-device-sync.yml`) | iOS | unknown (GitHub secret `FIREBASE_IOS_APP_ID`) | `fad.yml`: direct distribution via `--testers`; `ios-device-sync.yml`: `testers:batchAdd`, then `groups/…:batchJoin` into `beta-testers` (`FAD_GROUP`) |
 
 - `fad.yml` states that others are not added to FAD on purpose ("ユーザー指示: 他者は FAD に追加しない"). Adding
-  anyone other than kouiso needs his explicit message naming that person; groups are not used so that nobody
-  is added by group membership.
+  anyone other than kouiso needs his explicit message naming that person. Direct distribution in `fad.yml`
+  uses `--testers`, not groups, so nobody receives that distribution through group membership.
+  The iOS invitation route in `ios-device-sync.yml` uses the `beta-testers` group as listed above.
 
 kouiso states invites precisely. Past failures came from the AI reading them loosely, not from his wording:
 a tester was put on the stg (test) group as well as prod, opened the look-alike STG app, and got stuck
@@ -33,9 +34,9 @@ The AI must read exactly.
 - One person = one check = one result line. A batch message is split into people before anything else.
   A sentence that names several people applies to each one named; words about someone else never do.
 - "## This repo" (the mapping of env, project, OS, app id, group) is the only source for "which app / group".
-  If a value there is `unknown`, ask; never guess it. A dimension with a single entry there (one env, one OS,
-  one app) scores YES for that dimension without a question.
-- No FAD write (console, API, CLI, workflow dispatch, roster edit) happens before step 4 passes for that person.
+  If a value there is `unknown`, ask; never guess it. For Env, OS, and Project, a dimension with a single
+  known entry in "## This repo" scores YES without a question; `unknown` never scores YES.
+- No FAD write (console, API, CLI, workflow dispatch, roster edit) happens before the group-membership check in step 3a is recorded and step 4 passes for that person.
 
 ## Flow (per person, in order)
 
@@ -52,22 +53,31 @@ Fill each cell **only** from his words for this person. Unknown = write `?`. Nev
 
 ### 3. Score each row
 
-For each of the four checks, write YES only if his quote for this person states it directly:
+For Env, OS, and Project, a dimension with a single known entry in "## This repo" scores YES without a
+question; `unknown` never scores YES. Otherwise, write YES only if his quote for this person states it
+directly and the mapping below is known:
 
 - **Env**: does he say 本番 / prod, or stg / 検証 / テスト版, for this person?
-- **Project**: does he name an app listed in "## This repo" for this person (or is only one listed), and does it
+- **Project**: does he name an app listed in "## This repo" for this person, and does it
   map to exactly one Firebase project + app id?
 - **OS**: does he say iOS / iPhone or Android for this person? An app name alone does not decide the OS.
 - **Person**: does the address match his text character for character (no two candidates, no Android/iOS
-  address mix-up, no family/old address)? Before any write, list every FAD group this address is in now and
-  show that list in the step-5 question.
+  address mix-up, no family/old address)?
 
 Any NO or `?` → confidence < 100% → go to step 5 for that row. Do not proceed on "probably".
 
+### 3a. Record current group membership (mandatory for every person)
+
+Before any write, list every FAD group this address currently belongs to in the target Firebase project
+and record the full list in that person's result row (write `none` if empty). Do this for every person,
+including rows with all YES checks. If the project or membership cannot be confirmed, go to step 5;
+do not write. Give the recorded list to the step-4 reviewer and show it in any step-5 question.
+
 ### 4. Independent review (mandatory, even at 100%)
 
-Spawn a reviewer subagent that did not build the table (fresh context, model opus). Give it only:
-kouiso's verbatim message, the table, and this skill's Iron rules. Ask it to try to break each row:
+Use an independent reviewer who did not build the table (fresh context, the strongest model available
+in the execution environment; for example, opus in Claude). Give the reviewer only:
+kouiso's verbatim message, the table including each person's current group-membership list, and this skill's Iron rules. Ask it to try to break each row:
 "Find any cell not literally supported by the quote for that person. Answer per row: PASS or REJECT + reason."
 
 - Any REJECT → that row goes to step 5. Do not argue the reviewer down; ask kouiso.
@@ -75,8 +85,12 @@ kouiso's verbatim message, the table, and this skill's Iron rules. Ask it to try
 
 ### 5. Ask kouiso — multiple choice, impossible to misread
 
-Use AskUserQuestion (never prose). One question per unclear check, per person (several in one call is fine,
-never merged into one question). Offer only options that exist in "## This repo".
+Use the host's multiple-choice question feature. Only if it is unavailable, list the same options in
+prose and wait for an answer. Never proceed without the answer. One question per unclear check, per
+person (several in one call is fine, never merged into one question). Offer only options that exist in
+"## This repo", plus the unknown-mapping option below.
+If an item in the table is `unknown`, include this option: "Ask an authorized person how to map the
+unknown item; do not guess." Obtain the confirmed mapping before rescoring; do not infer a value.
 Options must be concrete and mutually exclusive, e.g.:
 
 - "〇〇さん（xxx@example.com）を入れるのは？" → 「本番の <アプリ名> iPhone 版だけ」/「検証版の <アプリ名> iPhone 版だけ」/「両方」/「入れない」

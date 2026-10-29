@@ -67,6 +67,16 @@ struct CalendarAlarmApp: App {
                         Task { await engine.resync(reason: "foreground") }
                     }
                 }
+                // 時刻・タイムゾーンの手動変更を検知して予約を再展開する (#156)。
+                // Android 側の TimeChangeReceiver (TIME_SET/TIMEZONE_CHANGED → resync) と同じ契機。
+                // significantTimeChange は時計の手動変更と TZ 変更の両方で発火する。
+                // 予約はエポックms登録で展開時のローカル時刻から作るため、TZ 変更後は
+                // 古い TZ で展開した予約を張り替えないとずれた時刻に鳴る
+                .onReceive(NotificationCenter.default.publisher(
+                    for: UIApplication.significantTimeChangeNotification)) { _ in
+                    engine.store.reload()
+                    Task { await engine.resync(reason: "time change") }
+                }
         }
     }
 
