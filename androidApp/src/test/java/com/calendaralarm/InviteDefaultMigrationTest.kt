@@ -32,10 +32,10 @@ class InviteDefaultMigrationTest {
     private val otherKey = intPreferencesKey("alarm_volume_percent")
 
     /** [file] を開いて [block] を実行し、閉じる (同じファイルを同時に 2 つ開かないため) */
-    private fun <T> open(file: File, migrate: Boolean, block: suspend (androidx.datastore.core.DataStore<Preferences>) -> T): T {
+    private fun <T> open(file: File, migrate: Boolean, upgrade: Boolean = false, block: suspend (androidx.datastore.core.DataStore<Preferences>) -> T): T {
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val store = PreferenceDataStoreFactory.create(
-            migrations = if (migrate) listOf(InviteDefaultMigration) else emptyList(),
+            migrations = if (migrate) listOf(InviteDefaultMigration { upgrade }) else emptyList(),
             scope = scope,
             produceFile = { file },
         )
@@ -75,5 +75,12 @@ class InviteDefaultMigrationTest {
         open(file, migrate = false) { s -> s.edit { it[SettingsRepository.KEY_INVITE_MASK] = 3 } }
         val mask = open(file, migrate = true) { s -> s.data.first()[SettingsRepository.KEY_INVITE_MASK] }
         assertEquals(3, mask)
+    }
+
+    @Test
+    fun `設定を一度も変えていない前からの利用者も更新なら全部オンが残る`() {
+        val file = File(tmp.root, "untouched.preferences_pb")
+        val mask = open(file, migrate = true, upgrade = true) { s -> s.data.first()[SettingsRepository.KEY_INVITE_MASK] }
+        assertEquals(SettingsRepository.LEGACY_INVITE_MASK, mask)
     }
 }
