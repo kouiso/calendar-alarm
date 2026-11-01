@@ -5,6 +5,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.core.DataMigration
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.calendaralarm.shared.logic.WeekCalendar
 import com.calendaralarm.shared.model.EventAction
@@ -17,7 +19,31 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 // テストから旧キーの残存を確かめるため internal にしている
-internal val Context.settingsDataStore by preferencesDataStore(name = "settings")
+internal val Context.settingsDataStore by preferencesDataStore(
+    name = "settings",
+    produceMigrations = { listOf(InviteDefaultMigration) },
+)
+
+/**
+ * 招待フィルタの既定を「承諾のみ」に変えた時 (#155) の、前から使っている人の扱い。
+ * 保存キーが無い人は今まで「全部オン」(7) で鳴っていたので、更新しただけで未定・未回答の予定が
+ * 黙って鳴らなくならないよう、7 を保存して今までの動きを残す。iOS も保存済みの設定はそのまま残る。
+ * 何も保存していない新しい人は保存せず、新しい既定 (承諾のみ) になる。判定は一度だけ (印のキーを書く)
+ */
+internal object InviteDefaultMigration : DataMigration<Preferences> {
+    override suspend fun shouldMigrate(currentData: Preferences): Boolean =
+        currentData[SettingsRepository.KEY_INVITE_DEFAULT_MIGRATED] == null
+
+    override suspend fun migrate(currentData: Preferences): Preferences =
+        currentData.toMutablePreferences().apply {
+            if (this[SettingsRepository.KEY_INVITE_MASK] == null && currentData.asMap().isNotEmpty()) {
+                this[SettingsRepository.KEY_INVITE_MASK] = SettingsRepository.LEGACY_INVITE_MASK
+            }
+            this[SettingsRepository.KEY_INVITE_DEFAULT_MIGRATED] = true
+        }.toPreferences()
+
+    override suspend fun cleanUp() = Unit
+}
 
 /** アプリ全体設定。DataStore Preferences で保持する。 */
 class SettingsRepository(private val context: Context) {
@@ -304,6 +330,9 @@ class SettingsRepository(private val context: Context) {
         val KEY_INVITE_MASK = intPreferencesKey("invite_mask")
         /** 招待フィルタの既定 = 承諾のみ (bit 1)。読み出しとトグルで同じ値を使う (#155) */
         const val DEFAULT_INVITE_MASK = 1
+        /** 既定を変える前の招待フィルタ (承諾・未定・未回答)。前から使っている人に残す (#155) */
+        const val LEGACY_INVITE_MASK = 7
+        val KEY_INVITE_DEFAULT_MIGRATED = booleanPreferencesKey("invite_default_migrated")
         val KEY_EVENT_TYPE_MASK = intPreferencesKey("event_type_mask")
         // サイレントモードと予定なしは、旧版の event_type_mask と別のキーにする (#79)
         val KEY_EVENT_TYPE_FOCUS = booleanPreferencesKey("event_type_focus_time")
