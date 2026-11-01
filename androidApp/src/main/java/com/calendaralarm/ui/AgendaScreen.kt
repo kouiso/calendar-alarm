@@ -592,7 +592,7 @@ internal fun EventRow(
             ) {
                 Text(
                     "${item.minutesBefore}分前" +
-                        if (item.extraOffsets.isNotEmpty()) " +${item.extraOffsets.size}" else "",
+                        if (item.effectiveExtraOffsets.isNotEmpty()) " +${item.effectiveExtraOffsets.size}" else "",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.primary,
                 )

@@ -360,6 +360,9 @@ object AlarmExpander {
     fun effectiveExtraOffsets(overrideExtras: List<Int>?, rule: AlarmRule, commonExtraOffsets: List<Int>): List<Int> =
         overrideExtras ?: (rule.extraOffsets + commonExtraOffsets).distinct()
 
+    /** 予定側 (カレンダーの通知) のリマインダーの上限。Google カレンダーは 4 週前まで指定できる */
+    const val MAX_EVENT_REMINDER_MINUTES = 4 * 7 * 24 * 60
+
     /**
      * 予定の取得を horizon より先へ伸ばす幅 (分, #143)。開始が horizon より後でも、
      * 「何分前」が大きいと鳴動が horizon 内に入る。設定で分かっている最大の前倒し分だけ伸ばす。

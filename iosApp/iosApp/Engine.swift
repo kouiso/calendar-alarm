@@ -871,6 +871,8 @@ final class Engine: ObservableObject {
         for r in s.calendarRules.values { all += r.extraOffsets + [r.minutesBefore] }
         for a in s.accountSettings.values { if let m = a.minutesBefore { all.append(m) } }
         for o in s.overrides.values { all += (o.extraOffsets ?? []) + (o.minutesBefore.map { [$0] } ?? []) }
+        // 予定側のリマインダーは読むまで分からないので、取り込む時は上限 (4週) まで読む (shared と同じ)
+        if s.importEventReminders { all.append(4 * 7 * 24 * 60) }
         return max(0, all.max() ?? 0)
     }
 

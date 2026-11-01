@@ -126,6 +126,8 @@ class CommonReminderFetchTest {
 
     @Test
     fun `20日後の予定は共通リマインダー7日前の分だけ予約される`() = runBlocking {
+        // 予定側リマインダーの取り込み (4週まで読む) を切り、共通リマインダーの分だけで読むことを確かめる
+        settings.setImportEventReminders(false)
         settings.setExtraReminderOffsets(listOf(7 * 24 * 60))
         repository.resync("test")
         assertEquals(setOf(7 * 24 * 60), pendingOffsets())
@@ -133,6 +135,7 @@ class CommonReminderFetchTest {
 
     @Test
     fun `共通リマインダーが無ければ14日より先の予定は予約しない`() = runBlocking {
+        settings.setImportEventReminders(false)
         repository.resync("test")
         assertEquals(emptySet<Int>(), pendingOffsets())
     }

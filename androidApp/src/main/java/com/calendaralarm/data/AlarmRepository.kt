@@ -184,7 +184,10 @@ class AlarmRepository(
         /** 解決後のリマインダーアクション。 */
         val reminderAction: EventAction,
         val minutesBefore: Int,
+        /** 予定ごとの指定かカレンダー既定の追加リマインダー。詳細シートの編集の起点 (共通リマインダーは含めない) */
         val extraOffsets: List<Int>,
+        /** 実際に効く追加リマインダー (共通リマインダー込み, #143)。一覧の表示用 */
+        val effectiveExtraOffsets: List<Int> = extraOffsets,
         val hasOverride: Boolean,
         /** カレンダーを鳴らさない設定にしている (予定ごとの指定より強い。展開がカレンダー単位で外すため) */
         val calendarOff: Boolean = false,
@@ -299,7 +302,10 @@ class AlarmRepository(
                 startAction = start,
                 reminderAction = reminder,
                 minutesBefore = ov?.minutesBefore ?: rule.minutesBefore,
-                extraOffsets = effectiveExtras,
+                // 編集の起点は共通リマインダーを含めない。含めると詳細シートで何か押しただけで
+                // 共通リマインダーが予定ごとの指定に焼き付き、設定から消しても鳴り続ける (#143)
+                extraOffsets = ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets,
+                effectiveExtraOffsets = effectiveExtras,
                 hasOverride = ov != null,
                 calendarOff = pref?.enabled == false,
                 accountOff = accountOff,
@@ -606,10 +612,14 @@ class AlarmRepository(
                 // 未来側は「何分前」の最大分だけ horizon より先まで読む (#143)。
                 // 開始が14日より先でも、共通リマインダーなどの前倒しで鳴動が14日以内に入るため。
                 // 予約の範囲は展開側が鳴動時刻で horizon に切るので変わらない
-                val fetchUntil = horizon + AlarmExpander.fetchLeadMinutes(
-                    accountApplied.calendarRules.values + defaultRule,
-                    overrides.values,
-                    appSettings.extraReminderOffsets,
+                val fetchUntil = horizon + maxOf(
+                    AlarmExpander.fetchLeadMinutes(
+                        accountApplied.calendarRules.values + defaultRule,
+                        overrides.values,
+                        appSettings.extraReminderOffsets,
+                    ),
+                    // 予定側のリマインダーは読むまで分からないので、取り込む時は上限 (4週) まで読む
+                    if (appSettings.importEventReminders) AlarmExpander.MAX_EVENT_REMINDER_MINUTES else 0,
                 ).minutes
                 // 過去側はグレース幅ではなく14日に広げる。スヌーズ連鎖が親予定の
                 // 開始から長く伸びても liveEventKeys が親を見失わず、スヌーズ子が
