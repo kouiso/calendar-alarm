@@ -1230,6 +1230,13 @@ private fun RingingCard(
             // 鳴動持続時間 (競合の Alarm Duration, #148)。時間切れで自動停止し
             // 「鳴らせなかった」扱いにする。制限なしは従来どおり10分の安全上限
             IconSettingRow(Icons.Default.Timer) {
+                // 秒数のチップだけでは何の設定か伝わらないので、見出しを付ける (読み上げもチップの前に読む)
+                Column {
+                Text(
+                    "鳴動持続時間",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 FlowRow {
                     listOf(5, 10, 30, 60, 120, 300, 0).forEach { sec ->
                         FilterChip(
@@ -1248,6 +1255,7 @@ private fun RingingCard(
                             modifier = Modifier.padding(end = 4.dp),
                         )
                     }
+                }
                 }
             }
             // 全アラーム一括ミュート (通知・タイマーは止めない)

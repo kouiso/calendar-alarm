@@ -87,7 +87,6 @@ class AlarmService : Service() {
     @Volatile private var vibrateForRing = true
     // 鳴動持続時間 (#148)。0=制限なし (従来どおり10分の安全上限)。
     // 前面化前に鳴動設定から確定させる
-    @Volatile private var ringDurationSecForRing = 0
     // 直近に受け取ったコマンドの startId (ringLock 内のみ)。終了判定時点の値で
     // stopSelfResult すると、判定後に届いた ACTION_START があればサービスは止まらない
     // (引数なし stopSelf は判定〜停止の間に届いた新しい鳴動ごと殺す)
@@ -197,7 +196,6 @@ class AlarmService : Service() {
                     // チャンネル (バイブ有無) と持続時間は前面化の通知で決まるので先に設定を読む。
                     // 前面化の期限があるので読めなければ既定 (バイブあり・制限なし) で進む
                     vibrateForRing = readVibrateSetting()
-                    ringDurationSecForRing = readRingDurationSetting()
                     if (!startForegroundWithNotification(id)) {
                         // BOOT_COMPLETED 処理中など、mediaPlayback FGS の起動が
                         // 禁止されているコンテキスト。ここで例外を上げると
@@ -368,8 +366,10 @@ class AlarmService : Service() {
         // 上限タイマーの差し替えも世代ゲートの内側で行う。ゲート外で
         // cancel/assign すると新世代のタイマーを殺したり、stale 世代の
         // タイマーが残って後から現行世代の鳴動を止め得る
-        val ringTimeoutMs = if (ringDurationSecForRing > 0) {
-            ringDurationSecForRing * 1000L
+        // 鳴動ごとの設定の写し (ringSettings) から決める。サービス全体の値だと、同時に鳴り始めた
+        // 別の鳴動が先に上書きして、この鳴動の上限を取り違える
+        val ringTimeoutMs = if (ringSettings.ringDurationSec > 0) {
+            ringSettings.ringDurationSec * 1000L
         } else {
             RING_TIMEOUT_MS
         }
@@ -792,17 +792,6 @@ class AlarmService : Service() {
         }
 
     /** 鳴動持続時間 (秒, #148)。読めなければ制限なし (従来どおり10分上限) で進む */
-    private suspend fun readRingDurationSetting(): Int =
-        try {
-            withTimeoutOrNull(SETTINGS_READ_TIMEOUT_MS) {
-                app.container.settings.flow.first().ringDurationSec
-            } ?: 0
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            0
-        }
-
     /**
      * 世代前進から資源の畳みまでを ringLock 内で一続きに行う (呼び出し側がロック保持)。
      * 途中でロックを手放すと、その隙に座席確保・採用した後続鳴動の世代や資源を
