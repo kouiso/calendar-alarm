@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1169,9 +1170,13 @@ private fun RingingCard(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri != null) {
-            context.contentResolver.takePersistableUriPermission(
-                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
-            )
+            // 永続権を出さない提供元もある。取れなくても選んだ音は保存し、
+            // 読めなくなった時は鳴動側がシステム既定へ落ちる (画面ごと落とさない)
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
             scope.launch { settings.setDefaultSoundUri(uri.toString()) }
         }
     }
@@ -1199,26 +1204,30 @@ private fun RingingCard(
                 },
                 modifier = Modifier.padding(horizontal = 12.dp),
             )
+            // 360dp でも「選ぶ」が押し出されないよう、表示と操作を行で分けて操作は折り返す
             IconSettingRow(Icons.Default.Notifications) {
                 Text(
                     if (p.defaultSoundUri == null) "アラーム音: 標準" else "アラーム音: カスタム",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.weight(1f))
-                if (p.defaultSoundUri != null) {
-                    FilterChip(
-                        selected = false,
-                        onClick = { scope.launch { settings.setDefaultSoundUri(null) } },
-                        label = { Text("標準に戻す", maxLines = 1) },
-                        modifier = Modifier.padding(end = 4.dp),
-                    )
-                }
+            }
+            FlowRow(
+                Modifier.fillMaxWidth().padding(start = 32.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 FilterChip(
                     selected = p.defaultSoundUri != null,
                     onClick = { soundPicker.launch(arrayOf("audio/*")) },
                     label = { Text("選ぶ", maxLines = 1) },
                 )
+                if (p.defaultSoundUri != null) {
+                    FilterChip(
+                        selected = false,
+                        onClick = { scope.launch { settings.setDefaultSoundUri(null) } },
+                        label = { Text("標準に戻す", maxLines = 1) },
+                    )
+                }
             }
             // スヌーズプリセット (鳴動画面の +N分 ボタンに出る一覧)
             IconSettingRow(Icons.Default.Snooze) {
