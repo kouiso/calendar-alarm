@@ -47,7 +47,11 @@ class CommonReminderFetchTest {
 
     /** Instances の取得範囲 (/instances/when/<begin>/<end>) に入る時だけ予定1件を返す */
     private class RangeProvider : ContentProvider() {
-        companion object { var eventStart = 0L }
+        companion object {
+            var eventStart = 0L
+            /** 予定側の通知 (開始何分前)。null なら通知なし */
+            var reminderMinutes: Int? = null
+        }
         override fun onCreate() = true
         override fun query(
             uri: Uri, projection: Array<out String>?, selection: String?,
@@ -72,6 +76,13 @@ class CommonReminderFetchTest {
                         CalendarContract.Instances.ORGANIZER to null,
                         CalendarContract.Instances.AVAILABILITY to CalendarContract.Events.AVAILABILITY_BUSY,
                     ) else null
+                }
+                seg.contains("reminders") -> reminderMinutes?.let {
+                    mapOf(
+                        CalendarContract.Reminders.EVENT_ID to 1L,
+                        CalendarContract.Reminders.MINUTES to it,
+                        CalendarContract.Reminders.METHOD to CalendarContract.Reminders.METHOD_ALERT,
+                    )
                 }
                 seg.contains("calendars") -> mapOf(
                     CalendarContract.Calendars._ID to 1L,
@@ -101,6 +112,7 @@ class CommonReminderFetchTest {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
         settings = SettingsRepository(context)
         RangeProvider.eventStart = start
+        RangeProvider.reminderMinutes = null
         Robolectric.buildContentProvider(RangeProvider::class.java).create(CalendarContract.AUTHORITY)
         repository = AlarmRepository(
             db = db,
@@ -138,5 +150,14 @@ class CommonReminderFetchTest {
         settings.setImportEventReminders(false)
         repository.resync("test")
         assertEquals(emptySet<Int>(), pendingOffsets())
+    }
+
+    @Test
+    fun `予定側の通知を取り込む時は20日後の予定の7日前の通知も予約される`() = runBlocking {
+        // 共通リマインダーは無し。予定側の通知 (7 日前) は読むまで分からないので 4 週先まで読む
+        RangeProvider.reminderMinutes = 7 * 24 * 60
+        settings.setImportEventReminders(true)
+        repository.resync("test")
+        assertEquals(setOf(7 * 24 * 60), pendingOffsets())
     }
 }

@@ -589,6 +589,27 @@ class AlarmExpanderTest {
     }
 
     @Test
+    fun `iOS が通るブリッジ経由でも共通リマインダーが効く`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val req = com.calendaralarm.shared.bridge.SharedBridge.ExpandRequest(
+            events = listOf(ev),
+            nowMillis = now.toEpochMilliseconds(),
+            horizonMillis = horizon.toEpochMilliseconds(),
+            zoneId = TZ.id,
+            defaultMinutesBefore = 15,
+            commonExtraOffsets = listOf(60),
+        )
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        val res = json.decodeFromString(
+            com.calendaralarm.shared.bridge.SharedBridge.ExpandResult.serializer(),
+            com.calendaralarm.shared.bridge.SharedBridge.expand(
+                json.encodeToString(com.calendaralarm.shared.bridge.SharedBridge.ExpandRequest.serializer(), req),
+            ),
+        )
+        assertEquals(listOf(15, 60), res.instances.map { it.minutesBefore })
+    }
+
+    @Test
     fun `決定8 iOS が通るブリッジ経由でも同じ時刻は1回`() {
         val ev = event("e1", start = ldt("2026-10-05T10:00:00")).copy(calendarReminderMinutes = listOf(15, 30))
         val req = com.calendaralarm.shared.bridge.SharedBridge.ExpandRequest(
