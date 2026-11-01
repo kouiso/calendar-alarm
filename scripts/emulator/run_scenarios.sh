@@ -284,7 +284,7 @@ cleanup_ring() {
 # シナリオ開始前に前のシナリオの鳴動・通知が残っていないこと。
 # 残った鳴動通知は次の鳴動の投稿を「更新」にして FSI を出させず、次のシナリオの結果を歪める
 # 状態を採れなかっただけ (adb の一時切断など) の時は残りとみなさず、adb の再接続を待って採り直す (#193)。
-# 採り直しても採れなければ DIRTY_START ではなく INFRA_ERROR として別に記録する (結果は FAIL のまま)
+# 採り直しても採れなければ DIRTY_START ではなく INFRA_ERROR として別に記録し、そのシナリオは飛ばす (結果は FAIL のまま)
 ensure_clean_start() {
   local sc=$1 st kind i
   st=$(stop_state)
@@ -301,11 +301,18 @@ ensure_clean_start() {
   done
   case "$kind" in
     clean) return 0 ;;
-    dirty) record "$sc" FAIL DIRTY_START "leftover from previous scenario (players service notif)=$st; force-stopped before running" ;;
-    *) record "$sc" FAIL INFRA_ERROR "could not capture start state after 3 retries (players service notif)=$st; force-stopped before running" ;;
+    dirty)
+      record "$sc" FAIL DIRTY_START "leftover from previous scenario (players service notif)=$st; force-stopped before running"
+      adb shell am force-stop "$PKG"
+      sleep 2
+      return 0
+      ;;
+    *)
+      # adb が使えないままシナリオを回しても、端末と関係ない失敗が積み上がるだけなので飛ばす
+      record "$sc" FAIL INFRA_ERROR "could not capture start state after 3 retries (players service notif)=$st; scenario skipped"
+      return 1
+      ;;
   esac
-  adb shell am force-stop "$PKG"
-  sleep 2
 }
 
 # ---------- シナリオ ----------
@@ -567,7 +574,7 @@ sh_ pm list packages > "$OUT/packages.txt" 2>&1
 
 for sc in "${SCENARIOS[@]}"; do
   log "=== scenario: $sc ==="
-  ensure_clean_start "$sc"
+  ensure_clean_start "$sc" || continue
   "scenario_$sc"
 done
 
