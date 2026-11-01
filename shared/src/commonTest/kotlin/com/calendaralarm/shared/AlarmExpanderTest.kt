@@ -155,6 +155,18 @@ class AlarmExpanderTest {
     }
 
     @Test
+    fun `複数日にまたがる終日予定は開始日だけ鳴る`() {
+        // 仕様 §7.3: 3日間の終日予定 (end は4日目の0時・排他) も開始日の終日として1回だけ展開する
+        val utcStart = Instant.parse("2026-10-08T00:00:00Z").toEpochMilliseconds()
+        val threeDays = allDayEvent("ad3", utcStart).copy(endMillis = utcStart + 3 * 86_400_000L)
+        val out = AlarmExpander.expandEvents(
+            listOf(threeDays), mapOf("c1" to AlarmRule()),
+            emptyMap(), emptySet(), now, horizon, zone = TZ,
+        )
+        assertEquals(listOf(ldt("2026-10-08T09:00:00").toEpochMilliseconds()), out.map { it.triggerAtMillis })
+    }
+
+    @Test
     fun `終日イベントの鳴動OFFは展開しない`() {
         val ev = allDayEvent("ad1", Instant.parse("2026-10-08T00:00:00Z").toEpochMilliseconds())
         val out = AlarmExpander.expandEvents(
