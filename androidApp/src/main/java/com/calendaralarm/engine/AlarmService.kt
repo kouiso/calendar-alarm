@@ -517,7 +517,7 @@ class AlarmService : Service() {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Builder(this, if (vibrateForRing) CHANNEL_ID else CHANNEL_ID_NOVIB)
+        return NotificationCompat.Builder(this, ringChannelId(vibrateForRing))
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle(currentInstance?.title ?: "アラーム")
             .setContentText("「停止」でそのまま止められます")
@@ -871,6 +871,12 @@ class AlarmService : Service() {
         const val CHANNEL_ID = "alarm_vib"
         const val CHANNEL_ID_NOVIB = "alarm_novib"
         private const val LEGACY_CHANNEL_ID = "alarm_v1"
+
+        /**
+         * 鳴動通知を出すチャンネル。停止手段が見えるかの判定 (StopUiPermissions.notificationsUsable) も
+         * 必ずこれで同じチャンネルを見る (#153)。チャンネルの選び方を変える時はここだけを変える
+         */
+        fun ringChannelId(vibrate: Boolean): String = if (vibrate) CHANNEL_ID else CHANNEL_ID_NOVIB
         private val VIBRATION_PATTERN = longArrayOf(0, 800, 400, 800, 400)
         /** クレッシェンドの立ち上がり時間と開始音量。 */
         private const val CRESCENDO_MS = 30_000L

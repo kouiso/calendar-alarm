@@ -23,7 +23,7 @@ data class StopUiPermissions(
         fun notificationsUsable(context: Context, vibrate: Boolean = true): Boolean {
             val nm = context.getSystemService(NotificationManager::class.java) ?: return true
             if (!nm.areNotificationsEnabled()) return false
-            val id = if (vibrate) AlarmService.CHANNEL_ID else AlarmService.CHANNEL_ID_NOVIB
+            val id = AlarmService.ringChannelId(vibrate)
             val importance = runCatching { nm.getNotificationChannel(id)?.importance }.getOrNull()
                 ?: return true // 未作成なら鳴動時に HIGH で作られる
             return importance >= NotificationManager.IMPORTANCE_HIGH
