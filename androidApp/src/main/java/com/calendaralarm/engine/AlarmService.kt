@@ -237,15 +237,20 @@ class AlarmService : Service() {
         val interruptionFilter = runCatching {
             getSystemService(NotificationManager::class.java)?.currentInterruptionFilter
         }.getOrNull() ?: NotificationManager.INTERRUPTION_FILTER_UNKNOWN
-        if (silencedByDnd(ringSettings.ignoreDnd, interruptionFilter)) {
+        // 同じ鳴動の二重 START (鳴動中・座席確保済み) や、判定中に届いた停止は通常の経路に任せる。
+        // ここで MISSED を書くと、鳴っている最中の行や止めた行を「鳴らせなかった」で上書きしてしまう
+        val handledElsewhere = synchronized(ringLock) {
+            isDismissed(instanceId) || ringingInstanceId.value == instanceId || pendingStartId == instanceId
+        }
+        if (!handledElsewhere && silencedByDnd(ringSettings.ignoreDnd, interruptionFilter)) {
             synchronized(ringLock) { requestedIds -= instanceId }
             withContext(NonCancellable) {
-                runCatching {
-                    app.container.repository.markMissed(
+                val marked = runCatching {
+                    app.container.repository.markDndSuppressed(
                         instanceId, "おやすみモード中のため鳴らさない (おやすみモードを無視=OFF, filter=$interruptionFilter)",
                     )
-                }
-                MissedNotifier.post(this@AlarmService, instance.title)
+                }.getOrDefault(false)
+                if (marked) MissedNotifier.post(this@AlarmService, instance.title)
             }
             releaseWaitingRings(instanceId)
             restoreOrFinish()
