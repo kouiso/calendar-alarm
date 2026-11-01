@@ -85,6 +85,10 @@ class AlarmService : Service() {
     private val requestedIds = mutableSetOf<String>()
     // 鳴動通知のチャンネル選択に使う。前面化前に鳴動設定から確定させる
     @Volatile private var vibrateForRing = true
+    @Volatile private var ignoreDndForRing = true
+    // おやすみモードで鳴らさない要求の id (#149)。前面化の通知を出す前に決め、その要求の通知から全画面とバイブを外す。
+    // サービス全体の 1 つの値にすると、同時に始まった別の要求が書き換えて取り違えるので、要求ごとに持つ
+    private val dndSilentIds: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
     // 直近に受け取ったコマンドの startId (ringLock 内のみ)。終了判定時点の値で
     // stopSelfResult すると、判定後に届いた ACTION_START があればサービスは止まらない
     // (引数なし stopSelf は判定〜停止の間に届いた新しい鳴動ごと殺す)
@@ -191,9 +195,9 @@ class AlarmService : Service() {
                         finishIfIdle()
                         return@launch
                     }
-                    // チャンネル (バイブ有無) は前面化の通知で決まるので先に設定を読む。
-                    // 前面化の期限があるので読めなければ既定 (バイブあり) で進む
-                    vibrateForRing = readVibrateSetting()
+                    // チャンネル (バイブ有無・DND尊重か) は前面化の通知で決まるので先に設定を読む。
+                    // 前面化の期限があるので読めなければ既定 (バイブあり・DND無視) で進む
+                    if (readRingChannelSettings()) dndSilentIds += id else dndSilentIds -= id
                     if (!startForegroundWithNotification(id)) {
                         // BOOT_COMPLETED 処理中など、mediaPlayback FGS の起動が
                         // 禁止されているコンテキスト。ここで例外を上げると
@@ -229,6 +233,33 @@ class AlarmService : Service() {
             return
         }
         val (instance, ringSettings) = ready
+        // 「おやすみモードを無視」OFF でおやすみモード中なら鳴らさない (#149)。
+        // 音は USAGE_ALARM なので、チャンネルの bypassDnd を外すだけではおやすみモードを素通りして鳴る。
+        // 座席を取る前に判定し、音を出さないまま前面サービスと座席を上限まで握らず、すぐ「鳴らせなかった」で終える
+        // (鳴動中の別アラームにも触れない)。後で気づけるよう見逃しの通知は出す
+        val interruptionFilter = currentInterruptionFilter()
+        // 同じ鳴動の二重 START (鳴動中・座席確保済み) や、判定中に届いた停止は通常の経路に任せる。
+        // ここで MISSED を書くと、鳴っている最中の行や止めた行を「鳴らせなかった」で上書きしてしまう
+        val handledElsewhere = synchronized(ringLock) {
+            isDismissed(instanceId) || ringingInstanceId.value == instanceId || pendingStartId == instanceId
+        }
+        if (!handledElsewhere && silencedByDnd(ringSettings.ignoreDnd, interruptionFilter)) {
+            synchronized(ringLock) { requestedIds -= instanceId }
+            withContext(NonCancellable) {
+                val marked = runCatching {
+                    app.container.repository.markDndSuppressed(
+                        instanceId, "おやすみモード中のため鳴らさない (おやすみモードを無視=OFF, filter=$interruptionFilter)",
+                    )
+                }.getOrDefault(false)
+                if (marked) MissedNotifier.post(this@AlarmService, instance.title)
+            }
+            dndSilentIds -= instanceId
+            releaseWaitingRings(instanceId)
+            restoreOrFinish()
+            return
+        }
+        // ここから先は鳴らす経路 (または二重 START・停止済みを通常の経路で処理)。この要求の全画面・バイブを戻す
+        dndSilentIds -= instanceId
         // 墓標確認・自世代確定・現行鳴動の停止・鳴動要求公開をひとつの
         // クリティカルセクションで行う。分割すると、その間に届く DISMISS が
         // 「確認〜停止」の窓で墓標済み要求を殺せずに現行鳴動が犠牲になるか、
@@ -513,7 +544,11 @@ class AlarmService : Service() {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Builder(this, if (vibrateForRing) CHANNEL_ID else CHANNEL_ID_NOVIB)
+        // おやすみモードで鳴らさない要求は、すぐ畳むまでの間もバイブ・全画面を出さない (#149)。
+        // CATEGORY_ALARM の通知は「アラームは許可」のおやすみモードを素通りするため
+        val dndSilent = instanceId in dndSilentIds
+        val channel = if (dndSilent) CHANNEL_ID_NOVIB_DND else channelIdFor(vibrateForRing, ignoreDndForRing)
+        return NotificationCompat.Builder(this, channel)
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle(currentInstance?.title ?: "アラーム")
             .setContentText("「停止」でそのまま止められます")
@@ -527,7 +562,7 @@ class AlarmService : Service() {
             // setSilent(true) は入れない: Android 15 で「抑制グループ」扱いされ
             // フルスクリーン Intent が自動起動しない (E2E 実測)。無音化は
             // チャンネル側の setSound(null) に一本化し、音は MediaPlayer が出す。
-            .setFullScreenIntent(fullScreen, true)
+            .apply { if (!dndSilent) setFullScreenIntent(fullScreen, true) }
             .setContentIntent(fullScreen)
             .setDeleteIntent(dismiss)
             // 鳴動画面に辿り着けなくても通知シェードから必ず止められる退路
@@ -767,16 +802,25 @@ class AlarmService : Service() {
         stopSelfResult(finishId)
     }
 
-    private suspend fun readVibrateSetting(): Boolean =
-        try {
+    /** チャンネルを決める設定を読む。おやすみモードで鳴らさない要求なら true を返す (#149) */
+    private suspend fun readRingChannelSettings(): Boolean {
+        val st = try {
             withTimeoutOrNull(SETTINGS_READ_TIMEOUT_MS) {
-                app.container.settings.flow.first().vibrateWhileRinging
-            } ?: true
+                app.container.settings.flow.first()
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            true
+            null
         }
+        vibrateForRing = st?.vibrateWhileRinging ?: true
+        ignoreDndForRing = st?.ignoreDnd ?: true
+        return silencedByDnd(ignoreDndForRing, currentInterruptionFilter())
+    }
+
+    private fun currentInterruptionFilter(): Int =
+        runCatching { getSystemService(NotificationManager::class.java)?.currentInterruptionFilter }.getOrNull()
+            ?: NotificationManager.INTERRUPTION_FILTER_UNKNOWN
 
     /**
      * 世代前進から資源の畳みまでを ringLock 内で一続きに行う (呼び出し側がロック保持)。
@@ -852,7 +896,28 @@ class AlarmService : Service() {
         // トラブルシューティング画面がチャンネルの重要度・ロック画面表示を検査するので公開
         const val CHANNEL_ID = "alarm_vib"
         const val CHANNEL_ID_NOVIB = "alarm_novib"
+        /** おやすみモードを尊重する側のチャンネル (#149)。bypassDnd は作成後に変えられないので別IDにする */
+        const val CHANNEL_ID_VIB_DND = "alarm_vib_dnd"
+        const val CHANNEL_ID_NOVIB_DND = "alarm_novib_dnd"
         private const val LEGACY_CHANNEL_ID = "alarm_v1"
+
+        /**
+         * 「おやすみモードを無視」OFF で、いまおやすみモード中か (#149)。
+         * 割り込みフィルタが「すべて許可」以外 (重要な通知のみ・アラームのみ・サイレント) なら黙る。
+         * 取得できない (UNKNOWN) 時は鳴らす側に倒す: 鳴らないより鳴る方が安全なため
+         */
+        fun silencedByDnd(ignoreDnd: Boolean, interruptionFilter: Int): Boolean =
+            !ignoreDnd &&
+                interruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL &&
+                interruptionFilter != NotificationManager.INTERRUPTION_FILTER_UNKNOWN
+
+        /** 鳴動通知が使うチャンネル。ignoreDnd=ON は既存チャンネル (bypassDnd=true)、OFF は DND 尊重側 */
+        fun channelIdFor(vibrate: Boolean, ignoreDnd: Boolean): String = when {
+            ignoreDnd && vibrate -> CHANNEL_ID
+            ignoreDnd -> CHANNEL_ID_NOVIB
+            vibrate -> CHANNEL_ID_VIB_DND
+            else -> CHANNEL_ID_NOVIB_DND
+        }
         private val VIBRATION_PATTERN = longArrayOf(0, 800, 400, 800, 400)
         /** クレッシェンドの立ち上がり時間と開始音量。 */
         private const val CRESCENDO_MS = 30_000L
@@ -888,20 +953,22 @@ class AlarmService : Service() {
         fun ensureChannels(context: Context) {
             val mgr = context.getSystemService(NotificationManager::class.java) ?: return
             mgr.deleteNotificationChannel(LEGACY_CHANNEL_ID)
-            fun channel(id: String, label: String, vibrate: Boolean) =
+            fun channel(id: String, label: String, vibrate: Boolean, bypassDnd: Boolean) =
                 NotificationChannel(id, label, NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "アラーム鳴動時のフルスクリーン通知"
                     // 音は MediaPlayer が出すのでチャンネルは無音
                     setSound(null, null)
                     enableVibration(vibrate)
                     if (vibrate) vibrationPattern = VIBRATION_PATTERN
-                    setBypassDnd(true)
+                    setBypassDnd(bypassDnd)
                     lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 }
             mgr.createNotificationChannels(
                 listOf(
-                    channel(CHANNEL_ID, "アラーム", vibrate = true),
-                    channel(CHANNEL_ID_NOVIB, "アラーム（バイブなし）", vibrate = false),
+                    channel(CHANNEL_ID, "アラーム", vibrate = true, bypassDnd = true),
+                    channel(CHANNEL_ID_NOVIB, "アラーム（バイブなし）", vibrate = false, bypassDnd = true),
+                    channel(CHANNEL_ID_VIB_DND, "アラーム（おやすみモード尊重）", vibrate = true, bypassDnd = false),
+                    channel(CHANNEL_ID_NOVIB_DND, "アラーム（バイブなし・おやすみモード尊重）", vibrate = false, bypassDnd = false),
                 ),
             )
         }

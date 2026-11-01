@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.DoNotDisturbOn
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
@@ -1225,6 +1226,30 @@ private fun RingingCard(
                     onCheckedChange = { scope.launch { settings.setVibrateWhileRinging(it) } },
                 )
             }
+            // ON は通知チャンネルの bypassDnd。効くには通知ポリシーへのアクセス許可が要る (検査画面で案内)
+            IconSettingRow(Icons.Default.DoNotDisturbOn) {
+                Text(
+                    "おやすみモードを無視",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                Switch(
+                    checked = p.ignoreDnd,
+                    onCheckedChange = { scope.launch { settings.setIgnoreDnd(it) } },
+                )
+            }
+            // ON/OFF で何が変わるかと、ON を効かせる許可の場所 (#149)。許可の有無は検査画面が見る
+            Text(
+                if (p.ignoreDnd) {
+                    "おやすみモード中も鳴らします (おやすみモードでアラームまで止める設定の時は OS が止めます)。通知と鳴動画面まで出すには、トラブルシューティングで「通知ポリシーへのアクセス」を許可してください"
+                } else {
+                    "おやすみモード中は鳴らさず、「鳴らせなかった」として通知だけ残します"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 32.dp, end = 12.dp),
+            )
             // 全アラーム一括ミュート (通知・タイマーは止めない)
             IconSettingRow(Icons.Default.VolumeOff) {
                 Text(

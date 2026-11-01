@@ -63,6 +63,8 @@ class SettingsRepository(private val context: Context) {
         val volumeCrescendo: Boolean = false,
         /** 鳴動中にバイブするか。 */
         val vibrateWhileRinging: Boolean = true,
+        /** おやすみモード(DND)中でも鳴動通知を割り込ませるか。通知ポリシーへのアクセス許可が無いとOSが無視する。 */
+        val ignoreDnd: Boolean = true,
         /** 一括ミュート: ALARM鳴動を全て止める (通知のみは残す)。 */
         val muteAll: Boolean = false,
         /** 既定の鳴動音 URI (カスタムMP3等)。null=システム既定。 */
@@ -122,6 +124,7 @@ class SettingsRepository(private val context: Context) {
             alarmVolumePercent = p[KEY_ALARM_VOLUME] ?: 0,
             volumeCrescendo = p[KEY_VOL_CRESCENDO] ?: false,
             vibrateWhileRinging = p[KEY_VIBRATE] ?: true,
+            ignoreDnd = p[KEY_IGNORE_DND] ?: true,
             muteAll = p[KEY_MUTE_ALL] ?: false,
             defaultSoundUri = p[KEY_SOUND_URI],
             showWeekNumbers = p[KEY_WEEK_NUMBERS] ?: false,
@@ -214,6 +217,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAlarmVolumePercent(v: Int) = edit { it[KEY_ALARM_VOLUME] = v }
     suspend fun setVolumeCrescendo(v: Boolean) = edit { it[KEY_VOL_CRESCENDO] = v }
     suspend fun setVibrateWhileRinging(v: Boolean) = edit { it[KEY_VIBRATE] = v }
+    suspend fun setIgnoreDnd(v: Boolean) = edit { it[KEY_IGNORE_DND] = v }
     suspend fun setMuteAll(v: Boolean) = edit { it[KEY_MUTE_ALL] = v }
 
     /** Googleカレンダー連携のアカウントを足す。旧版の1アカウントのキーはここで新しいキーへ移す */
@@ -353,6 +357,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_ALARM_VOLUME = intPreferencesKey("alarm_volume_percent")
         val KEY_VOL_CRESCENDO = booleanPreferencesKey("volume_crescendo")
         val KEY_VIBRATE = booleanPreferencesKey("vibrate_while_ringing")
+        val KEY_IGNORE_DND = booleanPreferencesKey("ignore_dnd")
         val KEY_MUTE_ALL = booleanPreferencesKey("mute_all")
         val KEY_SOUND_URI = stringPreferencesKey("default_sound_uri")
         val KEY_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
