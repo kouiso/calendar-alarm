@@ -35,15 +35,21 @@ data class StopUiPermissions(
  * 他アプリ (動画など) が前面だと FSI は heads-up にしかならず、数秒で畳まれた後は
  * オーバーレイだけが画面上の停止手段になる。二重表示は鳴動画面側
  * (RingingActivity がオーバーレイを畳む / DB 終端で自動終了) で解消する。
+ *
+ * 「フルスクリーンを強制」OFF (#153) の時は、全画面のオーバーレイも出さない。
+ * 通知 (ヘッズアップ) の「停止」と、通知を開いて出る鳴動画面だけで止める。
  */
 data class StopUiPlan(
     val showOverlay: Boolean,
     val warnings: List<String>,
 ) {
     companion object {
-        fun of(p: StopUiPermissions): StopUiPlan = StopUiPlan(
-            showOverlay = p.overlayOk,
+        fun of(p: StopUiPermissions, forceFullScreen: Boolean = true): StopUiPlan = StopUiPlan(
+            showOverlay = p.overlayOk && forceFullScreen,
             warnings = buildList {
+                if (!forceFullScreen) {
+                    add("フルスクリーン強制OFF: 鳴動画面とオーバーレイは自動表示せず、通知の「停止」か通知を開いて止める")
+                }
                 if (!p.notificationsOk) {
                     add("通知OFF: 通知の「停止」と鳴動画面の自動表示が使えない")
                 }

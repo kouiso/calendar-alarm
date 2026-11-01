@@ -40,4 +40,13 @@ class StopUiPlanTest {
         assertEquals(3, all.size)
         assertTrue(all.any { "通知OFF" in it })
     }
+
+    @Test
+    fun `フルスクリーン強制OFFならオーバーレイも出さず理由を記録する`() {
+        val off = StopUiPlan.of(StopUiPermissions(true, fsiOk = true, overlayOk = true), forceFullScreen = false)
+        assertFalse(off.showOverlay)
+        assertTrue(off.warnings.any { it.startsWith("フルスクリーン強制OFF") })
+        // 既定 (ON) は従来どおり
+        assertTrue(StopUiPlan.of(StopUiPermissions(true, fsiOk = true, overlayOk = true)).showOverlay)
+    }
 }
