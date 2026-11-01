@@ -54,6 +54,10 @@ class StopUiPlanTest {
     fun `フルスクリーン強制OFFでも通知が出せない時はオーバーレイを残す`() {
         // 通知 OFF + 強制 OFF でオーバーレイまで消すと、画面上に停止手段が何も無くなる
         val p = StopUiPermissions(notificationsOk = false, fsiOk = true, overlayOk = true)
-        assertTrue(StopUiPlan.of(p, forceFullScreen = false).showOverlay)
+        val plan = StopUiPlan.of(p, forceFullScreen = false)
+        assertTrue(plan.showOverlay)
+        // 鳴動ログの理由も実際の動き (オーバーレイは出す) と合わせる
+        assertTrue(plan.warnings.any { it == "フルスクリーン強制OFF: 通知OFFのため、停止手段としてオーバーレイだけは出す" })
+        assertFalse(plan.warnings.any { "自動表示せず" in it })
     }
 }

@@ -50,7 +50,13 @@ data class StopUiPlan(
             showOverlay = p.overlayOk && (forceFullScreen || !p.notificationsOk),
             warnings = buildList {
                 if (!forceFullScreen) {
-                    add("フルスクリーン強制OFF: 鳴動画面とオーバーレイは自動表示せず、通知の「停止」か通知を開いて止める")
+                    add(
+                        if (p.notificationsOk) {
+                            "フルスクリーン強制OFF: 鳴動画面とオーバーレイは自動表示せず、通知の「停止」か通知を開いて止める"
+                        } else {
+                            "フルスクリーン強制OFF: 通知OFFのため、停止手段としてオーバーレイだけは出す"
+                        },
+                    )
                 }
                 if (!p.notificationsOk) {
                     add("通知OFF: 通知の「停止」と鳴動画面の自動表示が使えない")
