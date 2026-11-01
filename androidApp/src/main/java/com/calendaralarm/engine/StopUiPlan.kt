@@ -38,6 +38,7 @@ data class StopUiPermissions(
  *
  * 「フルスクリーンを強制」OFF (#153) の時は、全画面のオーバーレイも出さない。
  * 通知 (ヘッズアップ) の「停止」と、通知を開いて出る鳴動画面だけで止める。
+ * ただし通知が OFF だと画面上の停止手段が無くなるので、その時だけはオーバーレイを出す。
  */
 data class StopUiPlan(
     val showOverlay: Boolean,
@@ -45,7 +46,8 @@ data class StopUiPlan(
 ) {
     companion object {
         fun of(p: StopUiPermissions, forceFullScreen: Boolean = true): StopUiPlan = StopUiPlan(
-            showOverlay = p.overlayOk && forceFullScreen,
+            // 強制 OFF でも、通知が出せない時はオーバーレイが唯一の停止手段なので残す
+            showOverlay = p.overlayOk && (forceFullScreen || !p.notificationsOk),
             warnings = buildList {
                 if (!forceFullScreen) {
                     add("フルスクリーン強制OFF: 鳴動画面とオーバーレイは自動表示せず、通知の「停止」か通知を開いて止める")
