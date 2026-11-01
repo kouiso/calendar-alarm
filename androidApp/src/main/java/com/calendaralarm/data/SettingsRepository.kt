@@ -110,10 +110,10 @@ class SettingsRepository(private val context: Context) {
             // キー未保存 (一度も触っていない) 人の既定は元アプリと同じ「承諾した招待のみ」(#155)。
             // 保存済みの選択はそのまま残る
             inviteFilter = InviteFilter(
-                accepted = (p[KEY_INVITE_MASK] ?: 1) and 1 != 0,
-                tentative = (p[KEY_INVITE_MASK] ?: 1) and 2 != 0,
-                needsAction = (p[KEY_INVITE_MASK] ?: 1) and 4 != 0,
-                declined = (p[KEY_INVITE_MASK] ?: 1) and 8 != 0,
+                accepted = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) and 1 != 0,
+                tentative = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) and 2 != 0,
+                needsAction = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) and 4 != 0,
+                declined = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) and 8 != 0,
             ),
             eventTypeFilter = eventTypeFilterOf(p),
             googleAccountEmails = googleAccountsOf(p),
@@ -192,7 +192,9 @@ class SettingsRepository(private val context: Context) {
             InviteStatus.NEEDS_ACTION -> 4
             InviteStatus.DECLINED -> 8
         }
-        p[KEY_INVITE_MASK] = (p[KEY_INVITE_MASK] ?: 7) xor bit
+        // 未保存の人は表示と同じ既定 (承諾のみ) から反転する。7 から反転すると
+        // 初回タップで触っていない「未回答」まで ON になる (#155)
+        p[KEY_INVITE_MASK] = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) xor bit
     }
     suspend fun toggleEventType(type: EventType) = edit { p ->
         val current = eventTypeFilterOf(p)
@@ -300,6 +302,8 @@ class SettingsRepository(private val context: Context) {
         val KEY_NEVER_CODES = stringPreferencesKey("title_never_codes")
         val KEY_CODE_SCOPE = intPreferencesKey("title_code_scope")
         val KEY_INVITE_MASK = intPreferencesKey("invite_mask")
+        /** 招待フィルタの既定 = 承諾のみ (bit 1)。読み出しとトグルで同じ値を使う (#155) */
+        const val DEFAULT_INVITE_MASK = 1
         val KEY_EVENT_TYPE_MASK = intPreferencesKey("event_type_mask")
         // サイレントモードと予定なしは、旧版の event_type_mask と別のキーにする (#79)
         val KEY_EVENT_TYPE_FOCUS = booleanPreferencesKey("event_type_focus_time")
