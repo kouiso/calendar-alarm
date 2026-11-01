@@ -108,4 +108,28 @@ class AutoSnoozeRaceTest {
         repository.onDismissed(inst.id)
         assertEquals(listOf(AlarmState.PENDING.name), children(inst.id).map { it.state })
     }
+
+    @Test
+    fun `先に停止されていたら時間切れでも見逃しにしない`() = runBlocking {
+        val inst = ringing("tm:miss-race")
+        repository.onDismissed(inst.id)
+        assertFalse(repository.markMissedIfFired(inst.id, "時間切れ"))
+        assertEquals(AlarmState.DISMISSED.name, state(inst.id))
+    }
+
+    @Test
+    fun `鳴動中のまま時間切れなら見逃しにする`() = runBlocking {
+        val inst = ringing("tm:miss")
+        assertTrue(repository.markMissedIfFired(inst.id, "時間切れ"))
+        assertEquals(AlarmState.MISSED.name, state(inst.id))
+    }
+
+    @Test
+    fun `停止の後に遅れて届いた手動スヌーズは子を作らない`() = runBlocking {
+        val inst = ringing("tm:late-snooze")
+        repository.onDismissed(inst.id)
+        repository.onSnoozed(inst.id, 10)
+        assertEquals(AlarmState.DISMISSED.name, state(inst.id))
+        assertTrue(children(inst.id).isEmpty())
+    }
 }

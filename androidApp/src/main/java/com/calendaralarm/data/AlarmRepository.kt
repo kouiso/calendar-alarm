@@ -361,6 +361,7 @@ class AlarmRepository(
     suspend fun onDismissed(id: String?) {
         if (id == null) return
         ringTransitionLock.withLock { dismissRow(id) }
+        onScheduleChanged?.invoke()
     }
 
     private suspend fun dismissRow(id: String) {
@@ -381,7 +382,6 @@ class AlarmRepository(
         db.scheduledInstances().byId(id)?.standaloneAlarmId?.let {
             disableConsumedOneShots(setOf(it))
         }
-        onScheduleChanged?.invoke()
     }
 
     /**
@@ -497,8 +497,18 @@ class AlarmRepository(
     private val waitingRings = WaitingRingStore(calendarReader.appContext())
 
     suspend fun onSnoozed(id: String?, snoozeMinutes: Int? = null) {
-        val entity = id?.let { db.scheduledInstances().byId(it) } ?: return
-        ringTransitionLock.withLock { snoozeRow(entity, snoozeMinutes) }
+        if (id == null) return
+        val done = ringTransitionLock.withLock {
+            // 先に停止・見逃しで終わった行へ遅れて届いたスヌーズは、子を作らない (止めたのに鳴るのを防ぐ)
+            val entity = db.scheduledInstances().byId(id) ?: return@withLock false
+            if (entity.state in TERMINAL_STATES) {
+                audit("SNOOZE_SKIP", "$id: スヌーズの前に ${entity.state} になっていたので何もしない", entity)
+                return@withLock false
+            }
+            snoozeRow(entity, snoozeMinutes)
+            true
+        }
+        if (done) onScheduleChanged?.invoke()
     }
 
     /**
@@ -508,18 +518,43 @@ class AlarmRepository(
      * (停止ボタンを押した瞬間に放置の時間切れが重なった時、押した側を優先するため)。
      * @return 子を作ったら true
      */
-    suspend fun onAutoSnoozed(id: String, snoozeMinutes: Int): Boolean = ringTransitionLock.withLock {
-        val row = db.scheduledInstances().byId(id) ?: return@withLock false
-        if (row.state != AlarmState.FIRED.name) {
-            audit("SNOOZE_SKIP", "$id: 自動スヌーズの前に ${row.state} になっていたので何もしない", row)
-            return@withLock false
+    suspend fun onAutoSnoozed(id: String, snoozeMinutes: Int): Boolean {
+        val done = ringTransitionLock.withLock {
+            val row = db.scheduledInstances().byId(id) ?: return@withLock false
+            if (row.state != AlarmState.FIRED.name) {
+                audit("SNOOZE_SKIP", "$id: 自動スヌーズの前に ${row.state} になっていたので何もしない", row)
+                return@withLock false
+            }
+            val childId = snoozeRow(row, snoozeMinutes)
+            autoSnoozedChildren[id] = childId to System.currentTimeMillis()
+            true
         }
-        val childId = snoozeRow(row, snoozeMinutes)
-        autoSnoozedChildren[id] = childId to System.currentTimeMillis()
-        true
+        if (done) onScheduleChanged?.invoke()
+        return done
     }
 
-    /** スヌーズの子を予約して元を SNOOZED にする。呼び出し側が [ringTransitionLock] を持つ。子の id を返す */
+    /**
+     * 放置の時間切れで「鳴らせなかった」にする (#145)。停止と排他にし、鳴動中 (FIRED) のままの時だけ書く。
+     * 先に停止されていたら DISMISSED を MISSED で上書きせず、見逃しの通知も出さないよう false を返す
+     */
+    suspend fun markMissedIfFired(id: String, detail: String): Boolean {
+        val done = ringTransitionLock.withLock {
+            val row = db.scheduledInstances().byId(id) ?: return@withLock false
+            if (row.state != AlarmState.FIRED.name) {
+                audit("MISS_SKIP", "$id: 時間切れの前に ${row.state} になっていたので見逃しにしない", row)
+                return@withLock false
+            }
+            setState(id, AlarmState.MISSED)
+            audit("MISS", "$id: $detail", row)
+            row.standaloneAlarmId?.let { disableConsumedOneShots(setOf(it)) }
+            true
+        }
+        if (done) onScheduleChanged?.invoke()
+        return done
+    }
+
+    /** スヌーズの子を予約して元を SNOOZED にする。呼び出し側が [ringTransitionLock] を持ち、
+     *  ロックを放してから onScheduleChanged を呼ぶ (ウィジェット更新で停止の書き込みを待たせない)。子の id を返す */
     private suspend fun snoozeRow(entity: ScheduledInstanceEntity, snoozeMinutes: Int?): String {
         val instance = entity.toInstance()
         val minutes = snoozeMinutes ?: instance.snoozeMinutes
@@ -530,7 +565,6 @@ class AlarmRepository(
         if (!scheduler.schedule(snoozed)) audit("EXACT_DENIED", snoozed.id)
         setState(instance.id, AlarmState.SNOOZED)
         audit("SNOOZE", "${instance.id} +${minutes}m → ${snoozed.id}", entity)
-        onScheduleChanged?.invoke()
         return snoozed.id
     }
 
@@ -1004,6 +1038,11 @@ class AlarmRepository(
     )
 
     companion object {
+        /** 終わった行。遅れて届いたスヌーズで子を作らない (#145) */
+        private val TERMINAL_STATES = setOf(
+            AlarmState.DISMISSED.name, AlarmState.MISSED.name,
+            AlarmState.CANCELLED.name, AlarmState.SKIPPED.name,
+        )
         /** 自動スヌーズの直後に届いた停止を「同時に押した」とみなす長さ (#145) */
         const val AUTO_SNOOZE_RACE_MS = 30_000L
         /** 鳴らし直しの発火までの間。停止した鳴動の後始末 (通知の掃除など) が済んでから鳴らす */

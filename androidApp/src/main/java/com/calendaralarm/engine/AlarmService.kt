@@ -399,13 +399,16 @@ class AlarmService : Service() {
                             }
                         }
                     } else {
-                        runCatching {
-                            app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
+                        // 停止と重なったら停止を優先する: 先に停止済みなら見逃しにせず通知も出さない
+                        val missed = runCatching {
+                            app.container.repository.markMissedIfFired(instance.id, "鳴動が${ringTimeoutMs / 1000}秒続き自動停止")
+                        }.getOrDefault(false)
+                        if (missed) {
+                            runCatching {
+                                app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
+                            }
+                            MissedNotifier.post(this@AlarmService, instance.title)
                         }
-                        runCatching {
-                            app.container.repository.markMissed(instance.id, "鳴動が${ringTimeoutMs / 1000}秒続き自動停止")
-                        }
-                        MissedNotifier.post(this@AlarmService, instance.title)
                     }
                     releaseWaitingRings(instance.id)
                     finishIfIdle()
