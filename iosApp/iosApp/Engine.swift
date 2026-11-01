@@ -171,9 +171,13 @@ final class Engine: ObservableObject {
         if reader.authorizationGranted {
             // 過去側はグレース幅でなく14日に広げる (Android と同じ)。スヌーズ連鎖が
             // 親予定の開始から長く伸びても liveEventKeys が親を見失わない。
+            // 未来側は「何分前」の最大分だけ horizon より先まで読む (#143, Android と同じ)。
+            // 開始が horizon より先でも、共通リマインダーなどの前倒しで鳴動が horizon 内に入るため。
+            // 予約の範囲は shared の展開が鳴動時刻で horizon に切るので変わらない
+            let leadMinutes = Self.fetchLeadMinutes(store.state)
             events = reader.events(
                 from: Date(timeIntervalSince1970: TimeInterval(now) / 1000 - Double(horizonDays) * 86_400),
-                to: Date(timeIntervalSince1970: TimeInterval(horizon) / 1000))
+                to: Date(timeIntervalSince1970: TimeInterval(horizon) / 1000 + Double(leadMinutes) * 60))
             store.setCalendars(reader.calendars())
             store.setLastEvents(events)
             calendarsOk = true
@@ -858,6 +862,16 @@ final class Engine: ObservableObject {
         }
         keep.formUnion(Self.inFlightSounds.keys)
         AlarmSoundLibrary.removeAll(except: keep, createdBefore: store.loadedAt)
+    }
+
+    /// 予定の取得を horizon より先へ伸ばす幅 (分, #143)。shared `AlarmExpander.fetchLeadMinutes` と同じく、
+    /// 設定で分かっている最大の前倒し (共通リマインダー・カレンダーの既定・アカウントの既定・予定ごとの指定) を取る
+    static func fetchLeadMinutes(_ s: Store.Persisted) -> Int {
+        var all = s.extraReminderOffsets + [s.defaultMinutesBefore]
+        for r in s.calendarRules.values { all += r.extraOffsets + [r.minutesBefore] }
+        for a in s.accountSettings.values { if let m = a.minutesBefore { all.append(m) } }
+        for o in s.overrides.values { all += (o.extraOffsets ?? []) + (o.minutesBefore.map { [$0] } ?? []) }
+        return max(0, all.max() ?? 0)
     }
 
     private static func soundsInUse(_ s: Store.Persisted) -> Set<String> {

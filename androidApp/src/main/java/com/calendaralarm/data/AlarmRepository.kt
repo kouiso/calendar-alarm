@@ -44,6 +44,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * 鳴動ドメインの統合リポジトリ。
@@ -272,6 +273,11 @@ class AlarmRepository(
                     ?: appSettings.defaultReminderAction,
             )
             val override = ov?.toModel()
+            // 展開と同じ規則で、この予定に効く追加リマインダー (共通リマインダー込み, #143)。
+            // 一覧の鳴る／鳴らない表示が、共通リマインダーだけで鳴る予定を OFF と出さないようにする
+            val effectiveExtras = AlarmExpander.effectiveExtraOffsets(
+                ov?.extraOffsetsCsv?.toOffsets(), rule, appSettings.extraReminderOffsets,
+            )
             // 招待フィルタも反映する: 展開側で鳴らない予定が「アラーム」
             // アイコン表示になるのは矛盾
             // 予約の展開と同じ判定関数を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
@@ -293,23 +299,23 @@ class AlarmRepository(
                 startAction = start,
                 reminderAction = reminder,
                 minutesBefore = ov?.minutesBefore ?: rule.minutesBefore,
-                extraOffsets = ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets,
+                extraOffsets = effectiveExtras,
                 hasOverride = ov != null,
                 calendarOff = pref?.enabled == false,
                 accountOff = accountOff,
                 allDayOff = allDayOff,
-                hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
+                hasReminderTriggers = effectiveExtras.isNotEmpty() ||
                     (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
                 muteAll = appSettings.muteAll,
                 defaultSilenced = AlarmExpander.silencedWithoutOverride(
                     ev, rule, appSettings.titleCodes, appSettings.inviteFilter, appSettings.eventTypeFilter,
                     // 何分前などの個別指定は ON でも残すので、リマインダー側の時刻は指定の分まで数える
-                    hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
+                    hasReminderTriggers = effectiveExtras.isNotEmpty() ||
                         (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
                 ),
                 restoreSilenced = AlarmExpander.silencedWithoutOverride(
                     ev, rule, appSettings.titleCodes, appSettings.inviteFilter, appSettings.eventTypeFilter,
-                    hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
+                    hasReminderTriggers = effectiveExtras.isNotEmpty() ||
                         (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
                     muteAll = appSettings.muteAll,
                 ),
@@ -593,27 +599,35 @@ class AlarmRepository(
                 // カレンダー一覧の読み取り失敗は予定の読み取り失敗と同じ扱いにする (下の runCatching で前回の予約を維持)。
                 // 鳴らさないアカウントを無視して鳴らすことも、全部止めることもしない
                 val calendarList = calendarReader.calendars()
+                // アカウント単位の設定 (使う / 鳴らす / 何分前) を配下カレンダーへ当てはめる (#74)
+                val accountApplied = com.calendaralarm.shared.logic.AccountRules.apply(
+                    calendarList, appSettings.accountSettings, prefs, defaultRule, minutesFollowDefault,
+                )
+                // 未来側は「何分前」の最大分だけ horizon より先まで読む (#143)。
+                // 開始が14日より先でも、共通リマインダーなどの前倒しで鳴動が14日以内に入るため。
+                // 予約の範囲は展開側が鳴動時刻で horizon に切るので変わらない
+                val fetchUntil = horizon + AlarmExpander.fetchLeadMinutes(
+                    accountApplied.calendarRules.values + defaultRule,
+                    overrides.values,
+                    appSettings.extraReminderOffsets,
+                ).minutes
                 // 過去側はグレース幅ではなく14日に広げる。スヌーズ連鎖が親予定の
                 // 開始から長く伸びても liveEventKeys が親を見失わず、スヌーズ子が
                 // 無言キャンセルされない。in-window 外の予定は展開側で弾かれる。
                 val events = enrichWithGoogleTypes(
                     calendarReader.events(
                         (now - 14.days).toEpochMilliseconds(),
-                        horizon.toEpochMilliseconds(),
+                        fetchUntil.toEpochMilliseconds(),
                     ).map { it.withResolvedDefaultReminders(appSettings) },
                     appSettings,
                     (now - 14.days).toEpochMilliseconds(),
-                    horizon.toEpochMilliseconds(),
+                    fetchUntil.toEpochMilliseconds(),
                 )
                 // 予定があるのにカレンダーが1件も読めないのは一覧の読み取り失敗。
                 // アカウント設定があるとアカウントへ当てはめられないので、前回の予約を維持する
                 check(calendarList.isNotEmpty() || events.isEmpty() || appSettings.accountSettings.isEmpty()) {
                     "calendar list is empty while events exist"
                 }
-                // アカウント単位の設定 (使う / 鳴らす / 何分前) を配下カレンダーへ当てはめる (#74)
-                val accountApplied = com.calendaralarm.shared.logic.AccountRules.apply(
-                    calendarList, appSettings.accountSettings, prefs, defaultRule, minutesFollowDefault,
-                )
                 val disabledCalIds = accountApplied.disabledCalendarIds
                 liveEventKeys = events.asSequence()
                     .filter { overrides[it.instanceKey]?.muted != true }

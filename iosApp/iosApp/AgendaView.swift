@@ -526,7 +526,8 @@ extension Store {
             .sorted { $0.startMillis < $1.startMillis }
             .map { ev in
                 let ov = state.overrides[ev.instanceKey]
-                let rule = self.rule(for: ev.calendarId)
+                // 共通リマインダー (#143) を展開と同じ規則で足す。共通リマインダーだけで鳴る予定を OFF と出さない
+                let rule = withCommonReminders(self.rule(for: ev.calendarId), state.extraReminderOffsets)
                 let cal = state.calendars.first { $0.id == ev.calendarId }
                 // 終日を鳴らさないカレンダーの終日予定は、個別指定より先に展開で外れる (shared `AlarmExpander.allDaySuppressed`)
                 let allDayOff = ev.allDay && rule.allDayMinutes < 0

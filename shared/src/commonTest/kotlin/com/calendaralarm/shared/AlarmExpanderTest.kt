@@ -264,6 +264,52 @@ class AlarmExpanderTest {
     }
 
     @Test
+    fun `開始が14日より先でも共通リマインダーで14日以内に鳴るなら展開される`() {
+        // horizon は now+14日。開始は 20日後、共通リマインダー 7日前 → 鳴動は 13日後で窓に入る
+        val ev = event("far", start = ldt("2026-10-21T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 0)),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            commonExtraOffsets = listOf(7 * 24 * 60),
+        )
+        // 開始そのものは窓の外、共通リマインダーの分だけ予約される
+        assertEquals(listOf(7 * 24 * 60), out.map { it.minutesBefore })
+    }
+
+    @Test
+    fun `取得の前倒し幅は設定で分かっている最大の何分前`() {
+        assertEquals(0, AlarmExpander.fetchLeadMinutes(emptyList(), emptyList(), emptyList()))
+        assertEquals(
+            30 * 24 * 60,
+            AlarmExpander.fetchLeadMinutes(
+                rules = listOf(AlarmRule(minutesBefore = 15, extraOffsets = listOf(60))),
+                overrides = listOf(EventOverride(minutesBefore = 120, extraOffsets = listOf(240))),
+                commonExtraOffsets = listOf(30 * 24 * 60),
+            ),
+        )
+        // 予定ごとの指定が一番大きければそれを使う
+        assertEquals(
+            2 * 24 * 60,
+            AlarmExpander.fetchLeadMinutes(
+                rules = listOf(AlarmRule(minutesBefore = 15)),
+                overrides = listOf(EventOverride(extraOffsets = listOf(2 * 24 * 60))),
+                commonExtraOffsets = listOf(60),
+            ),
+        )
+    }
+
+    @Test
+    fun `一覧と展開は同じ規則で追加リマインダーを決める`() {
+        val rule = AlarmRule(extraOffsets = listOf(30))
+        assertEquals(listOf(30, 60), AlarmExpander.effectiveExtraOffsets(null, rule, listOf(60, 30)))
+        // 予定ごとの指定 (空リスト含む) は共通もカレンダー既定も置き換える
+        assertEquals(listOf(45), AlarmExpander.effectiveExtraOffsets(listOf(45), rule, listOf(60)))
+        assertEquals(emptyList<Int>(), AlarmExpander.effectiveExtraOffsets(emptyList(), rule, listOf(60)))
+    }
+
+    @Test
     fun `曜日繰り返しと例外日`() {
         val alarm = StandaloneAlarm(
             id = 7, hour = 7, minute = 30,

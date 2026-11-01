@@ -569,6 +569,18 @@ func notificationDeliveryAhead(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ o
     return offsets.contains { ahead($0) && !(startTriggerTaken && $0 == startMinutes) }
 }
 
+/// 全イベント共通の追加リマインダーをカレンダーの既定に併合したルール (#143)。
+/// shared `AlarmExpander.effectiveExtraOffsets` と同じく、予定ごとの extraOffsets 指定があればそちらが全体を置き換える
+/// (下の各判定は `ov?.extraOffsets ?? rule.extraOffsets` で読むので、このルールを渡せば同じ規則になる)。
+/// 一覧の鳴る／鳴らない表示用。保存するルールには使わない
+func withCommonReminders(_ rule: AlarmRuleDTO, _ common: [Int]) -> AlarmRuleDTO {
+    guard !common.isEmpty else { return rule }
+    var seen = Set<Int>()
+    var r = rule
+    r.extraOffsets = (rule.extraOffsets + common).filter { seen.insert($0).inserted }
+    return r
+}
+
 /// 予定が実際に使う動作。優先順は shared `AlarmExpander.resolveActions` と同じ:
 /// 予定の個別指定 > never コード > always コード > カレンダーの既定。
 /// 展開と同じく、リマインダーの動作はリマインダー側の時刻 (追加の何分前・取り込んだカレンダーの通知) がある時だけ使う (無ければ nil)
