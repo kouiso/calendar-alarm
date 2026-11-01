@@ -45,9 +45,17 @@ data class StopUiPlan(
     val warnings: List<String>,
 ) {
     companion object {
+        /**
+         * 鳴動画面 (またはオーバーレイ) を自動で前に出すか (#153)。強制 ON なら出す。
+         * 強制 OFF でも、通知が出せない時は画面上の停止手段が無くなるので出す。
+         * オーバーレイとアプリ前面時の自動表示 (MainActivity) で同じ判定を使う
+         */
+        fun autoShowStopScreen(forceFullScreen: Boolean, notificationsOk: Boolean): Boolean =
+            forceFullScreen || !notificationsOk
+
         fun of(p: StopUiPermissions, forceFullScreen: Boolean = true): StopUiPlan = StopUiPlan(
             // 強制 OFF でも、通知が出せない時はオーバーレイが唯一の停止手段なので残す
-            showOverlay = p.overlayOk && (forceFullScreen || !p.notificationsOk),
+            showOverlay = p.overlayOk && autoShowStopScreen(forceFullScreen, p.notificationsOk),
             warnings = buildList {
                 if (!forceFullScreen) {
                     add(

@@ -50,6 +50,7 @@ import com.calendaralarm.ui.SettingsScreen
 import com.calendaralarm.ui.TimerScreen
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -141,7 +142,15 @@ class MainActivity : ComponentActivity() {
                 // アプリを開けば鳴動画面へ辿り着けるようにする (止める手段の確保)。
                 androidx.compose.runtime.LaunchedEffect(Unit) {
                     com.calendaralarm.engine.AlarmService.ringingInstanceId.collect { id ->
-                        id?.let {
+                        // 「フルスクリーンを強制」OFF なら、アプリを開いていても鳴動画面を勝手に出さない (#153)。
+                        // 通知が出せない時だけは止める手段として出す (オーバーレイと同じ判定)
+                        val force = runCatching { app.container.settings.flow.first().forceFullScreen }.getOrDefault(true)
+                        val notificationsOk = runCatching {
+                            androidx.core.app.NotificationManagerCompat.from(this@MainActivity).areNotificationsEnabled()
+                        }.getOrDefault(true)
+                        id?.takeIf {
+                            com.calendaralarm.engine.StopUiPlan.autoShowStopScreen(force, notificationsOk)
+                        }?.let {
                             startActivity(
                                 com.calendaralarm.engine.RingingActivity.intent(
                                     this@MainActivity, it,

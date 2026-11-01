@@ -60,4 +60,12 @@ class StopUiPlanTest {
         assertTrue(plan.warnings.any { it == "フルスクリーン強制OFF: 通知OFFのため、停止手段としてオーバーレイだけは出す" })
         assertFalse(plan.warnings.any { "自動表示せず" in it })
     }
+
+    @Test
+    fun `アプリ前面時の鳴動画面の自動表示も強制の設定に従う`() {
+        assertTrue(StopUiPlan.autoShowStopScreen(forceFullScreen = true, notificationsOk = true))
+        assertFalse(StopUiPlan.autoShowStopScreen(forceFullScreen = false, notificationsOk = true))
+        // 通知が出せない時は止める手段として出す
+        assertTrue(StopUiPlan.autoShowStopScreen(forceFullScreen = false, notificationsOk = false))
+    }
 }
