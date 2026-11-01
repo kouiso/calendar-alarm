@@ -132,4 +132,16 @@ class AutoSnoozeRaceTest {
         assertEquals(AlarmState.DISMISSED.name, state(inst.id))
         assertTrue(children(inst.id).isEmpty())
     }
+
+    @Test
+    fun `自動スヌーズから30秒を過ぎて届いた停止は子を取り消さない`() = runBlocking {
+        var now = 1_000_000L
+        repository.nowMillis = { now }
+        val inst = ringing("tm:late-stop")
+        assertTrue(repository.onAutoSnoozed(inst.id, 10))
+        now += AlarmRepository.AUTO_SNOOZE_RACE_MS + 1
+        repository.onDismissed(inst.id)
+        // 「同時に押した」とはみなさず、予約済みの子はそのまま鳴る
+        assertEquals(listOf(AlarmState.PENDING.name), children(inst.id).map { it.state })
+    }
 }

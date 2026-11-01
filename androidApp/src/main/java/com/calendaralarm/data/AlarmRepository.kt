@@ -73,6 +73,8 @@ class AlarmRepository(
     private val ringTransitionLock = Mutex()
     // 自動スヌーズで作った子 (親 id → 子 id と作った時刻)。直後に届いた停止で子ごと取り消す
     private val autoSnoozedChildren = ConcurrentHashMap<String, Pair<String, Long>>()
+    // 自動スヌーズと停止の重なりを測る時計。テストで 30 秒経過を作るための差込口
+    internal var nowMillis: () -> Long = System::currentTimeMillis
 
     // ---- Google Calendar eventType 取得 ----
 
@@ -371,7 +373,7 @@ class AlarmRepository(
         // 放置の自動スヌーズと停止が重なった時は停止を優先し、直前に作った子も取り消す (#145)
         autoSnoozedChildren.remove(id)?.let { (childId, at) ->
             val child = db.scheduledInstances().byId(childId)
-            if (System.currentTimeMillis() - at <= AUTO_SNOOZE_RACE_MS && child?.state == AlarmState.PENDING.name) {
+            if (nowMillis() - at <= AUTO_SNOOZE_RACE_MS && child?.state == AlarmState.PENDING.name) {
                 setState(childId, AlarmState.CANCELLED)
                 scheduler.cancel(childId)
                 audit("DISMISS", "$childId: 停止が自動スヌーズと重なったので子も取り消す", child)
@@ -526,7 +528,7 @@ class AlarmRepository(
                 return@withLock false
             }
             val childId = snoozeRow(row, snoozeMinutes)
-            autoSnoozedChildren[id] = childId to System.currentTimeMillis()
+            autoSnoozedChildren[id] = childId to nowMillis()
             true
         }
         if (done) onScheduleChanged?.invoke()
