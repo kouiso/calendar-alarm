@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1273,7 +1274,8 @@ private fun RingingCard(
                     onCheckedChange = { scope.launch { settings.setAutoSnooze(it) } },
                 )
             }
-            // 自動スヌーズの回数上限。OFF の時は選んでも効かないので隠さず薄く効かせる
+            // 自動スヌーズの回数上限。ON の時だけ出す。
+            // 360dp で切れないよう、見出しと選択肢を行で分けて選択肢は折り返す
             if (p.autoSnooze) {
                 IconSettingRow(Icons.Default.Repeat) {
                     Text(
@@ -1281,12 +1283,16 @@ private fun RingingCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(start = 32.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     listOf(2, 3, 4).forEach { n ->
                         FilterChip(
                             selected = p.autoSnoozeMax == n,
                             onClick = { scope.launch { settings.setAutoSnoozeMax(n) } },
                             label = { Text("${n}回", maxLines = 1) },
-                            modifier = Modifier.padding(start = 4.dp),
                         )
                     }
                 }

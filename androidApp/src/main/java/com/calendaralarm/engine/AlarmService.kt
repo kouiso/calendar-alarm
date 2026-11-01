@@ -388,12 +388,15 @@ class AlarmService : Service() {
                     if (autoSnooze) {
                         val mins = instance.snoozeMinutes.takeIf { it > 0 }
                             ?: ringSettings.defaultSnoozeMinutes
-                        runCatching {
-                            app.container.repository.audit(
-                                "SNOOZE", "${instance.id}: 放置${ringTimeoutMs / 1000}秒で自動スヌーズ ${mins}分 (seq ${instance.snoozeSeq})")
-                        }
-                        runCatching {
-                            app.container.repository.onSnoozed(instance.id, mins)
+                        // 停止と重なったら停止を優先する (先に停止済みなら子を作らない)
+                        val snoozed = runCatching {
+                            app.container.repository.onAutoSnoozed(instance.id, mins)
+                        }.getOrDefault(false)
+                        if (snoozed) {
+                            runCatching {
+                                app.container.repository.audit(
+                                    "SNOOZE", "${instance.id}: 放置${ringTimeoutMs / 1000}秒で自動スヌーズ ${mins}分 (seq ${instance.snoozeSeq})")
+                            }
                         }
                     } else {
                         runCatching {
