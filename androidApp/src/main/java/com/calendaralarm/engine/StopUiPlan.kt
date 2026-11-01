@@ -13,6 +13,9 @@ data class StopUiPermissions(
     companion object {
         // テストから権限状態を差し替えるための差込口 (Robolectric は FSI 権限を再現できない)
         @Volatile internal var probeOverride: ((Context) -> StopUiPermissions)? = null
+        // 最後の probe に渡ったバイブ設定。差込口を使うテストでも、呼び出し側が実際のチャンネルを
+        // 渡しているかを確かめるために残す (#153)
+        @Volatile internal var lastProbedVibrate: Boolean? = null
 
         /**
          * 鳴動の通知が「見える停止手段」として使えるか (#153)。アプリ全体の通知 ON に加えて、
@@ -30,6 +33,7 @@ data class StopUiPermissions(
         }
 
         fun probe(context: Context, vibrate: Boolean = true): StopUiPermissions {
+            lastProbedVibrate = vibrate
             probeOverride?.let { return it(context) }
             val nm = context.getSystemService(NotificationManager::class.java)
             return StopUiPermissions(

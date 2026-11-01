@@ -55,7 +55,11 @@ class ForceFullScreenServiceTest {
         shadowOf(Looper.getMainLooper()).idle()
         StopUiPermissions.probeOverride = null
         AlarmService.ringingInstanceId.value = null
-        runBlocking { app.container.settings.setForceFullScreen(true) }
+        runBlocking {
+            app.container.settings.setForceFullScreen(true)
+            app.container.settings.setVibrateWhileRinging(true)
+        }
+        StopUiPermissions.lastProbedVibrate = null
     }
 
     private fun seed(id: String) = runBlocking {
@@ -119,5 +123,15 @@ class ForceFullScreenServiceTest {
         assertTrue(waitUntil(5_000) { c.get().isPlaying() })
         assertNotNull(shadowOf(c.get()).lastForegroundNotification!!.fullScreenIntent)
         assertTrue(waitUntil(3_000) { RingingOverlay.isShowing() })
+    }
+
+    @Test
+    fun `停止手段の判定にはバイブ設定で選ぶ実際のチャンネルを渡す`() {
+        runBlocking { app.container.settings.setVibrateWhileRinging(false) }
+        seed("fsi-novib")
+        val c = start("fsi-novib")
+        assertTrue(waitUntil(5_000) { c.get().isPlaying() })
+        assertTrue(waitUntil(3_000) { StopUiPermissions.lastProbedVibrate != null })
+        assertEquals("バイブなしで鳴る時はバイブなしのチャンネルで判定すること", false, StopUiPermissions.lastProbedVibrate)
     }
 }
