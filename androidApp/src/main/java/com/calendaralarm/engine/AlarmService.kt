@@ -86,6 +86,8 @@ class AlarmService : Service() {
     // 鳴動通知のチャンネル選択に使う。前面化前に鳴動設定から確定させる
     @Volatile private var vibrateForRing = true
     @Volatile private var ignoreDndForRing = true
+    // おやすみモードで鳴らさない要求か (#149)。前面化の通知を出す前に決め、その通知から全画面とバイブを外す
+    @Volatile private var dndSilentForRing = false
     // 直近に受け取ったコマンドの startId (ringLock 内のみ)。終了判定時点の値で
     // stopSelfResult すると、判定後に届いた ACTION_START があればサービスは止まらない
     // (引数なし stopSelf は判定〜停止の間に届いた新しい鳴動ごと殺す)
@@ -234,9 +236,7 @@ class AlarmService : Service() {
         // 音は USAGE_ALARM なので、チャンネルの bypassDnd を外すだけではおやすみモードを素通りして鳴る。
         // 座席を取る前に判定し、音を出さないまま前面サービスと座席を上限まで握らず、すぐ「鳴らせなかった」で終える
         // (鳴動中の別アラームにも触れない)。後で気づけるよう見逃しの通知は出す
-        val interruptionFilter = runCatching {
-            getSystemService(NotificationManager::class.java)?.currentInterruptionFilter
-        }.getOrNull() ?: NotificationManager.INTERRUPTION_FILTER_UNKNOWN
+        val interruptionFilter = currentInterruptionFilter()
         // 同じ鳴動の二重 START (鳴動中・座席確保済み) や、判定中に届いた停止は通常の経路に任せる。
         // ここで MISSED を書くと、鳴っている最中の行や止めた行を「鳴らせなかった」で上書きしてしまう
         val handledElsewhere = synchronized(ringLock) {
@@ -252,10 +252,14 @@ class AlarmService : Service() {
                 }.getOrDefault(false)
                 if (marked) MissedNotifier.post(this@AlarmService, instance.title)
             }
+            // 鳴動中の別アラームへ通知を戻す時は、その鳴動の全画面・バイブを外さない
+            dndSilentForRing = false
             releaseWaitingRings(instanceId)
             restoreOrFinish()
             return
         }
+        // ここから先は鳴らす経路 (または二重 START・停止済みを通常の経路で処理)。全画面・バイブを戻す
+        dndSilentForRing = false
         // 墓標確認・自世代確定・現行鳴動の停止・鳴動要求公開をひとつの
         // クリティカルセクションで行う。分割すると、その間に届く DISMISS が
         // 「確認〜停止」の窓で墓標済み要求を殺せずに現行鳴動が犠牲になるか、
@@ -540,7 +544,10 @@ class AlarmService : Service() {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Builder(this, channelIdFor(vibrateForRing, ignoreDndForRing))
+        // おやすみモードで鳴らさない要求は、すぐ畳むまでの間もバイブ・全画面を出さない (#149)。
+        // CATEGORY_ALARM の通知は「アラームは許可」のおやすみモードを素通りするため
+        val channel = if (dndSilentForRing) CHANNEL_ID_NOVIB_DND else channelIdFor(vibrateForRing, ignoreDndForRing)
+        return NotificationCompat.Builder(this, channel)
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle(currentInstance?.title ?: "アラーム")
             .setContentText("「停止」でそのまま止められます")
@@ -554,7 +561,7 @@ class AlarmService : Service() {
             // setSilent(true) は入れない: Android 15 で「抑制グループ」扱いされ
             // フルスクリーン Intent が自動起動しない (E2E 実測)。無音化は
             // チャンネル側の setSound(null) に一本化し、音は MediaPlayer が出す。
-            .setFullScreenIntent(fullScreen, true)
+            .apply { if (!dndSilentForRing) setFullScreenIntent(fullScreen, true) }
             .setContentIntent(fullScreen)
             .setDeleteIntent(dismiss)
             // 鳴動画面に辿り着けなくても通知シェードから必ず止められる退路
@@ -806,7 +813,12 @@ class AlarmService : Service() {
         }
         vibrateForRing = st?.vibrateWhileRinging ?: true
         ignoreDndForRing = st?.ignoreDnd ?: true
+        dndSilentForRing = silencedByDnd(ignoreDndForRing, currentInterruptionFilter())
     }
+
+    private fun currentInterruptionFilter(): Int =
+        runCatching { getSystemService(NotificationManager::class.java)?.currentInterruptionFilter }.getOrNull()
+            ?: NotificationManager.INTERRUPTION_FILTER_UNKNOWN
 
     /**
      * 世代前進から資源の畳みまでを ringLock 内で一続きに行う (呼び出し側がロック保持)。
