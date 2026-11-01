@@ -87,4 +87,35 @@ class StopUiPlanTest {
         )
         assertFalse(StopUiPermissions.notificationsUsable(context))
     }
+
+    @Test
+    fun `使っていないチャンネルが止められていても通知は使える扱い`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val nm = context.getSystemService(android.app.NotificationManager::class.java)
+        com.calendaralarm.engine.AlarmService.ensureChannels(context)
+        // バイブなし側だけ「なし」。バイブありで鳴らすなら影響しない
+        nm.deleteNotificationChannel(com.calendaralarm.engine.AlarmService.CHANNEL_ID_NOVIB)
+        nm.createNotificationChannel(
+            android.app.NotificationChannel(
+                com.calendaralarm.engine.AlarmService.CHANNEL_ID_NOVIB, "アラーム（バイブなし）",
+                android.app.NotificationManager.IMPORTANCE_NONE,
+            ),
+        )
+        assertTrue(StopUiPermissions.notificationsUsable(context, vibrate = true))
+        assertFalse(StopUiPermissions.notificationsUsable(context, vibrate = false))
+    }
+
+    @Test
+    fun `鳴動用チャンネルがヘッズアップの出ない重要度なら通知は使えない扱い`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val nm = context.getSystemService(android.app.NotificationManager::class.java)
+        nm.deleteNotificationChannel(com.calendaralarm.engine.AlarmService.CHANNEL_ID)
+        nm.createNotificationChannel(
+            android.app.NotificationChannel(
+                com.calendaralarm.engine.AlarmService.CHANNEL_ID, "アラーム",
+                android.app.NotificationManager.IMPORTANCE_DEFAULT,
+            ),
+        )
+        assertFalse(StopUiPermissions.notificationsUsable(context, vibrate = true))
+    }
 }

@@ -15,24 +15,25 @@ data class StopUiPermissions(
         @Volatile internal var probeOverride: ((Context) -> StopUiPermissions)? = null
 
         /**
-         * 鳴動の通知が実際に出せるか。アプリ全体の通知 ON に加えて、鳴動用チャンネルが
-         * 個別に止められていないこと (#153)。チャンネルだけ止められると、アプリ全体は ON のまま
-         * 通知の「停止」が出ないので、オーバーレイや鳴動画面の自動表示を止める手段として残す判定に使う
+         * 鳴動の通知が「見える停止手段」として使えるか (#153)。アプリ全体の通知 ON に加えて、
+         * 実際に鳴動に使うチャンネル (バイブ設定で選ぶ方) がヘッズアップの出る重要度 (HIGH 以上) であること。
+         * 個別に止められたり下げられたりしていると、アプリ全体は ON のまま通知の「停止」が画面に出ないので、
+         * オーバーレイや鳴動画面の自動表示を止める手段として残す判定に使う。使わない方のチャンネルは見ない
          */
-        fun notificationsUsable(context: Context): Boolean {
+        fun notificationsUsable(context: Context, vibrate: Boolean = true): Boolean {
             val nm = context.getSystemService(NotificationManager::class.java) ?: return true
             if (!nm.areNotificationsEnabled()) return false
-            return listOf(AlarmService.CHANNEL_ID, AlarmService.CHANNEL_ID_NOVIB).none { id ->
-                runCatching { nm.getNotificationChannel(id)?.importance }.getOrNull() ==
-                    NotificationManager.IMPORTANCE_NONE
-            }
+            val id = if (vibrate) AlarmService.CHANNEL_ID else AlarmService.CHANNEL_ID_NOVIB
+            val importance = runCatching { nm.getNotificationChannel(id)?.importance }.getOrNull()
+                ?: return true // 未作成なら鳴動時に HIGH で作られる
+            return importance >= NotificationManager.IMPORTANCE_HIGH
         }
 
-        fun probe(context: Context): StopUiPermissions {
+        fun probe(context: Context, vibrate: Boolean = true): StopUiPermissions {
             probeOverride?.let { return it(context) }
             val nm = context.getSystemService(NotificationManager::class.java)
             return StopUiPermissions(
-                notificationsOk = runCatching { notificationsUsable(context) }.getOrDefault(true),
+                notificationsOk = runCatching { notificationsUsable(context, vibrate) }.getOrDefault(true),
                 // API 33 以下は FSI が権限制ではないため常に可
                 fsiOk = Build.VERSION.SDK_INT < 34 ||
                     (runCatching { nm?.canUseFullScreenIntent() }.getOrNull() ?: true),

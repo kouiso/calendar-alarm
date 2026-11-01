@@ -342,7 +342,7 @@ class AlarmService : Service() {
         // SYSTEM_ALERT_WINDOW は BAL 対象外なので、許可済みなら FSI の可否に関係なく
         // 停止画面をオーバーレイでも出す (鳴動画面と共存しないよう後者が出れば畳む)。
         // 「フルスクリーンを強制」OFF なら通知の FSI と同じく全画面のオーバーレイも出さない (#153)
-        val plan = StopUiPlan.of(StopUiPermissions.probe(this), forceFullScreen = forceFullScreen)
+        val plan = StopUiPlan.of(StopUiPermissions.probe(this, vibrateForRing), forceFullScreen = forceFullScreen)
         if (plan.showOverlay) {
             // 表示自体はメインスレッドで行い、成否はオーバーレイ側が鳴動ログへ記録する。
             // stillValid は addView 直前にメインスレッド上で評価される: 停止の hide が

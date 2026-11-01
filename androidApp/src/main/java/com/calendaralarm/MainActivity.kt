@@ -144,9 +144,12 @@ class MainActivity : ComponentActivity() {
                     com.calendaralarm.engine.AlarmService.ringingInstanceId.collect { id ->
                         // 「フルスクリーンを強制」OFF なら、アプリを開いていても鳴動画面を勝手に出さない (#153)。
                         // 通知が出せない時だけは止める手段として出す (オーバーレイと同じ判定)
-                        val force = runCatching { app.container.settings.flow.first().forceFullScreen }.getOrDefault(true)
+                        val prefs = runCatching { app.container.settings.flow.first() }.getOrNull()
+                        val force = prefs?.forceFullScreen ?: true
                         val notificationsOk = runCatching {
-                            com.calendaralarm.engine.StopUiPermissions.notificationsUsable(this@MainActivity)
+                            com.calendaralarm.engine.StopUiPermissions.notificationsUsable(
+                                this@MainActivity, prefs?.vibrateWhileRinging ?: true,
+                            )
                         }.getOrDefault(true)
                         id?.takeIf {
                             com.calendaralarm.engine.StopUiPlan.autoShowStopScreen(force, notificationsOk)
