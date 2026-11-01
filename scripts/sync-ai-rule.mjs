@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Generates per-AI entry points from the canonical sources:
-//   AGENTS.md            -> CLAUDE.md, GEMINI.md, .github/copilot-instructions.md,
+//   AGENTS.md            -> GEMINI.md, .github/copilot-instructions.md,
 //                         .cursor/rules/calendar-alarm.mdc
 //   .agents/skills/*     -> .claude/skills/<name>/SKILL.md stubs (canonical stays in .agents)
 // Usage:
@@ -18,7 +18,6 @@ const PROLOG =
 const agents = readFileSync(join(ROOT, "AGENTS.md"), "utf8");
 
 const targets = [
-  ["CLAUDE.md", `${PROLOG}\n\n${agents}`],
   ["GEMINI.md", `${PROLOG}\n\n${agents}`],
   [".github/copilot-instructions.md", `${PROLOG}\n\n${agents}`],
   [
@@ -56,7 +55,17 @@ if (existsSync(claudeSkillsDir)) {
   }
 }
 
+// CLAUDE.md は AGENTS.md へ移行済み。入口を二重に持たないよう、復活したら検出して消す
 let stale = 0;
+if (existsSync(join(ROOT, "CLAUDE.md"))) {
+  stale += 1;
+  if (CHECK) {
+    console.log("retired: CLAUDE.md (指示の正本は AGENTS.md)");
+  } else {
+    rmSync(join(ROOT, "CLAUDE.md"));
+    console.log("removed: CLAUDE.md");
+  }
+}
 for (const name of orphans) {
   stale += 1;
   if (CHECK) {
