@@ -25,7 +25,9 @@ struct EventDetailSheet: View {
     }
     private var muted: Bool { action == .mute }
     private var minutes: Int { ov.minutesBefore ?? rule.minutesBefore }
-    private var extras: [Int] { ov.extraOffsets ?? rule.extraOffsets }
+    /// チップに出す追加リマインダー。予定ごとの指定が無ければ、共通リマインダー込みで実際に効く分 (#143)。
+    /// 時刻や動作だけ変える時は ov.extraOffsets (nil = 今のまま) を渡すので、共通リマインダーは焼き付かない
+    private var extras: [Int] { ov.extraOffsets ?? withCommonReminders(rule, store.state.extraReminderOffsets).extraOffsets }
 
     var body: some View {
         NavigationStack {

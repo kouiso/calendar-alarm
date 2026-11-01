@@ -184,9 +184,9 @@ class AlarmRepository(
         /** 解決後のリマインダーアクション。 */
         val reminderAction: EventAction,
         val minutesBefore: Int,
-        /** 予定ごとの指定かカレンダー既定の追加リマインダー。詳細シートの編集の起点 (共通リマインダーは含めない) */
+        /** 予定ごとの指定かカレンダー既定の追加リマインダー (共通リマインダーは含めない) */
         val extraOffsets: List<Int>,
-        /** 実際に効く追加リマインダー (共通リマインダー込み, #143)。一覧の表示用 */
+        /** 実際に効く追加リマインダー (共通リマインダー込み, #143)。一覧の表示と詳細シートのチップに使う */
         val effectiveExtraOffsets: List<Int> = extraOffsets,
         val hasOverride: Boolean,
         /** カレンダーを鳴らさない設定にしている (予定ごとの指定より強い。展開がカレンダー単位で外すため) */
@@ -302,8 +302,7 @@ class AlarmRepository(
                 startAction = start,
                 reminderAction = reminder,
                 minutesBefore = ov?.minutesBefore ?: rule.minutesBefore,
-                // 編集の起点は共通リマインダーを含めない。含めると詳細シートで何か押しただけで
-                // 共通リマインダーが予定ごとの指定に焼き付き、設定から消しても鳴り続ける (#143)
+                // 共通リマインダーは含めない。詳細シートはチップを触った時だけ一覧を書く (#143)
                 extraOffsets = ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets,
                 effectiveExtraOffsets = effectiveExtras,
                 hasOverride = ov != null,

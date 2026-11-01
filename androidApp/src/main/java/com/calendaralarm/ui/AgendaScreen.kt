@@ -633,7 +633,12 @@ private fun EventDetailSheet(
     // 3状態。開始とリマインダーが混在する場合は開始側を初期値に
     var action by remember { mutableStateOf(item.startAction) }
     var minutes by remember { mutableIntStateOf(item.minutesBefore) }
-    var extras by remember { mutableStateOf(item.extraOffsets) }
+    // 追加リマインダーのチップは実際に効く分 (共通リマインダー込み, #143) を選択済みで出す。
+    // チップを触った時だけ予定ごとの指定として書き、時刻や動作だけ変えた時は null (今の指定のまま) を渡す。
+    // 触っていないのに一覧を書くと、共通リマインダーが焼き付く/消えるため
+    var extras by remember { mutableStateOf(item.effectiveExtraOffsets) }
+    var extrasEdited by remember { mutableStateOf(false) }
+    fun extrasArg(): List<Int>? = if (extrasEdited) extras else null
     var forecast by remember { mutableStateOf<List<DailyForecast>?>(null) }
     // 「HH:mm の予報」に出す取得時刻。日ごとの予報なので、予定の時刻ではなくいつ取った予報かを出す
     var forecastAtMillis by remember { mutableStateOf(0L) }
@@ -711,7 +716,7 @@ private fun EventDetailSheet(
                     onClick = {
                         action = a
                         onOverride(a, if (a == EventAction.MUTE) null else minutes,
-                            if (a == EventAction.MUTE) null else extras)
+                            if (a == EventAction.MUTE) null else extrasArg())
                     },
                     shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
                 ) { Text(label) }
@@ -726,7 +731,7 @@ private fun EventDetailSheet(
                         selected = minutes == v,
                         onClick = {
                             minutes = v
-                            onOverride(action, v, extras)
+                            onOverride(action, v, extrasArg())
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
                     ) { Text(label) }
@@ -739,7 +744,7 @@ private fun EventDetailSheet(
                         selected = minutes == v,
                         onClick = {
                             minutes = v
-                            onOverride(action, v, extras)
+                            onOverride(action, v, extrasArg())
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
                     ) { Text(label) }
@@ -753,6 +758,7 @@ private fun EventDetailSheet(
                         selected = v in extras,
                         onClick = {
                             extras = if (v in extras) extras - v else (extras + v).sorted()
+                            extrasEdited = true
                             onOverride(action, minutes, extras)
                         },
                         label = { Text("+$label") },
