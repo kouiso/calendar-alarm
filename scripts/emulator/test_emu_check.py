@@ -116,6 +116,11 @@ class StartState(unittest.TestCase):
     def test_partial_failure_is_unknown(self):
         self.assertEqual(start_state("0", "err", "0"), "unknown")
 
+    def test_missing_values_are_unknown(self):
+        # stop_state が何も出さなかった時も「残り」とは言わない
+        self.assertEqual(start_state(), "unknown")
+        self.assertEqual(start_state("0", "0"), "unknown")
+
     def test_leftover_ring_is_dirty(self):
         self.assertEqual(start_state("1", "0", "0"), "dirty")
         self.assertEqual(start_state("0", "1", "0"), "dirty")

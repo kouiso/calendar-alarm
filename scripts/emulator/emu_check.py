@@ -199,12 +199,12 @@ def audit(db, since=0):
     return 0
 
 
-def start_state(players, service, notif):
+def start_state(players="", service="", notif="", *extra):
     """シナリオ開始前の状態を判定する (#193)。stop_state の 3 値を受け取り
-    clean (全部 0) / unknown (採取失敗の err を含む) / dirty (何か残っている) を出す。
+    clean (全部 0) / unknown (採取失敗の err を含む・値が欠けている) / dirty (何か残っている) を出す。
     採取できなかっただけの時を「前のシナリオの残り」と取り違えないため"""
     vals = (players, service, notif)
-    if "err" in vals:
+    if "err" in vals or "" in vals or extra:
         print("unknown")
     elif all(v == "0" for v in vals):
         print("clean")
