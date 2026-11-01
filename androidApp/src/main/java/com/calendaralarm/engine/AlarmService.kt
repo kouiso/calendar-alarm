@@ -85,8 +85,6 @@ class AlarmService : Service() {
     private val requestedIds = mutableSetOf<String>()
     // 鳴動通知のチャンネル選択に使う。前面化前に鳴動設定から確定させる
     @Volatile private var vibrateForRing = true
-    // 鳴動持続時間 (#148)。0=制限なし (従来どおり10分の安全上限)。
-    // 前面化前に鳴動設定から確定させる
     // 直近に受け取ったコマンドの startId (ringLock 内のみ)。終了判定時点の値で
     // stopSelfResult すると、判定後に届いた ACTION_START があればサービスは止まらない
     // (引数なし stopSelf は判定〜停止の間に届いた新しい鳴動ごと殺す)
@@ -791,7 +789,6 @@ class AlarmService : Service() {
             true
         }
 
-    /** 鳴動持続時間 (秒, #148)。読めなければ制限なし (従来どおり10分上限) で進む */
     /**
      * 世代前進から資源の畳みまでを ringLock 内で一続きに行う (呼び出し側がロック保持)。
      * 途中でロックを手放すと、その隙に座席確保・採用した後続鳴動の世代や資源を
