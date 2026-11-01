@@ -9,7 +9,8 @@ import com.calendaralarm.data.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -42,7 +43,8 @@ class InviteDefaultMigrationTest {
         return try {
             runBlocking { block(store) }
         } finally {
-            scope.cancel()
+            // 閉じ切るまで待ってから次を開く (同じファイルを 2 つの DataStore で同時に開かないため)
+            runBlocking { scope.coroutineContext[Job]!!.cancelAndJoin() }
         }
     }
 
