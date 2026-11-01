@@ -283,11 +283,27 @@ cleanup_ring() {
 
 # シナリオ開始前に前のシナリオの鳴動・通知が残っていないこと。
 # 残った鳴動通知は次の鳴動の投稿を「更新」にして FSI を出させず、次のシナリオの結果を歪める
+# 状態を採れなかっただけ (adb の一時切断など) の時は残りとみなさず、adb の再接続を待って採り直す (#193)。
+# 採り直しても採れなければ DIRTY_START ではなく INFRA_ERROR として別に記録する (結果は FAIL のまま)
 ensure_clean_start() {
-  local sc=$1 st
+  local sc=$1 st kind i
   st=$(stop_state)
-  [ "$st" = "0 0 0" ] && return 0
-  record "$sc" FAIL DIRTY_START "leftover from previous scenario (players service notif)=$st; force-stopped before running"
+  # shellcheck disable=SC2086
+  kind=$("${CHECK[@]}" start-state $st)
+  for i in 1 2 3; do
+    [ "$kind" = unknown ] || break
+    log "start state capture failed before $sc (try $i): $st; waiting for adb"
+    timeout 60 adb wait-for-device >/dev/null 2>&1 || true
+    sleep 5
+    st=$(stop_state)
+    # shellcheck disable=SC2086
+    kind=$("${CHECK[@]}" start-state $st)
+  done
+  case "$kind" in
+    clean) return 0 ;;
+    dirty) record "$sc" FAIL DIRTY_START "leftover from previous scenario (players service notif)=$st; force-stopped before running" ;;
+    *) record "$sc" FAIL INFRA_ERROR "could not capture start state after 3 retries (players service notif)=$st; force-stopped before running" ;;
+  esac
   adb shell am force-stop "$PKG"
   sleep 2
 }

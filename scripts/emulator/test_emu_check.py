@@ -99,5 +99,28 @@ class AnrWait(unittest.TestCase):
         self.assertEqual(anr_wait("<hierarchy")[0], 1)
 
 
+def start_state(*vals):
+    r = subprocess.run([sys.executable, os.path.join(HERE, "emu_check.py"), "start-state", *vals], capture_output=True, text=True)
+    return r.stdout.strip()
+
+
+class StartState(unittest.TestCase):
+    """#193: 採取失敗 (err) を DIRTY_START と取り違えない"""
+
+    def test_all_zero_is_clean(self):
+        self.assertEqual(start_state("0", "0", "0"), "clean")
+
+    def test_capture_failure_is_unknown_not_dirty(self):
+        self.assertEqual(start_state("err", "err", "err"), "unknown")
+
+    def test_partial_failure_is_unknown(self):
+        self.assertEqual(start_state("0", "err", "0"), "unknown")
+
+    def test_leftover_ring_is_dirty(self):
+        self.assertEqual(start_state("1", "0", "0"), "dirty")
+        self.assertEqual(start_state("0", "1", "0"), "dirty")
+        self.assertEqual(start_state("0", "0", "1"), "dirty")
+
+
 if __name__ == "__main__":
     unittest.main()
