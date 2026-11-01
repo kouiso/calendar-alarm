@@ -191,8 +191,8 @@ class AlarmService : Service() {
                         finishIfIdle()
                         return@launch
                     }
-                    // チャンネル (バイブ有無) と持続時間は前面化の通知で決まるので先に設定を読む。
-                    // 前面化の期限があるので読めなければ既定 (バイブあり・制限なし) で進む
+                    // チャンネル (バイブ有無) は前面化の通知で決まるので先に設定を読む。
+                    // 前面化の期限があるので読めなければ既定 (バイブあり) で進む
                     vibrateForRing = readVibrateSetting()
                     if (!startForegroundWithNotification(id)) {
                         // BOOT_COMPLETED 処理中など、mediaPlayback FGS の起動が
