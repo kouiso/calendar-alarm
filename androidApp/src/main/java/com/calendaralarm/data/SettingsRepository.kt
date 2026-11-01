@@ -25,7 +25,7 @@ internal val Context.settingsDataStore by preferencesDataStore(
 )
 
 /** 前の版から更新して入った端末か (新しく入れた端末なら最初の導入と最後の更新が同じ時刻)。読めなければ更新扱い */
-private fun Context.isUpgradeInstall(): Boolean = runCatching {
+internal fun Context.isUpgradeInstall(): Boolean = runCatching {
     val info = packageManager.getPackageInfo(packageName, 0)
     info.firstInstallTime != info.lastUpdateTime
 }.getOrDefault(true)
