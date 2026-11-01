@@ -1239,6 +1239,17 @@ private fun RingingCard(
                     onCheckedChange = { scope.launch { settings.setIgnoreDnd(it) } },
                 )
             }
+            // ON/OFF で何が変わるかと、ON を効かせる許可の場所 (#149)。許可の有無は検査画面が見る
+            Text(
+                if (p.ignoreDnd) {
+                    "おやすみモード中も鳴らします。通知と鳴動画面まで出すには、トラブルシューティングで「通知ポリシーへのアクセス」を許可してください"
+                } else {
+                    "おやすみモード中は音・バイブ・鳴動画面を出しません"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 32.dp, end = 12.dp),
+            )
             // 全アラーム一括ミュート (通知・タイマーは止めない)
             IconSettingRow(Icons.Default.VolumeOff) {
                 Text(

@@ -306,12 +306,25 @@ class AlarmService : Service() {
             returnDisplaced()
             return
         }
-        startAudio(
-            instance.soundUri ?: ringSettings.defaultSoundUri,
-            volumePercent = ringSettings.alarmVolumePercent,
-            crescendo = ringSettings.volumeCrescendo,
-            gen = gen,
+        // 「おやすみモードを無視」OFF でおやすみモード中なら、音・バイブ・オーバーレイを出さない (#149)。
+        // 音は USAGE_ALARM なので、チャンネルの bypassDnd だけではおやすみモードを素通りして鳴ってしまう
+        val dndSilent = silencedByDnd(
+            ringSettings.ignoreDnd,
+            runCatching { getSystemService(NotificationManager::class.java)?.currentInterruptionFilter }.getOrNull()
+                ?: NotificationManager.INTERRUPTION_FILTER_UNKNOWN,
         )
+        if (dndSilent) {
+            runCatching {
+                app.container.repository.audit("WARN", "${instance.id}: おやすみモード中のため音・バイブ・オーバーレイを出さない (おやすみモードを無視=OFF)")
+            }
+        } else {
+            startAudio(
+                instance.soundUri ?: ringSettings.defaultSoundUri,
+                volumePercent = ringSettings.alarmVolumePercent,
+                crescendo = ringSettings.volumeCrescendo,
+                gen = gen,
+            )
+        }
         // 鳴動を実際に開始し得た時点で、公開IDを「要求中」から「鳴動中」へ
         // 繰り上げる (繰上げ前の要求は宛先違いの DISMISS で個別に潰せる)
         adoptIfCurrent(gen) {
@@ -325,7 +338,7 @@ class AlarmService : Service() {
         // リソースは局所参照で生成し、世代がまだ現行の時だけ共有フィールド
         // へ adopt する。採用されなかったものは局所参照で畳み (新世代のもの
         // は止めない)、採用後に世代が進んだ分は新世代側の停止が畳む
-        val myVibrator = if (ringSettings.vibrateWhileRinging) startVibration() else null
+        val myVibrator = if (ringSettings.vibrateWhileRinging && !dndSilent) startVibration() else null
         if (myVibrator != null && !adoptIfCurrent(gen) { vibrator = myVibrator }) {
             runCatching { myVibrator.cancel() }
             return
@@ -340,7 +353,7 @@ class AlarmService : Service() {
         // SYSTEM_ALERT_WINDOW は BAL 対象外なので、許可済みなら FSI の可否に関係なく
         // 停止画面をオーバーレイでも出す (鳴動画面と共存しないよう後者が出れば畳む)。
         val plan = StopUiPlan.of(StopUiPermissions.probe(this))
-        if (plan.showOverlay) {
+        if (plan.showOverlay && !dndSilent) {
             // 表示自体はメインスレッドで行い、成否はオーバーレイ側が鳴動ログへ記録する。
             // stillValid は addView 直前にメインスレッド上で評価される: 停止の hide が
             // 先に走っていたら attach を抑止し、ゾンビオーバーレイを防ぐ
@@ -860,6 +873,16 @@ class AlarmService : Service() {
         const val CHANNEL_ID_VIB_DND = "alarm_vib_dnd"
         const val CHANNEL_ID_NOVIB_DND = "alarm_novib_dnd"
         private const val LEGACY_CHANNEL_ID = "alarm_v1"
+
+        /**
+         * 「おやすみモードを無視」OFF で、いまおやすみモード中か (#149)。
+         * 割り込みフィルタが「すべて許可」以外 (重要な通知のみ・アラームのみ・サイレント) なら黙る。
+         * 取得できない (UNKNOWN) 時は鳴らす側に倒す: 鳴らないより鳴る方が安全なため
+         */
+        fun silencedByDnd(ignoreDnd: Boolean, interruptionFilter: Int): Boolean =
+            !ignoreDnd &&
+                interruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL &&
+                interruptionFilter != NotificationManager.INTERRUPTION_FILTER_UNKNOWN
 
         /** 鳴動通知が使うチャンネル。ignoreDnd=ON は既存チャンネル (bypassDnd=true)、OFF は DND 尊重側 */
         fun channelIdFor(vibrate: Boolean, ignoreDnd: Boolean): String = when {
