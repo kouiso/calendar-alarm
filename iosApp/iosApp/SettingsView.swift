@@ -893,7 +893,7 @@ struct RingTimesCard: View {
 }
 
 /// オフセットの表示名 (20分前 / 2時間前 / 1日前 など)。競合の D:H:M 表記と同じ粒度 (#143)
-private func reminderOffsetLabel(_ minutes: Int) -> String {
+func reminderOffsetLabel(_ minutes: Int) -> String {
     let d = minutes / 1440
     let h = (minutes % 1440) / 60
     let m = minutes % 60

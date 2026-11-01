@@ -38,7 +38,8 @@ struct EventDetailSheet: View {
                     if let f = eventForecast { weatherCard(f) }
                     actionPicker
                     if !muted { timingPicker }
-                    extraChips
+                    // 受け継いだ時刻のチップが増えても画面からはみ出さないよう横にスクロールさせる
+                    ScrollView(.horizontal, showsIndicators: false) { extraChips }
                     if !ev.location.isEmpty { locationRow }
                     if store.state.overrides[ev.instanceKey] != nil {
                         resetButton
@@ -118,7 +119,9 @@ struct EventDetailSheet: View {
     private var extraChips: some View {
         HStack(spacing: 8) {
             Image(systemName: "plus.bell").foregroundStyle(.secondary)
-            ForEach(extraOptions, id: \.self) { m in
+            // 共通リマインダーなどで受け継いだ、決まった候補に無い時刻もチップに出す (#143)。
+            // 出さないと、その予定だけ外すことができない
+            ForEach(Array(Set(extraOptions + extras)).sorted(), id: \.self) { m in
                 let on = extras.contains(m)
                 Button {
                     var e = extras
@@ -127,7 +130,7 @@ struct EventDetailSheet: View {
                                       minutes: ov.minutesBefore, extras: e)
                     Task { await engine.resync(reason: "override") }
                 } label: {
-                    Text("+\(m)")
+                    Text(extraOptions.contains(m) ? "+\(m)" : "+" + reminderOffsetLabel(m))
                         .font(NightTheme.font(12, weight: .medium))
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(on ? NightTheme.indigo.opacity(0.2) : Color(uiColor: .tertiarySystemGroupedBackground),

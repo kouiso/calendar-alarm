@@ -752,8 +752,13 @@ private fun EventDetailSheet(
             }
             // 追加リマインダー: 「+」付きチップ = その時刻にも鳴らす
             Spacer(Modifier.height(10.dp))
+            // 共通リマインダーなどで受け継いだ、決まった候補に無い時刻 (20分前・1日前 など) もチップに出す。
+            // 出さないと、その予定だけ外すことができない (#143)
+            val extraChoices = (options.map { it.first } + extras).distinct().sorted()
+                .filter { it != minutes && it > 0 }
+                .map { v -> v to (options.firstOrNull { it.first == v }?.second ?: reminderOffsetLabel(v)) }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                options.filter { it.first != minutes }.forEach { (v, label) ->
+                extraChoices.forEach { (v, label) ->
                     FilterChip(
                         selected = v in extras,
                         onClick = {

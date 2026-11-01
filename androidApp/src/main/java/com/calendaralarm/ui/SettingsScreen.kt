@@ -1708,7 +1708,7 @@ private fun AddGoogleAccountRow() {
 }
 
 /** オフセットの表示名 (20分前 / 2時間前 / 1日前 など)。競合の D:H:M 表記と同じ粒度 (#143)。 */
-private fun reminderOffsetLabel(minutes: Int): String {
+internal fun reminderOffsetLabel(minutes: Int): String {
     val d = minutes / 1440
     val h = (minutes % 1440) / 60
     val m = minutes % 60
