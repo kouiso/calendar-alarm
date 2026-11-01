@@ -516,7 +516,7 @@ private fun RingingScreen(
             if (largeButtons) {
                 Button(
                     onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth().height(96.dp),
+                    modifier = Modifier.fillMaxWidth().height(96.dp).testTag(LARGE_STOP_TAG),
                     shape = RoundedCornerShape(RingingSlideSpec.TRACK_CORNER_DP.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = accent,
@@ -546,6 +546,9 @@ private fun RingingScreen(
 }
 
 internal const val SLIDE_THUMB_TAG = "slide-stop-thumb"
+
+/** 大ボタンモード (#154) の停止ボタン。テストで押す対象を他の「停止」と取り違えないための目印 */
+internal const val LARGE_STOP_TAG = "large-stop-button"
 
 /**
  * 「スライドして停止」トラック。左端の丸を右へドラッグし、トラック幅の80%を
