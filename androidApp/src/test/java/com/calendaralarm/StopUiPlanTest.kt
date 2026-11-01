@@ -68,4 +68,23 @@ class StopUiPlanTest {
         // 通知が出せない時は止める手段として出す
         assertTrue(StopUiPlan.autoShowStopScreen(forceFullScreen = false, notificationsOk = false))
     }
+
+    @Test
+    fun `鳴動用チャンネルだけ止められていたら通知は使えない扱いにする`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val nm = context.getSystemService(android.app.NotificationManager::class.java)
+        // 止められていなければ使える
+        com.calendaralarm.engine.AlarmService.ensureChannels(context)
+        assertTrue(StopUiPermissions.notificationsUsable(context))
+        // アプリ全体の通知は ON のまま、鳴動用チャンネルだけ「なし」にされた状態
+        // (作成済みのチャンネルは重要度を下げられないので、消してから作る)
+        nm.deleteNotificationChannel(com.calendaralarm.engine.AlarmService.CHANNEL_ID)
+        nm.createNotificationChannel(
+            android.app.NotificationChannel(
+                com.calendaralarm.engine.AlarmService.CHANNEL_ID, "アラーム",
+                android.app.NotificationManager.IMPORTANCE_NONE,
+            ),
+        )
+        assertFalse(StopUiPermissions.notificationsUsable(context))
+    }
 }

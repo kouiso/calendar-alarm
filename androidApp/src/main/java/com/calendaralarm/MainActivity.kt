@@ -146,7 +146,7 @@ class MainActivity : ComponentActivity() {
                         // 通知が出せない時だけは止める手段として出す (オーバーレイと同じ判定)
                         val force = runCatching { app.container.settings.flow.first().forceFullScreen }.getOrDefault(true)
                         val notificationsOk = runCatching {
-                            androidx.core.app.NotificationManagerCompat.from(this@MainActivity).areNotificationsEnabled()
+                            com.calendaralarm.engine.StopUiPermissions.notificationsUsable(this@MainActivity)
                         }.getOrDefault(true)
                         id?.takeIf {
                             com.calendaralarm.engine.StopUiPlan.autoShowStopScreen(force, notificationsOk)

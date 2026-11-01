@@ -14,11 +14,25 @@ data class StopUiPermissions(
         // テストから権限状態を差し替えるための差込口 (Robolectric は FSI 権限を再現できない)
         @Volatile internal var probeOverride: ((Context) -> StopUiPermissions)? = null
 
+        /**
+         * 鳴動の通知が実際に出せるか。アプリ全体の通知 ON に加えて、鳴動用チャンネルが
+         * 個別に止められていないこと (#153)。チャンネルだけ止められると、アプリ全体は ON のまま
+         * 通知の「停止」が出ないので、オーバーレイや鳴動画面の自動表示を止める手段として残す判定に使う
+         */
+        fun notificationsUsable(context: Context): Boolean {
+            val nm = context.getSystemService(NotificationManager::class.java) ?: return true
+            if (!nm.areNotificationsEnabled()) return false
+            return listOf(AlarmService.CHANNEL_ID, AlarmService.CHANNEL_ID_NOVIB).none { id ->
+                runCatching { nm.getNotificationChannel(id)?.importance }.getOrNull() ==
+                    NotificationManager.IMPORTANCE_NONE
+            }
+        }
+
         fun probe(context: Context): StopUiPermissions {
             probeOverride?.let { return it(context) }
             val nm = context.getSystemService(NotificationManager::class.java)
             return StopUiPermissions(
-                notificationsOk = nm?.areNotificationsEnabled() ?: true,
+                notificationsOk = runCatching { notificationsUsable(context) }.getOrDefault(true),
                 // API 33 以下は FSI が権限制ではないため常に可
                 fsiOk = Build.VERSION.SDK_INT < 34 ||
                     (runCatching { nm?.canUseFullScreenIntent() }.getOrNull() ?: true),
