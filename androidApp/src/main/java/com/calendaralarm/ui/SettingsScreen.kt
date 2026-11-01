@@ -1242,9 +1242,9 @@ private fun RingingCard(
             // ON/OFF で何が変わるかと、ON を効かせる許可の場所 (#149)。許可の有無は検査画面が見る
             Text(
                 if (p.ignoreDnd) {
-                    "おやすみモード中も鳴らします。通知と鳴動画面まで出すには、トラブルシューティングで「通知ポリシーへのアクセス」を許可してください"
+                    "おやすみモード中も鳴らします (おやすみモードでアラームまで止める設定の時は OS が止めます)。通知と鳴動画面まで出すには、トラブルシューティングで「通知ポリシーへのアクセス」を許可してください"
                 } else {
-                    "おやすみモード中は音・バイブ・鳴動画面を出しません"
+                    "おやすみモード中は鳴らさず、「鳴らせなかった」として通知だけ残します"
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

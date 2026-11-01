@@ -185,6 +185,7 @@
     <string name="trouble_dnd_desc">おやすみモード中でもアラームが鳴るよう、おやすみモードの「アラーム」を許可してください。</string>
     <string name="trouble_dnd_ng">おやすみモードでアラームが鳴りません</string>
     <string name="trouble_dnd_ok">おやすみモード中にアラーム可能</string>
+    <string name="trouble_dnd_off">「おやすみモードを無視」がOFFのため、おやすみモード中は鳴らしません</string>
     <string name="trouble_dnd_policy_desc">「おやすみモードを無視」を使うには通知ポリシーへのアクセス許可が要ります。タップしてこのアプリを許可してください。</string>
     <string name="trouble_dnd_policy_na">「おやすみモードを無視」がOFFのため不要</string>
     <string name="trouble_dnd_policy_ng">おやすみモードを無視できません（通知ポリシー未許可）</string>

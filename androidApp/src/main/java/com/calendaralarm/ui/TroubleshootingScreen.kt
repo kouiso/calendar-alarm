@@ -200,9 +200,17 @@ object TroubleshootChecks {
                 context.getString(R.string.trouble_fsi_desc),
                 Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkgUri),
             ),
+            // 「おやすみモードを無視」OFF の時は、おやすみモード中はわざと鳴らさない (#149)。
+            // OS の「アラーム許可」の状態で OK/NG を出すとエンジンの動きと食い違うので対象外にする
             TroubleshootItem(
-                "dnd", s(dndOk),
-                context.getString(if (dndOk) R.string.trouble_dnd_ok else R.string.trouble_dnd_ng),
+                "dnd", if (!ignoreDnd) CheckState.NA else s(dndOk),
+                context.getString(
+                    when {
+                        !ignoreDnd -> R.string.trouble_dnd_off
+                        dndOk -> R.string.trouble_dnd_ok
+                        else -> R.string.trouble_dnd_ng
+                    },
+                ),
                 context.getString(R.string.trouble_dnd_desc),
                 dndFix,
             ),
