@@ -63,6 +63,9 @@ class SettingsRepository(private val context: Context) {
         val volumeCrescendo: Boolean = false,
         /** 鳴動中にバイブするか。 */
         val vibrateWhileRinging: Boolean = true,
+        /** 鳴動の持続時間 (秒)。0=制限なし (従来どおり10分の安全上限で自動停止)。
+         *  競合の Alarm Duration (5s〜infinite, #148) に対応。 */
+        val ringDurationSec: Int = 0,
         /** 一括ミュート: ALARM鳴動を全て止める (通知のみは残す)。 */
         val muteAll: Boolean = false,
         /** 既定の鳴動音 URI (カスタムMP3等)。null=システム既定。 */
@@ -122,6 +125,8 @@ class SettingsRepository(private val context: Context) {
             alarmVolumePercent = p[KEY_ALARM_VOLUME] ?: 0,
             volumeCrescendo = p[KEY_VOL_CRESCENDO] ?: false,
             vibrateWhileRinging = p[KEY_VIBRATE] ?: true,
+            // 鳴動持続時間 (#148)。負数は来ないはずだが、来ても「制限なし」と同じ扱いに倒す
+            ringDurationSec = (p[KEY_RING_DURATION] ?: 0).coerceAtLeast(0),
             muteAll = p[KEY_MUTE_ALL] ?: false,
             defaultSoundUri = p[KEY_SOUND_URI],
             showWeekNumbers = p[KEY_WEEK_NUMBERS] ?: false,
@@ -214,6 +219,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAlarmVolumePercent(v: Int) = edit { it[KEY_ALARM_VOLUME] = v }
     suspend fun setVolumeCrescendo(v: Boolean) = edit { it[KEY_VOL_CRESCENDO] = v }
     suspend fun setVibrateWhileRinging(v: Boolean) = edit { it[KEY_VIBRATE] = v }
+    /** 鳴動持続時間 (秒)。0=制限なし (#148)。 */
+    suspend fun setRingDurationSec(v: Int) = edit { it[KEY_RING_DURATION] = v.coerceAtLeast(0) }
     suspend fun setMuteAll(v: Boolean) = edit { it[KEY_MUTE_ALL] = v }
 
     /** Googleカレンダー連携のアカウントを足す。旧版の1アカウントのキーはここで新しいキーへ移す */
@@ -353,6 +360,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_ALARM_VOLUME = intPreferencesKey("alarm_volume_percent")
         val KEY_VOL_CRESCENDO = booleanPreferencesKey("volume_crescendo")
         val KEY_VIBRATE = booleanPreferencesKey("vibrate_while_ringing")
+        val KEY_RING_DURATION = intPreferencesKey("ring_duration_sec")
         val KEY_MUTE_ALL = booleanPreferencesKey("mute_all")
         val KEY_SOUND_URI = stringPreferencesKey("default_sound_uri")
         val KEY_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
