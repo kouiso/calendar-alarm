@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,7 +43,9 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Snooze
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Vibration
@@ -1154,7 +1157,8 @@ private fun AuditRow(log: AuditLogEntity) {
     }
 }
 
-// ---- 鳴動設定: 元アプリの音量系 (独立音量・徐々に音量UP・バイブ) + 一括ミュート ----
+// ---- 鳴動設定: 元アプリの音量系 (独立音量・徐々に音量UP・バイブ・持続時間) + 一括ミュート ----
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RingingCard(
     p: SettingsRepository.Settings,
@@ -1224,6 +1228,74 @@ private fun RingingCard(
                     checked = p.vibrateWhileRinging,
                     onCheckedChange = { scope.launch { settings.setVibrateWhileRinging(it) } },
                 )
+            }
+            // 鳴動持続時間 (競合の Alarm Duration, #148)。時間切れで自動停止し
+            // 「鳴らせなかった」扱いにする。制限なしは従来どおり10分の安全上限
+            IconSettingRow(Icons.Default.Timer) {
+                // 秒数のチップだけでは何の設定か伝わらないので、見出しを付ける (読み上げもチップの前に読む)
+                Column {
+                Text(
+                    "鳴動持続時間",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow {
+                    listOf(5, 10, 30, 60, 120, 300, 0).forEach { sec ->
+                        FilterChip(
+                            selected = p.ringDurationSec == sec,
+                            onClick = { scope.launch { settings.setRingDurationSec(sec) } },
+                            label = {
+                                Text(
+                                    when {
+                                        sec == 0 -> "制限なし"
+                                        sec < 60 -> "${sec}秒"
+                                        else -> "${sec / 60}分"
+                                    },
+                                    maxLines = 1,
+                                )
+                            },
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    }
+                }
+                }
+            }
+            // 自動スヌーズ (競合の Auto-snooze, #145)。放置で鳴動上限に達した時、
+            // ON なら既定分数で鳴り直し、OFF なら従来どおり「鳴らせなかった」扱い
+            IconSettingRow(Icons.Default.Snooze) {
+                Text(
+                    "放置したら自動でスヌーズ",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                Switch(
+                    checked = p.autoSnooze,
+                    onCheckedChange = { scope.launch { settings.setAutoSnooze(it) } },
+                )
+            }
+            // 自動スヌーズの回数上限。ON の時だけ出す。
+            // 360dp で切れないよう、見出しと選択肢を行で分けて選択肢は折り返す
+            if (p.autoSnooze) {
+                IconSettingRow(Icons.Default.Repeat) {
+                    Text(
+                        "自動スヌーズの回数上限",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(start = 32.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf(2, 3, 4).forEach { n ->
+                        FilterChip(
+                            selected = p.autoSnoozeMax == n,
+                            onClick = { scope.launch { settings.setAutoSnoozeMax(n) } },
+                            label = { Text("${n}回", maxLines = 1) },
+                        )
+                    }
+                }
             }
             // 全アラーム一括ミュート (通知・タイマーは止めない)
             IconSettingRow(Icons.Default.VolumeOff) {

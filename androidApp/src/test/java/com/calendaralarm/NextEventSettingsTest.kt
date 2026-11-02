@@ -35,4 +35,18 @@ class NextEventSettingsTest {
         repo.setShowNextEvent(true)
         assertTrue(SettingsRepository(context).flow.first().showNextEvent)
     }
+
+    @Test
+    fun keepsFullScreenAndNextEventChoicesIndependent() = runBlocking {
+        assertTrue(repo.flow.first().forceFullScreen)
+        repo.setForceFullScreen(false)
+        assertTrue(repo.flow.first().showNextEvent)
+        repo.setShowNextEvent(false)
+        assertFalse(SettingsRepository(context).flow.first().forceFullScreen)
+        assertFalse(SettingsRepository(context).flow.first().showNextEvent)
+        repo.setShowNextEvent(true)
+        assertFalse(repo.flow.first().forceFullScreen)
+        repo.setForceFullScreen(true)
+        assertTrue(repo.flow.first().showNextEvent)
+    }
 }

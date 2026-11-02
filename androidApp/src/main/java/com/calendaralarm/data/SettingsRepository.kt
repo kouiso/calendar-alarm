@@ -63,6 +63,15 @@ class SettingsRepository(private val context: Context) {
         val volumeCrescendo: Boolean = false,
         /** 鳴動中にバイブするか。 */
         val vibrateWhileRinging: Boolean = true,
+        /** 鳴動の持続時間 (秒)。0=制限なし (従来どおり10分の安全上限で自動停止)。
+         *  競合の Alarm Duration (5s〜infinite, #148) に対応。 */
+        val ringDurationSec: Int = 0,
+        /** 放置で自動スヌーズするか (競合の Auto-snooze, #145)。
+         *  既定 OFF: ON にすると鳴動上限到達が「見逃し」ではなく既定分数の再鳴動になる
+         *  挙動を黙って変えないため、利用者が明示して有効化する。 */
+        val autoSnooze: Boolean = false,
+        /** 自動スヌーズの回数上限 (2/3/4)。スヌーズ連鎖の snoozeSeq と比較する。 */
+        val autoSnoozeMax: Int = 3,
         /** 一括ミュート: ALARM鳴動を全て止める (通知のみは残す)。 */
         val muteAll: Boolean = false,
         /** 既定の鳴動音 URI (カスタムMP3等)。null=システム既定。 */
@@ -71,6 +80,9 @@ class SettingsRepository(private val context: Context) {
         val showWeekNumbers: Boolean = false,
         /** メイン画面に次の予定 (次のアラーム欄) を出すか。競合の Show upcoming event 相当。 */
         val showNextEvent: Boolean = true,
+        /** 鳴動を常にフルスクリーン通知で出すか (競合の Force full-screen alarm, #153)。
+         *  false ならヘッズアップ通知のみ。既定 true = 従来どおり常時FSI。 */
+        val forceFullScreen: Boolean = true,
         /** 週の開始曜日 (1=月 … 7=日)。既定はこれまでの月表示と同じ日曜。 */
         val firstWeekday: Int = WeekCalendar.DEFAULT_FIRST_WEEKDAY,
         /** テーマ ID。 */
@@ -124,12 +136,19 @@ class SettingsRepository(private val context: Context) {
             alarmVolumePercent = p[KEY_ALARM_VOLUME] ?: 0,
             volumeCrescendo = p[KEY_VOL_CRESCENDO] ?: false,
             vibrateWhileRinging = p[KEY_VIBRATE] ?: true,
+            // 鳴動持続時間 (#148)。負数は来ないはずだが、来ても「制限なし」と同じ扱いに倒す
+            ringDurationSec = (p[KEY_RING_DURATION] ?: 0).coerceAtLeast(0),
+            autoSnooze = p[KEY_AUTO_SNOOZE] ?: false,
+            // 自動スヌーズ上限 (#145) は競合の選択肢 2/3/4 に丸める。それ以外は既定3
+            autoSnoozeMax = (p[KEY_AUTO_SNOOZE_MAX] ?: 3).coerceIn(2, 4),
             muteAll = p[KEY_MUTE_ALL] ?: false,
             defaultSoundUri = p[KEY_SOUND_URI],
             showWeekNumbers = p[KEY_WEEK_NUMBERS] ?: false,
             firstWeekday = WeekCalendar.normalize(p[KEY_FIRST_WEEKDAY] ?: WeekCalendar.DEFAULT_FIRST_WEEKDAY),
             // 競合の「Show upcoming event」相当 (#151)。既定は競合に合わせて表示
             showNextEvent = p[KEY_SHOW_NEXT_EVENT] ?: true,
+            // 「フルスクリーンを強制」(#153)。既定ON=従来どおり常にFSIを付ける
+            forceFullScreen = p[KEY_FORCE_FSI] ?: true,
             themeId = p[KEY_THEME_ID] ?: "default",
             backgroundImageUri = p[KEY_BG_IMAGE_URI],
             weatherOnAlarmScreen = p[KEY_WEATHER_ALARM] ?: true,
@@ -218,6 +237,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAlarmVolumePercent(v: Int) = edit { it[KEY_ALARM_VOLUME] = v }
     suspend fun setVolumeCrescendo(v: Boolean) = edit { it[KEY_VOL_CRESCENDO] = v }
     suspend fun setVibrateWhileRinging(v: Boolean) = edit { it[KEY_VIBRATE] = v }
+    /** 鳴動持続時間 (秒)。0=制限なし (#148)。 */
+    suspend fun setRingDurationSec(v: Int) = edit { it[KEY_RING_DURATION] = v.coerceAtLeast(0) }
+    /** 放置で自動スヌーズするか (#145)。 */
+    suspend fun setAutoSnooze(v: Boolean) = edit { it[KEY_AUTO_SNOOZE] = v }
+    /** 自動スヌーズの回数上限 (2/3/4, #145)。 */
+    suspend fun setAutoSnoozeMax(v: Int) = edit { it[KEY_AUTO_SNOOZE_MAX] = v.coerceIn(2, 4) }
     suspend fun setMuteAll(v: Boolean) = edit { it[KEY_MUTE_ALL] = v }
 
     /** Googleカレンダー連携のアカウントを足す。旧版の1アカウントのキーはここで新しいキーへ移す */
@@ -250,6 +275,9 @@ class SettingsRepository(private val context: Context) {
 
     /** メイン画面に次の予定欄を出すか (#151)。 */
     suspend fun setShowNextEvent(v: Boolean) = edit { it[KEY_SHOW_NEXT_EVENT] = v }
+
+    /** 鳴動を常にフルスクリーン通知で出すか (#153)。 */
+    suspend fun setForceFullScreen(v: Boolean) = edit { it[KEY_FORCE_FSI] = v }
     suspend fun setThemeId(v: String) = edit { it[KEY_THEME_ID] = v }
     suspend fun setBackgroundImageUri(v: String?) = edit {
         if (v == null) it.remove(KEY_BG_IMAGE_URI) else it[KEY_BG_IMAGE_URI] = v
@@ -360,11 +388,15 @@ class SettingsRepository(private val context: Context) {
         val KEY_ALARM_VOLUME = intPreferencesKey("alarm_volume_percent")
         val KEY_VOL_CRESCENDO = booleanPreferencesKey("volume_crescendo")
         val KEY_VIBRATE = booleanPreferencesKey("vibrate_while_ringing")
+        val KEY_RING_DURATION = intPreferencesKey("ring_duration_sec")
+        val KEY_AUTO_SNOOZE = booleanPreferencesKey("auto_snooze")
+        val KEY_AUTO_SNOOZE_MAX = intPreferencesKey("auto_snooze_max")
         val KEY_MUTE_ALL = booleanPreferencesKey("mute_all")
         val KEY_SOUND_URI = stringPreferencesKey("default_sound_uri")
         val KEY_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
         val KEY_FIRST_WEEKDAY = intPreferencesKey("first_weekday")
         val KEY_SHOW_NEXT_EVENT = booleanPreferencesKey("show_next_event")
+        val KEY_FORCE_FSI = booleanPreferencesKey("force_full_screen")
         val KEY_THEME_ID = stringPreferencesKey("theme_id")
         val KEY_BG_IMAGE_URI = stringPreferencesKey("background_image_uri")
         val KEY_WEATHER_ALARM = booleanPreferencesKey("weather_on_alarm_screen")
