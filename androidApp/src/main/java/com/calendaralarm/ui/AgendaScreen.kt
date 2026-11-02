@@ -351,7 +351,7 @@ fun AgendaScreen(
 }
 
 @Composable
-private fun NextAlarmBanner(title: String?, triggerAtMillis: Long?, statusLine: String, showEvent: Boolean = true) {
+internal fun NextAlarmBanner(title: String?, triggerAtMillis: Long?, statusLine: String, showEvent: Boolean = true) {
     val accent = MaterialTheme.colorScheme.primary
     Card(
         Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp),

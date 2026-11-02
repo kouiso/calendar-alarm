@@ -200,7 +200,7 @@ struct SettingsView: View {
                             }
                             // 競合の「Show upcoming event」相当 (#151)
                             IconRow("calendar.badge.clock") {
-                                Text("メイン画面に次の予定を出す")
+                                Text("メイン画面に次のアラームを出す")
                                     .font(NightTheme.font(13)).foregroundStyle(.secondary)
                                 Spacer()
                                 Toggle("", isOn: Binding(get: { store.state.showNextEvent },

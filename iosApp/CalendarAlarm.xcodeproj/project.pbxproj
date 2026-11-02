@@ -18,6 +18,7 @@
 		2C48431DBDA0DF45F9D75583 /* diagnosis-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */; };
 		2DF8005728D2E0319C73F77B /* plex_sans_jp_medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */; };
 		2E6FBB230347EBF9423F1C52 /* RingingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8688F25F9579677C2080FB0E /* RingingView.swift */; };
+		34F77FE82785A6CFE029DCE7 /* next-event-settings-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = C705954A5DE07B4702ABE926 /* next-event-settings-test.swift */; };
 		397AD219F56EB6076068BAD1 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E42B1C06A0E446C3B4F2DCD4 /* Localizable.xcstrings */; };
 		40D1C13EB37C422D85A661DF /* plex_sans_jp_semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D2D9928A082C610D9B0A9D67 /* plex_sans_jp_semibold.ttf */; };
 		4E39CD6EA7BC70A764AACD7A /* Engine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F9472624F7ECEBFD26FF3E /* Engine.swift */; };
@@ -138,6 +139,7 @@
 		C3DB907D283B90CDEE0E5F06 /* engine-off-app-stop-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "engine-off-app-stop-test.swift"; sourceTree = "<group>"; };
 		C59894E1200D6FB530B33BED /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		C694CCA1128C6527CB1476DC /* outfit_semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_semibold.ttf; sourceTree = "<group>"; };
+		C705954A5DE07B4702ABE926 /* next-event-settings-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "next-event-settings-test.swift"; sourceTree = "<group>"; };
 		C93BB72148CA1464D80ABDAB /* EventDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailSheet.swift; sourceTree = "<group>"; };
 		CF4FE1923E95F87EA8A05028 /* outfit_extralight.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_extralight.ttf; sourceTree = "<group>"; };
 		D2AF8727D8A981996E1355D9 /* plex_sans_jp_regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_regular.ttf; sourceTree = "<group>"; };
@@ -194,6 +196,7 @@
 				C3DB907D283B90CDEE0E5F06 /* engine-off-app-stop-test.swift */,
 				1AC8EE707421AED144DFAD38 /* engine-snooze-minutes-test.swift */,
 				6AD851BAB943D3DB6E272879 /* engine-sound-change-test.swift */,
+				C705954A5DE07B4702ABE926 /* next-event-settings-test.swift */,
 				AECCA8E3197BA59E900D5152 /* ringing-localization-test.swift */,
 				FF88FE737D7DF6DAF9D183AD /* ringing-window-render-test.swift */,
 				6CF0A04B53494A2C1258428E /* snooze-presets-test.swift */,
@@ -491,6 +494,7 @@
 				E710C0FCC3752DD55B30D5BC /* engine-off-app-stop-test.swift in Sources */,
 				966320DEE11E9E181F326ACE /* engine-snooze-minutes-test.swift in Sources */,
 				00FE057011931AD95770F145 /* engine-sound-change-test.swift in Sources */,
+				34F77FE82785A6CFE029DCE7 /* next-event-settings-test.swift in Sources */,
 				8BC62EA88163A9C19DEA60E3 /* ringing-localization-test.swift in Sources */,
 				5A07798B1780DD37A04D83F4 /* ringing-window-render-test.swift in Sources */,
 				62477EB76C5B27D505648E4F /* snooze-presets-test.swift in Sources */,

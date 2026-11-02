@@ -1385,7 +1385,7 @@ private fun WeekDisplaySettings(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "メイン画面に次の予定を出す",
+            "メイン画面に次のアラームを出す",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
