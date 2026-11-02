@@ -67,6 +67,7 @@ object RingingOverlay {
         // 既定値を持たせない: 省略してもコンパイルが通ると、呼び出し側の渡し忘れで
         // オーバーレイだけチップと見出しが静かに消える (鳴動画面とのズレ)
         snoozePresets: List<Int>,
+        largeButtons: Boolean = false,
         stillValid: () -> Boolean = { true },
     ) {
         if (!canShow(context)) return
@@ -80,7 +81,7 @@ object RingingOverlay {
                 audit(app, "OVERLAY_FAIL", "$instanceId: WindowManager取得不可")
                 return@post
             }
-            val view = buildView(app, instanceId, title, snoozeMinutes, snoozePresets)
+            val view = buildView(app, instanceId, title, snoozeMinutes, snoozePresets, largeButtons)
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -146,6 +147,7 @@ object RingingOverlay {
         title: String,
         snoozeMinutes: Int,
         snoozePresets: List<Int>,
+        largeButtons: Boolean = false,
     ): View {
         val accent = Color.parseColor("#BDBDFF")
         val fg = Color.parseColor("#F4F5F8")
@@ -296,9 +298,25 @@ object RingingOverlay {
 
         // 停止はスライド式: 誤タップで止まらないよう左端の丸を右へ80%ドラッグ。
         // TalkBack はこのトラックへのダブルタップ (performClick) で停止できる。
-        root.addView(buildSlideToStop(context, instanceId, accent, fg),
+        val stop = if (largeButtons) {
+            android.widget.Button(context).apply {
+                text = "停止"
+                textSize = 32f
+                tag = LARGE_STOP_TAG
+                setTextColor(Color.parseColor("#26247A"))
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(RingingSlideSpec.TRACK_CORNER_DP).toFloat()
+                    setColor(accent)
+                }
+                setOnClickListener { dismiss(context, instanceId) }
+            }
+        } else {
+            buildSlideToStop(context, instanceId, accent, fg)
+        }
+        root.addView(stop,
             LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(RingingSlideSpec.TRACK_HEIGHT_DP),
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(if (largeButtons) 96 else RingingSlideSpec.TRACK_HEIGHT_DP),
             ).apply { topMargin = dp(12) })
 
         root.addView(TextView(context).apply {
@@ -312,6 +330,16 @@ object RingingOverlay {
         ).apply { topMargin = dp(10) })
 
         return root
+    }
+
+    private fun dismiss(context: Context, instanceId: String) {
+        audit(context.applicationContext, "STOP_TAP", "オーバーレイ: $instanceId")
+        context.sendBroadcast(
+            Intent(context, AlarmReceiver::class.java).apply {
+                action = AlarmService.ACTION_DISMISS
+                putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
+            },
+        )
     }
 
     /**
@@ -330,16 +358,6 @@ object RingingOverlay {
         val dp = { v: Int -> (v * context.resources.displayMetrics.density).toInt() }
         val thumbSize = dp(RingingSlideSpec.THUMB_DP)
         val pad = dp(RingingSlideSpec.PAD_DP)
-
-        fun dismiss() {
-            audit(context.applicationContext, "STOP_TAP", "オーバーレイ: $instanceId")
-            context.sendBroadcast(
-                Intent(context, AlarmReceiver::class.java).apply {
-                    action = AlarmService.ACTION_DISMISS
-                    putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
-                },
-            )
-        }
 
         val slider = FrameLayout(context).apply {
             contentDescription = "スライドして停止"
@@ -406,7 +424,7 @@ object RingingOverlay {
                     grabbed = false
                     if (SlideToStopRule.shouldStop((ev.x - downX) / travel)) {
                         thumb.translationX = travel
-                        dismiss()
+                        dismiss(context, instanceId)
                     } else {
                         thumb.animate().translationX(0f).setDuration(120).start()
                         label.animate().alpha(1f).setDuration(120).start()
@@ -426,7 +444,7 @@ object RingingOverlay {
         }
         // TalkBack ダブルタップ (performClick) で停止。通常タップは OnTouch が
         // 消費するのでここには来ず、スナップバックだけになる。
-        slider.setOnClickListener { dismiss() }
+        slider.setOnClickListener { dismiss(context, instanceId) }
         return slider
     }
 }

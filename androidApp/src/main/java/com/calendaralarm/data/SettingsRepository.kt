@@ -127,6 +127,9 @@ class SettingsRepository(private val context: Context) {
         val firstWeekday: Int = WeekCalendar.DEFAULT_FIRST_WEEKDAY,
         /** テーマ ID。 */
         val themeId: String = "default",
+        /** 鳴動画面の停止UIを大ボタンにするか (競合の Large Button Mode, #154)。
+         *  OFF=従来のスライド停止、ON=誤タッチしにくい大きな停止ボタン。 */
+        val largeButtons: Boolean = false,
         /** カスタム背景画像 URI (鳴動画面/テーマ)。 */
         val backgroundImageUri: String? = null,
         /** 鳴動画面に天気を表示するか。 */
@@ -193,6 +196,7 @@ class SettingsRepository(private val context: Context) {
             // 「フルスクリーンを強制」(#153)。既定ON=従来どおり常にFSIを付ける
             forceFullScreen = p[KEY_FORCE_FSI] ?: true,
             themeId = p[KEY_THEME_ID] ?: "default",
+            largeButtons = p[KEY_LARGE_BUTTONS] ?: false,
             backgroundImageUri = p[KEY_BG_IMAGE_URI],
             weatherOnAlarmScreen = p[KEY_WEATHER_ALARM] ?: true,
             weatherHeaderEnabled = p[KEY_WEATHER_HEADER] ?: true,
@@ -339,6 +343,8 @@ class SettingsRepository(private val context: Context) {
     /** 鳴動を常にフルスクリーン通知で出すか (#153)。 */
     suspend fun setForceFullScreen(v: Boolean) = edit { it[KEY_FORCE_FSI] = v }
     suspend fun setThemeId(v: String) = edit { it[KEY_THEME_ID] = v }
+    /** 鳴動画面の停止UIを大ボタンにするか (#154)。 */
+    suspend fun setLargeButtons(v: Boolean) = edit { it[KEY_LARGE_BUTTONS] = v }
     suspend fun setBackgroundImageUri(v: String?) = edit {
         if (v == null) it.remove(KEY_BG_IMAGE_URI) else it[KEY_BG_IMAGE_URI] = v
     }
@@ -464,6 +470,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_SHOW_NEXT_EVENT = booleanPreferencesKey("show_next_event")
         val KEY_FORCE_FSI = booleanPreferencesKey("force_full_screen")
         val KEY_THEME_ID = stringPreferencesKey("theme_id")
+        val KEY_LARGE_BUTTONS = booleanPreferencesKey("large_buttons")
         val KEY_BG_IMAGE_URI = stringPreferencesKey("background_image_uri")
         val KEY_WEATHER_ALARM = booleanPreferencesKey("weather_on_alarm_screen")
         val KEY_WEATHER_HEADER = booleanPreferencesKey("weather_header_enabled")
