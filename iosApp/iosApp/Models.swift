@@ -147,11 +147,11 @@ func passesEventFilters(_ ev: CalendarEventDTO, _ ov: EventOverrideDTO?, _ invit
     return invite.allows(ev.inviteStatus) && types.allows(ev)
 }
 
-/// Models.kt InviteFilter。
+/// Models.kt InviteFilter。既定は元アプリと同じ「承諾した招待のみ」(#155)。
 struct InviteFilter: Codable, Hashable {
     var accepted: Bool = true
-    var tentative: Bool = true
-    var needsAction: Bool = true
+    var tentative: Bool = false
+    var needsAction: Bool = false
     var declined: Bool = false
 
     func allows(_ status: String?) -> Bool {

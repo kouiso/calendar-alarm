@@ -1,6 +1,7 @@
 package com.calendaralarm.data
 
 import android.util.Log
+import java.util.concurrent.ConcurrentHashMap
 import com.calendaralarm.data.calendar.CalendarContractReader
 import com.calendaralarm.data.db.AppDatabase
 import com.calendaralarm.data.db.AuditLogEntity
@@ -35,6 +36,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DayOfWeek
@@ -67,6 +70,13 @@ class AlarmRepository(
     /** 期限切れが MISSED 化された件数の通知 (missed 通知用)。 */
     private val onMissed: (suspend (Int) -> Unit)? = null,
 ) {
+    // 自動スヌーズ・手動スヌーズ・停止の状態遷移を一つずつ通す (#145)
+    private val ringTransitionLock = Mutex()
+    // 自動スヌーズで作った子 (親 id → 子 id と作った時刻)。直後に届いた停止で子ごと取り消す
+    private val autoSnoozedChildren = ConcurrentHashMap<String, Pair<String, Long>>()
+    // 自動スヌーズと停止の重なりを測る時計。テストで 30 秒経過を作るための差込口
+    internal var nowMillis: () -> Long = System::currentTimeMillis
+
     // ---- Google Calendar eventType 取得 ----
 
     /**
@@ -363,15 +373,28 @@ class AlarmRepository(
 
     suspend fun onDismissed(id: String?) {
         if (id == null) return
+        ringTransitionLock.withLock { dismissRow(id) }
+        onScheduleChanged?.invoke()
+    }
+
+    private suspend fun dismissRow(id: String) {
         setState(id, AlarmState.DISMISSED)
         scheduler.cancel(id)
         audit("DISMISS", id, db.scheduledInstances().byId(id))
+        // 放置の自動スヌーズと停止が重なった時は停止を優先し、直前に作った子も取り消す (#145)
+        autoSnoozedChildren.remove(id)?.let { (childId, at) ->
+            val child = db.scheduledInstances().byId(childId)
+            if (nowMillis() - at <= AUTO_SNOOZE_RACE_MS && child?.state == AlarmState.PENDING.name) {
+                setState(childId, AlarmState.CANCELLED)
+                scheduler.cancel(childId)
+                audit("DISMISS", "$childId: 停止が自動スヌーズと重なったので子も取り消す", child)
+            }
+        }
         // 単発アラームは終端到達=消費。アラーム本体も OFF に倒して
         // 「有効表示なのに二度と鳴らない」状態を残さない
         db.scheduledInstances().byId(id)?.standaloneAlarmId?.let {
             disableConsumedOneShots(setOf(it))
         }
-        onScheduleChanged?.invoke()
     }
 
     /**
@@ -487,7 +510,65 @@ class AlarmRepository(
     private val waitingRings = WaitingRingStore(calendarReader.appContext())
 
     suspend fun onSnoozed(id: String?, snoozeMinutes: Int? = null) {
-        val entity = id?.let { db.scheduledInstances().byId(it) } ?: return
+        if (id == null) return
+        val done = ringTransitionLock.withLock {
+            // 先に停止・見逃しで終わった行へ遅れて届いたスヌーズは、子を作らない (止めたのに鳴るのを防ぐ)
+            val entity = db.scheduledInstances().byId(id) ?: return@withLock false
+            if (entity.state in TERMINAL_STATES) {
+                audit("SNOOZE_SKIP", "$id: スヌーズの前に ${entity.state} になっていたので何もしない", entity)
+                return@withLock false
+            }
+            snoozeRow(entity, snoozeMinutes)
+            true
+        }
+        if (done) onScheduleChanged?.invoke()
+    }
+
+    /**
+     * 放置による自動スヌーズ (#145)。手動の停止 [onDismissed] と排他にし、停止を勝たせる。
+     * 鳴動中 (FIRED) のままの時だけ子を作る。先に停止された (DISMISSED など) なら何もしない。
+     * 作った子は [AUTO_SNOOZE_RACE_MS] の間だけ覚え、その間に届いた停止で子ごと取り消す
+     * (停止ボタンを押した瞬間に放置の時間切れが重なった時、押した側を優先するため)。
+     * @return 子を作ったら true
+     */
+    suspend fun onAutoSnoozed(id: String, snoozeMinutes: Int): Boolean {
+        val done = ringTransitionLock.withLock {
+            val row = db.scheduledInstances().byId(id) ?: return@withLock false
+            if (row.state != AlarmState.FIRED.name) {
+                audit("SNOOZE_SKIP", "$id: 自動スヌーズの前に ${row.state} になっていたので何もしない", row)
+                return@withLock false
+            }
+            val childId = snoozeRow(row, snoozeMinutes)
+            autoSnoozedChildren[id] = childId to nowMillis()
+            true
+        }
+        if (done) onScheduleChanged?.invoke()
+        return done
+    }
+
+    /**
+     * 放置の時間切れで「鳴らせなかった」にする (#145)。停止と排他にし、鳴動中 (FIRED) のままの時だけ書く。
+     * 先に停止されていたら DISMISSED を MISSED で上書きせず、見逃しの通知も出さないよう false を返す
+     */
+    suspend fun markMissedIfFired(id: String, detail: String): Boolean {
+        val done = ringTransitionLock.withLock {
+            val row = db.scheduledInstances().byId(id) ?: return@withLock false
+            if (row.state != AlarmState.FIRED.name) {
+                audit("MISS_SKIP", "$id: 時間切れの前に ${row.state} になっていたので見逃しにしない", row)
+                return@withLock false
+            }
+            setState(id, AlarmState.MISSED)
+            audit("MISS", "$id: $detail", row)
+            row.standaloneAlarmId?.let { disableConsumedOneShots(setOf(it)) }
+            true
+        }
+        if (done) onScheduleChanged?.invoke()
+        return done
+    }
+
+    /** スヌーズの子を予約して元を SNOOZED にする。呼び出し側が [ringTransitionLock] を持ち、
+     *  ロックを放してから onScheduleChanged を呼ぶ (ウィジェット更新で停止の書き込みを待たせない)。子の id を返す */
+    private suspend fun snoozeRow(entity: ScheduledInstanceEntity, snoozeMinutes: Int?): String {
         val instance = entity.toInstance()
         val minutes = snoozeMinutes ?: instance.snoozeMinutes
         val snoozed = instance.snoozed(
@@ -497,7 +578,7 @@ class AlarmRepository(
         if (!scheduler.schedule(snoozed)) audit("EXACT_DENIED", snoozed.id)
         setState(instance.id, AlarmState.SNOOZED)
         audit("SNOOZE", "${instance.id} +${minutes}m → ${snoozed.id}", entity)
-        onScheduleChanged?.invoke()
+        return snoozed.id
     }
 
     /** タイマーなど単発インスタンスを即座に予約する。 */
@@ -983,6 +1064,13 @@ class AlarmRepository(
     )
 
     companion object {
+        /** 終わった行。遅れて届いたスヌーズで子を作らない (#145) */
+        private val TERMINAL_STATES = setOf(
+            AlarmState.DISMISSED.name, AlarmState.MISSED.name,
+            AlarmState.CANCELLED.name, AlarmState.SKIPPED.name,
+        )
+        /** 自動スヌーズの直後に届いた停止を「同時に押した」とみなす長さ (#145) */
+        const val AUTO_SNOOZE_RACE_MS = 30_000L
         /** 鳴らし直しの発火までの間。停止した鳴動の後始末 (通知の掃除など) が済んでから鳴らす */
         private const val REARM_DELAY_MS = 1_500L
         /** 待ちが複数ある時の発火のずらし幅。同じ時刻に重ねず、押し出しの順を安定させる */
