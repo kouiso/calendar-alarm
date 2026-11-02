@@ -1419,8 +1419,10 @@ private fun AppearanceCard(
             WeekDisplaySettings(
                 showWeekNumbers = p.showWeekNumbers,
                 firstWeekday = p.firstWeekday,
+                showNextEvent = p.showNextEvent,
                 onShowWeekNumbers = { scope.launch { settings.setShowWeekNumbers(it) } },
                 onFirstWeekday = { scope.launch { settings.setFirstWeekday(it) } },
+                onShowNextEvent = { scope.launch { settings.setShowNextEvent(it) } },
             )
         }
     }
@@ -1432,8 +1434,10 @@ private fun AppearanceCard(
 private fun WeekDisplaySettings(
     showWeekNumbers: Boolean,
     firstWeekday: Int,
+    showNextEvent: Boolean,
     onShowWeekNumbers: (Boolean) -> Unit,
     onFirstWeekday: (Int) -> Unit,
+    onShowNextEvent: (Boolean) -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -1446,6 +1450,19 @@ private fun WeekDisplaySettings(
             modifier = Modifier.weight(1f),
         )
         Switch(checked = showWeekNumbers, onCheckedChange = onShowWeekNumbers)
+    }
+    // 競合の「Show upcoming event」相当 (#151)
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "メイン画面に次のアラームを出す",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = showNextEvent, onCheckedChange = onShowNextEvent)
     }
     Text(
         "週の始まり",
