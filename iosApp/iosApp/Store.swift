@@ -57,6 +57,10 @@ final class Store: ObservableObject {
         // scheduled_instances: id -> ScheduledRecord
         var scheduled: [String: ScheduledRecord] = [:]
         var audit: [AuditEntry] = []
+        /// アプリを開いていない間に「停止した」とみなした行のうち、書き残しが無く
+        /// 「起動し続けた + 予約だけ消えた」で拾った (via=boot) 累計 (#136)。
+        /// 監査ログ50件を超えると切れて数えられなくなるので永続カウンタで持つ
+        var offAppBootDismissedCount: Int = 0
         /// 停止・スヌーズ・鳴らずの記録 (7日分)。監査ログ (50件) や予約の行
         /// (単発を使い直すと消える) とは別に持ち、設定先頭の「最近の鳴動」と見逃しの数に使う
         var ringHistory: [AuditEntry] = []
@@ -340,6 +344,9 @@ final class Store: ObservableObject {
         state.scheduled.compactMapValues { $0.state == .pending ? $0.instance.triggerAtMillis : nil }
     }
 
+    /// via=boot で停止とみなした累計を1つ進める (#136)
+    func incrementOffAppBootDismissed() { mutate { $0.offAppBootDismissedCount += 1 } }
+
     func markState(_ id: String, _ st: InstanceState) {
         mutate { s in
             guard var r = s.scheduled[id] else { return }
@@ -464,6 +471,7 @@ extension Store.Persisted {
         standaloneAlarms = try c.decodeIfPresent([StandaloneAlarmDTO].self, forKey: .standaloneAlarms) ?? []
         scheduled = try c.decodeIfPresent([String: ScheduledRecord].self, forKey: .scheduled) ?? [:]
         audit = try c.decodeIfPresent([AuditEntry].self, forKey: .audit) ?? []
+        offAppBootDismissedCount = try c.decodeIfPresent(Int.self, forKey: .offAppBootDismissedCount) ?? 0
         if let saved = try c.decodeIfPresent([AuditEntry].self, forKey: .ringHistory) {
             ringHistory = saved
         } else {

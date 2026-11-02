@@ -50,6 +50,8 @@ struct DiagnosisInput {
     var auditCount: Int
     /// 残っている記録の中の予約失敗と、直近24時間の見逃し (7日残る予約の行で数える) の件数
     var recentFailures: Int
+    /// 書き残し無しで「起動し続けた + 予約だけ消えた」を停止とみなした累計 (#136)
+    var offAppBootDismissed: Int = 0
     var nowMillis: Int64
 }
 
@@ -203,6 +205,14 @@ enum DiagnosisPlan {
             title: i.recentFailures == 0 ? "直近の記録に予約の失敗・見逃しはありません" : "直近の記録に予約の失敗・見逃しが\(i.recentFailures)件",
             detail: i.recentFailures == 0 ? "記録は設定の一番下（直近 \(i.auditCount) 件）で見られます。" : "上の許可を直してから、設定の一番下の記録で内容を確かめてください。",
             fix: nil))
+        // via=boot の累計 (#136)。0の時は出さない。増え続けるなら OS が予約を捨てている疑いがある
+        if i.offAppBootDismissed > 0 {
+            out.append(DiagnosisItem(
+                id: "boot_dismiss", state: .info,
+                title: "アプリの外で止めた扱いにした回数: \(i.offAppBootDismissed)",
+                detail: "OS の予約だけが消えていた行を「止めた」と数えた累計です。鳴らなかった覚えがあるのにここが増えていたら、記録の「DISMISS_OFFAPP」を確かめてください。",
+                fix: nil))
+        }
         return out
     }
 
@@ -349,6 +359,7 @@ struct DiagnosticsView: View {
             unconfirmedCount: DiagnosisPlan.unconfirmedCount(store.state.audit, nowMillis: now),
             auditCount: store.state.audit.count,
             recentFailures: DiagnosisPlan.recentFailures(store.state.audit, ringHistory: store.state.ringHistory, nowMillis: now),
+            offAppBootDismissed: store.state.offAppBootDismissedCount,
             nowMillis: now)
         items = DiagnosisPlan.items(input)
     }

@@ -275,6 +275,25 @@ final class EngineOffAppStopTests: XCTestCase {
         XCTAssertNil(OffAppStopLog().entries[id], "保存が済んだ後の書き残しが残っている")
     }
 
+    /// #136: 書き残しが無いまま予約だけ消えた行 (via=boot) だけが「アプリの外で止めた扱いにした回数」に載る。
+    /// 停止ボタンの書き残しで止めた行 (via=intent) は載らない。OS が予約を捨てた疑いと、人が止めたのを分けるため
+    func testBootInferredDismissalIsCountedSeparatelyFromIntent() async throws {
+        let bootId = placeRungRow(minutesAgo: 1, timer: true)
+        engine.bootMillis = Engine.nowMillis - 24 * 3_600_000
+        let intentId = placeRungRow(minutesAgo: 1)
+        try await pressStop(intentId)
+
+        await engine.resync(reason: "test")
+
+        XCTAssertEqual(engine.store.state.scheduled[bootId]?.state, .dismissed)
+        XCTAssertEqual(engine.store.state.scheduled[intentId]?.state, .dismissed)
+        XCTAssertEqual(engine.store.state.offAppBootDismissedCount, 1, "via=boot だけが累計に載る")
+
+        // 停止済みの行はもう拾われないので、もう一度 resync しても二重に数えない
+        await engine.resync(reason: "test")
+        XCTAssertEqual(engine.store.state.offAppBootDismissedCount, 1)
+    }
+
     /// 予約に渡す設定に停止ボタンの intent が付いている。付け忘れると書き残しが残らず #61 が戻る
     func testReservationCarriesStopIntent() throws {
         guard #available(iOS 26.0, *) else { throw XCTSkip("AlarmKit は iOS 26 から") }

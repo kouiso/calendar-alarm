@@ -236,6 +236,9 @@ final class Engine: ObservableObject {
                 guard let rec = store.state.scheduled[id] else { continue }
                 store.markState(id, .dismissed)
                 let via = stopLog.entries[id] != nil ? "intent" : "boot"
+                // via=boot は「書き残しなしで OS の予約だけ消えた」行。OS が黙って予約を
+                // 捨てた可能性を切り分けるため累計を別に残す (#136)
+                if via == "boot" { store.incrementOffAppBootDismissed() }
                 store.audit("DISMISS_OFFAPP", "\(rec.instance.title) @\(Self.hm(rec.instance.triggerAtMillis)) via=\(via)", ring: rec.instance)
             }
             disableConsumedOneShots(decision.oneShotAlarmIds)
