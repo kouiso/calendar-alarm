@@ -439,7 +439,8 @@ extension Store.Persisted {
         defaultStartAction = try c.decodeIfPresent(String.self, forKey: .defaultStartAction) ?? EventAction.alarm.rawValue
         defaultReminderAction = try c.decodeIfPresent(String.self, forKey: .defaultReminderAction) ?? EventAction.alarm.rawValue
         titleCodes = try c.decodeIfPresent(TitleCodeSettings.self, forKey: .titleCodes) ?? TitleCodeSettings()
-        inviteFilter = try c.decodeIfPresent(InviteFilter.self, forKey: .inviteFilter) ?? InviteFilter()
+        inviteFilter = try c.decodeIfPresent(InviteFilter.self, forKey: .inviteFilter)
+            ?? InviteFilter(accepted: true, tentative: true, needsAction: true, declined: false)
         eventTypeFilter = try c.decodeIfPresent(EventTypeFilter.self, forKey: .eventTypeFilter) ?? EventTypeFilter()
         // キーが無い=新規のみ ON。旧データに保存済みの値は識別不能のため維持する
         importEventReminders = try c.decodeIfPresent(Bool.self, forKey: .importEventReminders) ?? true
