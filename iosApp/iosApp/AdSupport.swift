@@ -9,11 +9,12 @@ import UserMessagingPlatform
 /// 「広告が出ない」だけに倒れ、鳴動・停止・スヌーズ・予定確認へ影響しない。
 /// 予定のタイトルや内容は広告 SDK へ送らない (ターゲティング情報は一切渡さない)。
 @MainActor
-final class AdCoordinator: ObservableObject {
+final class AdCoordinator: NSObject, ObservableObject, BannerViewDelegate {
     static let shared = AdCoordinator()
 
     /// 広告を読み込んでよい状態か。同意が要る地域では同意後にだけ true になる
     @Published private(set) var canRequestAds = false
+    @Published private(set) var bannerLoaded = false
 
     private var started = false
 
@@ -63,15 +64,25 @@ final class AdCoordinator: ObservableObject {
         let banner = BannerView(adSize: AdSizeBanner)
         banner.adUnitID = AdConfig.bannerUnitID
         banner.rootViewController = Self.topRootViewController()
-        banner.load(GoogleMobileAds.Request())
+        banner.delegate = self
         cachedBannerView = banner
+        banner.load(GoogleMobileAds.Request())
         return banner
+    }
+
+    func bannerViewDidReceiveAd(_ bannerView: BannerView) {
+        bannerLoaded = true
+    }
+
+    func bannerView(_ bannerView: BannerView, didFailToReceiveAdWithError error: Error) {
+        bannerLoaded = false
     }
 
     private func finishConsent() {
         guard ConsentInformation.shared.canRequestAds else { return }
         canRequestAds = true
         MobileAds.shared.start(completionHandler: nil)
+        _ = sharedBannerView()
     }
 
     static func topRootViewController() -> UIViewController? {
@@ -118,7 +129,7 @@ struct AdBannerSlot: View {
     @ObservedObject private var coordinator = AdCoordinator.shared
 
     var body: some View {
-        if coordinator.canRequestAds {
+        if coordinator.canRequestAds && coordinator.bannerLoaded {
             VStack(spacing: 4) {
                 Text("広告")
                     .font(NightTheme.font(11))

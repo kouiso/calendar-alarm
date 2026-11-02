@@ -25,6 +25,7 @@
 		4E39CD6EA7BC70A764AACD7A /* Engine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F9472624F7ECEBFD26FF3E /* Engine.swift */; };
 		4E485751888C27D65F6C4ABA /* MailImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B399458D4913DD152149CADA /* MailImportView.swift */; };
 		4F6BD3C9781EB50C7D026E32 /* OffAppStopPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EEE1565D963DCF58E797F77 /* OffAppStopPlan.swift */; };
+		53BFBA703BCAAC9BCE034F72 /* ad-banner-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C08DFB01B289114643AADF /* ad-banner-test.swift */; };
 		54E5C67790C94D5298C69492 /* CalendarAlarmWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		56581CC8A21360368B1593B0 /* AdSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2683FC9C13770D132297D6B /* AdSupport.swift */; };
 		56C929D3E057A4F1B62C284A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70278C1DA89E0C3594F39E2A /* SettingsView.swift */; };
@@ -127,6 +128,7 @@
 		7384BC516B1FE4FB2F672E67 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
 		7A3A04452A7A85976807934D /* TitleCodesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleCodesSheet.swift; sourceTree = "<group>"; };
 		8688F25F9579677C2080FB0E /* RingingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingingView.swift; sourceTree = "<group>"; };
+		87C08DFB01B289114643AADF /* ad-banner-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ad-banner-test.swift"; sourceTree = "<group>"; };
 		8D9FE2D91349946227BD8E55 /* PermissionAsker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionAsker.swift; sourceTree = "<group>"; };
 		8DD3A0F17E4F13654090ABE8 /* outfit_light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_light.ttf; sourceTree = "<group>"; };
 		90ED19FA826B4A1503E171A1 /* MailShareExt.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MailShareExt.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -209,6 +211,7 @@
 		58C4D55CDF63CCF2265CE5D6 /* unit-test */ = {
 			isa = PBXGroup;
 			children = (
+				87C08DFB01B289114643AADF /* ad-banner-test.swift */,
 				A22FA71EC8E0871C65511A60 /* alarm-sound-import-test.swift */,
 				9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */,
 				C3DB907D283B90CDEE0E5F06 /* engine-off-app-stop-test.swift */,
@@ -516,6 +519,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				53BFBA703BCAAC9BCE034F72 /* ad-banner-test.swift in Sources */,
 				86B15B16E50DEF7BDFC0FC23 /* alarm-sound-import-test.swift in Sources */,
 				2C48431DBDA0DF45F9D75583 /* diagnosis-test.swift in Sources */,
 				E710C0FCC3752DD55B30D5BC /* engine-off-app-stop-test.swift in Sources */,

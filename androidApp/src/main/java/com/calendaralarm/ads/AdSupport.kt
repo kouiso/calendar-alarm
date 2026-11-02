@@ -2,11 +2,42 @@ package com.calendaralarm.ads
 
 import android.app.Activity
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import com.google.android.gms.ads.MobileAds
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.lang.ref.WeakReference
+
+internal interface AdConsentSdk {
+    fun requestConsentInfoUpdate(activity: Activity, onSuccess: () -> Unit, onError: () -> Unit)
+    fun loadAndShowConsentFormIfRequired(activity: Activity, onComplete: () -> Unit)
+    fun canRequestAds(context: Context): Boolean
+    fun initialize(context: Context)
+}
+
+private object GoogleAdConsentSdk : AdConsentSdk {
+    override fun requestConsentInfoUpdate(activity: Activity, onSuccess: () -> Unit, onError: () -> Unit) {
+        UserMessagingPlatform.getConsentInformation(activity).requestConsentInfoUpdate(
+            activity,
+            ConsentRequestParameters.Builder().build(),
+            onSuccess,
+            { onError() },
+        )
+    }
+
+    override fun loadAndShowConsentFormIfRequired(activity: Activity, onComplete: () -> Unit) {
+        UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) { onComplete() }
+    }
+
+    override fun canRequestAds(context: Context): Boolean =
+        UserMessagingPlatform.getConsentInformation(context).canRequestAds()
+
+    override fun initialize(context: Context) {
+        MobileAds.initialize(context)
+    }
+}
 
 /**
  * 広告 (AdMob) の同意と初期化 (#140)。
@@ -23,48 +54,67 @@ object AdSupport {
 
     @Volatile
     private var started = false
+    private var consentActivity: WeakReference<Activity>? = null
+
+    @VisibleForTesting
+    internal var consentSdk: AdConsentSdk = GoogleAdConsentSdk
 
     /** GDPR/EEA の同意状態を確認し、必要なら同意フォームを出してから GMA SDK を初期化する。
      *  同意不要の地域ではフォームは出ずそのまま進む。1度だけ呼ぶ。
      *  鳴動・停止・スヌーズ操作を同意フォームで塞がないよう、鳴動中は表示を待つ。 */
     fun gatherConsentAndInit(activity: Activity, isAlerting: () -> Boolean = { false }) {
-        if (started) return
+        if (activity.isFinishing || activity.isDestroyed) return
+        if (started) {
+            val previous = consentActivity?.get()
+            if (consentActivity == null || (previous != null && !previous.isFinishing && !previous.isDestroyed)) return
+        }
         started = true
-        val consentInfo = UserMessagingPlatform.getConsentInformation(activity)
-        consentInfo.requestConsentInfoUpdate(
+        consentActivity = WeakReference(activity)
+        val sdk = consentSdk
+        sdk.requestConsentInfoUpdate(
             activity,
-            ConsentRequestParameters.Builder().build(),
             {
                 // 同意情報の更新に成功。フォームが要る地域だけここで出る
-                showConsentFormWhenIdle(activity, isAlerting)
+                showConsentFormWhenIdle(activity, isAlerting, sdk)
             },
-            { _ /* error: FormError */ ->
+            {
                 // 同意情報の取得失敗 (オフライン等) でも前回の状態を尊重して進める
-                finishConsent(activity.applicationContext)
+                if (consentActivity?.get() === activity) finishConsent(activity.applicationContext, sdk)
             },
         )
     }
 
-    private fun showConsentFormWhenIdle(activity: Activity, isAlerting: () -> Boolean) {
-        if (activity.isFinishing || activity.isDestroyed) return
+    private fun showConsentFormWhenIdle(activity: Activity, isAlerting: () -> Boolean, sdk: AdConsentSdk) {
+        if (consentActivity?.get() !== activity || activity.isFinishing || activity.isDestroyed) return
         if (isAlerting()) {
             activity.window.decorView.postDelayed(
-                { showConsentFormWhenIdle(activity, isAlerting) }, 500,
+                { showConsentFormWhenIdle(activity, isAlerting, sdk) }, 500,
             )
             return
         }
-        UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) {
-            finishConsent(activity.applicationContext)
+        sdk.loadAndShowConsentFormIfRequired(activity) {
+            if (consentActivity?.get() === activity) finishConsent(activity.applicationContext, sdk)
         }
     }
 
-    private fun finishConsent(appContext: Context) {
-        val consentInfo = UserMessagingPlatform.getConsentInformation(appContext)
-        if (!consentInfo.canRequestAds()) return
+    private fun finishConsent(appContext: Context, sdk: AdConsentSdk) {
+        consentActivity = null
+        if (!sdk.canRequestAds(appContext)) {
+            started = false
+            return
+        }
         _canRequestAds.value = true
         // SDK 初期化はバックグラウンドスレッドで (公式推奨)。鳴動処理は待たせない
         Thread {
-            runCatching { MobileAds.initialize(appContext) }
+            runCatching { sdk.initialize(appContext) }
         }.start()
+    }
+
+    @VisibleForTesting
+    internal fun resetForTests() {
+        started = false
+        consentActivity = null
+        _canRequestAds.value = false
+        consentSdk = GoogleAdConsentSdk
     }
 }
