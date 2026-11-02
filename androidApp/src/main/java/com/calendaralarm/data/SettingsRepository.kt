@@ -1,6 +1,8 @@
 package com.calendaralarm.data
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -317,6 +319,16 @@ class SettingsRepository(private val context: Context) {
     }
     suspend fun setDefaultSoundUri(v: String?) = edit {
         if (v == null) it.remove(KEY_SOUND_URI) else it[KEY_SOUND_URI] = v
+    }
+    internal suspend fun selectDefaultSound(
+        uri: Uri,
+        grantReadPermission: (Uri) -> Unit = {
+            context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        },
+    ): Boolean {
+        if (runCatching { grantReadPermission(uri) }.isFailure) return false
+        setDefaultSoundUri(uri.toString())
+        return true
     }
     suspend fun setShowWeekNumbers(v: Boolean) = edit { it[KEY_WEEK_NUMBERS] = v }
     suspend fun setFirstWeekday(v: Int) = edit { it[KEY_FIRST_WEEKDAY] = v }

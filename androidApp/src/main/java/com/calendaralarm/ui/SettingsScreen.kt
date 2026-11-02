@@ -1225,6 +1225,17 @@ private fun RingingCard(
     repository: AlarmRepository,
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
+    val context = LocalContext.current
+    var soundSelectionFailed by remember { mutableStateOf(false) }
+    val soundPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                soundSelectionFailed = !settings.selectDefaultSound(uri)
+            }
+        }
+    }
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -1249,6 +1260,42 @@ private fun RingingCard(
                 },
                 modifier = Modifier.padding(horizontal = 12.dp),
             )
+            // 360dp でも「選ぶ」が押し出されないよう、表示と操作を行で分けて操作は折り返す
+            IconSettingRow(Icons.Default.Notifications) {
+                Text(
+                    if (p.defaultSoundUri == null) "アラーム音: 標準" else "アラーム音: カスタム",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            FlowRow(
+                Modifier.fillMaxWidth().padding(start = 32.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = p.defaultSoundUri != null,
+                    onClick = { soundPicker.launch(arrayOf("audio/*")) },
+                    label = { Text("選ぶ", maxLines = 1) },
+                )
+                if (p.defaultSoundUri != null) {
+                    FilterChip(
+                        selected = false,
+                        onClick = {
+                            scope.launch { settings.setDefaultSoundUri(null) }
+                            soundSelectionFailed = false
+                        },
+                        label = { Text("標準に戻す", maxLines = 1) },
+                    )
+                }
+            }
+            if (soundSelectionFailed) {
+                Text(
+                    "音声への継続アクセスを取得できませんでした。端末に保存したファイルを選び直してください。",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 32.dp),
+                )
+            }
             // スヌーズプリセット (鳴動画面の +N分 ボタンに出る一覧)
             IconSettingRow(Icons.Default.Snooze) {
                 listOf(1, 5, 10, 15, 20, 30, 45, 60, 90).forEach { m ->
