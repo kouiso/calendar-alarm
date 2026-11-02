@@ -5,6 +5,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.core.DataMigration
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.calendaralarm.shared.logic.WeekCalendar
 import com.calendaralarm.shared.model.EventAction
@@ -17,7 +19,41 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 // テストから旧キーの残存を確かめるため internal にしている
-internal val Context.settingsDataStore by preferencesDataStore(name = "settings")
+internal val Context.settingsDataStore by preferencesDataStore(
+    name = "settings",
+    produceMigrations = { ctx -> listOf(InviteDefaultMigration { ctx.isUpgradeInstall() }) },
+)
+
+/** 前の版から更新して入った端末か (新しく入れた端末なら最初の導入と最後の更新が同じ時刻)。読めなければ更新扱い */
+internal fun Context.isUpgradeInstall(): Boolean = runCatching {
+    val info = packageManager.getPackageInfo(packageName, 0)
+    info.firstInstallTime != info.lastUpdateTime
+}.getOrDefault(true)
+
+/**
+ * 招待フィルタの既定を「承諾のみ」に変えた時 (#155) の、前から使っている人の扱い。
+ * 保存キーが無い人は今まで「全部オン」(7) で鳴っていたので、更新しただけで未定・未回答の予定が
+ * 黙って鳴らなくならないよう、7 を保存して今までの動きを残す。iOS も保存済みの設定はそのまま残る。
+ * 前からの利用者は「何か保存済み」か「前の版から更新して入った」で見分ける (設定を一度も変えていない人もいるため)。
+ * 新しく入れた人は保存せず、新しい既定 (承諾のみ) になる。判定は一度だけ (印のキーを書く)
+ */
+internal class InviteDefaultMigration(private val isUpgrade: () -> Boolean) : DataMigration<Preferences> {
+    override suspend fun shouldMigrate(currentData: Preferences): Boolean =
+        currentData[SettingsRepository.KEY_INVITE_DEFAULT_MIGRATED] == null
+
+    override suspend fun migrate(currentData: Preferences): Preferences =
+        currentData.toMutablePreferences().apply {
+            // 設定を一度も変えていない前からの利用者は保存が空なので、空かどうかだけでは新しい人と区別できない。
+            // アプリの更新で入ったかも見る
+            val existingUser = currentData.asMap().isNotEmpty() || isUpgrade()
+            if (this[SettingsRepository.KEY_INVITE_MASK] == null && existingUser) {
+                this[SettingsRepository.KEY_INVITE_MASK] = SettingsRepository.LEGACY_INVITE_MASK
+            }
+            this[SettingsRepository.KEY_INVITE_DEFAULT_MIGRATED] = true
+        }.toPreferences()
+
+    override suspend fun cleanUp() = Unit
+}
 
 /** アプリ全体設定。DataStore Preferences で保持する。 */
 class SettingsRepository(private val context: Context) {
@@ -121,11 +157,13 @@ class SettingsRepository(private val context: Context) {
                 applyToStart = (p[KEY_CODE_SCOPE] ?: 0) != 2,
                 applyToReminders = (p[KEY_CODE_SCOPE] ?: 0) != 1,
             ),
+            // キー未保存 (一度も触っていない) 人の既定は元アプリと同じ「承諾した招待のみ」(#155)。
+            // 保存済みの選択はそのまま残る
             inviteFilter = InviteFilter(
-                accepted = (p[KEY_INVITE_MASK] ?: 7) and 1 != 0,
-                tentative = (p[KEY_INVITE_MASK] ?: 7) and 2 != 0,
-                needsAction = (p[KEY_INVITE_MASK] ?: 7) and 4 != 0,
-                declined = (p[KEY_INVITE_MASK] ?: 7) and 8 != 0,
+                accepted = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) and 1 != 0,
+                tentative = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) and 2 != 0,
+                needsAction = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) and 4 != 0,
+                declined = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) and 8 != 0,
             ),
             eventTypeFilter = eventTypeFilterOf(p),
             googleAccountEmails = googleAccountsOf(p),
@@ -213,7 +251,9 @@ class SettingsRepository(private val context: Context) {
             InviteStatus.NEEDS_ACTION -> 4
             InviteStatus.DECLINED -> 8
         }
-        p[KEY_INVITE_MASK] = (p[KEY_INVITE_MASK] ?: 7) xor bit
+        // 未保存の人は表示と同じ既定 (承諾のみ) から反転する。7 から反転すると
+        // 初回タップで触っていない「未回答」まで ON になる (#155)
+        p[KEY_INVITE_MASK] = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) xor bit
     }
     suspend fun toggleEventType(type: EventType) = edit { p ->
         val current = eventTypeFilterOf(p)
@@ -333,6 +373,11 @@ class SettingsRepository(private val context: Context) {
         val KEY_NEVER_CODES = stringPreferencesKey("title_never_codes")
         val KEY_CODE_SCOPE = intPreferencesKey("title_code_scope")
         val KEY_INVITE_MASK = intPreferencesKey("invite_mask")
+        /** 招待フィルタの既定 = 承諾のみ (bit 1)。読み出しとトグルで同じ値を使う (#155) */
+        const val DEFAULT_INVITE_MASK = 1
+        /** 既定を変える前の招待フィルタ (承諾・未定・未回答)。前から使っている人に残す (#155) */
+        const val LEGACY_INVITE_MASK = 7
+        val KEY_INVITE_DEFAULT_MIGRATED = booleanPreferencesKey("invite_default_migrated")
         val KEY_EVENT_TYPE_MASK = intPreferencesKey("event_type_mask")
         // サイレントモードと予定なしは、旧版の event_type_mask と別のキーにする (#79)
         val KEY_EVENT_TYPE_FOCUS = booleanPreferencesKey("event_type_focus_time")
