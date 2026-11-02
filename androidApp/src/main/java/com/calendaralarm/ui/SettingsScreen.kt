@@ -1164,20 +1164,14 @@ private fun RingingCard(
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
     val context = LocalContext.current
-    // 既定の鳴動音 (#146)。個別アラーム単位の音は編集画面に既にある。永続権を取って
-    // URI を保持する (失効した URI でも鳴動側がシステム既定へ落ちるので無音にはならない)
+    var soundSelectionFailed by remember { mutableStateOf(false) }
     val soundPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri != null) {
-            // 永続権を出さない提供元もある。取れなくても選んだ音は保存し、
-            // 読めなくなった時は鳴動側がシステム既定へ落ちる (画面ごと落とさない)
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                )
+            scope.launch {
+                soundSelectionFailed = !settings.selectDefaultSound(uri)
             }
-            scope.launch { settings.setDefaultSoundUri(uri.toString()) }
         }
     }
     Card(
@@ -1224,10 +1218,21 @@ private fun RingingCard(
                 if (p.defaultSoundUri != null) {
                     FilterChip(
                         selected = false,
-                        onClick = { scope.launch { settings.setDefaultSoundUri(null) } },
+                        onClick = {
+                            scope.launch { settings.setDefaultSoundUri(null) }
+                            soundSelectionFailed = false
+                        },
                         label = { Text("標準に戻す", maxLines = 1) },
                     )
                 }
+            }
+            if (soundSelectionFailed) {
+                Text(
+                    "音声への継続アクセスを取得できませんでした。端末に保存したファイルを選び直してください。",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 32.dp),
+                )
             }
             // スヌーズプリセット (鳴動画面の +N分 ボタンに出る一覧)
             IconSettingRow(Icons.Default.Snooze) {
