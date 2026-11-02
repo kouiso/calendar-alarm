@@ -1730,14 +1730,14 @@ private fun ExtraReminderDialog(
     var days by remember { mutableStateOf("") }
     var hours by remember { mutableStateOf("") }
     var mins by remember { mutableStateOf("") }
-    val total = (days.toIntOrNull() ?: 0) * 1440 + (hours.toIntOrNull() ?: 0) * 60 + (mins.toIntOrNull() ?: 0)
+    val total = extraReminderMinutes(days.toIntOrNull() ?: 0, hours.toIntOrNull() ?: 0, mins.toIntOrNull() ?: 0)
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(
                 // 0分と登録済みは追加できない (0分は開始時刻の鳴動と同じなので意味を持たない)
-                enabled = total > 0 && total !in existing,
-                onClick = { onAdd(total) },
+                enabled = total != null && total !in existing,
+                onClick = { total?.let(onAdd) },
             ) { Text("追加") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } },
@@ -1762,10 +1762,17 @@ private fun ExtraReminderDialog(
                         modifier = Modifier.weight(1f), singleLine = true,
                     )
                 }
-                if (total > 0 && total in existing) {
+                if (total == null && listOf(days, hours, mins).any { it.isNotBlank() }) {
+                    Text("0〜30日・0〜23時間・0〜59分で指定してください", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                } else if (total in existing) {
                     Text("同じ時刻はすでに登録済みです", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
                 }
             }
         },
     )
+}
+
+internal fun extraReminderMinutes(days: Int, hours: Int, minutes: Int): Int? {
+    if (days !in 0..30 || hours !in 0..23 || minutes !in 0..59) return null
+    return (days * 1440 + hours * 60 + minutes).takeIf { it > 0 }
 }
