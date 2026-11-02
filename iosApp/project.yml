@@ -16,6 +16,19 @@ settings:
     # AI 機能のキー。配布ビルドには入れない (局長決定 2026-10-17 の7)。
     # 開発者が手元で試す時だけ xcodebuild OPENROUTER_API_KEY=... で渡す
     OPENROUTER_API_KEY: ""
+    # AdMob (#140)。未指定 = Google 公式のテストID。本番配信では xcodebuild 引数や
+    # base 設定差し替えで実IDにする (開発・自動テストはテスト広告のみ)
+    ADMOB_APP_ID: "ca-app-pub-3940256099942544~1458002511"
+    ADMOB_BANNER_UNIT_ID: "ca-app-pub-3940256099942544/2934735716"
+
+# 広告 (#140): Google Mobile Ads SDK + GDPR/EEA 同意 (UMP)。SPM で追加
+packages:
+  GoogleMobileAds:
+    url: https://github.com/googleads/swift-package-manager-google-mobile-ads.git
+    from: 13.11.0
+  GoogleUserMessagingPlatform:
+    url: https://github.com/googleads/swift-package-manager-google-user-messaging-platform.git
+    from: 3.1.0
 
 schemes:
   iosApp:
@@ -58,6 +71,10 @@ targets:
         embed: true
       - target: MailShareExt
         embed: true
+      - package: GoogleMobileAds
+        product: GoogleMobileAds
+      - package: GoogleUserMessagingPlatform
+        product: GoogleUserMessagingPlatform
     entitlements:
       path: iosApp/CalendarAlarm.entitlements
       properties:
@@ -94,6 +111,14 @@ targets:
           - com.calendaralarm.resync
         UIBackgroundModes:
           - processing
+        # 広告 (AdMob, #140)。開発・検証はテストID、本番は設定差し替え
+        GADApplicationIdentifier: $(ADMOB_APP_ID)
+        AdMobBannerUnitID: $(ADMOB_BANNER_UNIT_ID)
+        # AdMob の SKAdNetwork 計測 (最小限: Google 自身の識別子のみ)
+        SKAdNetworkItems:
+          - SKAdNetworkIdentifier: cstr6suwn9.skadnetwork
+        # UMP 経由の ATT 許可を求める地域でだけ使われる説明文。許可不要地域では出ない
+        NSUserTrackingUsageDescription: アラームを無料で提供するため、お住まいの地域の規則に沿って広告を表示します
         # 共有拡張から本体アプリを開くカスタムスキーム (メール→予定の受け渡し)
         CFBundleURLTypes:
           - CFBundleURLSchemes:

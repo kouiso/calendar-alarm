@@ -17,7 +17,7 @@ case "$mode" in
   all) ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest :androidApp:assembleDebug --stacktrace --no-parallel ;;
   android-build) ./gradlew :androidApp:assembleDebug --stacktrace ;;
   ios)
-    (cd iosApp; xcodegen generate; xcodebuild -project CalendarAlarm.xcodeproj -target iosApp -sdk iphonesimulator -configuration Debug build)
+    (cd iosApp; xcodegen generate; xcodebuild -project CalendarAlarm.xcodeproj -scheme iosApp -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -configuration Debug CODE_SIGNING_ALLOWED=NO build)
     ;;
   ios-logic)
     # なぜ: iOS の XCTest はシミュレータが要る。画面と SharedKit に依存しない計算だけを macOS の swiftc で検査する
