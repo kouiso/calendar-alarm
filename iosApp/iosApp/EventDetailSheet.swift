@@ -25,7 +25,9 @@ struct EventDetailSheet: View {
     }
     private var muted: Bool { action == .mute }
     private var minutes: Int { ov.minutesBefore ?? rule.minutesBefore }
-    private var extras: [Int] { ov.extraOffsets ?? rule.extraOffsets }
+    /// チップに出す追加リマインダー。予定ごとの指定が無ければ、共通リマインダー込みで実際に効く分 (#143)。
+    /// 時刻や動作だけ変える時は ov.extraOffsets (nil = 今のまま) を渡すので、共通リマインダーは焼き付かない
+    private var extras: [Int] { ov.extraOffsets ?? withCommonReminders(rule, store.state.extraReminderOffsets).extraOffsets }
 
     var body: some View {
         NavigationStack {
@@ -36,7 +38,8 @@ struct EventDetailSheet: View {
                     if let f = eventForecast { weatherCard(f) }
                     actionPicker
                     if !muted { timingPicker }
-                    extraChips
+                    // 受け継いだ時刻のチップが増えても画面からはみ出さないよう横にスクロールさせる
+                    ScrollView(.horizontal, showsIndicators: false) { extraChips }
                     if !ev.location.isEmpty { locationRow }
                     if store.state.overrides[ev.instanceKey] != nil {
                         resetButton
@@ -116,7 +119,9 @@ struct EventDetailSheet: View {
     private var extraChips: some View {
         HStack(spacing: 8) {
             Image(systemName: "plus.bell").foregroundStyle(.secondary)
-            ForEach(extraOptions, id: \.self) { m in
+            // 共通リマインダーなどで受け継いだ、決まった候補に無い時刻もチップに出す (#143)。
+            // 出さないと、その予定だけ外すことができない
+            ForEach(Array(Set(extraOptions + extras)).sorted(), id: \.self) { m in
                 let on = extras.contains(m)
                 Button {
                     var e = extras
@@ -125,7 +130,7 @@ struct EventDetailSheet: View {
                                       minutes: ov.minutesBefore, extras: e)
                     Task { await engine.resync(reason: "override") }
                 } label: {
-                    Text("+\(m)")
+                    Text(extraOptions.contains(m) ? "+\(m)" : "+" + reminderOffsetLabel(m))
                         .font(NightTheme.font(12, weight: .medium))
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(on ? NightTheme.indigo.opacity(0.2) : Color(uiColor: .tertiarySystemGroupedBackground),

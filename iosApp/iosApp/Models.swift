@@ -147,11 +147,11 @@ func passesEventFilters(_ ev: CalendarEventDTO, _ ov: EventOverrideDTO?, _ invit
     return invite.allows(ev.inviteStatus) && types.allows(ev)
 }
 
-/// Models.kt InviteFilter。
+/// Models.kt InviteFilter。既定は元アプリと同じ「承諾した招待のみ」(#155)。
 struct InviteFilter: Codable, Hashable {
     var accepted: Bool = true
-    var tentative: Bool = true
-    var needsAction: Bool = true
+    var tentative: Bool = false
+    var needsAction: Bool = false
     var declined: Bool = false
 
     func allows(_ status: String?) -> Bool {
@@ -356,6 +356,8 @@ struct ExpandRequest: Codable {
     var importEventReminders: Bool = true
     /// 全アラームの一括ミュート (NOTIFY・タイマーには効かない)
     var muteAll: Bool = false
+    /// 全イベント共通の追加リマインダー (分リスト, #143)
+    var commonExtraOffsets: [Int] = []
 }
 
 struct ExpandResult: Codable {
@@ -565,6 +567,18 @@ func notificationDeliveryAhead(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ o
     let offsets = (ov?.extraOffsets ?? rule.extraOffsets)
         + (importReminders ? ev.calendarReminderMinutes.filter { $0 >= 0 } : [])
     return offsets.contains { ahead($0) && !(startTriggerTaken && $0 == startMinutes) }
+}
+
+/// 全イベント共通の追加リマインダーをカレンダーの既定に併合したルール (#143)。
+/// shared `AlarmExpander.effectiveExtraOffsets` と同じく、予定ごとの extraOffsets 指定があればそちらが全体を置き換える
+/// (下の各判定は `ov?.extraOffsets ?? rule.extraOffsets` で読むので、このルールを渡せば同じ規則になる)。
+/// 一覧の鳴る／鳴らない表示用。保存するルールには使わない
+func withCommonReminders(_ rule: AlarmRuleDTO, _ common: [Int]) -> AlarmRuleDTO {
+    guard !common.isEmpty else { return rule }
+    var seen = Set<Int>()
+    var r = rule
+    r.extraOffsets = (rule.extraOffsets + common).filter { seen.insert($0).inserted }
+    return r
 }
 
 /// 予定が実際に使う動作。優先順は shared `AlarmExpander.resolveActions` と同じ:

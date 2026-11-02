@@ -229,6 +229,16 @@ final class DiagnosisPlanTests: XCTestCase {
         XCTAssertEqual(DiagnosisPlan.recentFailures([err, tooOld], ringHistory: [missed], nowMillis: now), 2)
     }
 
+    /// #136: 「アプリの外で止めた扱いにした回数」の行は 1 回以上ある時だけ出す。0 では出さない
+    func testBootDismissedItemOnlyWhenCounted() {
+        var input = baseInput(usesRealAlarms: true)
+        XCTAssertNil(DiagnosisPlan.items(input).first { $0.id == "boot_dismiss" })
+        input.offAppBootDismissed = 3
+        let item = DiagnosisPlan.items(input).first { $0.id == "boot_dismiss" }
+        XCTAssertEqual(item?.state, .info)
+        XCTAssertEqual(item?.title, "アプリの外で止めた扱いにした回数: 3")
+    }
+
     private func baseInput(usesRealAlarms: Bool) -> DiagnosisInput {
         DiagnosisInput(
             calendar: .granted, alarm: .granted, notify: .granted,
