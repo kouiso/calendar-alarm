@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>全体図</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.tb{border-collapse:collapse;width:100%}
+.tb th,.tb td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--div);font-size:15px;line-height:1.55;vertical-align:top}
+.tb th{color:var(--mu);font-weight:600;font-size:12px;letter-spacing:.08em}
+.tb tr:last-child td{border-bottom:0}
+.k{display:inline-flex;width:30px;height:30px;border-radius:50%;box-shadow:inset 0 0 0 1px var(--acl);color:var(--ac);align-items:center;justify-content:center;font-family:Outfit,sans-serif;font-size:16px;font-weight:500}
+.bd{font-family:Outfit,'IBM Plex Sans JP',sans-serif;color:var(--mu);white-space:nowrap}
+.flow{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--mu)}
+.flow b{color:var(--tx);font-weight:600}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1600px; height: 900px; padding: 56px 64px; flex-direction: column; gap: 28px; align-items: stretch">
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <p class="eye">#68 UI/UX 作り直し</p>
+    <h1 style="margin: 0; font-size: 36px; font-weight: 600; line-height: 1.35">予定の前に確実に鳴って、すぐ止められる</h1>
+    <p class="m" style="font-size: 16px">局長決定 1〜9（2026-10-17）に合わせた作り直し。下の各ボードが画面の正本。ダークが基本で、右のパネルの Tweaks でライトに切り替えられる。</p>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px">
+    <div class="card" style="padding: 6px 10px">
+      <table class="tb">
+        <tr><th>決定</th><th>画面でどう守るか</th><th>ボード</th></tr>
+        <tr><td><span class="k">1</span></td><td>足りない許可は1画面に1つだけ頼む。残り数は出さない</td><td class="bd">⓪ P-ASK</td></tr>
+        <tr><td><span class="k">2</span></td><td>断っても、権限画面の「全部許可する」とスイッチで直せる</td><td class="bd">⑨ P-PERM</td></tr>
+        <tr><td><span class="k">3</span></td><td>「他のアプリの上に重ねて表示」は、頼む画面にも権限画面にも出さない</td><td class="bd">⓪ ⑨</td></tr>
+        <tr><td><span class="k">4</span></td><td>元のアプリの機能は全部残す（予定・鳴動・アラーム・タイマー）</td><td class="bd">R1 R2</td></tr>
+        <tr><td><span class="k">5</span></td><td>設定は結果の見た目を並べて選ぶ（鳴る時刻・テーマ・スヌーズ）</td><td class="bd">⑤ P-SET</td></tr>
+      </table>
+    </div>
+    <div class="card" style="padding: 6px 10px">
+      <table class="tb">
+        <tr><th>決定</th><th>画面でどう守るか</th><th>ボード</th></tr>
+        <tr><td><span class="k">6</span></td><td>Google アカウントごとにまとめ、使う・鳴らす・何分前を持つ</td><td class="bd">⑩ P-ACCT</td></tr>
+        <tr><td><span class="k">7</span></td><td>AI のキー入力欄はどの画面にも置かない</td><td class="bd">⑤ P-SET</td></tr>
+        <tr><td><span class="k">8</span></td><td>設定の先頭に「アプリ」と「Google」の鳴る時刻を並べる。同じ時刻は1回</td><td class="bd">⑤ P-SET</td></tr>
+        <tr><td><span class="k">9</span></td><td>画面はストーリー S1〜S14 から引く（doc/spec/user-stories.md）</td><td class="bd">全ボード</td></tr>
+        <tr><td></td><td class="c-mu">番号 ⓪②⑤⑨⑩ は記録のある正本番号。他は画面 ID（R1・R2）で呼ぶ</td><td></td></tr>
+      </table>
+    </div>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <p class="flow"><b>初めて開く</b><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>⓪ 1つずつ頼む<svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>準備OK<svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>R2 予定画面</p>
+    <p class="flow"><b>断った時</b><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>R2 のバナー「直す」<svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>⑨ 権限</p>
+    <p class="flow"><b>鳴った時</b><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>R1 鳴動画面（ロック中は ② 通知の「停止」）</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1600,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

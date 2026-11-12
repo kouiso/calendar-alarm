@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#146 端末の音声ファイル（Android）</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.s52{display:flex;align-items:center;gap:8px;min-height:56px;border-bottom:1px solid var(--div)}
+.s52:last-child{border-bottom:0}
+.s52>.i{color:var(--mu);margin-right:4px}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1272px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 標準の音</div>
+    <div class="sub">最初は端末の標準のアラーム音。「選ぶ」で端末の音声ファイル選びが開く</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="s52"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg><p class="t grow">アラーム音: 標準</p><button class="ghost">選ぶ</button></div>
+        </div>
+        <p class="m" style="padding: 0 6px">アプリに入っている音の一覧や、試しに聞くボタンは無い。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. ファイルを選んだ後</div>
+    <div class="sub">表示は「カスタム」になり、「標準に戻す」が出る。ファイル名は出ない</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="s52"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg><p class="t grow">アラーム音: カスタム</p><button class="ghost">選ぶ</button><button class="ghost">標準に戻す</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">3. 続けて読めないファイルだった</div>
+    <div class="sub">後で鳴らす時に読めないと困るので、選んだ時点で断る。音は前のまま</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="s52"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg><p class="t grow">アラーム音: 標準</p><button class="ghost">選ぶ</button></div>
+        </div>
+        <div class="banner ng"><p class="t grow">音声への継続アクセスを取得できませんでした。端末に保存したファイルを選び直してください。</p></div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">アラームごとの音（アラーム編集の「標準／選択中」）は、これとは別に持つ。</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1272,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

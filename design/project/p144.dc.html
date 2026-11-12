@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#144 終日予定</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.blk{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-bottom:1px solid var(--div)}
+.blk:last-child{border-bottom:0}
+.dy{display:flex;align-items:center;gap:12px;min-height:52px;border-bottom:1px solid var(--div)}
+.dy:last-child{border-bottom:0}
+.dy>.num{width:56px;font-size:18px;font-weight:500;flex:none}
+.dy.off>.num{color:var(--mu)}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1272px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. カレンダーごとの「終日」 <span class="chip ok">実装あり</span></div>
+    <div class="sub">設定のカレンダーの行を開いて決める。鳴らさないか、当日の 8:00・9:00・12:00。既定は 9:00</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="it"><span class="cal" style="background: #8AB4F8"></span><div class="grow"><p class="t">仕事</p><p class="m">開始時 · 終日<span class="num">9:00</span></p></div><button class="sw on" aria-label="仕事で鳴らす"></button><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></div>
+          <div class="blk"><p class="m">終日</p><div class="seg" role="group" aria-label="終日の予定を鳴らす時刻"><button style="font-size: 12px">鳴らさない</button><button><span class="num">8:00</span></button><button class="on"><span class="num">9:00</span></button><button><span class="num">12:00</span></button></div></div>
+        </div>
+        <div class="prev">
+          <p class="m">10月28日 (水) 終日「出張」なら</p>
+          <p class="t" style="font-size: 14px">10月28日 <span class="num c-ac" style="font-size: 17px">9:00</span> に鳴る</p>
+        </div>
+        <p class="m" style="padding: 0 6px">今の表示は「OFF」。「鳴らさない」にそろえる（#224）。アプリ全体でまとめて決める行は無い。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 複数日 <span class="case">案A</span> <span class="chip mu">未実装の案</span></div>
+    <div class="sub">初日だけ鳴らす。通知が少なく、旅行・出張向き</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card" style="gap: 4px">
+          <div><p class="t">出張</p><p class="m">10月28日〜30日（3日間）</p></div>
+          <div>
+            <div class="dy"><span class="num">10/28</span><span class="t grow" style="font-size: 14px"><span class="num" style="font-size: 16px">9:00</span> に鳴る</span><span class="chip ac">鳴る</span></div>
+            <div class="dy off"><span class="num">10/29</span><span class="m grow">鳴らさない</span></div>
+            <div class="dy off"><span class="num">10/30</span><span class="m grow">鳴らさない</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 複数日 <span class="case">案B</span> <span class="chip mu">未実装の案</span></div>
+    <div class="sub">毎日鳴らす。連日の休み・当番に向く。設定で「初日だけ」に切り替え可</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card" style="gap: 4px">
+          <div><p class="t">出張</p><p class="m">10月28日〜30日（3日間）</p></div>
+          <div>
+            <div class="dy"><span class="num">10/28</span><span class="t grow" style="font-size: 14px"><span class="num" style="font-size: 16px">9:00</span> に鳴る</span><span class="chip ac">鳴る</span></div>
+            <div class="dy"><span class="num">10/29</span><span class="t grow" style="font-size: 14px"><span class="num" style="font-size: 16px">9:00</span> に鳴る</span><span class="chip ac">鳴る</span></div>
+            <div class="dy"><span class="num">10/30</span><span class="t grow" style="font-size: 14px"><span class="num" style="font-size: 16px">9:00</span> に鳴る</span><span class="chip ac">鳴る</span></div>
+          </div>
+        </div>
+        <div class="card ls"><div class="it"><p class="t grow">何日もある予定は初日だけ</p><button class="sw" aria-label="何日もある予定は初日だけ"></button></div></div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">repo には、何日もある終日予定を分けて扱う処理はまだ無い。</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1272,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

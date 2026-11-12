@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#153 トラブルシューティング</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ck{display:flex;flex-direction:column;gap:4px;padding:12px 0;border-bottom:1px solid var(--div)}
+.ck:last-child{border-bottom:0}
+.ck .hd{display:flex;align-items:center;gap:8px}
+.ck .t{font-size:14px;flex:1;min-width:0}
+.ck .m{font-size:12px}
+.op{background:none;border:0;color:var(--ac);font-size:13px;font-weight:600;min-height:44px;padding:0;display:flex;align-items:center;gap:6px;align-self:flex-start}
+.bl{background:none;border:0;color:inherit;font-size:13px;font-weight:600;min-height:44px;padding:0 10px;flex:none}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1272px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 上の方（Android） <span class="case">#228</span></div>
+    <div class="sub">8つの点検。状態は印に加えて言葉の札でも出す。直せる行には「設定を開く」と書く</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1 grow" style="font-size: 19px">トラブルシューティング</h2><button class="ib" aria-label="再チェック"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3M18 3v4h-4M6 21v-4h4"/></svg></button></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="ck"><div class="hd"><p class="t">カレンダー権限あり</p><span class="chip ok">OK</span></div><p class="m">予定を見つけ、全画面アラーム通知をスケジュールするために必要です。</p></div>
+          <div class="ck"><div class="hd"><p class="t">通知が有効です</p><span class="chip ok">OK</span></div><p class="m">アラームを表示できるように、アプリ通知を有効にしてアラートを許可してください。</p></div>
+          <div class="ck"><div class="hd"><p class="t">アラーム通知が正しく設定されています</p><span class="chip ok">OK</span></div><p class="m">チャンネル「alarm_vib」は重要度が高く、ロック画面に表示される必要があります。</p></div>
+          <div class="ck"><div class="hd"><p class="t">バッテリー最適化の対象です（鳴動には影響しません）</p><span class="chip mu">参考</span></div><p class="m">アラームは最適化の対象でも鳴ります。端末独自の省電力で遅れる場合だけ、対象外にしてください。</p><button class="op">設定を開く<svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H6v11h11v-5"/></svg></button></div>
+          <div class="ck"><div class="hd"><p class="t">バックグラウンド制限なし</p><span class="chip ok">OK</span></div><p class="m">アラームが届くように、このアプリのシステムバックグラウンド制限をオフにしてください。</p></div>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">今は左の印の色と形だけ。「OK／要対応／参考／対象外」は読み上げにしか無い。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 下の方（Android） <span class="case">#228</span></div>
+    <div class="sub">要対応の行は赤い札。最後に「フルスクリーン通知を強制する」のスイッチ（既定オン）</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1 grow" style="font-size: 19px">トラブルシューティング</h2><button class="ib" aria-label="再チェック"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3M18 3v4h-4M6 21v-4h4"/></svg></button></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="ck"><div class="hd"><p class="t">正確なアラームが許可されていません</p><span class="chip ng">要対応</span></div><p class="m">アラームを時間どおりに鳴らすには、正確なアラームの権限が必要です。</p><button class="op">設定を開く<svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H6v11h11v-5"/></svg></button></div>
+          <div class="ck"><div class="hd"><p class="t">全画面アラーム通知を表示可能</p><span class="chip ok">OK</span></div><p class="m">通常の目覚まし時計と同じようにアラームをロック画面へ全画面表示するには、この許可が必要です。</p></div>
+          <div class="ck"><div class="hd"><p class="t">おやすみモード中にアラーム可能</p><span class="chip ok">OK</span></div><p class="m">おやすみモード中でもアラームが鳴るよう、おやすみモードの「アラーム」を許可してください。</p></div>
+        </div>
+        <div class="card">
+          <div style="display: flex; align-items: center; gap: 12px"><p class="t grow">フルスクリーン通知を強制する</p><button class="sw on" aria-label="フルスクリーン通知を強制する"></button></div>
+          <p class="m" style="font-size: 12px">オンの時は鳴動画面を常に全画面で出します。オフだとヘッズアップ通知のみで、通知を開くと鳴動画面が出ます。ただし通知が出せない設定の時は、止められるよう全画面の停止画面を出します。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">3. 入口 <span class="chip ok">実装あり</span></div>
+    <div class="sub">設定の「鳴動の状態」の中と、予定画面の「原因を見る」。権限画面とは別の画面として持つ</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">10月27日 (火)</h2></div>
+      <div class="body">
+        <div class="hero">
+          <div class="hr"><div class="grow"><p class="eye">次のアラーム</p><p class="t">定例ミーティング</p></div><span class="big">8:50</span></div>
+          <p class="live w">直近24時間に鳴らせなかったアラームが1件あります</p>
+        </div>
+        <div class="banner ng"><p class="t grow">直近24時間に鳴らせなかったアラームが1件あります</p><button class="bl">原因を見る</button></div>
+      </div>
+      <nav class="tab" aria-label="タブ"><button class="on"><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg></i>予定</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5M5 4L3 6M19 4l2 2"/></svg></i>アラーム</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="7"/><path d="M12 14v-3.5M10 3h4"/></svg></i>タイマー</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></i>設定</button></nav>
+    </div>
+    <p class="m" style="margin-top: 8px">iPhone は「鳴らない時の診断」。項目の並びが別で、「10秒後に鳴動テスト」が付く。</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1272,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

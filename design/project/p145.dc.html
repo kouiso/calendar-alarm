@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#145 スヌーズの分数・自動スヌーズ</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.lnk.mo{display:flex;align-items:center;justify-content:center;gap:6px;min-height:40px}
+.pre{display:flex;gap:6px}
+.pre button{flex:1;height:40px;border:0;border-radius:14px;background:var(--glass);color:var(--tx);font-size:13px;padding:0}
+.pm{width:64px;height:64px;border-radius:50%;border:0;background:var(--glass);color:var(--tx);display:flex;align-items:center;justify-content:center;flex:none}
+.stp{display:flex;align-items:center;gap:8px}
+.stp .snz{flex:1;width:auto;min-width:0;font-size:17px}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1272px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 設定: スヌーズ <span class="case">#217</span></div>
+    <div class="sub">いつもの分数、鳴動画面に並べる分数、放っておいた時の自動スヌーズ（Android）</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card">
+          <p class="t">いつものスヌーズ</p>
+          <div class="chips"><button class="c">5分</button><button class="c on">10分</button><button class="c">15分</button></div>
+          <p class="m"><span class="num">6:30</span> に鳴ってスヌーズ → <span class="num c-ac" style="font-size: 15px; font-weight: 500">6:40</span> にもう一度</p>
+        </div>
+        <div class="card">
+          <div><p class="t">鳴動画面で選べるスヌーズ</p><p class="m">鳴った時に、あと何分後にもう一度鳴らすかを選べます（いくつでも）。</p></div>
+          <div class="chips"><button class="c">1分</button><button class="c on">5分</button><button class="c on">10分</button><button class="c on">15分</button><button class="c">20分</button><button class="c on">30分</button><button class="c on">45分</button><button class="c on">60分</button><button class="c">90分</button></div>
+        </div>
+        <div class="card">
+          <div style="display: flex; align-items: center; gap: 12px"><p class="t grow">放置したら自動でスヌーズ</p><button class="sw on" aria-label="放置したら自動でスヌーズ"></button></div>
+          <p class="t">自動スヌーズの回数上限</p>
+          <div class="seg" role="group" aria-label="自動スヌーズの回数上限"><button>2回</button><button class="on">3回</button><button>4回</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">選択肢と既定（10分・自動スヌーズはオフ）は今のまま。今の Android は見出しが無く印だけ。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 鳴動画面で分数を選ぶ <span class="chip ok">実装あり</span></div>
+    <div class="sub">「スヌーズ時間を選ぶ」を開くと、設定で選んだ分数が並ぶ</div>
+    <div class="ph dk rg">
+      <span class="pill">10月27日 (火)</span>
+      <div class="ring">
+        <div class="dial"><b>8:50</b></div>
+        <p class="t c-ac" style="font-weight: 600">10分後に開始</p>
+        <p class="rt">定例ミーティング</p>
+      </div>
+      <div class="acts">
+        <button class="snz">スヌーズ <span class="num">10</span>分</button>
+        <button class="lnk mo">スヌーズ時間を選ぶ<svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+        <div class="pre"><button>+5分</button><button>+10分</button><button>+15分</button><button>+30分</button><button>+45分</button><button>+60分</button></div>
+        <div class="track" role="group" aria-label="スライドして停止"><span class="knob"></span><b>スライドして停止</b></div>
+        <p class="foot">Calendar Alarm</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">3. −／＋ で1分ずつ <span class="chip mu">未実装の案</span></div>
+    <div class="sub">スヌーズの両わきで1分ずつ増減する案。今の実装は 2 の「選ぶ」方式</div>
+    <div class="ph dk rg">
+      <span class="pill">10月27日 (火)</span>
+      <div class="ring">
+        <div class="dial"><b>8:50</b></div>
+        <p class="t c-ac" style="font-weight: 600">10分後に開始</p>
+        <p class="rt">定例ミーティング</p>
+      </div>
+      <div class="acts">
+        <div class="stp">
+          <button class="pm" aria-label="1分へらす"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+          <button class="snz">スヌーズ <span class="num">7</span>分</button>
+          <button class="pm" aria-label="1分ふやす"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+        </div>
+        <div class="track" role="group" aria-label="スライドして停止"><span class="knob"></span><b>スライドして停止</b></div>
+        <p class="foot">Calendar Alarm</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1272,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

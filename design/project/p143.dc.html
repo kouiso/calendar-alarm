@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#143 全予定共通の追加リマインダー</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.kw{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 10px 0 14px;border-radius:20px;background:var(--acs);color:var(--ac);font-size:13px;font-weight:600}
+.nf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.nf label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mu)}
+.nf input{height:48px;border-radius:14px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font-family:Outfit,sans-serif;font-size:20px;text-align:center;width:100%;padding:0}
+.da{display:flex;justify-content:flex-end;gap:4px}
+.da button{background:none;border:0;min-height:44px;padding:0 14px;font-size:14px;font-weight:600;color:var(--ac)}
+.wheel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}
+.wheel div{display:flex;flex-direction:column;gap:4px;font-family:Outfit,'IBM Plex Sans JP',sans-serif;font-size:18px;color:var(--mu)}
+.wheel b{font-weight:400;color:var(--tx);font-size:30px;line-height:1;background:var(--raised);border-radius:14px;padding:12px 0;display:flex;align-items:baseline;justify-content:center;gap:4px}
+.wheel small{font-family:'IBM Plex Sans JP',sans-serif;font-size:13px;color:var(--mu);font-weight:500}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1272px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 設定のカード</div>
+    <div class="sub">どの予定にも足す時刻。登録した物は札で並び、× で消せる</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card">
+          <div><p class="t">全イベントへの追加リマインダー</p><p class="m">予定ごとの指定とは別に、全ての予定に共通で鳴らす時刻を登録します。同じ時刻は1回だけ鳴ります</p></div>
+          <div class="chips"><span class="kw">20分前<svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg></span><span class="kw">1日前<svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg></span><button class="c"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align: -3px; margin-right: 4px"><path d="M12 5v14M5 12h14"/></svg>追加</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 追加（Android）</div>
+    <div class="sub">日・時間・分を数字で入れる。0 や登録済みの時刻では「追加」を押せない</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body"><div class="card"><p class="t">全イベントへの追加リマインダー</p></div></div>
+      <div class="dim"></div>
+      <div class="dlg" role="dialog" aria-label="追加リマインダー" style="top: 180px">
+        <p class="st" style="font-size: 20px">追加リマインダー</p>
+        <p class="m">予定の開始の何日前・何時間前・何分前に鳴らすかを入力してください</p>
+        <div class="nf">
+          <label for="d1">日<input id="d1" value="0" inputmode="numeric"></label>
+          <label for="h1">時間<input id="h1" value="0" inputmode="numeric"></label>
+          <label for="m1">分<input id="m1" value="20" inputmode="numeric"></label>
+        </div>
+        <p class="m c-ng" style="font-size: 12px">同じ時刻はすでに登録済みです</p>
+        <div class="da"><button class="c-mu">キャンセル</button><button disabled style="opacity: .45">追加</button></div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">範囲の外は「0〜30日・0〜23時間・0〜59分で指定してください」。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">3. 追加（iPhone）</div>
+    <div class="sub">下から出る回して選ぶ形。最初は 20分。ボタンは「やめる」と「追加」</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body"><div class="card"><p class="t">全イベントへの追加リマインダー</p></div></div>
+      <div class="dim"></div>
+      <div class="sheet">
+        <div class="wheel">
+          <div><span style="visibility: hidden">0</span><b>0<small>日</small></b><span>1</span></div>
+          <div><span style="visibility: hidden">0</span><b>0<small>時間</small></b><span>1</span></div>
+          <div><span>19</span><b>20<small>分</small></b><span>21</span></div>
+        </div>
+        <button class="btn">追加</button>
+        <button class="lnk">やめる</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1272,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>
