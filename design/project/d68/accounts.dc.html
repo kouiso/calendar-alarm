@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Google アカウントとカレンダー</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.av{width:36px;height:36px;border-radius:50%;background:var(--ggs);color:var(--gg);display:flex;align-items:center;justify-content:center;font-family:Outfit,sans-serif;font-size:16px;font-weight:500;flex:none}
+.blk{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-bottom:1px solid var(--div)}
+.blk:last-child{border-bottom:0}
+.act{display:flex;align-items:center;gap:12px;min-height:48px;border-bottom:1px solid var(--div);background:none;border-left:0;border-right:0;border-top:0;color:var(--tx);font-size:15px;font-weight:500;padding:0;width:100%;text-align:left}
+.act:last-child{border-bottom:0}
+.act>.i{color:var(--mu)}
+.dimd{opacity:.5}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1680px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. アカウントごとのまとまり <span class="case">#205</span> <span class="case">#218</span></div>
+    <div class="sub">アカウントの見出しに数とスイッチ。下の操作は印だけにせず、言葉で書く</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1">カレンダー</h2></div>
+      <div class="body" style="gap: 10px">
+        <div class="card ls">
+          <div class="it"><span class="av">W</span><div class="grow"><p class="t">work@example.com</p><p class="m">2つのうち1つで鳴らす</p></div><button class="sw on" aria-label="work@example.com の予定で鳴らす"></button></div>
+          <div class="it"><span class="cal" style="background: #8AB4F8"></span><div class="grow"><p class="t">仕事</p><p class="m">10分前 · 終日は <span class="num">9:00</span></p></div><button class="sw on" aria-label="仕事で鳴らす"></button><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div>
+          <div class="it"><span class="cal" style="background: #86D2C7"></span><div class="grow"><p class="t c-mu">チーム共有</p><p class="m">鳴らさない</p></div><button class="sw" aria-label="チーム共有で鳴らす"></button><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div>
+        </div>
+        <div class="card ls">
+          <div class="it"><span class="av">M</span><div class="grow"><p class="t">me@example.com</p><p class="m">1つのうち1つで鳴らす</p></div><button class="sw on" aria-label="me@example.com の予定で鳴らす"></button></div>
+          <div class="it"><span class="cal" style="background: #F4A3B5"></span><div class="grow"><p class="t">プライベート</p><p class="m">開始時 · 終日は <span class="num">9:00</span></p></div><button class="sw on" aria-label="プライベートで鳴らす"></button><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div>
+        </div>
+        <div class="card ls">
+          <button class="act"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="9" r="4"/><path d="M3 20a7 7 0 0 1 14 0M19 8v6M16 11h6"/></svg>端末にアカウントを追加</button>
+          <button class="act"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3M18 3v4h-4M6 21v-4h4"/></svg>今すぐ取り込み直す</button>
+          <button class="act"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.5"/></svg>取り込みについて</button>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">今は「人＋・ⓘ・↻」の印だけが並ぶ。追加は端末のアカウント追加画面が開く。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. アカウントごと止めた時 <span class="case">#206</span></div>
+    <div class="sub">見出しのスイッチ1つで止める。カレンダーごとの設定は消さず、止めている間は薄く見せる</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1">カレンダー</h2></div>
+      <div class="body" style="gap: 10px">
+        <div class="card ls">
+          <div class="it"><span class="av">W</span><div class="grow"><p class="t">work@example.com</p><p class="m c-ng">このアカウントは止めています</p></div><button class="sw" aria-label="work@example.com の予定で鳴らす"></button></div>
+          <div class="it dimd"><span class="cal" style="background: #8AB4F8"></span><div class="grow"><p class="t">仕事</p><p class="m">10分前 · 終日は <span class="num">9:00</span></p></div><button class="sw on" disabled aria-label="仕事で鳴らす（アカウントを止めている）"></button></div>
+          <div class="it dimd"><span class="cal" style="background: #86D2C7"></span><div class="grow"><p class="t">チーム共有</p><p class="m">鳴らさない</p></div><button class="sw" disabled aria-label="チーム共有で鳴らす（アカウントを止めている）"></button></div>
+          <p class="m" style="padding: 10px 0 12px">戻すと、カレンダーごとの設定は前のまま戻ります。Google 側の通知やメールは変えません。</p>
+        </div>
+        <div class="card ls">
+          <div class="it"><span class="av">M</span><div class="grow"><p class="t">me@example.com</p><p class="m">1つのうち1つで鳴らす</p></div><button class="sw on" aria-label="me@example.com の予定で鳴らす"></button></div>
+          <div class="it"><span class="cal" style="background: #F4A3B5"></span><div class="grow"><p class="t">プライベート</p><p class="m">開始時 · 終日は <span class="num">9:00</span></p></div><button class="sw on" aria-label="プライベートで鳴らす"></button><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">今は見出しにスイッチが2つ（「使う」と「このアカウントの予定で鳴らす」）ある。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">3. カレンダーを開いた時 <span class="case">#224</span></div>
+    <div class="sub">何分前・終日の時刻・鳴らし方。言葉はほかの画面と同じにする</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1">カレンダー</h2></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="it"><span class="cal" style="background: #8AB4F8"></span><div class="grow"><p class="t">仕事</p><p class="m">10分前 · 終日は <span class="num">9:00</span></p></div><button class="sw on" aria-label="仕事で鳴らす"></button><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></div>
+          <div class="blk"><p class="m">何分前に鳴らすか</p><div class="chips"><button class="c">既定（開始時）</button><button class="c">開始時</button><button class="c">5分前</button><button class="c on">10分前</button><button class="c">15分前</button><button class="c">30分前</button></div></div>
+          <div class="blk"><p class="m">終日の予定を鳴らす時刻</p><div class="seg" role="group" aria-label="終日の予定を鳴らす時刻"><button style="font-size: 12px">鳴らさない</button><button><span class="num">8:00</span></button><button class="on"><span class="num">9:00</span></button><button><span class="num">12:00</span></button></div></div>
+          <div class="blk"><p class="m">予定の開始</p><div class="seg" role="group" aria-label="予定の開始の鳴らし方"><button class="on">アラーム</button><button>通知のみ</button><button>鳴らさない</button></div></div>
+          <div class="blk"><p class="m">「○分前」の通知</p><div class="seg" role="group" aria-label="○分前の通知の鳴らし方"><button class="on">アラーム</button><button>通知のみ</button><button>鳴らさない</button></div></div>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">今は「既定（開始時）／5分／OFF」「開始／通知分」「アラーム／通知／OFF」と書いている。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">4. Google 連携（予定の種類を読む） <span class="chip ok">実装あり</span></div>
+    <div class="sub">連携すると予定の種類を Google から読む。無い時はタイトルから推定する</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1">鳴らす予定</h2></div>
+      <div class="body">
+        <p class="sec">連携している時</p>
+        <div class="card ls">
+          <div class="it"><p class="t grow">連携中: work@example.com</p><button class="ghost">解除</button></div>
+          <div class="it"><p class="t grow">別のアカウントも連携する</p><button class="ghost">連携</button></div>
+        </div>
+        <p class="sec">連携していない時</p>
+        <div class="card ls">
+          <div class="it"><p class="t grow">未連携 (種別はタイトル推測)</p><button class="ghost">連携</button></div>
+        </div>
+        <p class="m" style="padding: 0 6px">種類は予定のタイトルから推定します。Google 連携をすると Google の種類で判定します。</p>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">iPhone には Google 連携と「端末にアカウントを追加」は無い。</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1680,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>目次</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.tb{border-collapse:collapse;width:100%}
+.tb td,.tb th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--div);font-size:14px;line-height:1.5;vertical-align:middle}
+.tb th{color:var(--mu);font-weight:600;font-size:12px;letter-spacing:.08em}
+.tb tr:last-child td{border-bottom:0}
+.no{font-family:Outfit,sans-serif;font-size:16px;font-weight:500;color:var(--ac);margin-right:8px}
+.nt{color:var(--mu);font-size:13px}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1600px; height: 900px; padding: 48px 64px; flex-direction: column; gap: 20px; align-items: stretch">
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <p class="eye">#140・#142〜#155</p>
+    <h1 style="margin: 0; font-size: 32px; font-weight: 600; line-height: 1.35">設定・鳴動の追加機能</h1>
+    <p class="m" style="font-size: 15px">1つの PBI = 1つのボード。repo に実装がある所は実装の項目・選択肢・文言で描き、無い所は「未実装の案」の札を付けた。見た目の決まりは右の「デザインの決まり」、repo を直す所と PBI の対応はその右の「repo を直す所」。</p>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px">
+    <div class="card" style="padding: 6px 10px">
+      <table class="tb">
+        <tr><th>PBI</th><th>Issue</th><th>repo の実装</th></tr>
+        <tr><td><span class="no">#140</span>広告</td><td><span class="chip mu">未完了</span></td><td><span class="chip mu">無い</span></td></tr>
+        <tr><td><span class="no">#142</span>3択</td><td><span class="chip ok">完了</span></td><td><span class="chip ok">あり</span></td></tr>
+        <tr><td><span class="no">#143</span>共通の追加リマインダー</td><td><span class="chip mu">未完了</span></td><td><span class="chip ok">あり</span></td></tr>
+        <tr><td><span class="no">#144</span>終日</td><td><span class="chip mu">未完了</span></td><td><span class="chip ac">一部</span> <span class="nt">カレンダーごとの時刻まで。複数日は無い</span></td></tr>
+        <tr><td><span class="no">#145</span>スヌーズ</td><td><span class="chip mu">未完了</span></td><td><span class="chip ac">一部</span> <span class="nt">選ぶ方式と自動スヌーズ。−／＋ は無い</span></td></tr>
+        <tr><td><span class="no">#146</span>音声ファイル</td><td><span class="chip mu">未完了</span></td><td><span class="chip ok">あり</span> <span class="nt">Android</span></td></tr>
+        <tr><td><span class="no">#147</span>アラーム音</td><td><span class="chip mu">未完了</span></td><td><span class="chip ac">一部</span> <span class="nt">iOS。ファイルから選ぶ。同梱の音の一覧は無い</span></td></tr>
+        <tr><td><span class="no">#148</span>音量・鳴る長さ</td><td><span class="chip mu">未完了</span></td><td><span class="chip ok">あり</span> <span class="nt">Android</span></td></tr>
+      </table>
+    </div>
+    <div class="card" style="padding: 6px 10px">
+      <table class="tb">
+        <tr><th>PBI</th><th>Issue</th><th>repo の実装</th></tr>
+        <tr><td><span class="no">#149</span>おやすみモード</td><td><span class="chip mu">未完了</span></td><td><span class="chip mu">無い</span> <span class="nt">診断の行だけある</span></td></tr>
+        <tr><td><span class="no">#150</span>通知ルール</td><td><span class="chip ok">完了</span></td><td><span class="chip ok">あり</span> <span class="nt">Android</span></td></tr>
+        <tr><td><span class="no">#151</span>週番号・次のアラーム</td><td><span class="chip mu">未完了</span></td><td><span class="chip ok">あり</span></td></tr>
+        <tr><td><span class="no">#152</span>鳴動画面の天気</td><td><span class="chip ok">完了</span></td><td><span class="chip ok">あり</span></td></tr>
+        <tr><td><span class="no">#153</span>鳴らない時は</td><td><span class="chip mu">未完了</span></td><td><span class="chip ok">あり</span> <span class="nt">iPhone は別の診断画面</span></td></tr>
+        <tr><td><span class="no">#154</span>大きいボタン・外観</td><td><span class="chip mu">未完了</span></td><td><span class="chip ac">一部</span> <span class="nt">テーマ10色と背景画像まで</span></td></tr>
+        <tr><td><span class="no">#155</span>招待</td><td><span class="chip mu">未完了</span></td><td><span class="chip ok">あり</span></td></tr>
+        <tr><td class="c-mu">#139・#141</td><td colspan="2" class="c-mu">調査 PBI と実装 PR のため画面なし（#140 のボードが #141 の正本）</td></tr>
+      </table>
+    </div>
+  </div>
+  <p class="m">Issue の状態と repo の実装は 2026-11-11 時点。実装は master のコードを読んで確かめた（実機では動かしていない）。</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1600,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

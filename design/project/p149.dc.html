@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#149 おやすみモード中も鳴らす（Android）</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 864px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 許可あり <span class="chip mu">未実装の案</span></div>
+    <div class="sub">既定はオン。おやすみモード（サイレント）中でも全画面で鳴らす</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="it"><svg class="i c-ac" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><div class="grow"><p class="t">おやすみモード中も鳴らす</p><p class="m">サイレントにしていても、アラームだけは鳴ります</p></div><button class="sw on" aria-label="おやすみモード中も鳴らす"></button></div>
+        </div>
+        <div class="prev">
+          <p class="m">オフにすると</p>
+          <p class="t" style="font-size: 14px">おやすみモード中は鳴らさず、通知だけ残す</p>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">今あるのは、トラブルシューティングの行「おやすみモード中にアラーム可能」だけ。切り替えは無い。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 許可がまだない <span class="chip mu">未実装の案</span></div>
+    <div class="sub">スイッチは押せない表示。すぐ下に許可への道を置く</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="it"><svg class="i c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><div class="grow" style="opacity: .6"><p class="t">おやすみモード中も鳴らす</p><p class="m">サイレントにしていても、アラームだけは鳴ります</p></div><button class="sw" disabled aria-label="おやすみモード中も鳴らす（許可が必要）"></button></div>
+          <div style="padding: 12px 0 14px; display: flex; flex-direction: column; gap: 12px">
+            <p class="m c-tx">使うには「おやすみモードの例外」の許可が要ります。</p>
+            <button class="btn">許可を開く</button>
+          </div>
+        </div>
+        <p class="m" style="padding: 0 6px">iPhone では、おやすみモードの扱いは iPhone 側で決まるため、この項目は出しません。</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":864,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

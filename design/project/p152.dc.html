@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#152 鳴動画面の天気（Android）</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.lnk.mo{display:flex;align-items:center;justify-content:center;gap:6px;min-height:40px}
+.ir{display:flex;align-items:center;gap:12px;min-height:56px;border-bottom:1px solid var(--div)}
+.ir:last-child{border-bottom:0}
+.ir>.i{color:var(--mu)}
+.fl{height:44px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--bd);display:flex;align-items:center;padding:0 12px;font-size:14px;flex:1;min-width:0}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 864px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 天気が取れた時（Android）</div>
+    <div class="sub">予定名の下に「晴れ 18°」の1行。背景も天気の色になる。取れない時は行ごと出さない</div>
+    <div class="ph dk rg" style="background: linear-gradient(180deg, #1B2C47 0%, #101826 38%, #0A0C11 70%)">
+      <span class="pill">10月27日 (火)</span>
+      <div class="ring">
+        <div class="dial"><b>8:50</b></div>
+        <p class="t c-ac" style="font-weight: 600">10分後に開始</p>
+        <p class="rt">定例ミーティング</p>
+        <span class="pill" style="margin-top: 8px">晴れ <span class="num c-tx" style="font-size: 15px">18°</span></span>
+      </div>
+      <div class="acts">
+        <button class="snz">スヌーズ <span class="num">5</span>分</button>
+        <button class="lnk mo">スヌーズ時間を選ぶ<svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+        <div class="track" role="group" aria-label="スライドして停止"><span class="knob"></span><b>スライドして停止</b></div>
+        <p class="foot">Calendar Alarm</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 設定: 天気</div>
+    <div class="sub">地点を入れると天気が出る。予定画面の上と鳴動画面で、別々に切れる</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="ir"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.5 5.5l1.5 1.5M17 17l1.5 1.5M5.5 18.5L7 17M17 7l1.5-1.5"/></svg><p class="t grow">天気</p><button class="sw on" aria-label="天気を出す"></button></div>
+          <div class="ir"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.500-6 10-6 10z"/><circle cx="12" cy="11" r="2"/></svg><span class="fl">東京</span><button class="ghost">保存</button></div>
+          <div class="ir"><p class="t grow">ヘッダー</p><button class="sw on" aria-label="ヘッダーに天気を出す"></button></div>
+          <div class="ir"><p class="t grow">鳴動画面</p><button class="sw on" aria-label="鳴動画面に天気を出す"></button></div>
+        </div>
+        <p class="m" style="padding: 0 6px">地点の欄が空の時は「地点 (例: 東京)」と出て、天気は出ない。今の実装は1行目に見出しが無く、太陽の印とスイッチだけ。</p>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">iPhone の鳴動画面は、印と「18°」だけを出す。</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":864,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

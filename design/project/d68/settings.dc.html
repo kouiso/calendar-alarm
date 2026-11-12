@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>設定</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.chip.nd::before{content:none}
+.nv{display:flex;align-items:center;gap:12px;min-height:44px;border-bottom:1px solid var(--div)}
+.nv:last-child{border-bottom:0}
+.nv>.i:first-child{color:var(--mu)}
+.nv .t{flex:1;min-width:0}
+.nv .m{white-space:nowrap}
+.kw{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 10px 0 14px;border-radius:20px;background:var(--acs);color:var(--ac);font-size:13px;font-weight:600}
+.pal{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px 4px;justify-items:center;font-size:11px;color:var(--mu)}
+.pal span{display:flex;flex-direction:column;align-items:center;gap:4px}
+.swt{width:40px;height:40px;border-radius:50%;border:0;padding:0;display:flex;align-items:center;justify-content:center;color:#2C1600}
+.swt.on{box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--tx)}
+.d{width:36px;height:36px;border-radius:50%;border:0;background:var(--raised);color:var(--tx);font-size:13px;font-weight:500;padding:0}
+.d.on{background:var(--ac);color:var(--onac);font-weight:600}
+.s48{display:flex;align-items:center;gap:12px;min-height:48px;border-bottom:1px solid var(--div)}
+.s48:last-child{border-bottom:0}
+.lg3{display:flex;align-items:center;gap:8px}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 2088px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 設定のトップ <span class="case">#211</span></div>
+    <div class="sub">先頭に鳴る時刻と鳴動の状態。その下は名前の付いた入口だけにし、今の値を右に出す</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body" style="gap: 10px">
+        <div class="card" style="gap: 6px">
+          <p class="eye">鳴る時刻</p>
+          <p class="m"><span class="num">9:00</span> の予定なら</p>
+          <div style="display: flex; gap: 8px"><span class="chip ac nd"><span class="num" style="font-size: 13px">8:50</span>（アプリ）</span><span class="chip gg nd"><span class="num" style="font-size: 13px">8:55</span>（Google）</span></div>
+          <p class="m" style="font-size: 12px">同じ時刻なら1回だけ鳴ります。</p>
+        </div>
+        <div class="card" style="flex-direction: row; align-items: center; gap: 12px; padding-top: 10px; padding-bottom: 10px"><svg class="i c-ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.500-3.400 8-8 9-4.600-1-8-4.500-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><div class="grow"><p class="t">鳴動の状態</p><p class="m c-ok">鳴る準備ができています</p></div><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+        <div class="card ls">
+          <div class="nv"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><p class="t">鳴らす時刻</p><span class="m">10分前</span><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="nv"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><p class="t">鳴らし方</p><span class="m">アラーム</span><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="nv"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg><p class="t">鳴らす予定</p><span class="m">招待は出席だけ</span><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="nv"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><p class="t">カレンダー</p><span class="m">2アカウント</span><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="nv"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M9.500 11h5l-5 4.500h5M5 4L3 6M19 4l2 2"/></svg><p class="t">スヌーズ</p><span class="m">10分</span><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="nv"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg><p class="t">音</p><span class="m">標準の音</span><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="nv"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 7h5M12 12h7M12 17h5"/></svg><p class="t">見た目</p><span class="m">琥珀</span><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="nv"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="3"/><path d="M8 11h8M8 14h5"/></svg><p class="t">通知アラーム</p><span class="m">オフ</span><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+        </div>
+      </div>
+      <nav class="tab" aria-label="タブ"><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg></i>予定</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5M5 4L3 6M19 4l2 2"/></svg></i>アラーム</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="7"/><path d="M12 14v-3.5M10 3h4"/></svg></i>タイマー</button><button class="on"><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></i>設定</button></nav>
+    </div>
+    <p class="m" style="margin-top: 8px">今の実装は、見出しの無いカードが1画面に全部並ぶ。権限・テスト鳴動・記録は「鳴動の状態」の中。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 鳴らす時刻 <span class="case">#207</span></div>
+    <div class="sub">カレンダーの通知に従う分と、このアプリで足す分を分ける。結果は下の線で見せる</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1">鳴らす時刻</h2></div>
+      <div class="body">
+        <div class="card" style="gap: 6px">
+          <div style="display: flex; align-items: center; gap: 12px"><p class="t grow">カレンダーの通知に従う</p><button class="sw on" aria-label="カレンダーの通知に従う"></button></div>
+          <p class="m">予定に付いている「○分前」の通知の時刻で鳴ります。</p>
+        </div>
+        <div class="card">
+          <div><p class="t">このアプリで足す時刻</p><p class="m">カレンダーの通知とは別に、この時刻でも鳴ります。</p></div>
+          <p class="m">予定ごとに1つ</p>
+          <div class="chips"><button class="c">開始時</button><button class="c">5分前</button><button class="c on">10分前</button><button class="c">15分前</button></div>
+          <p class="m">全部の予定に足す（いくつでも）</p>
+          <div class="chips"><span class="kw">1日前<svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg></span><button class="c">追加</button></div>
+        </div>
+        <div class="card" style="gap: 4px">
+          <p class="eye">鳴る時刻</p>
+          <p class="m"><span class="num">9:00</span> の予定なら（前日 <span class="num">9:00</span> にも鳴る）</p>
+          <div class="tl">
+            <div class="ln"></div>
+            <span class="lb num c-ac" style="left: 20%">8:50</span><span class="dot" style="left: 20%; background: var(--ac)"></span><span class="lb2" style="left: 20%">アプリ</span>
+            <span class="lb num c-gg" style="left: 56%">8:55</span><span class="dot" style="left: 56%; background: var(--gg)"></span><span class="lb2" style="left: 56%">Google</span>
+            <span class="lb num" style="left: 92%">9:00</span><span class="dot" style="left: 92%; background: var(--tx)"></span><span class="lb2" style="left: 92%">予定</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">今は「何分前」の選択とスイッチと追加リマインダーが、別々のカードに分かれている。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">3. 鳴らし方 <span class="case">#211</span> <span class="case">#224</span></div>
+    <div class="sub">2つの3択に見出しを付け、言葉を予定の詳細と同じにする。3つの意味も下に書く</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1">鳴らし方</h2></div>
+      <div class="body">
+        <div class="card">
+          <p class="t">予定の開始</p>
+          <div class="seg" role="group" aria-label="予定の開始の鳴らし方"><button class="on">アラーム</button><button>通知のみ</button><button>鳴らさない</button></div>
+          <p class="t" style="margin-top: 6px">「○分前」の通知</p>
+          <div class="seg" role="group" aria-label="○分前の通知の鳴らし方"><button class="on">アラーム</button><button>通知のみ</button><button>鳴らさない</button></div>
+        </div>
+        <div class="prev" style="gap: 8px">
+          <p class="m lg3"><span class="chip ac">アラーム</span>全画面で鳴らす</p>
+          <p class="m lg3"><span class="chip gg">通知のみ</span>音なしの通知だけ出す</p>
+          <p class="m lg3"><span class="chip mu">鳴らさない</span>何もしない</p>
+        </div>
+        <div class="card ls">
+          <div class="nv" style="min-height: 56px"><div class="grow"><p class="t">カレンダーごとに変える</p><p class="m" style="white-space: normal">設定の「カレンダー」で、行を開く</p></div><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="nv" style="min-height: 56px"><div class="grow"><p class="t">予定ごとに変える</p><p class="m" style="white-space: normal">予定画面で、予定を押す</p></div></div>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">今は見出しが無く、時計とベルの印だけ。言葉も「通知／OFF」で、予定の詳細と違う。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">4. 鳴らす予定 <span class="case">#204</span> <span class="case">#203</span></div>
+    <div class="sub">選ぶ札は折り返して全部見せる。種類はスイッチの行にする。タイトルの言葉は入口だけ残す</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1">鳴らす予定</h2></div>
+      <div class="body" style="gap: 10px">
+        <div class="card" style="gap: 6px">
+          <p class="t">招待の返事</p>
+          <p class="m">鳴らす返事を選ぶ（いくつでも）</p>
+          <div class="chips"><button class="c on">出席</button><button class="c">未定</button><button class="c">未回答</button><button class="c">辞退</button></div>
+        </div>
+        <div class="card" style="gap: 0; padding-bottom: 4px">
+          <p class="t" style="margin-bottom: 4px">予定の種類</p>
+          <div class="s48"><p class="t grow" style="font-size: 14px">予定</p><button class="sw on" aria-label="予定"></button></div>
+          <div class="s48"><p class="t grow" style="font-size: 14px">タスク</p><button class="sw on" aria-label="タスク"></button></div>
+          <div class="s48"><p class="t grow" style="font-size: 14px">不在</p><button class="sw" aria-label="不在"></button></div>
+          <div class="s48"><p class="t grow" style="font-size: 14px">サイレントモード</p><button class="sw" aria-label="サイレントモード"></button></div>
+          <div class="s48"><p class="t grow" style="font-size: 14px">勤務場所</p><button class="sw" aria-label="勤務場所"></button></div>
+          <div class="s48"><p class="t grow" style="font-size: 14px">誕生日</p><button class="sw" aria-label="誕生日"></button></div>
+          <div class="s48"><p class="t grow" style="font-size: 14px">「予定なし」にした予定</p><button class="sw on" aria-label="「予定なし」にした予定"></button></div>
+        </div>
+        <div class="card ls">
+          <div class="nv" style="min-height: 60px"><div class="grow"><p class="t">タイトルの言葉で決める</p><p class="m" style="white-space: normal">決めた言葉が入った予定を、必ず鳴らす／鳴らさない</p></div><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">「タイトルの言葉で決める」は今の「タイトルコード」。残すか消すかは #203 で決める。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">5. 見た目 <span class="case">#225</span></div>
+    <div class="sub">今の色に印を付ける。丸は今の外観で実際に使う色で塗る。週と次のアラームもここ</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1">見た目</h2></div>
+      <div class="body">
+        <div class="card" style="gap: 10px">
+          <p class="t">テーマ</p>
+          <div class="pal">
+            <span><button class="swt" style="background: #BDBDFF" aria-label="インディゴ"></button>インディゴ</span><span><button class="swt on" style="background: #FFB870" aria-label="琥珀（選択中）"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></button>琥珀</span><span><button class="swt" style="background: #A4D396" aria-label="森"></button>森</span><span><button class="swt" style="background: #92CCFF" aria-label="海"></button>海</span><span><button class="swt" style="background: #FFB1C4" aria-label="薔薇"></button>薔薇</span>
+            <span><button class="swt" style="background: #DEBDFE" aria-label="紫"></button>紫</span><span><button class="swt" style="background: #C2C2C2" aria-label="墨"></button>墨</span><span><button class="swt" style="background: #9FCAFF" aria-label="空"></button>空</span><span><button class="swt" style="background: #FFB877" aria-label="橙"></button>橙</span><span><button class="swt" style="background: #FFB1C2" aria-label="桜"></button>桜</span>
+          </div>
+          <div class="prev" style="flex-direction: row; align-items: center; gap: 10px"><div class="grow"><p class="eye">次のアラーム</p><p class="m">チーム朝会 · <span class="num">7:00</span> 開始</p></div><span class="num" style="font-size: 30px; font-weight: 300">6:30</span><button class="sw on" aria-label="見本のスイッチ"></button></div>
+        </div>
+        <div class="card ls">
+          <div class="s48" style="min-height: 52px"><p class="t grow">背景画像</p><button class="ghost">選ぶ</button></div>
+          <div class="s48" style="min-height: 52px"><p class="t grow">予定一覧に週番号を出す</p><button class="sw" aria-label="予定一覧に週番号を出す"></button></div>
+          <div class="s48" style="min-height: 52px"><p class="t grow">メイン画面に次のアラームを出す</p><button class="sw on" aria-label="メイン画面に次のアラームを出す"></button></div>
+        </div>
+        <div class="card" style="gap: 8px">
+          <p class="t">週の始まり</p>
+          <div style="display: flex; gap: 6px"><button class="d">月</button><button class="d">火</button><button class="d">水</button><button class="d">木</button><button class="d">金</button><button class="d">土</button><button class="d on">日</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">今は、色を選んでいない人の設定でインディゴに印が付く（実際の色は琥珀）。</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":2088,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

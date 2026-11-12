@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>予定画面の表示切り替え</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.chip.nd::before{content:none}
+.ev .chip{height:20px;padding:0 7px}
+.mt{display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden}
+.d3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.d3>div{display:flex;flex-direction:column;gap:6px;min-width:0}
+.dc{margin:0;font-family:Outfit,'IBM Plex Sans JP',sans-serif;font-size:20px;font-weight:500;text-align:center;padding:5px 0;border-radius:12px}
+.dc.on{background:var(--bd)}
+.eb{border-radius:12px;padding:8px 9px;font-size:13px;font-weight:500;line-height:1.4;display:flex;flex-direction:column;gap:2px}
+.eb small{font-family:Outfit,'IBM Plex Sans JP',sans-serif;font-size:11px;font-weight:400;color:var(--mu)}
+.mg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));justify-items:center;text-align:center}
+.mg b{font-size:12px;font-weight:500;color:var(--mu);height:22px}
+.mg b.su{color:var(--now)}.mg b.sa{color:var(--gg)}
+.dd{display:flex;flex-direction:column;align-items:center;gap:2px;height:40px}
+.dd i{font-style:normal;font-family:Outfit,sans-serif;font-size:16px;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.dd.td i{background:var(--tx);color:var(--bg);font-weight:500}
+.dd.o i{color:var(--mu);opacity:.55}
+.dd em{display:flex;gap:2px}
+.dd em span{width:5px;height:5px;border-radius:50%}
+.tlv{position:relative;flex:1;min-height:0;overflow:hidden;padding-top:10px}
+.h{margin:0;height:48px;display:flex;align-items:flex-start;gap:8px}
+.h span{width:36px;text-align:right;font-family:Outfit,sans-serif;font-size:11px;color:var(--mu);transform:translateY(-7px);flex:none}
+.h i{flex:1;height:1px;background:var(--div)}
+.te{position:absolute;left:46px;right:2px;border-radius:10px;padding:5px 10px;font-size:13px;font-weight:500;line-height:1.35;overflow:hidden}
+.te small{display:block;font-family:Outfit,sans-serif;font-size:11px;font-weight:400;color:var(--mu)}
+.nw{position:absolute;left:0;right:0;display:flex;align-items:center;margin:0;font-size:10px;font-weight:600;color:var(--now);font-family:Outfit,'IBM Plex Sans JP',sans-serif}
+.nw::before{content:'';order:1;width:8px;height:8px;border-radius:50%;background:var(--now);margin-left:4px;flex:none}
+.nw::after{content:'';order:2;flex:1;height:2px;background:var(--now)}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1272px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 3日</div>
+    <div class="sub">今日から3日を横に並べる。列を押すと、その日が先頭になる</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">10月27日 (火)</h2></div>
+      <div class="body">
+        <div class="hero">
+          <div class="hr"><div class="grow"><p class="eye">次のアラーム</p><p class="t">定例ミーティング</p></div><span class="big">8:50</span></div>
+          <p class="live">鳴る準備ができています</p>
+        </div>
+        <div class="segrow">
+          <div class="seg" role="group" aria-label="表示の切り替え"><button>一覧</button><button class="on">3日</button><button>月</button><button>時間軸</button></div>
+          <button class="ib" aria-label="予定を検索"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></button>
+          <button class="ib" aria-label="同期"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3M18 3v4h-4M6 21v-4h4"/></svg></button>
+        </div>
+        <div class="d3">
+          <div>
+            <p class="dc on">27(火)</p>
+            <div class="eb" style="background: rgba(138,180,248,.16)"><small>9:00</small>定例ミーティング</div>
+            <div class="eb" style="background: rgba(244,163,181,.16)"><small>13:30</small>歯医者</div>
+            <div class="eb" style="background: rgba(134,210,199,.16)"><small>18:00</small>ジム</div>
+          </div>
+          <div>
+            <p class="dc">28(水)</p>
+            <div class="eb" style="background: rgba(138,180,248,.16)"><small>終日</small>出張</div>
+          </div>
+          <div>
+            <p class="dc">29(木)</p>
+            <p class="m" style="text-align: center; opacity: .6">—</p>
+          </div>
+        </div>
+      </div>
+      <nav class="tab" aria-label="タブ"><button class="on"><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg></i>予定</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5M5 4L3 6M19 4l2 2"/></svg></i>アラーム</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="7"/><path d="M12 14v-3.5M10 3h4"/></svg></i>タイマー</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></i>設定</button></nav>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 月</div>
+    <div class="sub">日を押すと、下にその日の予定が出る。今日は塗りつぶしの丸。予定のある日は色の点</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">10月27日 (火)</h2></div>
+      <div class="body" style="gap: 10px">
+        <div class="hero">
+          <div class="hr"><div class="grow"><p class="eye">次のアラーム</p><p class="t">定例ミーティング</p></div><span class="big">8:50</span></div>
+          <p class="live">鳴る準備ができています</p>
+        </div>
+        <div class="segrow">
+          <div class="seg" role="group" aria-label="表示の切り替え"><button>一覧</button><button>3日</button><button class="on">月</button><button>時間軸</button></div>
+          <button class="ib" aria-label="予定を検索"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></button>
+          <button class="ib" aria-label="同期"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3M18 3v4h-4M6 21v-4h4"/></svg></button>
+        </div>
+        <div class="mg">
+          <b class="su">日</b><b>月</b><b>火</b><b>水</b><b>木</b><b>金</b><b class="sa">土</b>
+          <span class="dd o"><i>27</i></span><span class="dd o"><i>28</i></span><span class="dd o"><i>29</i></span><span class="dd o"><i>30</i></span><span class="dd"><i>1</i></span><span class="dd"><i>2</i><em><span style="background: #8AB4F8"></span></em></span><span class="dd"><i>3</i></span>
+          <span class="dd"><i>4</i></span><span class="dd"><i>5</i></span><span class="dd"><i>6</i><em><span style="background: #8AB4F8"></span></em></span><span class="dd"><i>7</i></span><span class="dd"><i>8</i></span><span class="dd"><i>9</i></span><span class="dd"><i>10</i><em><span style="background: #F4A3B5"></span></em></span>
+          <span class="dd"><i>11</i></span><span class="dd"><i>12</i></span><span class="dd"><i>13</i><em><span style="background: #8AB4F8"></span></em></span><span class="dd"><i>14</i></span><span class="dd"><i>15</i></span><span class="dd"><i>16</i><em><span style="background: #86D2C7"></span></em></span><span class="dd"><i>17</i></span>
+          <span class="dd"><i>18</i></span><span class="dd"><i>19</i></span><span class="dd"><i>20</i><em><span style="background: #8AB4F8"></span></em></span><span class="dd"><i>21</i></span><span class="dd"><i>22</i></span><span class="dd"><i>23</i></span><span class="dd"><i>24</i></span>
+          <span class="dd"><i>25</i></span><span class="dd"><i>26</i></span><span class="dd td"><i>27</i><em><span style="background: #8AB4F8"></span><span style="background: #F4A3B5"></span></em></span><span class="dd"><i>28</i><em><span style="background: #8AB4F8"></span></em></span><span class="dd"><i>29</i></span><span class="dd"><i>30</i></span><span class="dd"><i>31</i></span>
+        </div>
+        <p class="dh"><span class="num">10/27(火)</span></p>
+        <div class="card ls">
+          <div class="ev"><span class="tm">9:00<small>~10:00</small></span><span class="cal" style="background: #8AB4F8"></span><div class="grow"><p class="t">定例ミーティング</p><p class="m mt"><span class="chip ac nd">10分前 +1</span>仕事</p></div><svg class="i c-ac" viewBox="0 0 24 24" role="img" aria-label="アラーム"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div>
+          <div class="ev"><span class="tm">13:30<small>~14:00</small></span><span class="cal" style="background: #F4A3B5"></span><div class="grow"><p class="t">歯医者</p><p class="m mt"><span class="chip ac nd">30分前</span>プライベート</p></div><svg class="i c-ac" viewBox="0 0 24 24" role="img" aria-label="アラーム"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div>
+        </div>
+      </div>
+      <nav class="tab" aria-label="タブ"><button class="on"><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg></i>予定</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5M5 4L3 6M19 4l2 2"/></svg></i>アラーム</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="7"/><path d="M12 14v-3.5M10 3h4"/></svg></i>タイマー</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></i>設定</button></nav>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">3. 時間軸</div>
+    <div class="sub">1日を時刻の物差しに置く。今の時刻は赤い線と「今 08:42」。開くと今の少し上から始まる</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">10月27日 (火)</h2></div>
+      <div class="body">
+        <div class="hero">
+          <div class="hr"><div class="grow"><p class="eye">次のアラーム</p><p class="t">定例ミーティング</p></div><span class="big">8:50</span></div>
+          <p class="live">鳴る準備ができています</p>
+        </div>
+        <div class="segrow">
+          <div class="seg" role="group" aria-label="表示の切り替え"><button>一覧</button><button>3日</button><button>月</button><button class="on">時間軸</button></div>
+          <button class="ib" aria-label="予定を検索"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></button>
+          <button class="ib" aria-label="同期"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3M18 3v4h-4M6 21v-4h4"/></svg></button>
+        </div>
+        <div class="tlv">
+          <p class="h"><span>07:00</span><i></i></p><p class="h"><span>08:00</span><i></i></p><p class="h"><span>09:00</span><i></i></p><p class="h"><span>10:00</span><i></i></p><p class="h"><span>11:00</span><i></i></p><p class="h"><span>12:00</span><i></i></p><p class="h"><span>13:00</span><i></i></p><p class="h"><span>14:00</span><i></i></p>
+          <div class="te" style="top: 106px; height: 48px; background: rgba(138,180,248,.25)">定例ミーティング<small>9:00〜10:00</small></div>
+          <div class="te" style="top: 322px; height: 24px; background: rgba(244,163,181,.25); padding-top: 3px">歯医者</div>
+          <p class="nw" style="top: 85px">今 08:42</p>
+        </div>
+      </div>
+      <nav class="tab" aria-label="タブ"><button class="on"><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg></i>予定</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5M5 4L3 6M19 4l2 2"/></svg></i>アラーム</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="7"/><path d="M12 14v-3.5M10 3h4"/></svg></i>タイマー</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></i>設定</button></nav>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1272,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>
