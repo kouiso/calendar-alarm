@@ -260,6 +260,16 @@
         }
       }
     },
+    "きっぱり": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharp"
+          }
+        }
+      }
+    },
     "このアラームを削除する?": {
       "localizations": {
         "en": {
@@ -326,6 +336,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cancel"
+          }
+        }
+      }
+    },
+    "ゆっくり": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gentle"
           }
         }
       }
@@ -506,6 +526,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Add preset"
+          }
+        }
+      }
+    },
+    "ベル": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bell"
           }
         }
       }
@@ -806,6 +836,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Could not find an event in the text"
+          }
+        }
+      }
+    },
+    "標準": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default"
           }
         }
       }

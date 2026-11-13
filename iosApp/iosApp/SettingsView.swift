@@ -120,11 +120,8 @@ struct SettingsView: View {
                                 items: ["__default__"] + AlarmSoundLibrary.bundledPresets,
                                 current: store.state.alarmSoundFile ?? "__default__",
                             ) { sel in
-                                if sel == "__default__" {
-                                    changeSound(file: nil, label: nil)
-                                } else {
-                                    changeSound(file: sel, label: Self.soundPresetLabel(sel))
-                                }
+                                let change = Self.soundChange(forChip: sel)
+                                changeSound(file: change.file, label: change.label)
                             } label: { Self.soundPresetLabel($0) }
                             // AlarmKit が受け付けない項目は、出来ないと画面に書く (Android にはある設定)
                             Text("音量・だんだん大きくする・バイブは、iPhone の「サウンドと触覚」の設定に従います。iPhone のアラーム機能では、アプリから変えられるのは音だけです。")
@@ -728,6 +725,11 @@ struct SettingsView: View {
         soundError = nil
         store.setAlarmSound(file: file, label: label)
         Task { await engine.rescheduleForSoundChange() }
+    }
+
+    /// 札を押した時に changeSound へ渡す音のファイル名と表示名 (#147)。「標準」は両方 nil
+    static func soundChange(forChip sel: String) -> (file: String?, label: String?) {
+        sel == "__default__" ? (nil, nil) : (sel, soundPresetLabel(sel))
     }
 
     /// プリセット音の表示名 (#147)。取り込み音はファイル名が UUID なので対象外、
