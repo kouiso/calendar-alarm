@@ -23,6 +23,13 @@ case "$mode" in
   fast) ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest --stacktrace --no-parallel ;;
   all) ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest :androidApp:assembleDebug --stacktrace --no-parallel ;;
   android-build) ./gradlew :androidApp:assembleDebug --stacktrace ;;
+  # なぜ: 翻訳漏れ・API 版・権限まわりの新しい指摘を止める。今ある指摘は androidApp/lint-baseline.xml に固定済み (#300)
+  lint) ./gradlew :androidApp:lintDebug --stacktrace ;;
+  i18n-check)
+    # なぜ: 画面の日本語を Kotlin に直接書く増加を止める (#289)。Gradle 不要で数秒。先に検査器自身のテストを回す
+    node --test scripts/hardcoded-ja/check.test.mjs
+    node scripts/hardcoded-ja/check.mjs
+    ;;
   ios)
     (cd iosApp; xcodegen generate; xcodebuild -project CalendarAlarm.xcodeproj -target iosApp -sdk iphonesimulator -configuration Debug build)
     ;;

@@ -21,6 +21,10 @@ interface ScheduledInstanceDao {
     @Query("SELECT * FROM scheduled_instances WHERE id = :id")
     suspend fun byId(id: String): ScheduledInstanceEntity?
 
+    /** 通知アラームの鎖: [id] 自身とそのスヌーズの子 (`id:snz*`)。id は 16 進 (先頭に '-' が付くことがある) だけなので LIKE の記号は混ざらない (#371)。 */
+    @Query("SELECT * FROM scheduled_instances WHERE id = :id OR id LIKE :id || ':snz%'")
+    suspend fun chainOf(id: String): List<ScheduledInstanceEntity>
+
     /** 1行だけの監視。鳴動画面が全件取得せずに自分の状態変化を追うのに使う。 */
     @Query("SELECT * FROM scheduled_instances WHERE id = :id")
     fun byIdFlow(id: String): Flow<ScheduledInstanceEntity?>
@@ -46,6 +50,22 @@ interface ScheduledInstanceDao {
      * アラームが無鳴動で終わる。トランザクションが丸ごと戻った場合は先行が
      * FIRED のまま残るので、復旧は先行を再鳴動する (無鳴動より安全側)。
      */
+    /** 生存中 (PENDING/FIRED) の行だけを MISSED にする。停止・スヌーズ済みの行は上書きしない (更新行数を返す)。 */
+    @Query("UPDATE scheduled_instances SET state = 'MISSED' WHERE id = :id AND state IN ('PENDING', 'FIRED')")
+    suspend fun setMissedIfLive(id: String): Int
+
+    /** 鳴動時刻が [cutoff] より前の PENDING 行だけを MISSED にする。読んだ後に動いた行は上書きしない (更新行数を返す)。 */
+    @Query("UPDATE scheduled_instances SET state = 'MISSED' WHERE id = :id AND state = 'PENDING' AND triggerAtMillis < :cutoff")
+    suspend fun setMissedIfOverduePending(id: String, cutoff: Long): Int
+
+    /** 生存中 (PENDING/FIRED) の行だけを CANCELLED にする。停止・スヌーズ済みの行は上書きしない (更新行数を返す)。 */
+    @Query("UPDATE scheduled_instances SET state = 'CANCELLED' WHERE id = :id AND state IN ('PENDING', 'FIRED')")
+    suspend fun setCancelledIfLive(id: String): Int
+
+    /** PENDING の行だけを SKIPPED にする (更新行数を返す)。 */
+    @Query("UPDATE scheduled_instances SET state = 'SKIPPED' WHERE id = :id AND state = 'PENDING'")
+    suspend fun setSkippedIfPending(id: String): Int
+
     /** 鳴動中だった行 (FIRED) だけを鳴動待ち (PENDING) に戻す。停止・スヌーズ済みの終端は戻さない (更新行数を返す)。 */
     @Query("UPDATE scheduled_instances SET state = 'PENDING' WHERE id = :id AND state = 'FIRED'")
     suspend fun setPendingIfFired(id: String): Int
@@ -134,6 +154,10 @@ interface AuditLogDao {
      */
     @Query("SELECT COUNT(DISTINCT instanceId) FROM audit_log WHERE action = 'MISS' AND triggerAtMillis >= :since")
     fun missedSinceFlow(since: Long): Flow<Int>
+
+    /** [ids] の行に付いた [action] の記録のうち一番新しい時刻。無ければ null (#371)。 */
+    @Query("SELECT MAX(atMillis) FROM audit_log WHERE action = :action AND instanceId IN (:ids)")
+    suspend fun latestAtMillis(action: String, ids: List<String>): Long?
 
     @Query("DELETE FROM audit_log WHERE atMillis < :before")
     suspend fun prune(before: Long)

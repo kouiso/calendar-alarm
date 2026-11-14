@@ -28,6 +28,18 @@ class StringParityTest {
             .associate { it.attributes.getNamedItem("name").nodeValue to it.textContent }
     }
 
+    /** plurals は名前ごとに quantity → 文言。日本語は other だけ、英語は one と other を持つ */
+    private fun loadPlurals(folder: String): Map<String, Map<String, String>> {
+        val file = File("src/main/res/$folder/strings.xml")
+        val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
+        val nodes = doc.getElementsByTagName("plurals")
+        return (0 until nodes.length).map { nodes.item(it) as org.w3c.dom.Element }.associate { p ->
+            val items = p.getElementsByTagName("item")
+            p.getAttribute("name") to (0 until items.length).map { items.item(it) as org.w3c.dom.Element }
+                .associate { it.getAttribute("quantity") to it.textContent }
+        }
+    }
+
     private fun placeholders(text: String) = Regex("%\\d+\\$[sd]").findAll(text).map { it.value }.sorted().toList()
 
     @Test
@@ -44,6 +56,31 @@ class StringParityTest {
         val en = load("values-en")
         val bad = ja.keys.intersect(en.keys).filter { placeholders(ja.getValue(it)) != placeholders(en.getValue(it)) }
         assertEquals("差し込み記号が日英でずれている文言", emptyList<String>(), bad)
+    }
+
+    @Test
+    fun `数で形を選ぶ文言 (plurals) も日英で同じ名前・同じ差し込み記号を持つ`() {
+        val ja = loadPlurals("values")
+        val en = loadPlurals("values-en")
+        assertTrue("plurals が 1 つも読めない (読み方が壊れている)", ja.isNotEmpty())
+        assertEquals("英語に無い plurals", emptySet<String>(), ja.keys - en.keys)
+        assertEquals("日本語に無い plurals", emptySet<String>(), en.keys - ja.keys)
+        // 日本語は数で形が変わらないので other だけでよい。英語は one と other の両方が要る
+        assertEquals("日本語の other が無い plurals", emptyList<String>(), ja.filter { "other" !in it.value }.keys.sorted())
+        assertEquals("英語の one か other が無い plurals", emptyList<String>(),
+            en.filter { "one" !in it.value || "other" !in it.value }.keys.sorted())
+        val bad = ja.keys.intersect(en.keys).flatMap { name ->
+            val want = placeholders(ja.getValue(name).getValue("other"))
+            // 英語の one は「Every day」のように数を書かないことがある (CountStringsTest)。書くなら同じ記号にする
+            en.getValue(name).filter { (q, text) ->
+                val got = placeholders(text)
+                if (q == "one") !want.containsAll(got) else got != want
+            }.map { "$name/${it.key}" }
+        }
+        assertEquals("差し込み記号が日英でずれている plurals", emptyList<String>(), bad)
+        val kana = Regex("[\\u3040-\\u30ff\\u4e00-\\u9fff]")
+        val kanaInEn = en.flatMap { (name, items) -> items.filter { kana.containsMatchIn(it.value) }.map { "$name/${it.key}" } }
+        assertEquals("英語なのに日本語が残っている plurals", emptyList<String>(), kanaInEn)
     }
 
     @Test
