@@ -1,0 +1,20 @@
+{
+  "androidApp/src/main/java/com/calendaralarm/MainActivity.kt": 8,
+  "androidApp/src/main/java/com/calendaralarm/data/SettingsRepository.kt": 10,
+  "androidApp/src/main/java/com/calendaralarm/data/calendar/CalendarContractReader.kt": 1,
+  "androidApp/src/main/java/com/calendaralarm/engine/AlarmService.kt": 6,
+  "androidApp/src/main/java/com/calendaralarm/engine/RingingActivity.kt": 13,
+  "androidApp/src/main/java/com/calendaralarm/engine/RingingOverlay.kt": 8,
+  "androidApp/src/main/java/com/calendaralarm/ui/AgendaScreen.kt": 58,
+  "androidApp/src/main/java/com/calendaralarm/ui/AgendaViews.kt": 7,
+  "androidApp/src/main/java/com/calendaralarm/ui/PermissionAsker.kt": 1,
+  "androidApp/src/main/java/com/calendaralarm/ui/SettingsScreen.kt": 155,
+  "androidApp/src/main/java/com/calendaralarm/ui/TimerScreen.kt": 1,
+  "androidApp/src/main/java/com/calendaralarm/ui/theme/Palettes.kt": 10,
+  "shared/src/commonMain/kotlin/com/calendaralarm/shared/ai/MailEventExtractor.kt": 2,
+  "shared/src/commonMain/kotlin/com/calendaralarm/shared/ai/NotificationRuleGenerator.kt": 1,
+  "shared/src/commonMain/kotlin/com/calendaralarm/shared/logic/AlarmExpander.kt": 3,
+  "shared/src/commonMain/kotlin/com/calendaralarm/shared/logic/RingStatus.kt": 5,
+  "shared/src/commonMain/kotlin/com/calendaralarm/shared/logic/SettingsPreview.kt": 4,
+  "shared/src/commonMain/kotlin/com/calendaralarm/shared/weather/WeatherApi.kt": 16
+}
