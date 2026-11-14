@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>repo を直す所</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.tb{border-collapse:collapse;width:100%}
+.tb td,.tb th{text-align:left;padding:9px 12px;border-bottom:1px solid var(--div);font-size:14px;line-height:1.5;vertical-align:top}
+.tb th{color:var(--mu);font-weight:600;font-size:12px;letter-spacing:.08em}
+.tb tr:last-child td{border-bottom:0}
+.no{font-family:Outfit,sans-serif;font-size:16px;font-weight:500;color:var(--ac);white-space:nowrap}
+.bd{color:var(--mu);font-size:13px}
+.hd2{font-size:12px;color:var(--mu);font-weight:600;letter-spacing:.08em;margin:0 0 2px 6px}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1600px; height: 900px; padding: 44px 64px; flex-direction: column; gap: 18px; align-items: stretch">
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <p class="eye">キャンバスと repo の差</p>
+    <h1 style="margin: 0; font-size: 32px; font-weight: 600; line-height: 1.35">repo を直す所</h1>
+    <p class="m" style="font-size: 15px">キャンバスは「こうしたい形」で描いた。今の repo と違う所には、ボードの見出しに PBI の番号の札を付けてある。2026-11-11 時点。</p>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px">
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <p class="hd2">2026-11-11 に新しく起票した PBI</p>
+      <div class="card" style="padding: 6px 10px">
+        <table class="tb">
+          <tr><th>PBI</th><th>直すこと</th><th>ボード</th><th>クラウド</th></tr>
+          <tr><td class="no">#224</td><td>鳴らし方と「○分前」の言葉を、全画面と両OSでそろえる</td><td class="bd">#142・⑩・決まり</td><td><span class="chip ac">Android</span></td></tr>
+          <tr><td class="no">#225</td><td>テーマが既定の時、設定の印を実際の色（琥珀）に付ける</td><td class="bd">⑤ の 5</td><td><span class="chip ok">できる</span></td></tr>
+          <tr><td class="no">#226</td><td>通知アラームのルールを、入れた後に直せる</td><td class="bd">#150</td><td><span class="chip ok">できる</span></td></tr>
+          <tr><td class="no">#227</td><td>予定の行で予定名を切らず、鳴らない理由を1行で出す</td><td class="bd">R2・#155</td><td><span class="chip ac">Android</span></td></tr>
+          <tr><td class="no">#228</td><td>トラブルシューティングの状態を、言葉でも出す</td><td class="bd">#153</td><td><span class="chip ok">できる</span></td></tr>
+          <tr><td class="no">#229</td><td>重ねて出す停止画面を、鳴動画面と同じ形と色にする</td><td class="bd">R1</td><td><span class="chip ac">実装まで</span></td></tr>
+          <tr><td class="no">#230</td><td>Night UI 第2版の見た目を、Android と iOS に反映する</td><td class="bd">全ボード</td><td><span class="chip mu">実機が要る</span></td></tr>
+        </table>
+      </div>
+      <p class="m" style="padding: 0 6px">「クラウド」は Claude のクラウドセッションで進められるか。Android は単体テストと CI で確かめられる。iOS は Mac でのビルドが要る。</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <p class="hd2">前からある PBI に、デザインで答えた物</p>
+      <div class="card" style="padding: 6px 10px">
+        <table class="tb">
+          <tr><th>PBI</th><th>デザインでの答え</th><th>ボード</th></tr>
+          <tr><td class="no">#211</td><td>設定を名前の付いた入口に分け、印だけの行に見出しを付ける</td><td class="bd">⑤ の 1・3</td></tr>
+          <tr><td class="no">#207</td><td>「カレンダーの通知に従う」と「このアプリで足す時刻」を分ける</td><td class="bd">⑤ の 2</td></tr>
+          <tr><td class="no">#204</td><td>選ぶ札は折り返し、種類はスイッチの行にする</td><td class="bd">⑤ の 4・#155</td></tr>
+          <tr><td class="no">#203</td><td>「タイトルの言葉で決める」と呼び、入口だけ残す（要否は未決）</td><td class="bd">⑤ の 4</td></tr>
+          <tr><td class="no">#205</td><td>アカウントの見出しに数を出し、カレンダーをその下にまとめる</td><td class="bd">⑩ の 1</td></tr>
+          <tr><td class="no">#206</td><td>見出しのスイッチ1つで止める。止めても個別の設定は残す</td><td class="bd">⑩ の 2</td></tr>
+          <tr><td class="no">#218</td><td>「端末にアカウントを追加」「今すぐ取り込み直す」と言葉で書く</td><td class="bd">⑩ の 1</td></tr>
+          <tr><td class="no">#217</td><td>2つのスヌーズに見出しと説明を付ける</td><td class="bd">#145</td></tr>
+        </table>
+      </div>
+      <p class="m" style="padding: 0 6px">まだ描いていない PBI は #208・#213・#215（通知の経路。先に調査が要る）と #222（押した手応え）。</p>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1600,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

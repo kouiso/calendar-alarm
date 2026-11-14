@@ -510,6 +510,48 @@ class EngineTest {
     }
 
     @Test
+    fun `共通リマインダーだけで鳴る予定は、一覧の行を鳴る側に出し予約と一致する`() = runBlocking {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        FakeCalendarProvider.instanceRows = listOf(
+            mapOf(
+                CalendarContract.Instances.EVENT_ID to 1L,
+                CalendarContract.Instances.CALENDAR_ID to 1L,
+                CalendarContract.Instances.TITLE to "予定1",
+                CalendarContract.Instances.DESCRIPTION to "",
+                CalendarContract.Instances.EVENT_LOCATION to "",
+                CalendarContract.Instances.BEGIN to start,
+                CalendarContract.Instances.END to start + 3_600_000L,
+                CalendarContract.Instances.ALL_DAY to 0,
+                CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                    CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+                CalendarContract.Instances.ORGANIZER to null,
+            ),
+        )
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        // 開始は鳴らさない、リマインダーは鳴らす。カレンダーの追加リマインダーも予定側の通知も無い
+        db.calendarPrefs().upsert(
+            CalendarPrefEntity("1", enabled = true, minutesBefore = 0, startAction = "MUTE", reminderAction = "ALARM"),
+        )
+        val settings = SettingsRepository(context)
+        settings.setImportEventReminders(false)
+        settings.setExtraReminderOffsets(listOf(60))
+        try {
+            val item = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }.getValue("1")
+            // 共通リマインダー (60 分前) で鳴るので、鳴る側に出す (#143)
+            assertTrue(item.hasReminderTriggers)
+            assertEquals(false, item.muted)
+            assertEquals(false, item.defaultSilenced)
+            repositoryWithCalendar.resync("test")
+            assertEquals(listOf("ev:1:1:$start:b60"), db.scheduledInstances().pending().map { it.id })
+        } finally {
+            settings.setExtraReminderOffsets(emptyList())
+            settings.setImportEventReminders(true)
+        }
+    }
+
+    @Test
     fun `カレンダーの通知がシステム既定 (-1) だけの予定も、鳴るなら行のスイッチを鳴る側に出す`() = runBlocking {
         val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
         FakeCalendarProvider.instanceRows = listOf(

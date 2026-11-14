@@ -220,6 +220,96 @@ class AlarmExpanderTest {
     }
 
     @Test
+    fun `共通リマインダーが全予定に効きカレンダー既定と併合される`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val ev2 = event("e2", start = ldt("2026-10-05T14:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev, ev2),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 15, extraOffsets = listOf(30))),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            commonExtraOffsets = listOf(60),
+        )
+        // 両方の予定に カレンダー既定30 + 共通60 が効く
+        assertEquals(6, out.size)
+        assertEquals(listOf(15, 30, 60), out.filter { it.eventId == ev.instanceKey }.map { it.minutesBefore })
+        assertEquals(listOf(15, 30, 60), out.filter { it.eventId == ev2.instanceKey }.map { it.minutesBefore })
+    }
+
+    @Test
+    fun `共通リマインダーは個別予定の指定で上書きできる`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 15, extraOffsets = listOf(30))),
+            overrides = mapOf(ev.instanceKey to EventOverride(extraOffsets = listOf(45))),
+            disabledCalendarIds = emptySet(), now = now, horizon = horizon, zone = TZ,
+            commonExtraOffsets = listOf(60),
+        )
+        // 個別指定があるイベントは共通もカレンダー既定も効かない (上書き, #160 引継)
+        assertEquals(listOf(15, 45), out.map { it.minutesBefore })
+    }
+
+    @Test
+    fun `共通リマインダーが開始や既存オフセットと同時刻なら重複しない`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 15, extraOffsets = listOf(30))),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            commonExtraOffsets = listOf(30, 15),
+        )
+        assertEquals(listOf(15, 30), out.map { it.minutesBefore })
+    }
+
+    @Test
+    fun `開始が14日より先でも共通リマインダーで14日以内に鳴るなら展開される`() {
+        // horizon は now+14日。開始は 20日後、共通リマインダー 7日前 → 鳴動は 13日後で窓に入る
+        val ev = event("far", start = ldt("2026-10-21T10:00:00"))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev),
+            calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 0)),
+            overrides = emptyMap(), disabledCalendarIds = emptySet(),
+            now = now, horizon = horizon, zone = TZ,
+            commonExtraOffsets = listOf(7 * 24 * 60),
+        )
+        // 開始そのものは窓の外、共通リマインダーの分だけ予約される
+        assertEquals(listOf(7 * 24 * 60), out.map { it.minutesBefore })
+    }
+
+    @Test
+    fun `取得の前倒し幅は設定で分かっている最大の何分前`() {
+        assertEquals(0, AlarmExpander.fetchLeadMinutes(emptyList(), emptyList(), emptyList()))
+        assertEquals(
+            30 * 24 * 60,
+            AlarmExpander.fetchLeadMinutes(
+                rules = listOf(AlarmRule(minutesBefore = 15, extraOffsets = listOf(60))),
+                overrides = listOf(EventOverride(minutesBefore = 120, extraOffsets = listOf(240))),
+                commonExtraOffsets = listOf(30 * 24 * 60),
+            ),
+        )
+        // 予定ごとの指定が一番大きければそれを使う
+        assertEquals(
+            2 * 24 * 60,
+            AlarmExpander.fetchLeadMinutes(
+                rules = listOf(AlarmRule(minutesBefore = 15)),
+                overrides = listOf(EventOverride(extraOffsets = listOf(2 * 24 * 60))),
+                commonExtraOffsets = listOf(60),
+            ),
+        )
+    }
+
+    @Test
+    fun `一覧と展開は同じ規則で追加リマインダーを決める`() {
+        val rule = AlarmRule(extraOffsets = listOf(30))
+        assertEquals(listOf(30, 60), AlarmExpander.effectiveExtraOffsets(null, rule, listOf(60, 30)))
+        // 予定ごとの指定 (空リスト含む) は共通もカレンダー既定も置き換える
+        assertEquals(listOf(45), AlarmExpander.effectiveExtraOffsets(listOf(45), rule, listOf(60)))
+        assertEquals(emptyList<Int>(), AlarmExpander.effectiveExtraOffsets(emptyList(), rule, listOf(60)))
+    }
+
+    @Test
     fun `曜日繰り返しと例外日`() {
         val alarm = StandaloneAlarm(
             id = 7, hour = 7, minute = 30,
@@ -496,6 +586,27 @@ class AlarmExpanderTest {
         // いじわる: Google 側に同じ分数が2つ + アプリの時刻とも一致
         val out = expandWithReminders(AlarmRule(minutesBefore = 10, extraOffsets = listOf(10)), listOf(10, 10, 60))
         assertEquals(listOf(10, 60), out.map { it.minutesBefore })
+    }
+
+    @Test
+    fun `iOS が通るブリッジ経由でも共通リマインダーが効く`() {
+        val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
+        val req = com.calendaralarm.shared.bridge.SharedBridge.ExpandRequest(
+            events = listOf(ev),
+            nowMillis = now.toEpochMilliseconds(),
+            horizonMillis = horizon.toEpochMilliseconds(),
+            zoneId = TZ.id,
+            defaultMinutesBefore = 15,
+            commonExtraOffsets = listOf(60),
+        )
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        val res = json.decodeFromString(
+            com.calendaralarm.shared.bridge.SharedBridge.ExpandResult.serializer(),
+            com.calendaralarm.shared.bridge.SharedBridge.expand(
+                json.encodeToString(com.calendaralarm.shared.bridge.SharedBridge.ExpandRequest.serializer(), req),
+            ),
+        )
+        assertEquals(listOf(15, 60), res.instances.map { it.minutesBefore })
     }
 
     @Test

@@ -65,6 +65,11 @@ object AlarmExpander {
         /** 元アプリの「一括ミュート」: ALARM 鳴動を全て抑止する。
          *  NOTIFY (通知のみ) は鳴動ではないので残す。 */
         muteAll: Boolean = false,
+        /** 全イベント共通の追加リマインダー (開始何分前かの分数リスト, #143)。
+         *  カレンダー既定の extraOffsets と併合して効く。予定個別の extraOffsets を
+         *  指定したイベントはそれが全体を置き換える (個別設定の上書き, #160 引継)。
+         *  triggerAtMillis が同じ鳴動は開始オフセット側を優先して重複させない。 */
+        commonExtraOffsets: List<Int> = emptyList(),
     ): List<AlarmInstance> {
         val result = mutableListOf<AlarmInstance>()
         for (event in events) {
@@ -88,7 +93,7 @@ object AlarmExpander {
             }
             val startMillis = Instant.fromEpochMilliseconds(eventStart)
             val minutesBefore = override?.minutesBefore ?: rule.minutesBefore
-            val extras = override?.extraOffsets ?: rule.extraOffsets
+            val extras = effectiveExtraOffsets(override?.extraOffsets, rule, commonExtraOffsets)
             val (startAction, reminderAction) = resolveActions(event, rule, override, titleCodes)
             val title = event.title.ifBlank { "(タイトルなし)" }
             // triggerAt 重複を避けるため時刻単位で集約 (開始オフセットを優先)
@@ -346,6 +351,32 @@ object AlarmExpander {
         val (start, reminder) = resolveActions(event, rule, null, titleCodes)
         fun EventAction.silenced() = this == EventAction.MUTE || (muteAll && this == EventAction.ALARM)
         return start.silenced() && (reminder.silenced() || !hasReminderTriggers)
+    }
+
+    /**
+     * 予定に効く追加リマインダー (開始何分前のリスト, #143)。展開と予定一覧の表示で同じ規則を使う。
+     * 予定個別の指定があればそれが全体を置き換える。無ければカレンダー既定と全イベント共通を併合する。
+     */
+    fun effectiveExtraOffsets(overrideExtras: List<Int>?, rule: AlarmRule, commonExtraOffsets: List<Int>): List<Int> =
+        overrideExtras ?: (rule.extraOffsets + commonExtraOffsets).distinct()
+
+    /** 予定側 (カレンダーの通知) のリマインダーの上限。Google カレンダーは 4 週前まで指定できる */
+    const val MAX_EVENT_REMINDER_MINUTES = 4 * 7 * 24 * 60
+
+    /**
+     * 予定の取得を horizon より先へ伸ばす幅 (分, #143)。開始が horizon より後でも、
+     * 「何分前」が大きいと鳴動が horizon 内に入る。設定で分かっている最大の前倒し分だけ伸ばす。
+     * 展開の窓 (inWindow) は鳴動時刻で切るので、取得を伸ばしても予約の範囲は変わらない。
+     */
+    fun fetchLeadMinutes(
+        rules: Collection<AlarmRule>,
+        overrides: Collection<EventOverride>,
+        commonExtraOffsets: List<Int>,
+    ): Int {
+        val all = commonExtraOffsets +
+            rules.flatMap { it.extraOffsets + it.minutesBefore } +
+            overrides.flatMap { o -> o.extraOffsets.orEmpty() + listOfNotNull(o.minutesBefore) }
+        return all.maxOrNull()?.coerceAtLeast(0) ?: 0
     }
 
     /** 指定時刻が「今すぐ鳴らすべき／未来に予約すべき」窓に入るか。 */

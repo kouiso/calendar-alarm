@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#140 広告バナー</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.chip.nd::before{content:none}
+.ev .chip{height:20px;padding:0 7px}
+.mt{display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden}
+.adw{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.adw span{font-size:11px;color:var(--mu);letter-spacing:.08em;padding-left:6px}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1272px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 広告が出た時 <span class="chip mu">未実装の案</span></div>
+    <div class="sub">予定一覧の一番下に1枠だけ。予定・スイッチ・下タブには重ねない</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">10月27日 (火)</h2></div>
+      <div class="body">
+        <p class="dh"><span class="num">10/27(火)</span><span class="c-ac">今日</span></p>
+        <div class="card ls">
+          <div class="ev"><span class="tm">9:00<small>~10:00</small></span><span class="cal" style="background: #8AB4F8"></span><div class="grow"><p class="t">定例ミーティング</p><p class="m mt"><span class="chip ac nd">10分前 +1</span>仕事</p></div><button class="sw on" aria-label="鳴らす"></button></div>
+          <div class="ev"><span class="tm">13:30<small>~14:00</small></span><span class="cal" style="background: #F4A3B5"></span><div class="grow"><p class="t">歯医者</p><p class="m mt"><span class="chip ac nd">30分前</span>プライベート</p></div><button class="sw on" aria-label="鳴らす"></button></div>
+          <div class="ev"><span class="tm">18:00<small>~19:00</small></span><span class="cal" style="background: #86D2C7"></span><div class="grow"><p class="t c-mu">ジム</p><p class="m mt">プライベート</p></div><button class="sw" aria-label="鳴らす"></button></div>
+        </div>
+        <div class="adw"><span>広告</span><div class="ad" style="border-style: solid; background: var(--card)">[広告バナー 320×50]</div></div>
+      </div>
+      <nav class="tab" aria-label="タブ"><button class="on"><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg></i>予定</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5M5 4L3 6M19 4l2 2"/></svg></i>アラーム</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="7"/><path d="M12 14v-3.5M10 3h4"/></svg></i>タイマー</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></i>設定</button></nav>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 読み込み中 <span class="chip mu">未実装の案</span></div>
+    <div class="sub">先に高さを空けておく。読み込み後にボタンが指の下へずれない</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">10月27日 (火)</h2></div>
+      <div class="body">
+        <p class="dh"><span class="num">10/27(火)</span><span class="c-ac">今日</span></p>
+        <div class="card ls">
+          <div class="ev"><span class="tm">9:00<small>~10:00</small></span><span class="cal" style="background: #8AB4F8"></span><div class="grow"><p class="t">定例ミーティング</p><p class="m mt"><span class="chip ac nd">10分前 +1</span>仕事</p></div><button class="sw on" aria-label="鳴らす"></button></div>
+          <div class="ev"><span class="tm">13:30<small>~14:00</small></span><span class="cal" style="background: #F4A3B5"></span><div class="grow"><p class="t">歯医者</p><p class="m mt"><span class="chip ac nd">30分前</span>プライベート</p></div><button class="sw on" aria-label="鳴らす"></button></div>
+          <div class="ev"><span class="tm">18:00<small>~19:00</small></span><span class="cal" style="background: #86D2C7"></span><div class="grow"><p class="t c-mu">ジム</p><p class="m mt">プライベート</p></div><button class="sw" aria-label="鳴らす"></button></div>
+        </div>
+        <div class="adw"><span>広告</span><div class="ad">読み込み中</div></div>
+      </div>
+      <nav class="tab" aria-label="タブ"><button class="on"><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg></i>予定</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5M5 4L3 6M19 4l2 2"/></svg></i>アラーム</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="7"/><path d="M12 14v-3.5M10 3h4"/></svg></i>タイマー</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></i>設定</button></nav>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">3. 出せない時 <span class="chip mu">未実装の案</span></div>
+    <div class="sub">通信なし・在庫なし・同意を断った時。枠ごと出さない。上の予定は動かない</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">10月27日 (火)</h2></div>
+      <div class="body">
+        <p class="dh"><span class="num">10/27(火)</span><span class="c-ac">今日</span></p>
+        <div class="card ls">
+          <div class="ev"><span class="tm">9:00<small>~10:00</small></span><span class="cal" style="background: #8AB4F8"></span><div class="grow"><p class="t">定例ミーティング</p><p class="m mt"><span class="chip ac nd">10分前 +1</span>仕事</p></div><button class="sw on" aria-label="鳴らす"></button></div>
+          <div class="ev"><span class="tm">13:30<small>~14:00</small></span><span class="cal" style="background: #F4A3B5"></span><div class="grow"><p class="t">歯医者</p><p class="m mt"><span class="chip ac nd">30分前</span>プライベート</p></div><button class="sw on" aria-label="鳴らす"></button></div>
+          <div class="ev"><span class="tm">18:00<small>~19:00</small></span><span class="cal" style="background: #86D2C7"></span><div class="grow"><p class="t c-mu">ジム</p><p class="m mt">プライベート</p></div><button class="sw" aria-label="鳴らす"></button></div>
+        </div>
+      </div>
+      <nav class="tab" aria-label="タブ"><button class="on"><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg></i>予定</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5M5 4L3 6M19 4l2 2"/></svg></i>アラーム</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="7"/><path d="M12 14v-3.5M10 3h4"/></svg></i>タイマー</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></i>設定</button></nav>
+    </div>
+    <p class="m" style="margin-top: 8px">鳴動画面・ロック画面・権限を頼む画面・設定には広告枠を置かない。repo に広告の実装はまだ無い。</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1272,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

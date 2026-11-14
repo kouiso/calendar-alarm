@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#148 音量・徐々に上げる・鳴動持続時間（Android）</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.vol{display:flex;flex-direction:column;gap:16px;padding:12px 0 18px;border-bottom:1px solid var(--div)}
+.s52{display:flex;align-items:center;gap:12px;min-height:56px;border-bottom:1px solid var(--div)}
+.s52:last-child{border-bottom:0}
+.dur{display:flex;flex-direction:column;gap:8px;padding:12px 0}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 864px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 最初の状態（端末の音量で鳴る）</div>
+    <div class="sub">つまみが左端の時は「端末設定」。鳴動持続時間は「制限なし」</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="vol"><p class="t">音量: 端末設定</p><div class="slider"><span style="width: 0%"></span><i style="left: -2px"></i></div></div>
+          <div class="s52"><p class="t grow">音量を徐々に上げる</p><button class="sw" aria-label="音量を徐々に上げる"></button></div>
+          <div class="s52"><p class="t grow">バイブレーション</p><button class="sw on" aria-label="バイブレーション"></button></div>
+          <div class="dur"><p class="t">鳴動持続時間</p><div class="chips"><button class="c">5秒</button><button class="c">10秒</button><button class="c">30秒</button><button class="c">1分</button><button class="c">2分</button><button class="c">5分</button><button class="c on">制限なし</button></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. アプリで決めた時</div>
+    <div class="sub">つまみを動かすと、端末の音量と別にアプリの音量で鳴る</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="vol"><p class="t">音量: <span class="num c-ac" style="font-size: 17px">70%</span></p><div class="slider"><span style="width: 70%"></span><i style="left: calc(70% - 12px)"></i></div></div>
+          <div class="s52"><p class="t grow">音量を徐々に上げる</p><button class="sw on" aria-label="音量を徐々に上げる"></button></div>
+          <div class="s52"><p class="t grow">バイブレーション</p><button class="sw on" aria-label="バイブレーション"></button></div>
+          <div class="dur"><p class="t">鳴動持続時間</p><div class="chips"><button class="c">5秒</button><button class="c">10秒</button><button class="c">30秒</button><button class="c">1分</button><button class="c">2分</button><button class="c on">5分</button><button class="c">制限なし</button></div></div>
+        </div>
+        <p class="m" style="padding: 0 6px">iPhone にこの項目は無く、代わりに「音量・だんだん大きくする・バイブは、iPhone の「サウンドと触覚」の設定に従います。」と出す。</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":864,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

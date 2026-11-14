@@ -162,7 +162,11 @@ fun AgendaScreen(
             modifier = Modifier.padding(start = 20.dp, top = 58.dp),
         )
         // 次のアラーム欄は小さくし、その下に鳴動の状態を1行出す (#51 PR2)
-        NextAlarmBanner(nextAlarm?.title, nextAlarm?.triggerAtMillis, ringStatus.line)
+        // 「メイン画面に次の予定を出す」OFF でも鳴動の状態の1行は残す (#151)
+        NextAlarmBanner(
+            nextAlarm?.title, nextAlarm?.triggerAtMillis, ringStatus.line,
+            showEvent = settings?.showNextEvent != false,
+        )
         if (ringStatus.showPermissionBanner) {
             StatusBanner(
                 "許可が${ringStatus.missingPermissions}つ足りません。鳴らない・止められないことがあります",
@@ -347,7 +351,7 @@ fun AgendaScreen(
 }
 
 @Composable
-private fun NextAlarmBanner(title: String?, triggerAtMillis: Long?, statusLine: String) {
+internal fun NextAlarmBanner(title: String?, triggerAtMillis: Long?, statusLine: String, showEvent: Boolean = true) {
     val accent = MaterialTheme.colorScheme.primary
     Card(
         Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp),
@@ -357,33 +361,36 @@ private fun NextAlarmBanner(title: String?, triggerAtMillis: Long?, statusLine: 
         ),
     ) {
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "次のアラーム",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.sp,
-                        color = accent,
-                    )
-                    Text(
-                        title ?: "なし",
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                    )
+            // 「次の予定を出す」OFF の時は予定の欄だけ隠し、鳴動の状態の1行は残す (#151)
+            if (showEvent) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "次のアラーム",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 1.sp,
+                            color = accent,
+                        )
+                        Text(
+                            title ?: "なし",
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                    if (triggerAtMillis != null) {
+                        Text(
+                            SimpleDateFormat("H:mm", Locale.JAPAN).format(Date(triggerAtMillis)),
+                            fontSize = 36.sp,
+                            fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
+                            fontWeight = FontWeight.Light,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
-                if (triggerAtMillis != null) {
-                    Text(
-                        SimpleDateFormat("H:mm", Locale.JAPAN).format(Date(triggerAtMillis)),
-                        fontSize = 36.sp,
-                        fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
-                        fontWeight = FontWeight.Light,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                Spacer(Modifier.height(6.dp))
             }
-            Spacer(Modifier.height(6.dp))
             // 鳴動の状態 (1行)
             Text(
                 statusLine,
@@ -592,7 +599,7 @@ internal fun EventRow(
             ) {
                 Text(
                     "${item.minutesBefore}分前" +
-                        if (item.extraOffsets.isNotEmpty()) " +${item.extraOffsets.size}" else "",
+                        if (item.effectiveExtraOffsets.isNotEmpty()) " +${item.effectiveExtraOffsets.size}" else "",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -633,7 +640,12 @@ private fun EventDetailSheet(
     // 3状態。開始とリマインダーが混在する場合は開始側を初期値に
     var action by remember { mutableStateOf(item.startAction) }
     var minutes by remember { mutableIntStateOf(item.minutesBefore) }
-    var extras by remember { mutableStateOf(item.extraOffsets) }
+    // 追加リマインダーのチップは実際に効く分 (共通リマインダー込み, #143) を選択済みで出す。
+    // チップを触った時だけ予定ごとの指定として書き、時刻や動作だけ変えた時は null (今の指定のまま) を渡す。
+    // 触っていないのに一覧を書くと、共通リマインダーが焼き付く/消えるため
+    var extras by remember { mutableStateOf(item.effectiveExtraOffsets) }
+    var extrasEdited by remember { mutableStateOf(false) }
+    fun extrasArg(): List<Int>? = if (extrasEdited) extras else null
     var forecast by remember { mutableStateOf<List<DailyForecast>?>(null) }
     // 「HH:mm の予報」に出す取得時刻。日ごとの予報なので、予定の時刻ではなくいつ取った予報かを出す
     var forecastAtMillis by remember { mutableStateOf(0L) }
@@ -711,7 +723,7 @@ private fun EventDetailSheet(
                     onClick = {
                         action = a
                         onOverride(a, if (a == EventAction.MUTE) null else minutes,
-                            if (a == EventAction.MUTE) null else extras)
+                            if (a == EventAction.MUTE) null else extrasArg())
                     },
                     shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
                 ) { Text(label) }
@@ -726,7 +738,7 @@ private fun EventDetailSheet(
                         selected = minutes == v,
                         onClick = {
                             minutes = v
-                            onOverride(action, v, extras)
+                            onOverride(action, v, extrasArg())
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
                     ) { Text(label) }
@@ -739,7 +751,7 @@ private fun EventDetailSheet(
                         selected = minutes == v,
                         onClick = {
                             minutes = v
-                            onOverride(action, v, extras)
+                            onOverride(action, v, extrasArg())
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
                     ) { Text(label) }
@@ -747,12 +759,18 @@ private fun EventDetailSheet(
             }
             // 追加リマインダー: 「+」付きチップ = その時刻にも鳴らす
             Spacer(Modifier.height(10.dp))
+            // 共通リマインダーなどで受け継いだ、決まった候補に無い時刻 (20分前・1日前 など) もチップに出す。
+            // 出さないと、その予定だけ外すことができない (#143)
+            val extraChoices = (options.map { it.first } + extras).distinct().sorted()
+                .filter { it != minutes }
+                .map { v -> v to (options.firstOrNull { it.first == v }?.second ?: reminderOffsetLabel(v)) }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                options.filter { it.first != minutes }.forEach { (v, label) ->
+                extraChoices.forEach { (v, label) ->
                     FilterChip(
                         selected = v in extras,
                         onClick = {
                             extras = if (v in extras) extras - v else (extras + v).sorted()
+                            extrasEdited = true
                             onOverride(action, minutes, extras)
                         },
                         label = { Text("+$label") },

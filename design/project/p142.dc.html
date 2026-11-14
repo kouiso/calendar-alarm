@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#142 鳴動／通知／無音の3択</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ir{display:flex;align-items:center;gap:12px}
+.ir>.i{color:var(--mu)}
+.blk{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-bottom:1px solid var(--div)}
+.blk:last-child{border-bottom:0}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1272px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 予定ごと: 詳細の3択 <span class="chip ok">実装あり</span></div>
+    <div class="sub">アラーム／通知のみ／鳴らさない。開始と「○分前」をまとめて1つで決める</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">10月27日 (火)</h2></div>
+      <div class="body"><div class="hero"><div class="hr"><div class="grow"><p class="eye">次のアラーム</p><p class="t">定例ミーティング</p></div><span class="big">8:50</span></div><p class="live">鳴る準備ができています</p></div></div>
+      <div class="dim"></div>
+      <div class="sheet">
+        <div>
+          <h3 class="st" style="font-size: 25px">歯医者</h3>
+          <p class="m"><span class="num">10/27(火)　13:30〜14:00</span>　プライベート</p>
+        </div>
+        <div class="seg" role="group" aria-label="鳴らし方" style="flex: none"><button>アラーム</button><button class="on">通知のみ</button><button>鳴らさない</button></div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div class="seg" role="group" aria-label="何分前（1段目）" style="flex: none"><button>開始時</button><button>5分前</button><button>10分前</button></div>
+          <div class="seg" role="group" aria-label="何分前（2段目）" style="flex: none"><button>15分前</button><button class="on">30分前</button><button>1時間前</button></div>
+        </div>
+        <button class="lnk c-ac" style="align-self: flex-start; width: auto">既定に戻す</button>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">「通知のみ」は音なしの通知（「30分前です」）だけ出す。「鳴らさない」を選ぶと、何分前の段は隠れる。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 設定: 既定を2つ <span class="case">#211</span> <span class="case">#224</span></div>
+    <div class="sub">予定の開始と、予定に付いた「○分前」の通知で、既定を分けて持つ</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="blk"><p class="m">予定の開始</p><div class="seg" role="group" aria-label="開始の既定"><button class="on">アラーム</button><button>通知のみ</button><button>鳴らさない</button></div></div>
+          <div class="blk"><p class="m">「○分前」の通知</p><div class="seg" role="group" aria-label="通知分の既定"><button class="on">アラーム</button><button>通知のみ</button><button>鳴らさない</button></div></div>
+        </div>
+        <div class="card ls">
+          <div class="it"><div class="grow"><p class="t">カレンダーの通知設定を使う</p><p class="m">開始時刻の鳴動に加えて、予定に設定された「○分前」通知の時刻でも鳴らします。</p></div><button class="sw on" aria-label="カレンダーの通知設定を使う"></button></div>
+        </div>
+        <p class="m" style="padding: 0 6px">今は見出しが無く印だけで、言葉も「通知／OFF」。見出しは #211、言葉は #224 で直す。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">3. カレンダーごとの上書き <span class="case">#224</span></div>
+    <div class="sub">設定のカレンダーの行を開くと、同じ2つをカレンダーごとに決められる</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card ls">
+          <div class="it"><span class="cal" style="background: #F4A3B5"></span><div class="grow"><p class="t">プライベート</p><p class="m">開始時 · 終日<span class="num">9:00</span></p></div><button class="sw on" aria-label="プライベートで鳴らす"></button><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></div>
+          <div class="blk"><p class="m">予定の開始</p><div class="seg" role="group" aria-label="プライベートの開始"><button>アラーム</button><button>通知のみ</button><button class="on">鳴らさない</button></div></div>
+          <div class="blk"><p class="m">「○分前」の通知</p><div class="seg" role="group" aria-label="プライベートの通知分"><button>アラーム</button><button class="on">通知のみ</button><button>鳴らさない</button></div></div>
+        </div>
+        <p class="m" style="padding: 0 6px">今は「開始／通知分」「通知／OFF」と書いている。予定の詳細と同じ言葉にする（#224）。</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1272,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>
