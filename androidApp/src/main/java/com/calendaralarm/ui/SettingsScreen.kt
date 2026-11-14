@@ -71,6 +71,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -1684,8 +1685,9 @@ internal fun LargeButtonsRow(checked: Boolean, onChange: (Boolean) -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
-        // 切り替えは行が受ける。スイッチは状態を見せるだけ
-        Switch(checked = checked, onCheckedChange = null)
+        // 切り替えは行が受ける。スイッチは状態を見せるだけ。
+        // onCheckedChange が null だとスイッチは最小の押せる大きさ (48dp) を取らず行が低くなるので、明示して元の高さを保つ
+        Switch(checked = checked, onCheckedChange = null, modifier = Modifier.minimumInteractiveComponentSize())
     }
 }
 

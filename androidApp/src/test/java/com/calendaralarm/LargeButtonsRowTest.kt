@@ -4,11 +4,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsToggleable
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import com.calendaralarm.ui.LargeButtonsRow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.Assert.assertEquals
@@ -36,6 +38,8 @@ class LargeButtonsRowTest {
         compose.waitForIdle()
         // 見出しを持つ部品そのものが切り替え (スイッチだけが別の部品だと、読み上げで何のスイッチか分からない)
         compose.onNodeWithText("停止ボタンを大きくする").assertIsToggleable().assertIsOff()
+            // 押せる大きさ (48dp) と上下の余白 4dp を保ち、隣の設定の行と同じ 56dp の高さにする
+            .assertHeightIsAtLeast(56.dp)
         compose.onNodeWithText("停止ボタンを大きくする").performClick()
         assertEquals(true, changed)
     }
