@@ -21,7 +21,7 @@ interface ScheduledInstanceDao {
     @Query("SELECT * FROM scheduled_instances WHERE id = :id")
     suspend fun byId(id: String): ScheduledInstanceEntity?
 
-    /** 通知アラームの鎖: [id] 自身とそのスヌーズの子 (`id:snz*`)。id は 16 進だけなので LIKE の記号は混ざらない (#371)。 */
+    /** 通知アラームの鎖: [id] 自身とそのスヌーズの子 (`id:snz*`)。id は 16 進 (先頭に '-' が付くことがある) だけなので LIKE の記号は混ざらない (#371)。 */
     @Query("SELECT * FROM scheduled_instances WHERE id = :id OR id LIKE :id || ':snz%'")
     suspend fun chainOf(id: String): List<ScheduledInstanceEntity>
 

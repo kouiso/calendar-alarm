@@ -169,12 +169,21 @@ class NotificationRepostTest {
 
     @Test
     fun `2 実際の停止の経路で書いた記録でも直後の出し直しを落とす`() = runBlocking {
-        now = System.currentTimeMillis()
         seed("nf:j", AlarmState.FIRED)
         repository.onDismissed("nf:j")
+        now = System.currentTimeMillis() // 停止の記録は実時計で書かれるので、停止の後の時刻にそろえる
         post("nf:j")
         assertEquals(AlarmState.DISMISSED.name, row("nf:j")!!.state)
         assertEquals("old", row("nf:j")!!.title)
+    }
+
+    @Test
+    fun `2 端末の時計が止めた後に戻っていても鳴らす`() = runBlocking {
+        seed("nf:p", AlarmState.DISMISSED)
+        seedDismissAudit("nf:p", now + 30 * minute) // 止めた記録が今より未来
+        post("nf:p")
+        assertEquals(AlarmState.PENDING.name, row("nf:p")!!.state)
+        assertEquals("new", row("nf:p")!!.title)
     }
 
     @Test
@@ -190,8 +199,10 @@ class NotificationRepostTest {
         seed("nf:l", AlarmState.MISSED)
         seed("nf:m", AlarmState.SNOOZED)
         seed("nf:n", AlarmState.CANCELLED)
-        listOf("nf:l", "nf:m", "nf:n").forEach { post(it) }
-        listOf("nf:l", "nf:m", "nf:n").forEach {
+        seed("nf:o", AlarmState.SKIPPED)
+        val ids = listOf("nf:l", "nf:m", "nf:n", "nf:o")
+        ids.forEach { post(it) }
+        ids.forEach {
             assertEquals(it, AlarmState.PENDING.name, row(it)!!.state)
             assertEquals(it, "new", row(it)!!.title)
         }

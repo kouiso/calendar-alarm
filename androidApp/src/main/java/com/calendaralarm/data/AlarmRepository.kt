@@ -641,7 +641,8 @@ class AlarmRepository(
                 val stoppedAt = db.auditLog().latestAtMillis("DISMISS", dismissed.map { it.id })
                     ?: dismissed.maxOf { it.triggerAtMillis }
                 val elapsed = nowMillis() - stoppedAt
-                if (elapsed < NOTIFICATION_REPOST_WINDOW_MS) {
+                // 時計が止めた後に戻った (elapsed < 0) 時は窓の外とみなして鳴らす
+                if (elapsed in 0 until NOTIFICATION_REPOST_WINDOW_MS) {
                     audit(
                         "NF_REPOST_SKIP",
                         "${instance.id}: 止めて ${elapsed / 1000} 秒なので出し直しを鳴らさない",
