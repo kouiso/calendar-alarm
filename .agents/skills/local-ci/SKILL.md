@@ -10,7 +10,7 @@ description: calendar-alarm の変更を確かめる時に、どの検査をど�
 | 変えたもの | 回す検査 |
 |---|---|
 | `shared/` だけ | `bash scripts/ci.sh fast` |
-| `androidApp/` | `bash scripts/ci.sh all` と `./gradlew :androidApp:lintDebug` |
+| `androidApp/` | `bash scripts/ci.sh all` と `bash scripts/ci.sh lint`（CI と同じ。lint の中身は `:androidApp:lintDebug`） |
 | 鳴動・停止の経路（`engine/`） | 上に加えて emulator の停止 E2E（`task ci:emulator:build` → `task ci:emulator`） |
 | `iosApp/` | `bash scripts/ci.sh ios`（Xcode と xcodegen が要る。署名・実機は対象外） |
 | `iosApp/iosApp/ring-history.swift` | 上に加えて `bash scripts/ci.sh ios-logic`（swiftc だけで動く単体テスト） |
