@@ -170,6 +170,14 @@ test("許可リストのファイルは数えない (照合キーワード)", ()
   } finally { rmSync(root, { recursive: true }); }
 });
 
+test("許可リストは engine/NotificationRuleTemplates.kt だけ。同名の別の置き場は数える", () => {
+  const other = "androidApp/src/main/java/com/calendaralarm/ui/NotificationRuleTemplates.kt";
+  const root = fixture({ [other]: 'val label = "表示"\n' });
+  try {
+    assert.deepEqual(countAll(root), { [other]: 1 });
+  } finally { rmSync(root, { recursive: true }); }
+});
+
 test("androidApp 全体と shared/commonMain を見る (ui 以外も対象)", () => {
   const eng = "androidApp/src/main/java/com/calendaralarm/engine/Bar.kt";
   const sh = "shared/src/commonMain/kotlin/com/calendaralarm/shared/logic/Baz.kt";

@@ -31,7 +31,7 @@ export const ALLOWLIST = [
   {
     // 通知ルールのクイックテンプレート。anyKeywords などは通知本文との照合キーワードで、
     // 画面に出す文言ではない (表示名は strings.xml の getString で出している)。
-    pattern: /^androidApp\/src\/main\/java\/com\/calendaralarm\/.*\/NotificationRuleTemplates\.kt$/,
+    pattern: /^androidApp\/src\/main\/java\/com\/calendaralarm\/engine\/NotificationRuleTemplates\.kt$/,
   },
   {
     // 停止手段の警告文 (StopUiPlan の診断メッセージ)。設定の「鳴動ログ」にそのまま出るが、

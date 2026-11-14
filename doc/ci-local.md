@@ -31,14 +31,14 @@ Gradle も Android SDK も要らず、Node 22 だけで数秒で終わる。Andr
 - 1 ファイルでも base より増える、または載っていないファイルに 1 個でも出れば失敗する。baseline ファイルを base より上げる変更も失敗する。baseline を下げるのは通る。
 - 減ったのに baseline を下げていないときも失敗する（余白を後の PR が再利用できないように）。`node scripts/hardcoded-ja/check.mjs --update` を実行し、下がった数字をコミットする。
 - baseline を実際の数より手で下げた（項目を消した）ときも失敗する。merge 後に master が赤になるため。baseline は手で編集せず `--update` で作る。
-- ファイルの rename は `git diff --name-status -M origin/<base>...HEAD` で検出し、旧パスの base の数を新パスの上限として引き継ぐ。分割（1 ファイルを複数に分ける）は検出しない。分割するときは、先に文言を resources へ移して数を減らしてから分けるか、元のファイルを残す。
+- ファイルの rename は `git diff --name-status -M origin/<base>...HEAD` で検出し、旧パスの base の数を新パスの上限として引き継ぐ。分割（1 ファイルを複数に分ける）は検出しない。分割するときは、先に文言を resources へ移して数を減らしてから分けるか、元のファイルを残す。rename の検出はコミットを読み、数えるのは作業ツリーなので、手元で確かめるときは rename をコミットしてから回す（コミット前だと `understated` と出る）。
 - `audit` などと同じ名前の自前関数で包んだ文字列は数えない（名前だけで見ているため）。
 - base に baseline ファイルがまだ無いとき（この検査を入れる最初の PR）だけ、その PR の baseline を基準にする。base ref が取れないときは失敗する。
 - 失敗の文は、ファイル名と何個から何個に増えたかを出す。androidApp のファイルには `strings.xml`（values と values-en）へ移して `stringResource` / `getString` を使うよう、shared のファイルには shared から種類（kind / enum）か引数を返し、文言への変換は各プラットフォーム側で行うよう案内する。
 
 数えない常設の許可（`scripts/hardcoded-ja/check.mjs` の `ALLOWLIST`。理由もそこに書く）:
 
-- `NotificationRuleTemplates.kt` はファイル全体。キーワード一覧は通知本文との照合用で、表示文言ではない。
+- `engine/NotificationRuleTemplates.kt` はファイル全体（この置き場だけ）。キーワード一覧は通知本文との照合用で、表示文言ではない。
 - `Models.kt` は `hit(...)` の直接引数だけ。予定タイトルとの照合キーワードである。
 - `StopUiPlan.kt` はファイル全体。停止手段の警告文は設定の「鳴動ログ」にそのまま出るが、診断ログの文面であり、このフェーズの対象外とするのがプロダクト判断（#289）。
 - どのファイルでも、`audit(` `markMissed(` `markMissedIfFired(` `markDndSuppressed(` `markSkipped(` と `Log.v/d/i/w/e(` の直接引数。診断ログの文面（detail）で、鳴動ログには出るが、このフェーズの対象外とするのがプロダクト判断。
