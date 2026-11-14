@@ -83,6 +83,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -1532,21 +1534,7 @@ private fun AppearanceCard(
             )
             // 大ボタンモード (競合の Large Button Mode, #154)。
             // 鳴動画面の停止をスライドから押しやすい大ボタンに変える
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "停止ボタンを大きくする",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                Switch(
-                    checked = p.largeButtons,
-                    onCheckedChange = { scope.launch { settings.setLargeButtons(it) } },
-                )
-            }
+            LargeButtonsRow(p.largeButtons) { scope.launch { settings.setLargeButtons(it) } }
         }
     }
 }
@@ -1674,6 +1662,30 @@ private fun RingTimesCard(appMinutesBefore: Int, useCalendarReminders: Boolean) 
                 )
             }
         }
+    }
+}
+
+/**
+ * 「停止ボタンを大きくする」の行 (#154)。行全体を切り替えの対象にして、読み上げでは見出しとスイッチの状態を 1 つとして読む
+ * (スイッチだけが別の部品だと、何のスイッチか読み上げられない)
+ */
+@Composable
+internal fun LargeButtonsRow(checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "停止ボタンを大きくする",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        // 切り替えは行が受ける。スイッチは状態を見せるだけ
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 
