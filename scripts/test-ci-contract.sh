@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
+if ! command -v task >/dev/null 2>&1; then
+  {
+    echo "test-ci-contract: task (go-task) が PATH にありません。契約テストは fixture の中で task ci / ci:fast / ci:ios を呼ぶので、実物が要ります。"
+    echo "入れ方: macOS は brew install go-task、どの OS でも go install github.com/go-task/task/v3/cmd/task@latest、"
+    echo "または https://taskfile.dev/installation/ の手順。詳しくは doc/ci-local.md。"
+  } >&2
+  exit 1
+fi
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT

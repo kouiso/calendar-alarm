@@ -162,7 +162,17 @@ data class CalendarSource(
     val isPrimary: Boolean = false,
 )
 
-/** イベント。繰り返しイベントはプラットフォーム側で個別回に展開済みの形で渡す。 */
+/**
+ * イベント。繰り返しイベントはプラットフォーム側で個別回に展開済みの形で渡す。
+ *
+ * 終日イベント (allDay=true) の契約:
+ * - startMillis は「その日付の UTC 0時」。Android の CalendarContract が終日イベントをこの形で返す。
+ *   ローカル0時 (例: JST 0時 = 前日 UTC 15時) を渡してはならない。
+ * - AlarmExpander は startMillis を UTC の日付に直し、その日付のローカル allDayMinutes
+ *   (AlarmRule の既定 540 = 9:00) に倒して鳴動時刻を決める。負数なら鳴らさない。
+ * - このため UTC 0時以外を渡すと日付がずれる (ローカル0時なら前日になる)。
+ *   現状の挙動は AlarmExpanderTest の「終日開始の契約」テストで固定している。
+ */
 @Serializable
 data class CalendarEvent(
     val id: String,
