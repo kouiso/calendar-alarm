@@ -1,0 +1,6 @@
+PR #398 head 5336dcb346fbb5f215a9612d295dd1468a535b5f (= reviewed d70ad1d + merge of master a37e822..3d251e4 only)
+start 2026-11-14T14:01:09Z
+:shared:jvmTest tests 133 fail 0 (SharedDecisionTableTest 4)
+end 2026-11-14T14:01:38Z
+hosted on 5336dcb: build, i18n-check, ios-build, plan, verify (fix), verify (control) success
+earlier verify (fix) on d70ad1d failed PROBE_PRECONDITION (job 132462837015); not reproduced on 5336dcb
