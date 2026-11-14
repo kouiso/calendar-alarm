@@ -185,6 +185,8 @@ data class CalendarEvent(
     val googleEventType: String? = null,
     /** 予定あり／予定なし。取れない時は UNKNOWN。 */
     val availability: Availability = Availability.UNKNOWN,
+    /** 繰り返しの予定の回か (繰り返しの規則があるか、繰り返しから外した 1 回か)。取れない時は false */
+    val recurring: Boolean = false,
 ) {
     /** 同一イベントの複数回を区別するため、開始時刻込みの安定キーを返す。 */
     val instanceKey: String get() = "$calendarId:$id:$startMillis"
