@@ -177,7 +177,10 @@ export function countAll(root) {
   for (const { dir, ext } of scanDirs(root)) {
     const base = join(root, dir);
     let files = [];
-    try { walk(base, ext, files); } catch { continue; }
+    // 無くてよいのは scan root そのものだけ (ENOENT)。中の dangling symlink などの走査エラーは
+    // 握りつぶさず投げる (一部しか数えない baseline を --update が書かないように)。
+    try { statSync(base); } catch (e) { if (e.code === "ENOENT") continue; throw e; }
+    walk(base, ext, files);
     for (const f of files) {
       const rel = relative(root, f).split(sep).join("/");
       const entries = ALLOWLIST.filter((a) => a.pattern.test(rel));

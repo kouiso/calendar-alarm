@@ -1,7 +1,7 @@
 // check.mjs の単体テスト。Gradle なしで動く: node --test scripts/hardcoded-ja/
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { countJapaneseLiterals, countAll, compare, formatError } from "./check.mjs";
@@ -218,4 +218,19 @@ test("rename されたファイルは旧パスの base の数を上限として�
   assert.deepEqual(compare({ [NEW]: 4 }, { [NEW]: 4 }, { [OLD]: 3 }, renames), [{ file: NEW, was: 3, now: 4 }]);
   // rename 情報が無ければ新規ファイル扱いで失敗
   assert.deepEqual(compare({ [NEW]: 3 }, { [NEW]: 3 }, { [OLD]: 3 }), [{ file: NEW, was: 0, now: 3 }]);
+});
+
+test("scan root の中に dangling symlink があると黙って飛ばさず例外を投げる", () => {
+  const root = fixture({ [UI]: 'val a = "あ"\n' });
+  try {
+    symlinkSync(join(root, "no-such-target.kt"), join(root, "androidApp/src/main/java/com/calendaralarm/ui/Dangling.kt"));
+    assert.throws(() => countAll(root), /ENOENT/);
+  } finally { rmSync(root, { recursive: true }); }
+});
+
+test("scan root が無いだけなら例外にしない", () => {
+  const root = fixture({ "README.md": "x" });
+  try {
+    assert.deepEqual(countAll(root), {});
+  } finally { rmSync(root, { recursive: true }); }
 });
