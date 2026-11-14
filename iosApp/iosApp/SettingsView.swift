@@ -114,6 +114,19 @@ struct SettingsView: View {
                                         .font(NightTheme.font(13)).foregroundStyle(.secondary)
                                 }
                             }
+                            // 「選ぶ」で取り込める音の説明。長い音は AlarmSoundLibrary.maxSeconds で切る (#147)
+                            Text("使える形式は mp3・m4a・wav・aiff・caf などです。長い音は先頭の約30秒だけ鳴ります。")
+                                .font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            // 同梱プリセット (#147)。AlarmKit の AlertSound.named は
+                            // アプリが置いた .caf しか読めないので、選択肢は同梱音で用意する
+                            Chips(
+                                items: ["__default__"] + AlarmSoundLibrary.bundledPresets,
+                                current: store.state.alarmSoundFile ?? "__default__",
+                            ) { sel in
+                                let change = Self.soundChange(forChip: sel)
+                                changeSound(file: change.file, label: change.label)
+                            } label: { Self.soundPresetLabel($0) }
                             // AlarmKit が受け付けない項目は、出来ないと画面に書く (Android にはある設定)
                             Text("音量・だんだん大きくする・バイブは、iPhone の「サウンドと触覚」の設定に従います。iPhone のアラーム機能では、アプリから変えられるのは音だけです。")
                                 .font(NightTheme.font(11)).foregroundStyle(.secondary)
@@ -716,6 +729,23 @@ struct SettingsView: View {
         soundError = nil
         store.setAlarmSound(file: file, label: label)
         Task { await engine.rescheduleForSoundChange() }
+    }
+
+    /// 札を押した時に changeSound へ渡す音のファイル名と表示名 (#147)。「標準」は両方 nil
+    static func soundChange(forChip sel: String) -> (file: String?, label: String?) {
+        sel == "__default__" ? (nil, nil) : (sel, soundPresetLabel(sel))
+    }
+
+    /// プリセット音の表示名 (#147)。取り込み音はファイル名が UUID なので対象外、
+    /// その場合はアラーム音行の alarmSoundLabel が表示を担う
+    static func soundPresetLabel(_ file: String) -> String {
+        switch file {
+        case "__default__": return String(localized: "標準")
+        case "preset_bell.caf": return String(localized: "ベル")
+        case "preset_soft.caf": return String(localized: "ゆっくり")
+        case "preset_beep.caf": return String(localized: "きっぱり")
+        default: return file
+        }
     }
 }
 

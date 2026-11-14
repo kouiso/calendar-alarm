@@ -260,6 +260,16 @@
         }
       }
     },
+    "きっぱり": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharp"
+          }
+        }
+      }
+    },
     "このアラームを削除する?": {
       "localizations": {
         "en": {
@@ -326,6 +336,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cancel"
+          }
+        }
+      }
+    },
+    "ゆっくり": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gentle"
           }
         }
       }
@@ -506,6 +526,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Add preset"
+          }
+        }
+      }
+    },
+    "使える形式は mp3・m4a・wav・aiff・caf などです。長い音は先頭の約30秒だけ鳴ります。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usable formats: mp3, m4a, wav, aiff, caf and more. Long sounds play only the first 30 seconds or so."
+          }
+        }
+      }
+    },
+    "ベル": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bell"
           }
         }
       }
@@ -806,6 +846,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Could not find an event in the text"
+          }
+        }
+      }
+    },
+    "標準": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default"
           }
         }
       }
