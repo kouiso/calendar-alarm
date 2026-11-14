@@ -1,6 +1,13 @@
-IN-PROGRESS 2026-11-14 11:26 UTC
+IN-PROGRESS 2026-11-14 11:40 UTC
 
 calendar-alarm [cloud]
+
+## 2026-11-14 11:40 UTC の進み
+
+- #369: 独立レビュー 4 回目で must 0・should 0（head 0991bb6、https://github.com/kouiso/calendar-alarm/pull/369#issuecomment-6876669337 ）。CodeRabbit の 3 スレッドは直して解決。CI の `verify (fix)` が終われば取り込む。
+- #371 → PR #372（止めて 10 分以内の出し直しは鳴らさない）: 独立レビュー 2 回で must 0（head 7c72dfa、https://github.com/kouiso/calendar-alarm/pull/372#issuecomment-6876702532 ）。時計が戻った時に黙り続ける should を直した。DB の移行は無い。5d1e06c の `verify (control)` は emulator の `adb: device offline` で落ちた（この PR のコードはそのレーンでビルドされない。PR にコメント済み）。7c72dfa の CI が通れば取り込む。
+- #188・#191: 新しい日本語の文言を strings.xml（ja・en）へ移している（判断役 packet 3）。#369 が入った後、各 PR に master を取り込む。
+- 台帳: Mac の `status.tsv` はこのクラウドの機械からは読めない。このセッションの台帳はこの記録（PR #358）。
 
 ## 2026-11-14 11:26 UTC の進み
 
