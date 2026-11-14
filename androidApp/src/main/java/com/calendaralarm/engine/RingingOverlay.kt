@@ -65,9 +65,9 @@ object RingingOverlay {
         title: String,
         snoozeMinutes: Int,
         // 既定値を持たせない: 省略してもコンパイルが通ると、呼び出し側の渡し忘れで
-        // オーバーレイだけチップと見出しが静かに消える (鳴動画面とのズレ)
+        // オーバーレイだけチップと見出し・大ボタンが静かに消える (鳴動画面とのズレ)
         snoozePresets: List<Int>,
-        largeButtons: Boolean = false,
+        largeButtons: Boolean,
         stillValid: () -> Boolean = { true },
     ) {
         if (!canShow(context)) return
