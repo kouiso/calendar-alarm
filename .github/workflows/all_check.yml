@@ -47,6 +47,10 @@ jobs:
       - name: Run all unit tests and build debug APK
         run: bash scripts/ci.sh all
 
+      # WHY: 翻訳漏れや権限まわりの新しい lint 指摘を止める。今ある指摘は lint-baseline.xml に固定 (#300)
+      - name: Android lint (new findings fail)
+        run: bash scripts/ci.sh lint
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

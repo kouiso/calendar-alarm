@@ -61,6 +61,11 @@ android {
         }
     }
 
+    // 今ある指摘は lint-baseline.xml に固定し、新しい指摘だけでビルドを落とす (#300)
+    lint {
+        baseline = file("lint-baseline.xml")
+    }
+
     kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
