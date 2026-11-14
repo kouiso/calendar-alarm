@@ -1424,7 +1424,7 @@ private fun RingingCard(
                     onCheckedChange = { scope.launch { settings.setIgnoreDnd(it) } },
                 )
             }
-            // ON/OFF で何が変わるかと、ON を効かせる許可の場所 (#149)。許可の有無は検査画面が見る
+            // ON/OFF で何が変わるかと、ON を効かせる許可の場所 (#149)。ON で許可が無い時は、ここでもその状態を出す
             Text(
                 if (p.ignoreDnd) {
                     "おやすみモード中も鳴らします (おやすみモードでアラームまで止める設定の時は OS が止めます)"

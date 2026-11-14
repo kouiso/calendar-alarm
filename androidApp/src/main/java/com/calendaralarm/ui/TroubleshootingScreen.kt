@@ -191,8 +191,8 @@ object TroubleshootChecks {
                 context.getString(R.string.trouble_fsi_desc),
                 Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkgUri),
             ),
-            // 「おやすみモードを無視」OFF の時は、おやすみモード中はわざと鳴らさない (#149)。
-            // OS の「アラーム許可」の状態で OK/NG を出すとエンジンの動きと食い違うので対象外にする
+            // ON でも OFF でも、OS がアラームを通すかで OK/NG を出す (#149)。
+            // OFF は OS に従って鳴らすので、OS がアラームを止めている時だけ鳴らない。判定はエンジンと同じ dndAllowsAlarms
             TroubleshootItem(
                 "dnd", s(dndOk),
                 context.getString(

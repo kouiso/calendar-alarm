@@ -2,6 +2,7 @@ package com.calendaralarm
 
 import android.app.NotificationManager
 import com.calendaralarm.engine.dndAllowsAlarms
+import com.calendaralarm.engine.policyAllowsAlarms
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,5 +32,19 @@ class DndPolicyTest {
         assertTrue(dndAllowsAlarms(null, null))
         assertTrue(dndAllowsAlarms(NotificationManager.INTERRUPTION_FILTER_UNKNOWN, null))
         assertTrue(dndAllowsAlarms(NotificationManager.INTERRUPTION_FILTER_PRIORITY, null))
+    }
+
+    @Test
+    fun `知らないフィルタの値は通す側に倒す`() {
+        assertTrue(dndAllowsAlarms(99, null))
+    }
+
+    @Test
+    fun `Android8の優先モードはアラームの項目が無くても通す`() {
+        // API 26/27 のポリシーには「アラーム」の項目が無い。無いのを「許可なし」と読むと、OFF で全部のアラームが黙って鳴らなくなる
+        assertTrue(policyAllowsAlarms(sdkInt = 27, priorityCategories = 0))
+        assertTrue(policyAllowsAlarms(sdkInt = 26, priorityCategories = 0))
+        assertFalse(policyAllowsAlarms(sdkInt = 28, priorityCategories = 0))
+        assertTrue(policyAllowsAlarms(sdkInt = 28, priorityCategories = NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS))
     }
 }
