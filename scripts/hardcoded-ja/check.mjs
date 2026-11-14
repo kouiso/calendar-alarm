@@ -16,10 +16,15 @@ import { fileURLToPath } from "node:url";
 // ひらがな・カタカナ・CJK 統合漢字(+拡張A, +拡張B 以降のサロゲートペア)・CJK 記号句読点・全角半角形
 const JA = /[぀-ヿ㐀-䶿一-鿿　-〿＀-￯]|[\u{20000}-\u{323AF}]/u;
 
-export const SCAN_DIRS = [
-  { dir: "androidApp/src/main/java", ext: ".kt" },
-  { dir: "shared/src/commonMain", ext: ".kt" },
-];
+// build に入る全 source set を見る: androidApp/src/main (java / kotlin) と shared/src/*Main
+// (commonMain / androidMain / jvmMain / iosMain ...)。test 系 (src/test, *Test) は見ない。
+export function scanDirs(root) {
+  const dirs = [{ dir: "androidApp/src/main", ext: ".kt" }];
+  let names = [];
+  try { names = readdirSync(join(root, "shared/src")).sort(); } catch { /* shared が無い fixture */ }
+  for (const n of names) if (/Main$/.test(n)) dirs.push({ dir: `shared/src/${n}`, ext: ".kt" });
+  return dirs;
+}
 
 // 常設の許可リスト。数えない。理由は必ず書く。
 export const ALLOWLIST = [
@@ -169,7 +174,7 @@ function walk(dir, ext, out) {
 
 export function countAll(root) {
   const counts = {};
-  for (const { dir, ext } of SCAN_DIRS) {
+  for (const { dir, ext } of scanDirs(root)) {
     const base = join(root, dir);
     let files = [];
     try { walk(base, ext, files); } catch { continue; }
@@ -184,25 +189,32 @@ export function countAll(root) {
   return counts;
 }
 
-// 失敗を返す。
+// 失敗を返す。1 ファイルにつき 1 件だけ (増加 > 引き下げすぎ > 引き上げ > 下げ忘れ の順)。
 //   current   : 今の数
 //   prBaseline: この PR の作業ツリーにある baseline
 //   base      : 比べる相手。PR では base ブランチの baseline (省略時は prBaseline と同じ)
-// 増加 (今の数 > base) と baseline の引き上げ (prBaseline > base) は kind なしの {file, was, now}。
-// 減ったのに baseline を下げていない (今の数 < prBaseline) は kind: "stale"。
-export function compare(current, prBaseline, base = prBaseline) {
+//   renames   : { 新パス: 旧パス }。rename されたファイルは旧パスの base の数を上限として引き継ぐ
+// 増加 (今の数 > base の上限) は kind なしの {file, was, now}。
+// understated: 今の数 > PR の baseline (手で下げすぎた・項目を消した。merge 後に master が赤くなる)
+// raised: PR の baseline > base の上限。 stale: 今の数 < PR の baseline (下げ忘れ)。
+export function compare(current, prBaseline, base = prBaseline, renames = {}) {
+  const ceiling = (file) => base[file] ?? (renames[file] !== undefined ? base[renames[file]] ?? 0 : 0);
   const errors = [];
+  const seen = new Set();
+  const add = (e) => { if (!seen.has(e.file)) { seen.add(e.file); errors.push(e); } };
   for (const [file, n] of Object.entries(current)) {
-    const was = base[file] ?? 0;
-    if (n > was) errors.push({ file, was, now: n });
+    if (n > ceiling(file)) add({ file, was: ceiling(file), now: n });
+  }
+  for (const [file, n] of Object.entries(current)) {
+    const rec = prBaseline[file] ?? 0;
+    if (n > rec) add({ file, was: rec, now: n, kind: "understated" });
   }
   for (const [file, n] of Object.entries(prBaseline)) {
-    const was = base[file] ?? 0;
-    if (n > was && !errors.some((e) => e.file === file)) errors.push({ file, was, now: n, kind: "raised" });
+    if (n > ceiling(file)) add({ file, was: ceiling(file), now: n, kind: "raised" });
   }
   for (const [file, n] of Object.entries(prBaseline)) {
     const now = current[file] ?? 0;
-    if (now < n) errors.push({ file, was: n, now, kind: "stale" });
+    if (now < n) add({ file, was: n, now, kind: "stale" });
   }
   return errors;
 }
@@ -220,6 +232,10 @@ export function formatError(e) {
     return `${e.file}: 日本語の文字列リテラルが減って ${e.was} 個から ${e.now} 個になりましたが、baseline が下がっていません。` +
       "node scripts/hardcoded-ja/check.mjs --update を実行し、下がった数字をコミットしてください (余白を後で再利用されないため)。";
   }
+  if (e.kind === "understated") {
+    return `${e.file}: 日本語の文字列リテラルは ${e.now} 個あるのに、baseline は ${e.was} 個しかありません (手で下げすぎ、または項目の削除)。` +
+      "baseline は --update で作り直してください。このまま merge すると master の検査が赤になります。";
+  }
   if (e.kind === "raised") {
     return `${e.file}: baseline が base ブランチの ${e.was} 個から ${e.now} 個に引き上げられています。baseline は下げる方向にしか変えられません。` +
       adviceFor(e.file);
@@ -227,18 +243,29 @@ export function formatError(e) {
   return `${e.file}: 日本語の文字列リテラルが ${e.was} 個から ${e.now} 個に増えました (+${e.now - e.was})。` + adviceFor(e.file);
 }
 
-// PR のときだけ、base ブランチの baseline を git から読む。PR 以外 (ローカル・push) は null。
+// PR のときだけ、base ブランチの baseline と rename 一覧を git から読む。PR 以外 (ローカル・push) は null。
 // base に baseline ファイルがまだ無いとき (この仕組みを入れる最初の PR) は null で作業ツリーのものを使う。
-// base ref が取れないのは失敗 (黙って PR 自身の baseline に落とすと素通りになる)。
-function loadBaseBaseline(root, baselineRel) {
+// base ref が取れない・git の失敗は失敗 (黙って PR 自身の baseline に落とすと素通りになる)。
+function loadBase(root, baselineRel) {
   const ref = process.env.GITHUB_BASE_REF;
   if (!ref) return null;
-  const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  try { git("rev-parse", "--verify", "--quiet", `origin/${ref}^{commit}`); }
-  catch { console.error(`base ブランチ origin/${ref} が取れません。workflow の checkout に fetch-depth: 0 (または base の fetch) が必要です。`); process.exit(1); }
-  try { git("cat-file", "-e", `origin/${ref}:${baselineRel}`); }
-  catch { console.log(`base (origin/${ref}) に ${baselineRel} がまだ無いので、この PR の baseline を基準にします。`); return null; }
-  return JSON.parse(git("show", `origin/${ref}:${baselineRel}`));
+  const git = (...args) => {
+    try { return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); }
+    catch (e) { console.error(`git ${args[0]} が失敗しました: ${String(e.stderr || e.message).trim()}\nworkflow の checkout に fetch-depth: 0 (または base の fetch) が必要です。`); process.exit(1); }
+  };
+  git("rev-parse", "--verify", "--quiet", `origin/${ref}^{commit}`);
+  if (git("ls-tree", `origin/${ref}`, "--", baselineRel).trim() === "") {
+    console.log(`base (origin/${ref}) に ${baselineRel} がまだ無いので、この PR の baseline を基準にします。`);
+    return null;
+  }
+  const baseline = JSON.parse(git("show", `origin/${ref}:${baselineRel}`));
+  // rename (-M) だけを拾う。分割や大きな書き換えは検出されない (doc/ci-local.md 参照)。
+  const renames = {};
+  for (const line of git("diff", "--name-status", "-M", `origin/${ref}...HEAD`).split("\n")) {
+    const [st, from, to] = line.split("\t");
+    if (st && st.startsWith("R") && from && to) renames[to] = from;
+  }
+  return { baseline, renames };
 }
 
 function main() {
@@ -254,8 +281,8 @@ function main() {
     return;
   }
   const baseline = JSON.parse(readFileSync(baselinePath, "utf8"));
-  const base = loadBaseBaseline(root, baselineRel) ?? baseline;
-  const errors = compare(current, baseline, base);
+  const loaded = loadBase(root, baselineRel);
+  const errors = compare(current, baseline, loaded?.baseline ?? baseline, loaded?.renames ?? {});
   if (errors.length > 0) {
     for (const e of errors) console.error(`::error file=${e.file}::${formatError(e)}`);
     console.error("増やすのではなく、文言を移すのが正しい直し方です。" +

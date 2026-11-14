@@ -126,8 +126,7 @@ test("使われていないのに baseline だけ引き上げても失敗する"
   const root = fixture({ [UI]: 'val a = "保存"\n' });
   try {
     const errors = compare(countAll(root), { [UI]: 4 }, { [UI]: 1 });
-    assert.ok(errors.some((e) => e.kind === "raised"));
-    assert.ok(errors.some((e) => e.kind === "stale"));
+    assert.deepEqual(errors, [{ file: UI, was: 1, now: 4, kind: "raised" }]); // stale は並べない
   } finally { rmSync(root, { recursive: true }); }
 });
 
@@ -179,4 +178,44 @@ test("androidApp 全体と shared/commonMain を見る (ui 以外も対象)", ()
   try {
     assert.deepEqual(countAll(root), { [eng]: 1, [sh]: 1 });
   } finally { rmSync(root, { recursive: true }); }
+});
+
+test("baseline を実際の数より手で下げた PR は失敗する (155→150 相当)", () => {
+  const root = fixture({ [UI]: 'val a = "あ"\nval b = "い"\nval c = "う"\n' });
+  try {
+    const errors = compare(countAll(root), { [UI]: 2 }, { [UI]: 3 });
+    assert.deepEqual(errors, [{ file: UI, was: 2, now: 3, kind: "understated" }]);
+    assert.match(formatError(errors[0]), /--update/);
+  } finally { rmSync(root, { recursive: true }); }
+});
+
+test("リテラルが残っているのに baseline の項目を消した PR は失敗する", () => {
+  const root = fixture({ [UI]: 'val a = "あ"\n' });
+  try {
+    const errors = compare(countAll(root), {}, { [UI]: 1 });
+    assert.deepEqual(errors, [{ file: UI, was: 0, now: 1, kind: "understated" }]);
+  } finally { rmSync(root, { recursive: true }); }
+});
+
+test("shared/src/androidMain など *Main と androidApp/src/main/kotlin も数える。test 系は数えない", () => {
+  const am = "shared/src/androidMain/kotlin/com/x/A.kt";
+  const im = "shared/src/iosMain/kotlin/com/x/I.kt";
+  const kt = "androidApp/src/main/kotlin/com/x/K.kt";
+  const ct = "shared/src/commonTest/kotlin/T.kt";
+  const at = "androidApp/src/test/java/T.kt";
+  const root = fixture({ [am]: 'val a = "あ"\n', [im]: 'val a = "い"\n', [kt]: 'val a = "う"\n', [ct]: 'val a = "え"\n', [at]: 'val a = "お"\n' });
+  try {
+    assert.deepEqual(countAll(root), { [am]: 1, [im]: 1, [kt]: 1 });
+  } finally { rmSync(root, { recursive: true }); }
+});
+
+test("rename されたファイルは旧パスの base の数を上限として引き継ぐ", () => {
+  const OLD = "androidApp/src/main/java/com/x/Old.kt";
+  const NEW = "androidApp/src/main/java/com/x/New.kt";
+  const renames = { [NEW]: OLD };
+  assert.deepEqual(compare({ [NEW]: 3 }, { [NEW]: 3 }, { [OLD]: 3 }, renames), []);
+  // 上限を超えたら失敗
+  assert.deepEqual(compare({ [NEW]: 4 }, { [NEW]: 4 }, { [OLD]: 3 }, renames), [{ file: NEW, was: 3, now: 4 }]);
+  // rename 情報が無ければ新規ファイル扱いで失敗
+  assert.deepEqual(compare({ [NEW]: 3 }, { [NEW]: 3 }, { [OLD]: 3 }), [{ file: NEW, was: 0, now: 3 }]);
 });
