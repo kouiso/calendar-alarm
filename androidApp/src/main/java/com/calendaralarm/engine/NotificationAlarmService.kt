@@ -73,7 +73,7 @@ class NotificationAlarmService : NotificationListenerService() {
         sbn.notification.contentIntent?.let { pendingOpens[id] = it }
         scope.launch {
             val repo = (application as CalendarAlarmApp).container.repository
-            repo.scheduleAdhoc(
+            repo.scheduleNotificationAlarm(
                 AlarmInstance(
                     id = id,
                     triggerAtMillis = System.currentTimeMillis(),
