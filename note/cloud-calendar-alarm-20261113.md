@@ -1,22 +1,23 @@
-PAUSED 2026-11-14 04:06 UTC
-
 calendar-alarm [cloud]
-
-## 止めた時点の状態（引き継ぐ人へ）
-
-- 済み: #191・#188・#189 は、どれもこの環境でできることを終えた。3 つとも区分 c で、持ち主を待っている（下の表と「待っているもの」）。
-- 途中: #231（子 #254・#255）は、コードを読んだところまで。ファイルの変更・ブランチ・push は無い。
-- 予約・繰り返し・定期実行は作っていない。動いているサブエージェントは無い。
-- 次にやること:
-  1. #231: `origin/master` から新しい worktree を作る。予約に効く設定のうち、画面が保存の後に `resync` を呼んでいない 2 つ（`defaultMinutesBefore`・`defaultSnoozeMinutes`）を、`settings.flow` から取り出して `distinctUntilChanged().drop(1)` で見張る。変化したら `repository.resync("settings")` を呼ぶ。アプリが生きている間ずっと動くよう、`AppContainer` の `appScope` で始める（画面のスコープは使わない）。`resync` が読む欄は 12 個ある: accountSettings・defaultMinutesBefore・defaultReminderAction・defaultSnoozeMinutes・defaultStartAction・eventTypeFilter・extraReminderOffsets・googleAccountEmails・importEventReminders・inviteFilter・muteAll・titleCodes。このうち 2 つ以外は、画面がもう `resync` を呼んでいる。`SettingsScreen.kt` は #188 と #191 も変えるので触らない。画面側の呼び出しを外して 1 か所に寄せるのは、2 つの PR が入った後の別の PR にする。
-  2. #254 のテスト: `AccountDefaultMinutesTest` を型にする。本物の container を通し、`SettingsRepository` の setter だけを呼ぶ（`resync` は呼ばない）。予約の行の鳴る時刻とスヌーズ分数が変わるまで待つ。直す前に落ち、直した後に通ることを確かめる。テストで `setDefaultMinutesBefore` と `setDefaultSnoozeMinutes` を呼んでいるクラスを探し、`--rerun-tasks` で何回か回す。二重の再同期で不安定にならないかを見るため。
-  3. 次は #232（同じ `AlarmRepository.resync`。#258 で排他を入れる）、#243（`:shared:jvmTest :shared:testDebugUnitTest` も回す）。#236・#204・#309 は区分 c で終わる見込み。#309 では配布の workflow を動かさない。
-  4. どの PR も、書いた AI とは別の新しいサブエージェントにレビューさせる。結果は PR のコメントに残す。
-- 環境: SDK を `/opt/android-sdk` に入れ直し、`local.properties` に `sdk.dir` を書く（git の管理外）。Gradle は `LANG=C.UTF-8 LC_ALL=C.UTF-8` で動かす。
 
 # クラウドでの引き継ぎ作業の記録（calendar-alarm）
 
 新しい記録が上。数字は PR か issue の番号。
+
+## 2026-11-14 04:27 UTC 時点（再開後）
+
+区分ごとの数: a 0 / b 2（#359・#360。差分の再レビュー待ち）/ c 3（#191・#188・#189）/ d 0
+次: #243 → #236・#204・#309
+
+| 番号 | 区分 | やったこと | head | checks | レビュー | マージ済みか / 足りないもの |
+|---|---|---|---|---|---|---|
+| #360（#232） | b | 再同期の書き戻しを鳴動・停止・スヌーズと同じロックに入れ、途中で鳴った・止めた・スヌーズした行を PENDING に戻さない。テスト 4 件（直す前は落ちる） | aa78f2b | 手元 unit 190 件 失敗 0、lint 成功 | [must 0（15a73c6）](https://github.com/kouiso/calendar-alarm/pull/360#issuecomment-6871643208)。should 1 は直した。差分の再レビュー中 | 未マージ。画面は変えない。持ち主の「merge #360」で入れられる |
+| #359（#231） | b | 「何分前」「スヌーズ」の既定を変えたら再同期する見張りを足した。テスト 3 件（直す前は 2 件が落ちる） | 804760a | 手元 unit 189 件 失敗 0、lint 成功、3 回の再実行で成功 | [must 0（fe3ae60）](https://github.com/kouiso/calendar-alarm/pull/359#issuecomment-6871554433)。should 2 件は直した。差分の再レビュー中 | 未マージ。画面は変えない。持ち主の「merge #359」で入れられる |
+
+### 新しい不具合の候補（issue にはしていない）
+
+- 再同期の外にも、行を読んでから状態を無条件で書く所が残っている。`cancelStaleWaitingEvents`（CANCELLED）、`markMissed()`（MISSED）、`rearmWaitingRings`（`setPendingIfFired` の前後）。読んだ後に停止が入ると上書きされる。提案: どれも `ringTransitionLock` の中で読み直すか、条件付きの UPDATE にする。（#360 のレビューの should 2）
+- #359 と #360 は同じ `AlarmRepository.kt` を変える。後でマージする方は、master を取り込み直して、もう一度テストとレビューを通す。
 
 ## 2026-11-14 04:05 UTC 時点
 
