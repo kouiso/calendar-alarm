@@ -561,7 +561,7 @@ private fun RingStatusCard(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("鳴動の状態", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    Text(status.line, style = MaterialTheme.typography.bodyMedium, color = statusColor)
+                    Text(ringStatusLine(status), style = MaterialTheme.typography.bodyMedium, color = statusColor)
                 }
                 Icon(
                     if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
