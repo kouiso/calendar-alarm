@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# なぜ: テスト名が日本語なので、UTF-8 でないロケール (クラウドの C など) では Kotlin の
+# クラスファイル名が書けず、ビルドが InvalidPathException で落ちる (#297)
+case "${LC_ALL:-${LANG:-}}" in
+  *[Uu][Tt][Ff]-8*|*[Uu][Tt][Ff]8*) ;;
+  *) export LC_ALL=C.UTF-8 LANG=C.UTF-8 ;;
+esac
 caller_dir="$PWD"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
@@ -13,9 +19,15 @@ validate_scenarios() {
   if ! [[ "$SCENARIOS" =~ $pattern ]]; then echo 'Invalid emulator scenarios' >&2; exit 2; fi
 }
 case "$mode" in
+  shared) ./gradlew :shared:jvmTest --stacktrace --no-parallel ;;
   fast) ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest --stacktrace --no-parallel ;;
   all) ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest :androidApp:assembleDebug --stacktrace --no-parallel ;;
   android-build) ./gradlew :androidApp:assembleDebug --stacktrace ;;
+  i18n-check)
+    # なぜ: 画面の日本語を Kotlin に直接書く増加を止める (#289)。Gradle 不要で数秒。先に検査器自身のテストを回す
+    node --test scripts/hardcoded-ja/check.test.mjs
+    node scripts/hardcoded-ja/check.mjs
+    ;;
   ios)
     (cd iosApp; xcodegen generate; xcodebuild -project CalendarAlarm.xcodeproj -target iosApp -sdk iphonesimulator -configuration Debug build)
     ;;

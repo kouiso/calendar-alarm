@@ -14,7 +14,12 @@ android {
         applicationId = "com.calendaralarm"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
+        // 配布のたびに上がる番号 (#309)。配布の workflow が -PversionCode=<run_number> で渡す。
+        // 渡さない手元のビルドは 1。数でない・1 未満の値はビルドを止める (黙って 1 に戻すと番号が下がるため)
+        versionCode = providers.gradleProperty("versionCode").orNull?.let { raw ->
+            raw.toIntOrNull()?.takeIf { it >= 1 }
+                ?: throw GradleException("versionCode must be a positive integer: $raw")
+        } ?: 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // AI のキーは利用者に入力させず、ビルドする側が渡す (局長決定 2026-10-17 で入力欄を廃止)。
