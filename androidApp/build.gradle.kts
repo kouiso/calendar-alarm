@@ -72,6 +72,8 @@ android {
     // 今ある指摘は lint-baseline.xml に固定し、新しい指摘だけでビルドを落とす (#300)
     lint {
         baseline = file("lint-baseline.xml")
+        // 日付と通信で結果が変わる「新しい版がある」系は切る。CI と手元で結果を揃えるため (#386)
+        disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "NewerVersionAvailable")
     }
 
     kotlin {
