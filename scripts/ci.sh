@@ -43,7 +43,10 @@ case "$mode" in
     app_dir="$(from_caller "${2:?An isolated app checkout is required}")"
     app_dir="$(cd "$app_dir" && pwd)"
     bash "$root/scripts/emulator/inject_harness.sh" "$app_dir"
-    (cd "$app_dir"; ./gradlew :androidApp:assembleDebug --stacktrace)
+    # なぜ: MINIFY_DEBUG=true の時だけ R8 (縮小・難読化) 後の APK で停止 E2E を回す (#220)。未設定は従来どおり
+    minify_args=()
+    if [ "${MINIFY_DEBUG:-}" = true ]; then minify_args=(-PminifyDebug=true); fi
+    (cd "$app_dir"; ./gradlew ${minify_args[@]+"${minify_args[@]}"} :androidApp:assembleDebug --stacktrace)
     ;;
   emulator-run)
     validate_scenarios

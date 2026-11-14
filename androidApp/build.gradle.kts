@@ -32,7 +32,15 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 (縮小・難読化)。戻す時はこの 1 行を false にする (#220)
+            isMinifyEnabled = true
+            isShrinkResources = isMinifyEnabled
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+        debug {
+            // FAD で配るのは debug APK。停止 E2E を R8 後の APK で回す時だけ -PminifyDebug=true を渡す (#220)。
+            // 渡さない通常の debug は従来どおり minify なし
+            isMinifyEnabled = providers.gradleProperty("minifyDebug").orNull == "true"
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
