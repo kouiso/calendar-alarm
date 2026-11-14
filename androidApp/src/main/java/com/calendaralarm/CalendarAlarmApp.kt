@@ -97,6 +97,9 @@ class CalendarAlarmApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container
+        // 予約に効く既定の変更を、アプリが生きている間ずっと再同期へつなぐ (#231)。
+        // 画面のスコープで呼ぶと、保存の直後に画面を閉じた時に再同期が消える
+        container.repository.watchScheduleDefaults(container.appScope)
         scheduleHealthCheck()
         ensureCalendarObserver()
         // 冪等なので毎回走らせてよい。書込み失敗で起動ごと落とさない
