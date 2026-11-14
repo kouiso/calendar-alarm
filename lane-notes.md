@@ -32,6 +32,11 @@ MANAGER scene a (ca-manager, Fable high, 13:2xZ):
 GATE ERROR 14:00Z | #370 merged before its GATE comment existed (G6 says posted before merging). Cause: the lead's retry script ran the merge loop even when every comment attempt failed. All G1-G5 conditions were met before the merge (review PASS 5904402300, LOCAL-CHECK, threads 0, head sha-matched). Fix from now: a merge step runs only after the GATE comment URL is read back. Late GATE: https://github.com/kouiso/calendar-alarm/pull/370#issuecomment-6877939530
 DECIDED (owner, relayed by main session 2026-11-14) | current design = 「カレンダーアラームの最新のデザイン」 https://claude.ai/artifact/VqUeceTJYaL9Z3U2JyLnNm ; REkqjYhaUXMoj42bHWE6cQ is old, never use | every screen build and still is compared against it | revert owner names another
   open attempt 14:55Z from this Mac session: Claude Docs read -> {"verdict":"deny","reason":"access"} (support req_011Ch2wQ4LAtFG8fwnyq22C4). This session cannot read it; the cloud lane reads it (PR #358 notes) and its reviewers compare. -> for main session: share the page with this account, or keep comparison on the cloud side.
+PAUSED 2026-11-14T14:25Z (main session: weekly allowance reserved for client work). Members all stopped.
+- Pixel: lock free, no calendar-alarm installed, screen lock disabled (no PIN was ever set). Free for horsemanager.
+- Done this cycle: #370 merged; Pixel stills for #363 #365 #373 #188 #191 in evidence/ (captions.tsv), privacy-checked; #373 defect found (AgendaScreen.kt:275 hardcoded Japanese empty text).
+- Queued GitHub writes (background retry loops, may have finished): evidence comments on #363 #365 #373 #188 #191 from /tmp/ca{363,365,373,188,191}-ev.md. On resume: check each PR for a comment starting "Device evidence for #"; post any missing.
+- Resume first: post missing evidence comments; then row 6 (#200) needs a harness-injected debug APK (scripts/emulator/inject_harness.sh before assembleDebug, source 216db04) from the WSL lane or a CI harness artifact; then #189 iPhone (needs disk >= 20 GiB, was 18).
 needs owner:
 - (answered 13:10Z 「消してええ」) deleted the 3 simulators hm-a4-voice-sim, hm-a5-photo-sim, iPhone 17 Pro; Devices 6.6G -> 12K; df still 19 GiB right after (recheck before #189 build).
 - One sound window for: #191 ring-through-DND case, #189 two bundled sounds, rows 7/12/35/V3.
