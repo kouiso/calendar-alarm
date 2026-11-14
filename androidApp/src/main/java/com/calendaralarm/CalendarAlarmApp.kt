@@ -100,6 +100,14 @@ class CalendarAlarmApp : Application() {
         // 予約に効く既定の変更を、アプリが生きている間ずっと再同期へつなぐ (#231)。
         // 画面のスコープで呼ぶと、保存の直後に画面を閉じた時に再同期が消える
         container.repository.watchScheduleDefaults(container.appScope)
+        // バックアップから復元された直後なら、端末と時刻に結びつく行を捨てて再同期する (#269)
+        container.appScope.launch {
+            runCatching {
+                RestoreReset.runIfRestored(this@CalendarAlarmApp, container.db) {
+                    container.repository.resync("restored from backup")
+                }
+            }
+        }
         scheduleHealthCheck()
         ensureCalendarObserver()
         // 冪等なので毎回走らせてよい。書込み失敗で起動ごと落とさない
