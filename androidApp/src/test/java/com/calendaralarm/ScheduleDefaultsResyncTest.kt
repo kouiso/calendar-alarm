@@ -136,14 +136,19 @@ class ScheduleDefaultsResyncTest {
         cond()
     }
 
+    /** 見張りを始め、最初の値を受け取るまで待つ (最初の値では再同期しないので、その後に変える) */
+    private fun startWatcher() {
+        val ready = java.util.concurrent.CountDownLatch(1)
+        repository.watchScheduleDefaults(scope) { ready.countDown() }
+        assertTrue("見張りが最初の値を受け取ること", ready.await(5, java.util.concurrent.TimeUnit.SECONDS))
+    }
+
     @Test
     fun `何分前の既定を変えると、resync を呼ばなくても予約の時刻が新しい分数になる`() {
         runBlocking { repository.resync("start") }
         val before = runBlocking { pending() }
         assertEquals("最初は開始時に鳴る", listOf(start), before.map { it.triggerAtMillis })
-        repository.watchScheduleDefaults(scope)
-        // 見張りが最初の値を受け取ってから変える (最初の値では再同期しない)
-        Thread.sleep(300)
+        startWatcher()
 
         runBlocking { settings.setDefaultMinutesBefore(15) }
 
@@ -157,8 +162,7 @@ class ScheduleDefaultsResyncTest {
     fun `スヌーズの既定を変えると、resync を呼ばなくても予約のスヌーズ分数が新しい値になる`() {
         runBlocking { repository.resync("start") }
         assertEquals(listOf(10), runBlocking { pending() }.map { it.snoozeMinutes })
-        repository.watchScheduleDefaults(scope)
-        Thread.sleep(300)
+        startWatcher()
 
         runBlocking { settings.setDefaultSnoozeMinutes(5) }
 

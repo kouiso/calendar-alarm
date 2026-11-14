@@ -33,7 +33,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.Job
@@ -616,14 +616,22 @@ class AlarmRepository(
     /**
      * 「何分前」「スヌーズ」の既定が変わったら再同期する (#231)。保存した層の flow を見張るので、
      * 設定画面を閉じても、アプリを開き直さなくても、予約済みのアラームが新しい分数になる。
-     * 最初の値は起動時の状態なので再同期しない (起動時の再同期は別の入口が行う)
+     * 最初の値は起動時の状態なので再同期しない (起動時の再同期は別の入口が行う)。
+     * 設定の読み取り自体が壊れても、例外をアプリへ漏らさない (鳴動のための起動を落とさない)
+     * @param onFirstValue 最初の値を受け取った時に呼ぶ (試験が変更を入れる時を決めるため)
      */
-    fun watchScheduleDefaults(scope: CoroutineScope): Job = scope.launch {
+    fun watchScheduleDefaults(scope: CoroutineScope, onFirstValue: () -> Unit = {}): Job = scope.launch {
+        var first = true
         settings.flow
             .map { ScheduleDefaults.of(it) }
             .distinctUntilChanged()
-            .drop(1)
+            .catch { e -> Log.w(TAG, "設定の見張りが止まった", e) }
             .collect {
+                if (first) {
+                    first = false
+                    onFirstValue()
+                    return@collect
+                }
                 try {
                     resync("settings: defaults")
                 } catch (e: CancellationException) {
