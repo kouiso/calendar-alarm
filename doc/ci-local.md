@@ -6,7 +6,7 @@
 Android CI と同じ `scripts/ci.sh` を使う。
 Gradle の三回の起動を一回へまとめ、必要な task をすべて指定する。
 統合した検査は `--no-parallel` とし、project 間の並列実行を増やさない。
-JDK 17 と既存の Android SDK を使う。`GRADLE_USER_HOME` は変更しない。
+JDK 17 と Android SDK を使う。SDK が無い環境（クラウドなど）では `bash scripts/setup-android-sdk.sh` が commandline-tools・platform（compileSdk）・build-tools を入れ、`local.properties` を作る（入っていれば何もしない）。`GRADLE_USER_HOME` は変更しない。
 UTF-8 のロケールが要る。テスト名が日本語なので、`C` などのロケールでは Kotlin のクラスファイル名が書けずに落ちる。
 `scripts/ci.sh` は、`LC_ALL` と `LANG` が UTF-8 でない時に `C.UTF-8` を設定する。`./gradlew` を直接動かす時は自分で `LC_ALL=C.UTF-8` を付ける。
 `bash scripts/ci.sh shared` は shared JVM だけを検査する（ロケールの確認に使う軽い入口）。
