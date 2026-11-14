@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AddAlert
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DoNotDisturbOn
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
@@ -68,12 +67,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -86,12 +86,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -1696,11 +1698,12 @@ internal fun IgnoreDndRow(
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val iconTint = if (policyGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
         Icon(
-            Icons.Default.DoNotDisturbOn,
+            CrescentMoonIcon,
             contentDescription = null,
-            tint = if (policyGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-            modifier = Modifier.size(20.dp),
+            tint = iconTint,
+            modifier = Modifier.size(20.dp).testTag(IGNORE_DND_ICON_TAG),
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f).alpha(dim)) {
@@ -1710,10 +1713,7 @@ internal fun IgnoreDndRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                stringResource(
-                    // 許可が無い間の説明は盤 2. のとおり (薄く出す)。許可があれば、いまの ON/OFF が実際にすることを書く
-                    if (!policyGranted || checked) R.string.settings_ignore_dnd_hint_on else R.string.settings_ignore_dnd_hint_off,
-                ),
+                stringResource(R.string.settings_ignore_dnd_hint_on),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1737,12 +1737,52 @@ internal fun IgnoreDndRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            OutlinedButton(onClick = onOpenPermission, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.settings_ignore_dnd_open_permission))
+            // 盤の .btn: 塗りつぶしのアクセント (--ac / --onac)、高さ 52、角丸 26、幅いっぱい
+            val container = MaterialTheme.colorScheme.primary
+            Button(
+                onClick = onOpenPermission,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag(IGNORE_DND_OPEN_PERMISSION_TAG),
+                shape = RoundedCornerShape(26.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = container,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
+            ) {
+                Text(stringResource(R.string.settings_ignore_dnd_open_permission), fontWeight = FontWeight.SemiBold)
             }
+        }
+    } else {
+        // 盤 1. のカードの下の .prev 箱。許可がある間だけ、スイッチの ON/OFF に関わらず「オフにすると」を見せる
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 8.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .testTag(IGNORE_DND_PREVIEW_TAG),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                stringResource(R.string.settings_ignore_dnd_preview_lead),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                stringResource(R.string.settings_ignore_dnd_hint_off),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
+
+internal const val IGNORE_DND_ICON_TAG = "ignore_dnd_icon"
+internal const val IGNORE_DND_OPEN_PERMISSION_TAG = "ignore_dnd_open_permission"
+internal const val IGNORE_DND_PREVIEW_TAG = "ignore_dnd_preview"
 
 /** 鳴らす予定の種類 6 つと「予定なし」を、名前つきのスイッチで並べる (#79)。 */
 @Composable

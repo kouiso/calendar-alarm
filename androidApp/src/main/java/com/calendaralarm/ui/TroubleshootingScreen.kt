@@ -134,7 +134,7 @@ object TroubleshootChecks {
         // おやすみモード (#149、盤 p149): 「おやすみモード中も鳴らす」が実際に効く (ON かつ通知ポリシーの許可あり) なら、
         // 鳴動音は USAGE_ALARM なので OS がアラームを通すかで OK/NG。効かない (OFF、または許可なしの ON) なら、
         // おやすみモード中は鳴らさず通知だけ残す。判定は鳴動側と同じ effectiveIgnoreDnd / dndActive
-        val policyGranted = runCatching { nm?.isNotificationPolicyAccessGranted }.getOrNull() == true
+        val policyGranted = com.calendaralarm.engine.readPolicyAccessGranted(context)
         val bypassing = effectiveIgnoreDnd(ignoreDnd, policyGranted)
         val dndFilter = readInterruptionFilter(context)
         val dndOk = dndAllowsAlarms(dndFilter, readPolicyAllowsAlarms(context))

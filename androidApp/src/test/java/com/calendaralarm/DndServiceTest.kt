@@ -158,6 +158,22 @@ class DndServiceTest {
     }
 
     @Test
+    fun `無視OFFでおやすみモード中は鳴らさず見逃しの通知を残す`() {
+        runBlocking { app.container.settings.setIgnoreDnd(false) }
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALARMS)
+        seed("dnd-missed-note")
+        val c = start("dnd-missed-note")
+        assertTrue(waitUntil(5_000) { shadowOf(c.get()).isStoppedBySelf })
+        assertEquals(AlarmState.MISSED.name, state("dnd-missed-note"))
+        // 鳴らさない方だけでなく「通知だけ残す」の方 (MissedNotifier、channel missed_v1、id 2) を固める
+        val note = nm.activeNotifications.firstOrNull { it.id == 2 }
+        org.junit.Assert.assertNotNull("見逃しの通知 (id 2) が残ること", note)
+        assertEquals("missed_v1", note!!.notification.channelId)
+        val text = note.notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString()
+        assertTrue("予定名が入ること: $text", text.contains("会議"))
+    }
+
+    @Test
     fun `無視OFFでアラームのみでも鳴らさず鳴らせなかったになる`() {
         runBlocking { app.container.settings.setIgnoreDnd(false) }
         nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALARMS)

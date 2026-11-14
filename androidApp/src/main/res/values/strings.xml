@@ -153,6 +153,7 @@
     <string name="rules_title">通知アラーム</string>
     <string name="rules_title_needs_permission">通知アラーム (要権限)</string>
     <string name="settings_ignore_dnd_hint_off">おやすみモード中は鳴らさず、通知だけ残す</string>
+    <string name="settings_ignore_dnd_preview_lead">オフにすると</string>
     <string name="settings_ignore_dnd_hint_on">サイレントにしていても、アラームだけは鳴ります</string>
     <string name="settings_ignore_dnd_switch_needs_permission">おやすみモード中も鳴らす（許可が必要）</string>
     <string name="settings_ignore_dnd_policy_missing">使うには「おやすみモードの例外」の許可が要ります。</string>

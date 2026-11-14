@@ -156,6 +156,7 @@
     <string name="rules_title">Notification alarms</string>
     <string name="rules_title_needs_permission">Notification alarms (needs permission)</string>
     <string name="settings_ignore_dnd_hint_off">No ring during Do Not Disturb; only a notification is left</string>
+    <string name="settings_ignore_dnd_preview_lead">If you turn it off</string>
     <string name="settings_ignore_dnd_hint_on">Alarms ring even when your phone is on silent</string>
     <string name="settings_ignore_dnd_switch_needs_permission">Ring during Do Not Disturb (permission needed)</string>
     <string name="settings_ignore_dnd_policy_missing">This needs the “Do Not Disturb exception” permission.</string>
