@@ -601,6 +601,11 @@ class AlarmRepository(
 
     /** タイマーなど単発インスタンスを即座に予約する。 */
     suspend fun scheduleAdhoc(instance: AlarmInstance) = withContext(Dispatchers.IO) {
+        if (writeAdhoc(instance)) onScheduleChanged?.invoke()
+    }
+
+    /** 行を書いて予約する。onScheduleChanged は呼ばない (呼び出し側がロックを放してから呼ぶ)。予約まで通ったら true */
+    private suspend fun writeAdhoc(instance: AlarmInstance): Boolean {
         // タイマー自体はスヌーズ分数を持たないので、設定の既定を載せる
         val inst = instance.copy(
             snoozeMinutes = settings.flow.first().defaultSnoozeMinutes,
@@ -609,10 +614,46 @@ class AlarmRepository(
         if (!scheduler.schedule(inst)) {
             db.scheduledInstances().setCancelledIfLive(inst.id)
             audit("EXACT_DENIED", "adhoc ${inst.id}")
-            return@withContext
+            return false
         }
         audit("SCHEDULE", "adhoc ${inst.id} @${inst.triggerAtMillis}")
-        onScheduleChanged?.invoke()
+        return true
+    }
+
+    /**
+     * 通知アラーム (`nf:`) を予約する。元アプリが同じ通知キーで出し直しても、同じ鎖
+     * (`nf:X` とスヌーズの子 `nf:X:snz*`) の状態で次のように分ける (#371)。
+     * 1. PENDING か FIRED がある: 何も書かない (鳴動待ち・鳴動中を上書きしない)
+     * 2. DISMISSED がある: 最後に止めてから [NOTIFICATION_REPOST_WINDOW_MS] 未満なら鳴らさず記録を 1 行書く。以上なら鳴らす
+     * 3. それ以外: [scheduleAdhoc] と同じに鳴らす
+     * 止めた時刻は DISMISS の記録の行から読む (プロセスが落ちても残る)。読めなければ鳴動時刻から数える。
+     * 落とした出し直しは窓を延ばさない。確かめと書き込みは [ringTransitionLock] の中で行う
+     */
+    suspend fun scheduleNotificationAlarm(instance: AlarmInstance) = withContext(Dispatchers.IO) {
+        val changed = ringTransitionLock.withLock {
+            val chain = db.scheduledInstances().chainOf(instance.id)
+            val states = chain.map { it.state }.toSet()
+            if (AlarmState.PENDING.name in states || AlarmState.FIRED.name in states) {
+                return@withLock false
+            }
+            val dismissed = chain.filter { it.state == AlarmState.DISMISSED.name }
+            if (dismissed.isNotEmpty()) {
+                val stoppedAt = db.auditLog().latestAtMillis("DISMISS", dismissed.map { it.id })
+                    ?: dismissed.maxOf { it.triggerAtMillis }
+                val elapsed = nowMillis() - stoppedAt
+                // 時計が止めた後に戻った (elapsed < 0) 時は窓の外とみなして鳴らす
+                if (elapsed in 0 until NOTIFICATION_REPOST_WINDOW_MS) {
+                    audit(
+                        "NF_REPOST_SKIP",
+                        "${instance.id}: 止めて ${elapsed / 1000} 秒なので出し直しを鳴らさない",
+                        dismissed.maxByOrNull { it.triggerAtMillis },
+                    )
+                    return@withLock false
+                }
+            }
+            writeAdhoc(instance)
+        }
+        if (changed) onScheduleChanged?.invoke()
     }
 
     // ---- 設定の変更から再同期 ----
@@ -1226,6 +1267,8 @@ class AlarmRepository(
         )
         /** 自動スヌーズの直後に届いた停止を「同時に押した」とみなす長さ (#145) */
         const val AUTO_SNOOZE_RACE_MS = 30_000L
+        /** 通知アラームを利用者が止めてから、同じ鎖の出し直しを鳴らさない長さ (#371) */
+        const val NOTIFICATION_REPOST_WINDOW_MS = 10 * 60_000L
         /** 鳴らし直しの発火までの間。停止した鳴動の後始末 (通知の掃除など) が済んでから鳴らす */
         private const val REARM_DELAY_MS = 1_500L
         /** 待ちが複数ある時の発火のずらし幅。同じ時刻に重ねず、押し出しの順を安定させる */
