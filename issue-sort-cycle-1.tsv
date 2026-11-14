@@ -1,0 +1,167 @@
+61	DEVICE	no	none	none	iOS real iPhone: stopped-while-app-dead alarm re-rings after resync; code path in Engine.swift RECOVER, not confirmed on device
+68	JUDGE	no	none	none	Umbrella for 9 owner UI decisions (permissions, no SYSTEM_ALERT_WINDOW, no AI key field, accounts, previews); which parts are still undone and split into SBIs? overlaps #205/#206/#211
+101	DEVICE	no	none	none	iOS AlarmKit sound/volume/vibrate parity needs real device to learn what AlarmKit allows
+124	JUDGE	no	none	none	Evidence-capture PBI; its target PRs (#48 #114 #115 #118 #127 #129) are not in the open PR list, so superseded? close or rewrite
+130	DEVICE	no	none	none	iOS real device: stop intent may not run on in-app stop or banner swipe (Apple forum 815064); needs iPhone, silent test
+136	DEVICE	no	none	none	PR #183 merged 144835d; counter in 959f512/fa02e3b; remaining item is on-device check that lock-screen stop no longer re-rings (iOS unverified)
+139	JUDGE	no	none	none	Competitor analysis PBI; follow-up PBIs #143-#155 already spawned and mostly merged; close as complete or keep for private PDF deliverable?
+143	DONE-ALREADY	no	none	none	PR #184 merged c21e998 plus fixes cbcdf0a 7f91b7e 4acb039; shared commonMain reminders; iOS side unverified on device
+144	DONE-ALREADY	no	none	none	PR #190 merged (spec); all-day handling in shared Models.kt:175 and doc/spec/kmp-replacement.md:233 default 540 (9:00 not 10:00 by design)
+145	DONE-ALREADY	no	none	none	Auto-snooze with 2/3/4 cap: 2e072a4 55d78da 2a8cdaa 662eeb5 (PR #186 e3626c9); androidApp SettingsScreen.kt:1379 autoSnooze; iOS limited by AlarmKit
+146	DONE-ALREADY	no	none	none	Custom audio file picker fa38b01 + b8ae9c7 (360dp fix); AlarmEditScreen.kt:146 OpenDocument; PR #192 merged
+147	DEVICE	no	none	#189	iOS bundled .caf presets; PR #189 still open; completion needs real-device sound check (iOS silent rule)
+148	DONE-ALREADY	no	none	none	Ring duration + volume: 44d1bd8 6335c37 95047bb (PR #185 0ee346c); SettingsScreen.kt:1351 ringDurationSec; SettingsRepository.kt:101 alarmVolumePercent; emulator proof not re-checked
+149	WORK	no	none	#191	DND-bypass toggle for Android; PR #191 open covers it (needs review/merge); today only diagnostics at TroubleshootingScreen.kt:131
+151	DONE-ALREADY	no	none	none	Week start, week numbers, next-event: AgendaScreen.kt:168 showNextEvent and :301 showWeekNumbers; PR #181 ebb18f1; shared WeekCalendar.kt
+153	DONE-ALREADY	no	none	none	Troubleshooting screen + force full-screen toggle: TroubleshootingScreen.kt:279 forceFullScreen; PR #182 e0437bd, 170e75e ce99a4f 9a14c72
+154	JUDGE	no	none	#188	Large-button/theme/font/background tied to Pro and ads (#140), low priority: keep, shrink to PR #188 scope, or close? background image already exists SettingsScreen.kt:1447
+155	DONE-ALREADY	no	none	none	Invite filter default accepted-only: e7f20b3 (#180); InviteStatus Models.kt:18; iOS migration 033138a
+194	WORK	no	none	none	Add a PR-triggered macOS job running scripts/ci.sh ios (xcodebuild simulator build); public repo macOS runner free; only fad.yml uses macos today
+197	WORK	no	none	none	Add issue/PR format check and public-content check workflows; item 1 regex rules must come from the owner (ask on issue), items 2-3 doable now
+200	DEVICE	no	none	none	Intermittent lock-screen stop-drag failure on Android API35; needs emulator/real-device run to isolate
+201	WORK	no	none	none	0:00 ringing from workplace/birthday/absence: defaults already false at Models.kt:118-120; remaining is legacy migration, cancel existing reservations, per-type toggles, tests
+203	JUDGE	no	none	none	Is title-code (always/never ring codes) needed at all? delete the feature or redesign UI; owner called it confusing
+204	WORK	no	none	#363	Settings event-type chips cut off or untappable; PR #363 open (invite chips wrap) may only cover part; verify the type-chip row, add tests
+205	WORK	no	none	none	Group settings calendars by Google account (collapsible, counts); #74 closed so fix regression only; #206 and #215 depend on it
+206	WORK	no	205 (open)	none	Per-account master on/off switch that keeps per-calendar state; builds on account grouping #205
+207	JUDGE	no	none	none	Inherit Google calendar reminders vs app extras: #75 done; research-first umbrella overlapping #208 #213 #215; which SBI first?
+208	JUDGE	no	none	none	Per-channel email/device/alarm toggles; app-sent email needs server, consent, cost: is that in scope or only read Google settings?
+209	OWNER	no	none	none	Logo/app icon redesign; owner must pick the concept (look approval)
+210	OWNER	no	none	none	Store release gate: privacy policy, terms, OAuth consent, store listing; legal text going public needs owner
+211	JUDGE	no	none	none	Inventory unclear settings controls and delete the ones with no purpose; overlaps #203 #217 #218; decide which to remove
+212	OWNER	no	none	none	Google Play submission and developer account; owner approval to apply and publish
+213	JUDGE	no	none	none	Split Google calendar notifications into popup vs email; overlaps #207 #208 #215; merge into one PBI?
+214	OWNER	no	none	none	App Store submission, signing, account, privacy declarations; needs owner and Mac
+215	JUDGE	no	none	none	Per-calendar notification mode + apply-to-all; overlaps #205 #206 #207 #213; priority model and email scope unclear
+216	OWNER	no	none	none	Portfolio case study with store links; owner publication and wording; only after release status is real
+217	JUDGE	no	none	none	Snooze preset chips (1..90 min) purpose unclear: delete, keep, or explain; code at SettingsScreen.kt snoozePresets; #145 added default snooze
+218	JUDGE	no	none	none	Unlabelled add-account/info/resync icon row: delete, relabel, or restructure; same family as #211
+219	DEVICE	no	none	none	iCloud via EventKit on iOS needs Mac/Xcode and an iPhone with iCloud calendar; EventKitReader.swift already reads all calendars
+220	JUDGE	no	none	#370	Security hardening umbrella: Android R8/mapping is doable in cloud, iOS needs Mac; no verified threat; PR #370 only adds fastlane lanes; which SBI first?
+221	DEVICE	no	none	none	iOS multi-device E2E on Mac mini/simulator + XCUITest; owner fixed free-first; needs Mac
+222	WORK	no	none	none	Press feedback/progress for refresh/sync buttons across Android Compose; SBI-1 inventory first; iOS part needs Mac
+223	JUDGE	no	none	none	Whole-app SOLID audit/refactor: scope unclear, conflicts with in-flight UI work; do now, split, or defer?
+224	WORK	no	-	-	Unify wording per design/project/ds.dc.html across Android screens (iOS Swift half needs Mac); same files as 246-249 so land after or merge-carefully
+225	WORK	no	-	-	Android: settings theme mark uses indigo for "default" but theme resolves amber (SettingsScreen.kt:1477-1485, Theme.kt:165); iOS half (SettingsView.swift:145) needs Mac
+226	WORK	no	-	-	Notification rule rows not tappable and save always appends (NotificationRulesCard.kt:100-160); add edit-in-place; editDraft exists so small change
+227	WORK	no	-	-	Move the minutes-before chip to a second line in the agenda row (AgendaScreen.kt); design board exists; reasons-for-not-ringing split to #315
+228	WORK	no	-	-	Add words OK/needs action/n-a/info to TroubleshootRow (TroubleshootingScreen.kt:306-343); land before #286
+229	WORK	no	-	-	Make RingingOverlay.kt (View, fixed indigo) match RingingActivity look and theme; acceptance wants emulator screenshots (do code first)
+231	DONE-ALREADY	no	-	-	f780ef6 (#359): AlarmRepository.kt:680 watchScheduleDefaults resyncs on default minutes/snooze change; test ScheduleDefaultsResyncTest.kt
+233	DEVICE	no	-	-	iOS EKEventStoreChanged + BGAppRefreshTask; needs Mac and real-phone frequency log; parent of SBIs 259 260 261; push-server idea needs owner decision (kept out)
+234	DEVICE	no	-	-	iOS last-import time in agenda and widget; Swift/Xcode (SBI 262)
+235	DEVICE	no	-	-	iOS CAPACITY_SKIP counted as failure (DiagnosticsView.swift:70, Engine.swift:489); Mac needed; booking-order question is an owner decision but excluded from this PBI
+236	DEVICE	no	265 open; 266 open; 267 open	-	Parent of 265/266/267; acceptance needs emulator reboot test; code part is WORK #266 (BootReceiver has no directBootAware yet)
+237	JUDGE	no	268 open	-	Which stable key (account + calendar name?) to key per-calendar settings by is an owner decision in the body; SBI 268 blocked on it
+238	WORK	no	-	365 (partial)	Show all-muted on agenda and alarms screens; PR #365 only adds it to the shared ring status line; "until when" excluded
+239	DEVICE	no	-	-	Needs Mac/iPhone to confirm EventKit all-day start is local midnight; AC says close if it is
+240	DEVICE	no	-	-	iOS recurrence anchor date shifts on save (UTC midnight round trip); Swift fix needs Mac
+241	JUDGE	no	-	-	Owner must decide: ring today or not when a repeating alarm time is moved later today; two fix options listed (id with time vs record handling)
+242	WORK	no	-	-	Show next-fire datetime in list and right after save; independent of 241 (display only)
+243	DONE-ALREADY	no	-	-	1a5eceb (#361): shared/logic/OverrideCarry.kt carries overrides when event time moves; test OverrideCarryResyncTest.kt (Android; iOS not checked)
+244	JUDGE	no	243 done	-	Owner decides whether to add all-occurrences override and which wins on conflict; wording must match #224
+245	WORK	no	-	-	Add share-ring-log button to diagnostics screen; crash reporting excluded (owner call with #210); #286 touches same file
+246	WORK	no	-	373 (partial, not Settings)	SettingsScreen.kt still has 140 hardcoded Japanese literals; move to strings.xml/values-en; #373 does other screens only; do before 224
+247	WORK	no	-	373 (partial, not Agenda)	AgendaScreen.kt has 51 Japanese literals; RingStatus line from shared also Japanese-only
+248	WORK	no	-	-	AlarmService.kt 22 and RingingActivity.kt 13 Japanese literals incl default titles; move to resources
+249	WORK	no	-	-	Locale.JAPAN fixed at AgendaScreen.kt:159 384 832, SettingsScreen.kt:676, RingingActivity.kt:339 plus hardcoded H:mm; use device locale and 12/24h (iOS half needs Mac)
+250	DEVICE	no	-	-	iOS English localization of settings and weather; Swift/Xcode (#296 related)
+251	WORK	no	-	-	Partly done: ci.sh sets UTF-8 (e129dd5 #364) and doc/ci-local.md:10 states it; remaining: SDK install script and 3-line cloud setup in AGENTS.md; registering cloud env is owner call
+252	WORK	no	-	-	Add CI job running scripts/test-ci-contract.sh when ci.sh/Taskfile/emulator scripts change; needs task installed in job; doc line
+253	WORK	no	251 open (soft)	-	Add lintDebug to Android CI (all_check.yml has no lint); baseline in CI so no local SDK needed
+255	WORK	yes	254 closed	-	Mostly started by #359 (watchScheduleDefaults) but screens still call resync (SettingsScreen.kt:286 913); remove them and pin affecting-field list in test
+256	DEVICE	no	-	-	iOS Store-side resync hook; Mac build
+259	DEVICE	no	-	-	iOS EKEventStoreChanged observer; Mac build
+260	DEVICE	no	-	-	iOS BGAppRefreshTask; Mac build
+261	DEVICE	no	260 open	-	Real iPhone multi-day log of background refresh frequency; no code
+262	DEVICE	no	-	-	iOS store/show last import time incl widget; Mac build
+263	DEVICE	no	-	-	iOS stop counting CAPACITY_SKIP as failure and 1 log line per resync; Mac build (logic-test)
+264	DEVICE	no	-	-	iOS show booked-until time; Mac build
+265	DEVICE	no	-	-	Emulator/phone reboot-before-unlock test recording current behavior; no code
+266	WORK	no	265 open; 258 closed	-	BootReceiver directBootAware + LOCKED_BOOT_COMPLETED + device-protected next-alarm copy; Robolectric test; ideally after 265 record
+267	DEVICE	no	266 open	-	Emulator/phone check that ring screen and sound work before unlock
+268	JUDGE	no	237 open (owner decision)	-	Blocked until owner answers parent #237 which key to use for per-calendar settings
+269	WORK	no	266 open	-	Exclude scheduled_instances and event_overrides from backup (AndroidManifest.xml:35 allowBackup, add dataExtractionRules+fullBackupContent); test via Robolectric/build
+270	DEVICE	no	268 open;269 open	none	Needs emulator/real phone to check restore-from-backup; also waits for #268 #269
+271	WORK	no	none	#365	Add all-muted Kind to RingStatus; PR #365 already open (feat(shared) all alarms muted) touches RingStatus.kt+AgendaScreen
+272	WORK	no	271 open (PR #365)	none	Android banner+row look in AgendaScreen/AlarmsScreen; unit-testable part in cloud; emulator check is a follow-up
+273	DEVICE	no	271 open	none	iOS SwiftUI needs Mac
+274	DEVICE	no	none	none	Needs Mac/real iPhone to read EKEvent.startDate for all-day event
+275	WORK	no	none	none	Document all-day UTC-midnight contract in CalendarEvent and pin with jvmTest (AlarmExpander.kt:81-90); independent of device check
+276	DEVICE	no	274 open	none	iOS EventKitReader fix needs Mac and only if #274 shows local midnight
+277	DEVICE	no	none	none	iOS loadAnchor and Swift test need Mac
+278	JUDGE	no	none	none	Q: owner must pick fix (put time in ring id vs drop terminal rows on save; ring today or not) per parent PBI
+279	DEVICE	no	278 open	none	iOS Store/Engine fix needs Mac; also blocked on owner decision (see #278)
+280	WORK	no	none	none	Android next-alarm day label (today/tomorrow/11/15) plus post-save notice; date-string unit test in cloud; emulator check later
+281	DEVICE	no	280 open	none	iOS needs Mac
+283	DEVICE	no	282 closed	none	iOS Store.swift needs Mac (dependency #282 already closed)
+284	JUDGE	no	282 closed;224 open	none	Q: owner decision on per-occurrence vs all-occurrences override and which wins (parent PBI); also #224 open
+285	DEVICE	no	284 open	none	iOS needs Mac; also blocked on owner decision (#284)
+286	JUDGE	no	none	none	Q: should shared log text hide event titles (privacy)? Owner answer needed before work
+287	DEVICE	no	286 open	none	iOS DiagnosticsView share needs Mac
+288	WORK	no	224 open;255 open	none	Move SettingsScreen.kt hardcoded ja to strings.xml plus en; blocked by #224 #255 (same file); PR #373 does not touch it
+290	WORK	no	224 open;272 open	none	Move AgendaScreen.kt hardcoded ja to resources; blocked by #224 #272; PR #373 does not touch AgendaScreen
+291	WORK	no	271 open (PR #365)	#365 partial	RingStatus returns kind+count and Android resolves text; #365 already added RingStatusText.kt so check overlap after it merges
+292	WORK	no	none	none	Move AlarmService/RingingActivity/RingingOverlay ja and shared AlarmExpander.kt:98 default title to resources; no open deps
+293	WORK	no	288 open;290 open;292 open;280 open	none	Locale-aware date/time formats on Android; blocked by 4 open SBIs
+294	DEVICE	no	none	none	iOS date formats need Mac
+295	DEVICE	no	256 open	none	iOS xcstrings needs Mac
+296	DEVICE	no	none	none	iOS WeatherService language needs Mac
+298	OWNER	no	297 closed	none	Installing Android SDK in cloud env needs owner approval for network and env registration (stated in the issue); script itself is doable
+299	WORK	yes	297 closed	none	scripts/test-ci-contract.sh calls task with no command -v task check (lines 27-68); add check plus CI job plus doc/ci-local.md
+300	WORK	yes	none	none	androidApp/lint-baseline.xml absent and no lintDebug in scripts/.github; add job and baseline (baseline generation needs Android SDK so via CI run)
+301	WORK	yes	none	none	Shared JSON table of inputs/expectations read by Kotlin test; no table exists yet; jvmTest with LC_ALL=C.UTF-8
+302	DEVICE	no	301 open	none	Swift test needs Mac
+303	DEVICE	no	302 open	none	SharedBridge move needs Mac
+304	WORK	yes	258 closed	none	AlarmPlanner.kt exists only as 39-line plan(); AlarmRepository.kt:920 calls it; extract the full reconcile decision and pin current behavior first; Android CI verifies
+305	DEVICE	no	304 open	none	iOS Engine.swift swap needs Mac and real device
+306	JUDGE	no	301 open	none	Q: owner must choose fix for title-based event type misclassification (see comment on #201)
+307	DEVICE	no	306 open	none	iOS Models.swift needs Mac; also waits for owner decision (#306)
+309	DONE-ALREADY	no	none	merged	Merged 7561d42 (#362): androidApp/build.gradle.kts:17-21 reads -PversionCode and .github/workflows/fad.yml:61 passes run_number; issue still open so close it
+310	DEVICE	no	194 open	none	Needs macOS runner/Mac for xcodebuild test
+311	DEVICE	no	310 open	none	Needs Mac to run ci.sh ios-logic
+312	DEVICE	no	292 open	none	iOS xcstrings needs Mac
+313	WORK	no	288 open	none	SettingsPreview.kt returns kind not text and Android resolves via resources; blocked by #288 (same files)
+315	JUDGE	no	none	none	Q: PBI (label feature) says needs data model split of why-not-ringing reasons and owner decisions per comment; confirm scope/wording before SBIs (#333 #334)
+316	OWNER	no	none	none	Match Night UI v2 design board (look/taste approval); needs side-by-side check with owner design canvas
+317	JUDGE	no	none	none	Parent PBI for Night UI v2 alarm tab; work is in child SBIs (Android emulator + iOS Mac). Question: keep as tracking parent and close when children land, or does owner need to approve the look at the end?
+318	JUDGE	no	none	none	Parent PBI for Night UI v2 timer tab; work is in child SBIs (Android emulator + iOS Mac). Question: keep as tracking parent and close when children land, or does owner need to approve the look at the end?
+319	JUDGE	no	none	none	Parent PBI for Night UI v2 settings; work is in child SBIs (Android emulator + iOS Mac). Question: keep as tracking parent and close when children land, or does owner need to approve the look at the end?
+320	JUDGE	no	none	none	Parent PBI for Night UI v2 ringing screen and notification; work is in child SBIs (Android emulator + iOS Mac). Question: keep as tracking parent and close when children land, or does owner need to approve the look at the end?
+321	JUDGE	no	none	none	Parent PBI for Night UI v2 permissions screen; work is in child SBIs (Android emulator + iOS Mac). Question: keep as tracking parent and close when children land, or does owner need to approve the look at the end?
+322	JUDGE	no	none	none	Parent PBI for Night UI v2 permission-ask screen; work is in child SBIs (Android emulator + iOS Mac). Question: keep as tracking parent and close when children land, or does owner need to approve the look at the end?
+323	JUDGE	no	none	none	Parent PBI for Night UI v2 bottom tab bar; work is in child SBIs (Android emulator + iOS Mac). Question: keep as tracking parent and close when children land, or does owner need to approve the look at the end?
+324	JUDGE	no	none	none	Parent PBI for Night UI v2 troubleshooting; work is in child SBIs (Android emulator + iOS Mac). Question: keep as tracking parent and close when children land, or does owner need to approve the look at the end?
+325	WORK	yes	none (must land before #288 #290; both open)	none	Reword settings/agenda strings (3-choice labels, N-min-before, all-day OFF) in SettingsScreen.kt/AgendaScreen.kt:584 still old on master; add Robolectric test
+326	DEVICE	no	none (before #295)	none	iOS wording in SettingsView.swift/EventDetailSheet.swift needs Mac build
+327	WORK	yes	none	none	Default theme marker and dot color in SettingsScreen.kt ~1462-1500; add Robolectric test; not done on master
+328	DEVICE	no	none	none	iOS default-theme marker and indigo save needs Mac
+329	WORK	yes	none	none	NotificationRulesCard.kt rows have only delete button, no tap-to-edit; add edit dialog + shared NotificationRuleSpecTest cases
+330	WORK	yes	none (blocks #333 #338)	none	Move N-min-before chip under event title in AgendaScreen.kt EventRow; Robolectric 360dp test
+331	DEVICE	no	none	none	iOS agenda row layout needs Mac
+332	JUDGE	no	none (blocks #333)	none	Issue says do not start until owner answers parent PBI's open decision on reason kinds for muted rows. Question: which reason kinds and wording?
+333	JUDGE	no	#332 #330 #272 #290 open	none	Blocked on same owner decision as #332 plus four open deps; also needs emulator check
+334	DEVICE	no	#333 (open)	none	iOS reason line needs Mac; depends on owner decision from #332
+335	WORK	yes	none (must land before #286)	none	Troubleshooting row state badge + open-settings text in TroubleshootingScreen.kt:320 (OK is bare icon desc); add string for OK; Robolectric 2x font test
+336	WORK	yes	none (must land before #292)	none	RingingOverlay.kt:150 uses hardcoded colors; align with ringing screen theme, date, rings, sizes via RingingSlideSpec; Robolectric compare test
+337	DEVICE	no	#336 open	none	Needs emulator or phone: lock screen and over-other-app screenshots of overlay
+338	DEVICE	no	#330 open	none	Android UI shape alignment to design board; needs emulator/phone screenshots at 360x740 light+dark
+339	DEVICE	no	none	none	iOS SwiftUI alignment to design board; needs Mac
+340	DEVICE	no	none	none	Android UI shape alignment to design board; needs emulator/phone screenshots at 360x740 light+dark
+341	DEVICE	no	none	none	iOS SwiftUI alignment to design board; needs Mac
+342	DEVICE	no	none	none	Android UI shape alignment to design board; needs emulator/phone screenshots at 360x740 light+dark
+343	DEVICE	no	none	none	iOS SwiftUI alignment to design board; needs Mac
+344	DEVICE	no	none	none	Android UI shape alignment to design board; needs emulator/phone screenshots at 360x740 light+dark
+345	DEVICE	no	none	none	iOS SwiftUI alignment to design board; needs Mac
+346	DEVICE	no	none	none	Android UI shape alignment to design board; needs emulator/phone screenshots at 360x740 light+dark
+347	DEVICE	no	none	none	iOS SwiftUI alignment to design board; needs Mac
+348	DEVICE	no	none	none	Android UI shape alignment to design board; needs emulator/phone screenshots at 360x740 light+dark
+349	DEVICE	no	none	none	iOS SwiftUI alignment to design board; needs Mac
+350	DEVICE	no	none	none	Android UI shape alignment to design board; needs emulator/phone screenshots at 360x740 light+dark
+351	DEVICE	no	none	none	iOS SwiftUI alignment to design board; needs Mac
+352	DEVICE	no	none	none	Android UI shape alignment to design board; needs emulator/phone screenshots at 360x740 light+dark
+353	DEVICE	no	none	none	iOS SwiftUI alignment to design board; needs Mac
+354	DEVICE	no	none	none	Android UI shape alignment to design board; needs emulator/phone screenshots at 360x740 light+dark
+356	DEVICE	no	none	none	targetSdk/compileSdk still 35 in gradle/libs.versions.toml; completion needs emulator check of alarm/stop/snooze/reboot (version bump plus Android 16 behavior review is cloud-doable first; Play submission itself is owner)
+367	WORK	no	none	#373 (open)	Move remaining Japanese strings to resources + English; PR #373 already open for it; also #374 plurals parity test
+375	WORK	no	none	#376 (open)	Add retry for pre-stop state probe in scripts/emulator/run_scenarios.sh (two probes_ringing sites at lines 356 and 508); PR #376 already open
