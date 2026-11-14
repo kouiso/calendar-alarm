@@ -429,7 +429,7 @@ private fun StatusBanner(message: String, action: String, onAction: () -> Unit) 
 }
 
 @Composable
-private fun AgendaList(
+internal fun AgendaList(
     items: List<AlarmRepository.AgendaItem>,
     onSelect: (AlarmRepository.AgendaItem) -> Unit,
     onToggle: ((AlarmRepository.AgendaItem, Boolean) -> Unit)? = null,

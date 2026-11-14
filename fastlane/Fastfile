@@ -81,4 +81,154 @@ platform :ios do
       },
     )
   end
+
+  desc "AppStore 署名の IPA を作り TestFlight へ上げる（手元の Mac 用。match は readonly 固定。upload:false で IPA 作成まで）"
+  lane :testflight_upload do |options|
+    # 同じ番号は 2 回上げられないので、作る前に止める。
+    UI.user_error!("build_number を渡してください（例: build_number:2611131200）") if options[:build_number].to_s.strip.empty?
+
+    # APP_STORE_CONNECT_API_KEY_PATH があればそれを使い、無い時だけ個別の環境変数から作る。
+    # setup_ci は GitHub 上の検査機械専用なので書かない。
+    if ENV["APP_STORE_CONNECT_API_KEY_PATH"].to_s.empty?
+      app_store_connect_api_key(
+        key_id: ENV["ASC_KEY_ID"],
+        issuer_id: ENV["ASC_ISSUER_ID"],
+        key_content: ENV["ASC_KEY_P8"],
+        is_key_content_base64: false,
+      )
+    end
+
+    # この道からは Apple にも保管庫にも書かない（readonly: true 固定。引数では変えられない）。
+    match(
+      type: "appstore",
+      app_identifier: [APP_IDENTIFIER, WIDGET_IDENTIFIER, SHAREEXT_IDENTIFIER],
+      git_url: MATCH_GIT_URL,
+      git_branch: MATCH_GIT_BRANCH,
+      team_id: TEAM_ID,
+      readonly: true,
+    )
+
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "iosApp/CalendarAlarm.xcodeproj",
+      targets: ["iosApp"],
+      profile_name: "match AppStore #{APP_IDENTIFIER}",
+      code_sign_identity: "Apple Distribution",
+      team_id: TEAM_ID,
+    )
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "iosApp/CalendarAlarm.xcodeproj",
+      targets: ["CalendarAlarmWidget"],
+      profile_name: "match AppStore #{WIDGET_IDENTIFIER}",
+      code_sign_identity: "Apple Distribution",
+      team_id: TEAM_ID,
+    )
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "iosApp/CalendarAlarm.xcodeproj",
+      targets: ["MailShareExt"],
+      profile_name: "match AppStore #{SHAREEXT_IDENTIFIER}",
+      code_sign_identity: "Apple Distribution",
+      team_id: TEAM_ID,
+    )
+
+    build_app(
+      project: "iosApp/CalendarAlarm.xcodeproj",
+      scheme: "iosApp",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build/ios",
+      output_name: "calendar-alarm-appstore.ipa",
+      xcargs: "CURRENT_PROJECT_VERSION=#{options[:build_number]}",
+      export_options: {
+        signingStyle: "manual",
+        teamID: TEAM_ID,
+        provisioningProfiles: {
+          APP_IDENTIFIER => "match AppStore #{APP_IDENTIFIER}",
+          WIDGET_IDENTIFIER => "match AppStore #{WIDGET_IDENTIFIER}",
+          SHAREEXT_IDENTIFIER => "match AppStore #{SHAREEXT_IDENTIFIER}",
+        },
+      },
+    )
+
+    # upload:false の時は IPA を作るところで終わる（上げる前に中身を調べるため）。
+    next if options[:upload].to_s == "false"
+
+    # skip_submission: true なので、上げるだけでテスター配布も審査送信もしない。
+    upload_to_testflight(
+      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"],
+      ipa: "build/ios/calendar-alarm-appstore.ipa",
+      skip_submission: true,
+      skip_waiting_for_build_processing: true,
+    )
+  end
+
+  desc "AdHoc 署名で IPA を作る（手元の Mac から実機へ入れる用。match は readonly 固定で何も書かない）"
+  lane :adhoc_local do |options|
+    UI.user_error!("build_number を渡してください（例: build_number:2611131200）") if options[:build_number].to_s.strip.empty?
+
+    if ENV["APP_STORE_CONNECT_API_KEY_PATH"].to_s.empty?
+      app_store_connect_api_key(
+        key_id: ENV["ASC_KEY_ID"],
+        issuer_id: ENV["ASC_ISSUER_ID"],
+        key_content: ENV["ASC_KEY_P8"],
+        is_key_content_base64: false,
+      )
+    end
+
+    match(
+      type: "adhoc",
+      app_identifier: [APP_IDENTIFIER, WIDGET_IDENTIFIER, SHAREEXT_IDENTIFIER],
+      git_url: MATCH_GIT_URL,
+      git_branch: MATCH_GIT_BRANCH,
+      team_id: TEAM_ID,
+      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"],
+      readonly: true,
+    )
+
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "iosApp/CalendarAlarm.xcodeproj",
+      targets: ["iosApp"],
+      profile_name: "match AdHoc #{APP_IDENTIFIER}",
+      code_sign_identity: "Apple Distribution",
+      team_id: TEAM_ID,
+    )
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "iosApp/CalendarAlarm.xcodeproj",
+      targets: ["CalendarAlarmWidget"],
+      profile_name: "match AdHoc #{WIDGET_IDENTIFIER}",
+      code_sign_identity: "Apple Distribution",
+      team_id: TEAM_ID,
+    )
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "iosApp/CalendarAlarm.xcodeproj",
+      targets: ["MailShareExt"],
+      profile_name: "match AdHoc #{SHAREEXT_IDENTIFIER}",
+      code_sign_identity: "Apple Distribution",
+      team_id: TEAM_ID,
+    )
+
+    build_app(
+      project: "iosApp/CalendarAlarm.xcodeproj",
+      scheme: "iosApp",
+      configuration: "Release",
+      export_method: "ad-hoc",
+      output_directory: "build/ios",
+      output_name: "calendar-alarm-adhoc.ipa",
+      xcargs: "CURRENT_PROJECT_VERSION=#{options[:build_number]}",
+      export_options: {
+        signingStyle: "manual",
+        teamID: TEAM_ID,
+        provisioningProfiles: {
+          APP_IDENTIFIER => "match AdHoc #{APP_IDENTIFIER}",
+          WIDGET_IDENTIFIER => "match AdHoc #{WIDGET_IDENTIFIER}",
+          SHAREEXT_IDENTIFIER => "match AdHoc #{SHAREEXT_IDENTIFIER}",
+        },
+      },
+    )
+  end
 end
