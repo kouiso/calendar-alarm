@@ -1412,47 +1412,15 @@ private fun RingingCard(
                     }
                 }
             }
-            // ON は通知チャンネルの bypassDnd。効くには通知ポリシーへのアクセス許可が要る (検査画面で案内)
-            IconSettingRow(Icons.Default.DoNotDisturbOn) {
-                Text(
-                    stringResource(R.string.settings_ignore_dnd_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.weight(1f))
-                Switch(
-                    checked = p.ignoreDnd,
-                    onCheckedChange = { scope.launch { settings.setIgnoreDnd(it) } },
-                )
-            }
-            // ON/OFF で何が変わるかと、ON を効かせる許可の場所 (#149)。ON で許可が無い時は、ここでもその状態を出す
-            Text(
-                if (p.ignoreDnd) {
-                    stringResource(R.string.settings_ignore_dnd_hint_on)
-                } else {
-                    stringResource(R.string.settings_ignore_dnd_hint_off)
+            // ON は通知チャンネルの bypassDnd。効くには通知ポリシーへのアクセス許可が要る。無い間はスイッチを押せなくして許可への道を下に置く (#149)
+            IgnoreDndRow(
+                checked = p.ignoreDnd,
+                policyGranted = policyGranted,
+                onCheckedChange = { scope.launch { settings.setIgnoreDnd(it) } },
+                onOpenPermission = {
+                    context.openSafely(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
                 },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 32.dp, end = 12.dp),
             )
-            // ON でも通知ポリシーへのアクセスが無いと、おやすみモード中に通知と鳴動画面が出ない (#149)
-            if (p.ignoreDnd && !policyGranted) {
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 32.dp, end = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        stringResource(R.string.settings_ignore_dnd_policy_missing),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = {
-                        context.openSafely(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
-                    }) { Text(stringResource(R.string.ask_allow)) }
-                }
-            }
             // 全アラーム一括ミュート (通知・タイマーは止めない)
             IconSettingRow(Icons.Default.VolumeOff) {
                 Text(
@@ -1707,6 +1675,50 @@ private fun RingTimesCard(appMinutesBefore: Int, useCalendarReminders: Boolean) 
                 )
             }
         }
+    }
+}
+
+/**
+ * 「おやすみモード中も鳴らす」の行 (#149、盤 p149)。通知ポリシーへのアクセスが無い間はスイッチを押せず、
+ * 下に「許可を開く」を置く。ON/OFF の説明は盤の文言 (OFF は実際の動作に合わせた文言)
+ */
+@Composable
+internal fun IgnoreDndRow(
+    checked: Boolean,
+    policyGranted: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onOpenPermission: () -> Unit,
+) {
+    IconSettingRow(Icons.Default.DoNotDisturbOn) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.settings_ignore_dnd_title),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.weight(1f))
+            Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = policyGranted)
+        }
+    }
+    Text(
+        stringResource(
+            if (checked) R.string.settings_ignore_dnd_hint_on else R.string.settings_ignore_dnd_hint_off,
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 32.dp, end = 12.dp),
+    )
+    if (!policyGranted) {
+        Text(
+            stringResource(R.string.settings_ignore_dnd_policy_missing),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(start = 32.dp, end = 12.dp, top = 4.dp),
+        )
+        TextButton(
+            onClick = onOpenPermission,
+            modifier = Modifier.padding(start = 24.dp),
+        ) { Text(stringResource(R.string.settings_ignore_dnd_open_permission)) }
     }
 }
 

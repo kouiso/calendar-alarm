@@ -205,7 +205,7 @@ object TroubleshootChecks {
                 context.getString(R.string.trouble_dnd_desc),
                 dndFix,
             ),
-            // #149: 「おやすみモードを無視」ON の時だけ意味を持つ。
+            // #149: 「おやすみモード中も鳴らす」ON の時だけ意味を持つ。
             // 通知ポリシーへのアクセス未許可だとチャンネルの bypassDnd が OS に無視される
             TroubleshootItem(
                 "dnd_policy",

@@ -28,7 +28,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowMediaPlayer
 
 /**
- * 「おやすみモードを無視」(#149)。サービスを実際に動かし、OFF でおやすみモード中は鳴らさず
+ * 「おやすみモード中も鳴らす」(#149)。サービスを実際に動かし、OFF でおやすみモード中は鳴らさず
  * すぐ終えること、鳴動中の同じアラームは上書きしないこと、その間の通知に全画面とバイブを
  * 付けないこと、おやすみモード尊重のチャンネルが bypassDnd しないことを確かめる。
  */

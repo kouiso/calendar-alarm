@@ -243,7 +243,7 @@ class AlarmService : Service() {
             return
         }
         val (instance, ringSettings) = ready
-        // 「おやすみモードを無視」OFF で、OS がアラームを止めている (サイレント・アラームを許可しない優先モード) なら鳴らさない (#149)。
+        // 「おやすみモード中も鳴らす」OFF で、OS がアラームを止めている (サイレント・アラームを許可しない優先モード) なら鳴らさない (#149)。
         // 音は USAGE_ALARM なので、チャンネルの bypassDnd を外すだけではおやすみモードを素通りして鳴る。
         // 座席を取る前に判定し、音を出さないまま前面サービスと座席を上限まで握らず、すぐ「鳴らせなかった」で終える
         // (鳴動中の別アラームにも触れない)。後で気づけるよう見逃しの通知は出す
@@ -259,7 +259,7 @@ class AlarmService : Service() {
             withContext(NonCancellable) {
                 val marked = runCatching {
                     app.container.repository.markDndSuppressed(
-                        instanceId, "OSがアラームを止めているため鳴らさない (おやすみモードを無視=OFF, filter=$filterNow)",
+                        instanceId, "OSがアラームを止めているため鳴らさない (おやすみモード中も鳴らす=OFF, filter=$filterNow)",
                     )
                 }.getOrDefault(false)
                 if (marked) MissedNotifier.post(this@AlarmService, instance.title)
@@ -973,7 +973,7 @@ class AlarmService : Service() {
         private const val LEGACY_CHANNEL_ID = "alarm_v1"
 
         /**
-         * 「おやすみモードを無視」OFF で、OS がアラームを止める状態か (#149)。OFF は OS の設定に従う。
+         * 「おやすみモード中も鳴らす」OFF で、OS がアラームを止める状態か (#149)。OFF は OS の設定に従う。
          * 黙るのは、サイレント (NONE) か、優先モードで「アラーム」許可がない時だけ。
          * すべて許可・アラームのみ・優先モード+アラーム許可・読めない時は鳴らす。判定は [dndAllowsAlarms] と共通
          */

@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 「おやすみモードを無視」(#149)。ON は常に鳴らし、OFF は OS に従う:
+ * 「おやすみモード中も鳴らす」(#149)。ON は常に鳴らし、OFF は OS に従う:
  * OS がアラームを止める時 (サイレント / アラーム許可なしの優先モード) だけ黙る。
  */
 class DndSilenceTest {
