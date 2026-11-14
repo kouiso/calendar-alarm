@@ -33,8 +33,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -595,6 +597,42 @@ class AlarmRepository(
         }
         audit("SCHEDULE", "adhoc ${inst.id} @${inst.triggerAtMillis}")
         onScheduleChanged?.invoke()
+    }
+
+    // ---- 設定の変更から再同期 ----
+
+    /**
+     * 予約に効く既定のうち、設定画面が保存の後に自分で resync を呼んでいないもの (#231)。
+     * ここに無い予約に効く欄 (種別・招待・タイトルコード・一括ミュート等) は、今は画面の各行が保存の後に
+     * resync を呼んでいる。全部をここへ寄せて画面側の呼び出しを消すのは別の変更で行う
+     */
+    data class ScheduleDefaults(val minutesBefore: Int, val snoozeMinutes: Int) {
+        companion object {
+            fun of(s: SettingsRepository.Settings) =
+                ScheduleDefaults(s.defaultMinutesBefore, s.defaultSnoozeMinutes)
+        }
+    }
+
+    /**
+     * 「何分前」「スヌーズ」の既定が変わったら再同期する (#231)。保存した層の flow を見張るので、
+     * 設定画面を閉じても、アプリを開き直さなくても、予約済みのアラームが新しい分数になる。
+     * 最初の値は起動時の状態なので再同期しない (起動時の再同期は別の入口が行う)
+     */
+    fun watchScheduleDefaults(scope: CoroutineScope): Job = scope.launch {
+        settings.flow
+            .map { ScheduleDefaults.of(it) }
+            .distinctUntilChanged()
+            .drop(1)
+            .collect {
+                try {
+                    resync("settings: defaults")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // 見張りを止めない。次の変更か定期の再同期で直る
+                    Log.w(TAG, "設定の変更の後の再同期に失敗", e)
+                }
+            }
     }
 
     // ---- 展開・適用 ----
