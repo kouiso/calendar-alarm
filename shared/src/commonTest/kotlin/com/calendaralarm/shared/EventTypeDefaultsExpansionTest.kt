@@ -5,7 +5,9 @@ import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
+import com.calendaralarm.shared.model.EventType
 import com.calendaralarm.shared.model.EventTypeFilter
+import com.calendaralarm.shared.model.resolveEventType
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -132,5 +134,38 @@ class EventTypeDefaultsExpansionTest {
         val e = allDay("t", "outOfOffice", 2026, 11, 6)
         val ov = mapOf(e.instanceKey to EventOverride(action = EventAction.ALARM))
         assertEquals(emptyList(), expand(listOf(e), overrides = ov, rule = AlarmRule(allDayMinutes = -1)))
+    }
+
+    @Test
+    fun `現在の挙動を固定_終日の予定に取り込んだ540分前のリマインダーは当日0時に鳴る`() {
+        // #382: 終日の予定のカレンダー側リマインダーは「その日の0時から何分前」だが、今は9時の基準から引くので
+        // 540分前は当日の0時になる。#382 で直すとこの期待値は変わる (この試験が反転する箇所)
+        val e = allDay("a", "default", 2026, 11, 6, reminders = listOf(540))
+        val triggers = expand(listOf(e), reminders = true).map { it.triggerAtMillis }.toSet()
+        assertEquals(setOf(local(2026, 11, 6, 0, 0), local(2026, 11, 6, 9, 0)), triggers)
+    }
+
+    @Test
+    fun `現在の挙動を固定_題に語を含む普通の予定は3種類に分類されて予約されない`() {
+        // #306: 時刻のある予定は題だけでは3種類に入れない方向で直す予定。直すとこの試験は反転する。
+        // 2026-11-11 の issue コメントの例 (普通の予定なのに、今は誤って鳴らない)
+        val titles = listOf(
+            "出社して面談", "有休申請の締切", "Microsoft Office 研修", "昼休み明けの定例", "Takeaway 発注締切",
+        )
+        val events = titles.mapIndexed { i, t ->
+            CalendarEvent(
+                id = "t$i", calendarId = "c1", title = t, startMillis = local(2026, 11, 6, 10, 0),
+                endMillis = local(2026, 11, 6, 11, 0), allDay = false,
+            )
+        }
+        assertEquals(
+            listOf(
+                EventType.WORKPLACE, EventType.ABSENCE, EventType.WORKPLACE, EventType.ABSENCE, EventType.ABSENCE,
+            ),
+            events.map { resolveEventType(it) },
+        )
+        assertEquals(emptyList(), expand(events))
+        // 対照: 語を含まない題は予約される
+        assertEquals(1, expand(listOf(events[0].copy(id = "ctl", title = "1on1"))).size)
     }
 }
