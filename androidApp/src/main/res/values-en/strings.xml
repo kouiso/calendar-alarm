@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="alarm_channel_novib_dnd">Alarm (no vibration, respects Do Not Disturb)</string>
+    <string name="alarm_channel_vib_dnd">Alarm (respects Do Not Disturb)</string>
     <string name="alarm_edit_add_skip_date">Add skip date</string>
     <string name="alarm_edit_anchor">Starts: %1$s</string>
     <string name="alarm_edit_change">Change</string>
@@ -153,6 +155,10 @@
     <string name="rules_target_apps">Apps (empty = all apps)</string>
     <string name="rules_title">Notification alarms</string>
     <string name="rules_title_needs_permission">Notification alarms (needs permission)</string>
+    <string name="settings_ignore_dnd_hint_off">While off, the OS setting applies. Alarms ring when the OS allows alarms; when it blocks them, they do not ring and only a “could not ring” notification is left</string>
+    <string name="settings_ignore_dnd_hint_on">Rings even in Do Not Disturb (the OS still blocks alarms if Do Not Disturb is set to silence them)</string>
+    <string name="settings_ignore_dnd_policy_missing">Notification policy access is not granted. The ringing screen and notification may not appear during Do Not Disturb</string>
+    <string name="settings_ignore_dnd_title">Ignore Do Not Disturb</string>
     <string name="share_import_ai_unavailable">AI reading is not available in this build. Enter the date and time to add it.</string>
     <string name="share_import_cancel">Cancel</string>
     <string name="share_import_no_event">No event was found in the text. Enter the date and time to add it.</string>

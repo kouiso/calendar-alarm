@@ -93,6 +93,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.calendaralarm.R
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.db.CalendarPrefEntity
@@ -1414,7 +1415,7 @@ private fun RingingCard(
             // ON は通知チャンネルの bypassDnd。効くには通知ポリシーへのアクセス許可が要る (検査画面で案内)
             IconSettingRow(Icons.Default.DoNotDisturbOn) {
                 Text(
-                    "おやすみモードを無視",
+                    stringResource(R.string.settings_ignore_dnd_title),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1427,9 +1428,9 @@ private fun RingingCard(
             // ON/OFF で何が変わるかと、ON を効かせる許可の場所 (#149)。ON で許可が無い時は、ここでもその状態を出す
             Text(
                 if (p.ignoreDnd) {
-                    "おやすみモード中も鳴らします (おやすみモードでアラームまで止める設定の時は OS が止めます)"
+                    stringResource(R.string.settings_ignore_dnd_hint_on)
                 } else {
-                    "OFF の間は OS の設定に従います。OS がアラームを許可している時は鳴らし、止めている時は鳴らさず、「鳴らせなかった」として通知だけ残します"
+                    stringResource(R.string.settings_ignore_dnd_hint_off)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1442,14 +1443,14 @@ private fun RingingCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "通知ポリシーへのアクセスが未許可です。おやすみモード中は鳴動画面や通知が出ないことがあります",
+                        stringResource(R.string.settings_ignore_dnd_policy_missing),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.weight(1f),
                     )
                     TextButton(onClick = {
                         context.openSafely(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
-                    }) { Text("許可する") }
+                    }) { Text(stringResource(R.string.ask_allow)) }
                 }
             }
             // 全アラーム一括ミュート (通知・タイマーは止めない)

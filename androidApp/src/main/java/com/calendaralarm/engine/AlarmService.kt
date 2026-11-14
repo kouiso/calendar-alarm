@@ -1038,8 +1038,8 @@ class AlarmService : Service() {
                 listOf(
                     channel(CHANNEL_ID, "アラーム", vibrate = true, bypassDnd = true),
                     channel(CHANNEL_ID_NOVIB, "アラーム（バイブなし）", vibrate = false, bypassDnd = true),
-                    channel(CHANNEL_ID_VIB_DND, "アラーム（おやすみモード尊重）", vibrate = true, bypassDnd = false),
-                    channel(CHANNEL_ID_NOVIB_DND, "アラーム（バイブなし・おやすみモード尊重）", vibrate = false, bypassDnd = false),
+                    channel(CHANNEL_ID_VIB_DND, context.getString(R.string.alarm_channel_vib_dnd), vibrate = true, bypassDnd = false),
+                    channel(CHANNEL_ID_NOVIB_DND, context.getString(R.string.alarm_channel_novib_dnd), vibrate = false, bypassDnd = false),
                 ),
             )
         }

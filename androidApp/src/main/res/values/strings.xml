@@ -2,6 +2,8 @@
 <resources>
     <string name="app_name" translatable="false">Calendar Alarm</string>
     <!-- 文言の元は日本語。英語は values-en (#105)。%1$s などは差し込む値 -->
+    <string name="alarm_channel_novib_dnd">アラーム（バイブなし・おやすみモード尊重）</string>
+    <string name="alarm_channel_vib_dnd">アラーム（おやすみモード尊重）</string>
     <string name="alarm_edit_add_skip_date">休止日を追加</string>
     <string name="alarm_edit_anchor">起点: %1$s</string>
     <string name="alarm_edit_change">変更</string>
@@ -150,6 +152,10 @@
     <string name="rules_target_apps">対象アプリ (空=全アプリ)</string>
     <string name="rules_title">通知アラーム</string>
     <string name="rules_title_needs_permission">通知アラーム (要権限)</string>
+    <string name="settings_ignore_dnd_hint_off">OFF の間は OS の設定に従います。OS がアラームを許可している時は鳴らし、止めている時は鳴らさず、「鳴らせなかった」として通知だけ残します</string>
+    <string name="settings_ignore_dnd_hint_on">おやすみモード中も鳴らします (おやすみモードでアラームまで止める設定の時は OS が止めます)</string>
+    <string name="settings_ignore_dnd_policy_missing">通知ポリシーへのアクセスが未許可です。おやすみモード中は鳴動画面や通知が出ないことがあります</string>
+    <string name="settings_ignore_dnd_title">おやすみモードを無視</string>
     <string name="share_import_ai_unavailable">このビルドでは AI の読み取りを使えません。日時を入れて追加してください</string>
     <string name="share_import_cancel">やめる</string>
     <string name="share_import_no_event">本文から予定を見つけられませんでした。日時を入れて追加してください</string>
