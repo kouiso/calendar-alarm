@@ -32,15 +32,22 @@ android {
 
     buildTypes {
         release {
-            // R8 (縮小・難読化)。戻す時はこの 1 行を false にする (#220)
+            // R8 (縮小・難読化・最適化)。戻す時はこの 1 行を false にする (#220)
             isMinifyEnabled = true
             isShrinkResources = isMinifyEnabled
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
-        debug {
-            // FAD で配るのは debug APK。停止 E2E を R8 後の APK で回す時だけ -PminifyDebug=true を渡す (#220)。
-            // 渡さない通常の debug は従来どおり minify なし
-            isMinifyEnabled = providers.gradleProperty("minifyDebug").orNull == "true"
+        // 停止 E2E 専用 (#220)。release と同じ R8 (縮小・難読化・最適化・リソース縮小) で作る。
+        // debuggable な variant では R8 が debug モードで動き、名前が変わらない。そのため debuggable にせず、
+        // release を初期値にして署名だけ debug 鍵にする (CI に release 鍵は無い。配布物にはならない)。
+        // applicationId は変えない (E2E のスクリプトが com.calendaralarm を前提にするため)
+        create("e2eMinified") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

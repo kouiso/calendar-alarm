@@ -5,7 +5,7 @@ name: (verify) alarm stop E2E (emulator)
 #
 # PR / emu-verify/** への push では 3 レーンを並べる:
 #   fix              : 対象コミット。unlocked / race / locked / locked_screen_on の全シナリオ PASS が期待値
-#   fix-minified     : 同じコミットを R8 (縮小・難読化) 後の APK で。配るのは debug APK なので、R8 を入れても停止経路が壊れないことの門 (#220)
+#   fix-minified     : 同じコミットを release と同じ R8 (縮小・難読化・最適化) で作った e2eMinified variant (署名だけ debug 鍵) で。release が出す APK でも停止経路が壊れないことの門 (#220)
 #   control-3d106817 : FAD 配布版 (オーバーレイ抑止ゲート入り) を陰性対照に同じシナリオを流し、
 #                      停止UI欠落 (STOP_UI_MISSING) を再現できること = テストがバグを検出できることを確かめる
 # workflow_dispatch では任意の ref を 1 レーンで検証する。
@@ -33,7 +33,7 @@ on:
         default: unlocked race locked locked_screen_on
         type: string
       minify:
-        description: R8 (縮小・難読化) 後の debug APK で検証する
+        description: release と同じ R8 (難読化あり) の e2eMinified APK で検証する
         required: false
         default: false
         type: boolean
@@ -138,9 +138,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Inject E2E harness and build debug APK
+      - name: Inject E2E harness and build APK (debug, or e2eMinified for the minify lane)
         env:
-          MINIFY_DEBUG: ${{ matrix.lane.minify }}
+          E2E_MINIFIED: ${{ matrix.lane.minify }}
         run: bash verifier/scripts/ci.sh emulator-build app
 
       - name: Enable KVM
@@ -162,7 +162,7 @@ jobs:
           disable-animations: true
           # -noaudio は付けない (USAGE_ALARM プレイヤーの再生状態を検証するため)
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -camera-back none -camera-front none
-          script: bash verifier/scripts/ci.sh emulator-run "$GITHUB_WORKSPACE/app/androidApp/build/outputs/apk/debug/androidApp-debug.apk" "$GITHUB_WORKSPACE/out"
+          script: bash verifier/scripts/ci.sh emulator-run "$GITHUB_WORKSPACE/app/androidApp/build/outputs/apk/${{ matrix.lane.minify && 'e2eMinified' || 'debug' }}/androidApp-${{ matrix.lane.minify && 'e2eMinified' || 'debug' }}.apk" "$GITHUB_WORKSPACE/out"
 
       - name: Evaluate against lane expectation
         if: always()
