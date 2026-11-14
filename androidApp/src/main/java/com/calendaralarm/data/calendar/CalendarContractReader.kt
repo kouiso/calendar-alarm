@@ -65,6 +65,10 @@ class CalendarContractReader(private val context: Context) {
             CalendarContract.Instances.SELF_ATTENDEE_STATUS,
             CalendarContract.Instances.ORGANIZER,
             CalendarContract.Instances.AVAILABILITY,
+            // 繰り返しの予定か (#243)。予定ごとの指定の引き継ぎで、1 回だけの予定と見分けるのに使う
+            CalendarContract.Instances.RRULE,
+            CalendarContract.Instances.RDATE,
+            CalendarContract.Instances.ORIGINAL_ID,
         )
         val out = mutableListOf<CalendarEvent>()
         val baseEventIds = mutableSetOf<Long>()
@@ -95,6 +99,8 @@ class CalendarContractReader(private val context: Context) {
                         selfStatus, organizer, accountByCal[calId],
                     ),
                     availability = availabilityOf(c.getInt(10)),
+                    recurring = !c.getString(11).isNullOrEmpty() || !c.getString(12).isNullOrEmpty() ||
+                        !c.isNull(13),
                 )
             }
         }
