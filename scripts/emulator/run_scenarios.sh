@@ -315,6 +315,34 @@ ensure_clean_start() {
   esac
 }
 
+# 止める前の確認用。stop_state が採れなかった (err を含む) 時は adb を待って採り直す (#375)。
+# 採れた値 ("0 1 1" など) は採り直さずそのまま返す (鳴っていないものを採り直しで通さない)。
+# 採り直しても採れなければ "err ..." のまま返すので、呼び出し側が INFRA_ERROR にする。STATE_KEEP は stop_state に渡る
+stop_state_retry() {
+  local st kind i
+  st=$(stop_state)
+  # shellcheck disable=SC2086
+  kind=$("${CHECK[@]}" start-state $st)
+  for i in 1 2 3; do
+    [ "$kind" = unknown ] || break
+    log "pre-stop state capture failed (try $i): $st; waiting for adb"
+    timeout 60 adb wait-for-device >/dev/null 2>&1 || true
+    sleep 5
+    st=$(stop_state)
+    # shellcheck disable=SC2086
+    kind=$("${CHECK[@]}" start-state $st)
+  done
+  echo "$st"
+}
+
+# stop_state_retry の結果が採取失敗なら成功 (0) を返す。採れた値なら 1
+state_capture_failed() {
+  local kind
+  # shellcheck disable=SC2086
+  kind=$("${CHECK[@]}" start-state $1)
+  [ "$kind" = unknown ]
+}
+
 # ---------- シナリオ ----------
 
 scenario_unlocked() {
@@ -334,7 +362,7 @@ scenario_unlocked() {
   log "$name: fired ($id); waiting 12s for heads-up to settle"
   sleep 12
   capture "$p.t12"
-  st=$(STATE_KEEP="$p.t12.pre" stop_state)
+  st=$(STATE_KEEP="$p.t12.pre" stop_state_retry)
   read -r a s n <<<"$st"
   ov=$("${CHECK[@]}" overlay "$p.t12.window.txt" "$PKG")
   if "${CHECK[@]}" stop-node "$p.t12.ui.xml" com.android.systemui "$STOP_TEXT" >/dev/null; then hun=yes; else hun=no; fi
@@ -353,6 +381,10 @@ scenario_unlocked() {
   cat "$p.facts.txt" >&2
   # 鳴動が続いていることを停止UIの判定より先に確かめる。鳴動が途中で死んだだけの
   # 「停止UI無し」を陰性対照の STOP_UI_MISSING として成立させないため
+  if state_capture_failed "$st"; then
+    cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL INFRA_ERROR "could not capture pre-stop state after 3 retries (players service notif)=$st"; return
+  fi
   if ! probes_ringing "$a" "$s" "$n"; then
     cleanup_ring "$id"; stop_recording "$name"
     record "$name" FAIL PROBE_PRECONDITION "before stop (players service notif)=$st; every probe must see the ring before stop"; return
@@ -475,7 +507,7 @@ locked_case() {
   log "$name: fired ($id); waiting 12s"
   sleep 12
   capture "$p.t12"
-  st=$(STATE_KEEP="$p.t12.pre" stop_state)
+  st=$(STATE_KEEP="$p.t12.pre" stop_state_retry)
   read -r a s n <<<"$st"
   ov=$("${CHECK[@]}" overlay "$p.t12.window.txt" "$PKG")
   if ringing_resumed "$p.t12.activities.txt"; then rr=yes; else rr=no; fi
@@ -503,6 +535,11 @@ locked_case() {
   if ! xy=$("${CHECK[@]}" slide-swipe "$p.t12.ui.xml" "$PKG" "$SLIDE_DESC" "$(screen_dpi)"); then
     cleanup_ring "$id"; stop_recording "$name"
     record "$name" FAIL STOP_UI_MISSING "no $PKG '$SLIDE_DESC' node while locked (ringing_activity=$rr overlay=$ov)"
+    locked_restore "$name"; return
+  fi
+  if state_capture_failed "$st"; then
+    cleanup_ring "$id"; stop_recording "$name"
+    record "$name" FAIL INFRA_ERROR "could not capture pre-stop state after 3 retries (players service notif)=$st"
     locked_restore "$name"; return
   fi
   if ! probes_ringing "$a" "$s" "$n"; then
