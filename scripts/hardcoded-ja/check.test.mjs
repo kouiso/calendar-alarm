@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { countJapaneseLiterals, countAll, compare, formatError } from "./check.mjs";
+import { countJapaneseLiterals, countAll, compare, formatError, scanDirs } from "./check.mjs";
 
 const UI = "androidApp/src/main/java/com/calendaralarm/ui/Foo.kt";
 
@@ -167,6 +167,21 @@ test("許可リストのファイルは数えない (照合キーワード)", ()
   try {
     // Models.kt は hit( の引数だけ免除。表示文言らしい 1 個は数える
     assert.deepEqual(countAll(root), { [models]: 1 });
+  } finally { rmSync(root, { recursive: true }); }
+});
+
+test("shared/src を読めないとき (ENOENT 以外) は例外で落ちる", () => {
+  // shared/src がディレクトリでなくファイルだと readdirSync は ENOTDIR。root 権限でも再現できる
+  const root = fixture({ "shared/src": "not a dir\n" });
+  try {
+    assert.throws(() => scanDirs(root), (e) => e.code === "ENOTDIR");
+  } finally { rmSync(root, { recursive: true }); }
+});
+
+test("shared/src が無いだけなら scanDirs は androidApp だけを返す", () => {
+  const root = fixture({ "androidApp/src/main/java/A.kt": 'val a = "あ"\n' });
+  try {
+    assert.deepEqual(scanDirs(root).map((d) => d.dir), ["androidApp/src/main"]);
   } finally { rmSync(root, { recursive: true }); }
 });
 

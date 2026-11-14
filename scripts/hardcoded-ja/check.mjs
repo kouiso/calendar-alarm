@@ -21,7 +21,12 @@ const JA = /[぀-ヿ㐀-䶿一-鿿　-〿＀-￯]|[\u{20000}-\u{323AF}]/u;
 export function scanDirs(root) {
   const dirs = [{ dir: "androidApp/src/main", ext: ".kt" }];
   let names = [];
-  try { names = readdirSync(join(root, "shared/src")).sort(); } catch { /* shared が無い fixture */ }
+  try {
+    names = readdirSync(join(root, "shared/src")).sort();
+  } catch (e) {
+    // shared/src が無いとき (fixture) だけ飛ばす。権限などほかのエラーは落とす (--update が shared の項目を消さないように)
+    if (e.code !== "ENOENT") throw e;
+  }
   for (const n of names) if (/Main$/.test(n)) dirs.push({ dir: `shared/src/${n}`, ext: ".kt" });
   return dirs;
 }
