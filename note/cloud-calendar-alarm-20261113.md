@@ -55,6 +55,7 @@ needs owner (manager's picks in brackets):
   Q8 #237/#268 allow one database migration that re-keys per-calendar settings? [yes]
   Q9 #208/#213/#215 leave popup/email display and bulk apply until after the first release? [yes]
   Q10 #154 appearance all free in the first release? [yes]
+  Q11 #191: default of 「おやすみモード中も鳴らす」 is ON, and ON without the DND-policy permission now acts as OFF (board p149 rule set by manager). Most users have not granted it, so during DND they get no ring, only the 鳴らせなかった notification. Keep (board) or ring anyway until granted? [keep board / ring until granted]
   plus: #191 OFF behaviour (keep follow-the-OS vs board's notification-only) [keep]; #194 CI macOS cost approval (free while public) ; text-only screen PRs: may CI-emulator shots count? [yes]; #306 decided for the owner (B) — tell him.
 rule 1(b): 11 open items carry claude-cloud; the others go first.
 rule 1(a): Project 10's Iteration cannot be read from this session (GraphQL and user-level project REST both 403). Moved to front by 1(a): 0 (unknown). -> for main session.
