@@ -22,6 +22,7 @@ import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
 import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
+import androidx.room.withTransaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,8 +34,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -357,7 +360,8 @@ class AlarmRepository(
         // 停止が先に届いたレースで DISMISSED 等の終端を FIRED で上書き
         // しないよう、遷移元を UPDATE の WHERE で atomic に制限する。
         // 終端行が FIRED に戻ると kill 復活や再鳴動の対象に残ってしまう
-        val rows = db.scheduledInstances().setFiredIfPending(id)
+        // 再同期の書き戻し (#232) と同じロックで、PENDING の確認と書き戻しの間に FIRED が挟まらないようにする
+        val rows = ringTransitionLock.withLock { db.scheduledInstances().setFiredIfPending(id) }
         audit(
             if (rows > 0) "FIRE" else "STALE_FIRE",
             if (rows > 0) id else "$id: 終端状態のため FIRED 化を抑止",
@@ -597,6 +601,50 @@ class AlarmRepository(
         onScheduleChanged?.invoke()
     }
 
+    // ---- 設定の変更から再同期 ----
+
+    /**
+     * 予約に効く既定のうち、設定画面が保存の後に自分で resync を呼んでいないもの (#231)。
+     * ここに無い予約に効く欄 (種別・招待・タイトルコード・一括ミュート等) は、今は画面の各行が保存の後に
+     * resync を呼んでいる。全部をここへ寄せて画面側の呼び出しを消すのは別の変更で行う
+     */
+    data class ScheduleDefaults(val minutesBefore: Int, val snoozeMinutes: Int) {
+        companion object {
+            fun of(s: SettingsRepository.Settings) =
+                ScheduleDefaults(s.defaultMinutesBefore, s.defaultSnoozeMinutes)
+        }
+    }
+
+    /**
+     * 「何分前」「スヌーズ」の既定が変わったら再同期する (#231)。保存した層の flow を見張るので、
+     * 設定画面を閉じても、アプリを開き直さなくても、予約済みのアラームが新しい分数になる。
+     * 最初の値は起動時の状態なので再同期しない (起動時の再同期は別の入口が行う)。
+     * 設定の読み取り自体が壊れても、例外をアプリへ漏らさない (鳴動のための起動を落とさない)
+     * @param onFirstValue 最初の値を受け取った時に呼ぶ (試験が変更を入れる時を決めるため)
+     */
+    fun watchScheduleDefaults(scope: CoroutineScope, onFirstValue: () -> Unit = {}): Job = scope.launch {
+        var first = true
+        settings.flow
+            .map { ScheduleDefaults.of(it) }
+            .distinctUntilChanged()
+            .catch { e -> Log.w(TAG, "設定の見張りが止まった", e) }
+            .collect {
+                if (first) {
+                    first = false
+                    onFirstValue()
+                    return@collect
+                }
+                try {
+                    resync("settings: defaults")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // 見張りを止めない。次の変更か定期の再同期で直る
+                    Log.w(TAG, "設定の変更の後の再同期に失敗", e)
+                }
+            }
+    }
+
     // ---- 展開・適用 ----
 
     /**
@@ -614,14 +662,9 @@ class AlarmRepository(
 
         // 終端行は先に読む。同 id の蘇生防止と単発アラームの消費判定の両方で使う
         val allRows = db.scheduledInstances().all()
+        afterResyncReadForTest?.invoke()
         val terminalIds = allRows.asSequence()
-            .filter {
-                it.state in setOf(
-                    AlarmState.FIRED.name, AlarmState.DISMISSED.name,
-                    AlarmState.SNOOZED.name, AlarmState.MISSED.name,
-                    AlarmState.SKIPPED.name,
-                )
-            }
+            .filter { it.state in NO_REVIVE_STATES }
             .map { it.id }
             .toSet()
 
@@ -666,13 +709,17 @@ class AlarmRepository(
                     reminderAction = it.reminderAction.toAction(),
                 )
             }
-            val overrides = db.eventOverrides().all().associate {
+            val overrideRows = db.eventOverrides().all()
+            val storedOverrides = overrideRows.associate {
                 it.instanceKey to EventOverride(
                     action = it.action.toActionOrNull(),
                     minutesBefore = it.minutesBefore,
                     extraOffsets = it.extraOffsetsCsv?.toOffsets(),
                 )
             }
+            var overrides = storedOverrides
+            // DB への書き込みは展開に成功した後に行う。書き込みの失敗を読み取りの失敗と取り違えないため
+            var pendingCarry: com.calendaralarm.shared.logic.OverrideCarry.Result? = null
             val snoozeDefault = appSettings.defaultSnoozeMinutes
             // calendar_prefs 行が無いカレンダーはグローバル既定が効く。
             // アジェンダ表示も同じ既定を読むため、UIとエンジンを一致させる。
@@ -718,6 +765,15 @@ class AlarmRepository(
                 check(calendarList.isNotEmpty() || events.isEmpty() || appSettings.accountSettings.isEmpty()) {
                     "calendar list is empty while events exist"
                 }
+                // 予定の時刻が動いても予定ごとの指定を引き継ぎ、終わった回の指定は消す (#243)。
+                // 読み取りに成功した時だけ行う (失敗時はどの指定もはぐれて見えるため)
+                val carry = com.calendaralarm.shared.logic.OverrideCarry.reconcile(
+                    storedOverrides, events, now.toEpochMilliseconds(), 1.days.inWholeMilliseconds,
+                    fromMillis = (now - 14.days).toEpochMilliseconds(),
+                    untilMillis = fetchUntil.toEpochMilliseconds(),
+                )
+                overrides = carry.overrides
+                pendingCarry = carry
                 val disabledCalIds = accountApplied.disabledCalendarIds
                 liveEventKeys = events.asSequence()
                     .filter { overrides[it.instanceKey]?.muted != true }
@@ -741,6 +797,7 @@ class AlarmRepository(
                 )
             }.getOrNull()
             if (expanded != null) {
+                pendingCarry?.let { applyOverrideCarry(overrideRows, it) }
                 // イベント由来インスタンスは固有のスヌーズ設定を持たないため
                 // 設定の既定を載せる
                 desired += expanded.map { it.copy(snoozeMinutes = snoozeDefault) }
@@ -790,10 +847,29 @@ class AlarmRepository(
             }
         desired += adhoc
 
-        val scheduled = pendingRows.associate { it.id to it.triggerAtMillis }
-        val plan = AlarmPlanner.plan(scheduled, desired, now)
-        applyPlan(plan, desired, reason, scheduled.keys)
+        // 書き戻しは鳴動・停止・スヌーズと同じロックの中で行う (#232)。
+        // 上の読み取りから後に通信などを挟むので、その間に状態が変わった行がある。
+        // ロックの中で読み直し、蘇生させない状態 (鳴動中・停止・スヌーズ・見逃し・飛ばし) になった行は書き戻さない。
+        // 読んだ時にもう取り消し (CANCELLED) だった行は今までどおり、理想状態にあれば予約し直す (スイッチを ON に戻した時など)。
+        // 読み取りの後にできた PENDING の行 (スヌーズの子など) は、この再同期では触らない (次の再同期で扱う)。
+        // 再同期の全体はロックに入れない: 通信の間に停止ボタンが待たされるため
+        ringTransitionLock.withLock {
+            val current = db.scheduledInstances().all().associateBy { it.id }
+            val noReviveNow = current.values.filter { it.state in NO_REVIVE_STATES }.map { it.id }.toSet()
+            val stillPending = pendingRows.filter { current[it.id]?.state == AlarmState.PENDING.name }
+            // 読んだ時に PENDING で、今は PENDING でない行も書き戻さない。停止がスヌーズの子を
+            // 取り消した (CANCELLED) 時に、持ち越しの予約として鳴らし直さないため
+            val leftPending = pendingRows.map { it.id }.toSet() - stillPending.map { it.id }.toSet()
+            val finalDesired = desired.filterNot { it.id in noReviveNow || it.id in leftPending }
+            val scheduled = stillPending.associate { it.id to it.triggerAtMillis }
+            val plan = AlarmPlanner.plan(scheduled, finalDesired, now)
+            applyPlan(plan, finalDesired, reason, scheduled.keys)
+        }
+        onScheduleChanged?.invoke()
     }
+
+    /** 試験用の差込口: 再同期が全行を読んだ直後に呼ぶ (#232 の競合の再現) */
+    @Volatile internal var afterResyncReadForTest: (suspend () -> Unit)? = null
 
     private suspend fun applyPlan(
         plan: AlarmPlanner.Plan,
@@ -832,7 +908,9 @@ class AlarmRepository(
             // 先に行を作ってから終端化する (残さないと次回 resync で再展開される)。
             if (fire.id !in armedIds && fire.id.startsWith("ev:")) {
                 db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
-                markSkipped(fire.id, "予約前に通知時刻が過ぎていた")
+                // markSkipped はウィジェットの更新を呼ぶので、ロックの中では状態と記録だけ書く
+                setState(fire.id, AlarmState.SKIPPED)
+                audit("SKIP", "${fire.id}: 予約前に通知時刻が過ぎていた")
                 continue
             }
             db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
@@ -845,7 +923,6 @@ class AlarmRepository(
             "reason=$reason +${plan.toSchedule.size} -${plan.toCancel.size} fire=${plan.toFireNow.size}",
         )
         appScope.launch { pruneOldLogs() }
-        onScheduleChanged?.invoke()
     }
 
     /** 鳴動中にプロセスが殺された後の再起動用: 鳴動猶予内の最新 FIRED を返す。 */
@@ -966,6 +1043,31 @@ class AlarmRepository(
         resync("calendar pref")
     }
 
+    /** [OverrideCarry] の結果を DB へ書く。古いキーの行を新しいキーで作り直し、終わった回の行を消す (#243) */
+    private suspend fun applyOverrideCarry(
+        rows: List<EventOverrideEntity>,
+        carry: com.calendaralarm.shared.logic.OverrideCarry.Result,
+    ) {
+        if (carry.moved.isEmpty() && carry.dropped.isEmpty()) return
+        val byKey = rows.associateBy { it.instanceKey }
+        try {
+            // 途中で失敗して古いキーと新しいキーが両方残らないよう、まとめて 1 つのトランザクションで書く
+            db.withTransaction {
+                carry.moved.forEach { (old, new) ->
+                    byKey[old]?.let { db.eventOverrides().upsert(it.copy(instanceKey = new)) }
+                    db.eventOverrides().delete(old)
+                }
+                carry.dropped.forEach { db.eventOverrides().delete(it) }
+            }
+            audit("OVERRIDE_CARRY", "moved=${carry.moved.size} dropped=${carry.dropped.size}")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 今回の展開は付け替えた後の指定で済んでいる。次の再同期でもう一度付け替える
+            audit("ERROR", "予定ごとの指定の付け替えに失敗: ${e.javaClass.simpleName}")
+        }
+    }
+
     suspend fun setEventOverride(
         instanceKey: String,
         action: EventAction?,
@@ -1081,6 +1183,12 @@ class AlarmRepository(
     )
 
     companion object {
+        /** 再同期が同じ id を予約し直さない状態。ユーザーが止めた・スヌーズした・鳴っている意味を守る */
+        private val NO_REVIVE_STATES = setOf(
+            AlarmState.FIRED.name, AlarmState.DISMISSED.name,
+            AlarmState.SNOOZED.name, AlarmState.MISSED.name,
+            AlarmState.SKIPPED.name,
+        )
         /** 終わった行。遅れて届いたスヌーズで子を作らない (#145) */
         private val TERMINAL_STATES = setOf(
             AlarmState.DISMISSED.name, AlarmState.MISSED.name,
