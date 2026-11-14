@@ -634,3 +634,5 @@ func overrideAfterRingSwitch(_ ov: EventOverrideDTO?, on: Bool, defaultSilenced:
     kept.action = nil
     return kept.minutesBefore == nil && kept.extraOffsets == nil ? nil : kept
 }
+
+let deliberateCompileError: Int = "not an int"
