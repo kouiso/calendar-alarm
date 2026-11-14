@@ -447,10 +447,12 @@ class AlarmRepository(
                     (parent != null && parent !in enabledAlarmIds))
         }.map { it.id }.toSet()
         orphaned.forEach {
-            setState(it, AlarmState.CANCELLED)
+            // 読んだ後に停止・スヌーズされた行は書き換えない (条件付き UPDATE で atomic に)
+            val changed = db.scheduledInstances().setCancelledIfLive(it) > 0
             waitingRings.remove(it)
-            audit("REARM_SKIP", "$it: 待つ間に親のアラームが OFF・削除、または一括ミュートされたため鳴らし直さない")
+            if (changed) audit("REARM_SKIP", "$it: 待つ間に親のアラームが OFF・削除、または一括ミュートされたため鳴らし直さない")
         }
+        val pendingAtRead = candidates.filter { it.second == AlarmState.PENDING.name }.map { it.first.id }.toSet()
         val waiting = candidates.filter { (inst, state) ->
             inst.id !in orphaned &&
             inst.id != resolvedId &&
@@ -466,14 +468,21 @@ class AlarmRepository(
                 (state == AlarmState.FIRED.name || state == AlarmState.PENDING.name) &&
                 inst.triggerAtMillis <= since
         }.forEach { (inst, _) ->
-            markMissed(inst.id, "鳴らし直しを待つ間に鳴動猶予を過ぎた")
-            onMissed?.invoke(1)
+            // markMissed(id) はロックを取らない条件付き UPDATE。ここは停止側のロックの外なので入れ子でも詰まらない
+            if (markMissed(inst.id, "鳴らし直しを待つ間に鳴動猶予を過ぎた")) onMissed?.invoke(1)
         }
         // 片付いた行も待ち行列から外す
         queued.filter { q -> waiting.none { it.id == q } }.forEach { waitingRings.remove(it) }
+        var rearmed = 0
         waiting.forEachIndexed { i, inst ->
-            db.scheduledInstances().setPendingIfFired(inst.id)
+            // FIRED からの巻き戻しが 0 行なら、読んだ後に停止・スヌーズされている。元々 PENDING の行
+            // (巻き戻し不要) は今も PENDING の時だけ予約する
+            val reverted = db.scheduledInstances().setPendingIfFired(inst.id) > 0
             waitingRings.remove(inst.id)
+            if (!reverted && !(inst.id in pendingAtRead && instanceState(inst.id) == AlarmState.PENDING)) {
+                return@forEachIndexed
+            }
+            rearmed++
             val fireAt = now + REARM_DELAY_MS + i * REARM_STAGGER_MS
             if (scheduler.schedule(inst.copy(triggerAtMillis = fireAt))) {
                 audit("REARM", "${inst.id}: 押し出された鳴動を鳴らし直す")
@@ -481,8 +490,8 @@ class AlarmRepository(
                 audit("EXACT_DENIED", "rearm ${inst.id}")
             }
         }
-        if (waiting.isNotEmpty()) onScheduleChanged?.invoke()
-        return waiting.size
+        if (rearmed > 0) onScheduleChanged?.invoke()
+        return rearmed
     }
 
     /**
@@ -504,11 +513,16 @@ class AlarmRepository(
             // 展開されなくなった (ミュート等)、または通知だけに変わったものは、音で鳴らし直さない
             val stale = now == null || (now != EventAction.ALARM && row.delivery == EventAction.ALARM.name)
             if (!stale) continue
-            setState(id, AlarmState.CANCELLED)
+            beforeCancelStaleWriteForTest?.invoke()
+            // 読んだ後に停止・スヌーズされた行は書き換えない (条件付き UPDATE で atomic に)
+            val changed = db.scheduledInstances().setCancelledIfLive(id) > 0
             waitingRings.remove(id)
-            audit("REARM_SKIP", "$id: 待つ間に予定の設定が変わり鳴らし直さない")
+            if (changed) audit("REARM_SKIP", "$id: 待つ間に予定の設定が変わり鳴らし直さない")
         }
     }
+
+    /** 試験用の差込口: [cancelStaleWaitingEvents] が行を読んだ後、CANCELLED を書く直前に呼ぶ (#366) */
+    @Volatile internal var beforeCancelStaleWriteForTest: (suspend () -> Unit)? = null
 
     /** 押し出されて鳴らし直しを待つ id。プロセスが死んでも残るよう端末に保存する (#84)。 */
     private val waitingRings = WaitingRingStore(calendarReader.appContext())
@@ -593,7 +607,7 @@ class AlarmRepository(
         )
         db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(inst)))
         if (!scheduler.schedule(inst)) {
-            setState(inst.id, AlarmState.CANCELLED)
+            db.scheduledInstances().setCancelledIfLive(inst.id)
             audit("EXACT_DENIED", "adhoc ${inst.id}")
             return@withContext
         }
@@ -948,38 +962,54 @@ class AlarmRepository(
         return done
     }
 
-    /** 単発指定で MISSED 化する。鳴動を試みたが起動を OS に拒否された時などに使う。 */
-    suspend fun markMissed(id: String, detail: String? = null) {
-        setState(id, AlarmState.MISSED)
+    /** 試験用の差込口: [markMissed] が MISSED を書く直前に呼ぶ。id 指定・引数なしの両方 (#366) */
+    @Volatile internal var beforeMissedWriteForTest: (suspend () -> Unit)? = null
+
+    /**
+     * 単発指定で MISSED 化する。鳴動を試みたが起動を OS に拒否された時などに使う。
+     * 生存中 (PENDING/FIRED) の行だけを条件付き UPDATE で書くので、先に停止・スヌーズされた行は
+     * 上書きしない。ロックは取らない ([rearmWaitingRings] など呼び出し元がロックの外にあるとは限らないため)。
+     * @return 実際に MISSED にしたら true。false なら見逃しの通知を出さない
+     */
+    suspend fun markMissed(id: String, detail: String? = null): Boolean {
+        beforeMissedWriteForTest?.invoke()
+        if (db.scheduledInstances().setMissedIfLive(id) == 0) {
+            audit("MISS_SKIP", "$id: 見逃しにする前に終わっていたので何もしない", db.scheduledInstances().byId(id))
+            return false
+        }
         val row = db.scheduledInstances().byId(id)
         audit("MISS", if (detail == null) id else "$id: $detail", row)
         row?.standaloneAlarmId?.let {
             disableConsumedOneShots(setOf(it))
         }
         onScheduleChanged?.invoke()
+        return true
     }
 
     /** 予約前に時刻が過ぎた行を、見逃しに数えない終端 (SKIPPED) にする。ev: 専用なので単発アラームの消費は見ない */
-    suspend fun markSkipped(id: String, detail: String) {
-        setState(id, AlarmState.SKIPPED)
+    suspend fun markSkipped(id: String, detail: String): Boolean {
+        if (db.scheduledInstances().setSkippedIfPending(id) == 0) return false
         audit("SKIP", "$id: $detail")
         onScheduleChanged?.invoke()
+        return true
     }
 
-    /** 鳴動時刻が過去の PENDING 行を MISSED に整理する（健全性チェック用）。戻り値は見逃し件数。 */
+    /**
+     * 鳴動時刻が過去の PENDING 行を MISSED に整理する（健全性チェック用）。
+     * 戻り値は実際に変えた行の数 (読んだ後に停止された行は数えない)。
+     */
     suspend fun markMissed(): Int {
         val cutoff = Clock.System.now().toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds
         val stale = db.scheduledInstances().pending()
             .filter { it.triggerAtMillis < cutoff }
-        stale.forEach {
-            setState(it.id, AlarmState.MISSED)
-            audit("MISS", it.id, it)
-        }
-        if (stale.isNotEmpty()) {
-            disableConsumedOneShots(stale.mapNotNull { it.standaloneAlarmId }.toSet())
+        beforeMissedWriteForTest?.invoke()
+        val changed = stale.filter { db.scheduledInstances().setMissedIfOverduePending(it.id, cutoff) > 0 }
+        changed.forEach { audit("MISS", it.id, it) }
+        if (changed.isNotEmpty()) {
+            disableConsumedOneShots(changed.mapNotNull { it.standaloneAlarmId }.toSet())
             onScheduleChanged?.invoke()
         }
-        return stale.size
+        return changed.size
     }
 
     /** 単発アラームの終端到達をアラーム本体の OFF に反映する。 */

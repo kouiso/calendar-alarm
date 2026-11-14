@@ -46,6 +46,22 @@ interface ScheduledInstanceDao {
      * アラームが無鳴動で終わる。トランザクションが丸ごと戻った場合は先行が
      * FIRED のまま残るので、復旧は先行を再鳴動する (無鳴動より安全側)。
      */
+    /** 生存中 (PENDING/FIRED) の行だけを MISSED にする。停止・スヌーズ済みの行は上書きしない (更新行数を返す)。 */
+    @Query("UPDATE scheduled_instances SET state = 'MISSED' WHERE id = :id AND state IN ('PENDING', 'FIRED')")
+    suspend fun setMissedIfLive(id: String): Int
+
+    /** 鳴動時刻が [cutoff] より前の PENDING 行だけを MISSED にする。読んだ後に動いた行は上書きしない (更新行数を返す)。 */
+    @Query("UPDATE scheduled_instances SET state = 'MISSED' WHERE id = :id AND state = 'PENDING' AND triggerAtMillis < :cutoff")
+    suspend fun setMissedIfOverduePending(id: String, cutoff: Long): Int
+
+    /** 生存中 (PENDING/FIRED) の行だけを CANCELLED にする。停止・スヌーズ済みの行は上書きしない (更新行数を返す)。 */
+    @Query("UPDATE scheduled_instances SET state = 'CANCELLED' WHERE id = :id AND state IN ('PENDING', 'FIRED')")
+    suspend fun setCancelledIfLive(id: String): Int
+
+    /** PENDING の行だけを SKIPPED にする (更新行数を返す)。 */
+    @Query("UPDATE scheduled_instances SET state = 'SKIPPED' WHERE id = :id AND state = 'PENDING'")
+    suspend fun setSkippedIfPending(id: String): Int
+
     /** 鳴動中だった行 (FIRED) だけを鳴動待ち (PENDING) に戻す。停止・スヌーズ済みの終端は戻さない (更新行数を返す)。 */
     @Query("UPDATE scheduled_instances SET state = 'PENDING' WHERE id = :id AND state = 'FIRED'")
     suspend fun setPendingIfFired(id: String): Int
