@@ -79,7 +79,7 @@ enum class Availability { BUSY, FREE, TENTATIVE, UNKNOWN }
 
 /**
  * 題の照合用に整える。前後の空白を除き、全角英数記号 (U+FF01-FF5E) と全角空白を半角にし、
- * 空白の連なりを1つにして小文字へ揃える。NFKC は commonMain で使えないため、この範囲だけを自前で行う
+ * Unicode の空白 (NBSP を含む) の連なりを1つにして小文字へ揃える。NFKC は commonMain で使えないため、この範囲だけを自前で行う
  * (半角カナなど、この範囲に無い互換文字は変換しない)。
  */
 internal fun normalizeTitleForMatch(title: String): String {
@@ -94,13 +94,26 @@ internal fun normalizeTitleForMatch(title: String): String {
             )
         }
     }
-    return half.trim().replace(Regex("\\s+"), " ").lowercase()
+    // Regex の \s は JVM では U+00A0 などを空白とみなさず、trim() (Char.isWhitespace) と定義が食い違う。
+    // 端も中も Char.isWhitespace で揃えるため、文字単位で畳む (プラットフォーム非依存)
+    val collapsed = StringBuilder()
+    var inSpace = false
+    for (c in half.trim()) {
+        if (c.isWhitespace()) {
+            if (!inSpace) collapsed.append(' ')
+            inSpace = true
+        } else {
+            collapsed.append(c)
+            inSpace = false
+        }
+    }
+    return collapsed.toString().lowercase()
 }
 
 /**
  * タイトル文字からイベント種別を分類する。判定順 = 先勝ち (「誕生日」最優先)。
  * 終日の予定 ([allDay]=true) は題に語を含めば分類する。時刻のある予定は題全体が語と一致する時だけ分類する (#306)。
- * ooo は不在、オフィス・自宅・在宅は勤務場所として、終日でも時刻付きでも題全体の一致だけで判定する。
+ * オフィス・自宅・在宅は勤務場所として、終日でも時刻付きでも題全体の一致だけで判定する。
  */
 fun classifyEventType(title: String, allDay: Boolean): EventType {
     val t = title.lowercase()
@@ -110,8 +123,7 @@ fun classifyEventType(title: String, allDay: Boolean): EventType {
     fun wholeTitle(vararg needles: String) = needles.any { whole == it }
     return when {
         hit("誕生日", "バースデー", "birthday") -> EventType.BIRTHDAY
-        hit("不在", "休暇", "休み", "有休", "欠勤", "absence", "absent", "away", "out of office") ||
-            wholeTitle("ooo") -> EventType.ABSENCE
+        hit("不在", "休暇", "休み", "有休", "欠勤", "absence", "absent", "away", "out of office") -> EventType.ABSENCE
         hit("勤務場所", "出社", "在宅勤務", "リモートワーク", "workplace", "work location", "office") ||
             wholeTitle("オフィス", "自宅", "在宅") -> EventType.WORKPLACE
         hit("サイレントモード", "フォーカスタイム", "集中タイム", "focus time") -> EventType.FOCUS_TIME

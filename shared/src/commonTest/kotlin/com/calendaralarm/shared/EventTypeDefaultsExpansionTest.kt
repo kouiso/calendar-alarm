@@ -186,6 +186,15 @@ class EventTypeDefaultsExpansionTest {
     }
 
     @Test
+    fun `時刻のある予定は題全体の一致だけで判定する_改行なし空白U+00A0も普通の空白と同じに畳む`() {
+        // JVM の Regex の \s は U+00A0 を空白とみなさない。端 (trim) と中で定義が食い違わないことを固定する
+        assertEquals(EventType.ABSENCE, typeOf("Out\u00A0\u00A0of office", allDay = false))
+        assertEquals(EventType.ABSENCE, typeOf("Out \u00A0of\u2003 office", allDay = false))
+        assertEquals(EventType.ABSENCE, typeOf("\u00A0Out of office\u00A0", allDay = false))
+        assertEquals(EventType.EVENT, typeOf("Out\u00A0of\u00A0office review", allDay = false))
+    }
+
+    @Test
     fun `終日の予定は今までどおり題に語を含めば分類される`() {
         assertEquals(EventType.BIRTHDAY, typeOf("○○さんの誕生日", allDay = true))
         assertEquals(EventType.ABSENCE, typeOf("夏季休暇", allDay = true))
@@ -210,16 +219,6 @@ class EventTypeDefaultsExpansionTest {
         val e = titled("g", "不在", allDay = false).copy(googleEventType = "default")
         assertEquals(EventType.EVENT, resolveEventType(e))
         assertEquals(1, expand(listOf(e)).size)
-    }
-
-    @Test
-    fun `oooは題全体の一致だけで不在になり終日でも部分一致しない`() {
-        for (allDay in listOf(false, true)) {
-            assertEquals(EventType.ABSENCE, typeOf("OOO", allDay), "OOO allDay=$allDay")
-            assertEquals(EventType.ABSENCE, typeOf(" ｏｏｏ ", allDay), "ｏｏｏ allDay=$allDay")
-            assertEquals(EventType.EVENT, typeOf("foood", allDay), "foood allDay=$allDay")
-            assertEquals(EventType.EVENT, typeOf("ooo会議", allDay), "ooo会議 allDay=$allDay")
-        }
     }
 
     @Test
