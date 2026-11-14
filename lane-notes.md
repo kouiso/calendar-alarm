@@ -36,6 +36,7 @@ needs owner:
 - (answered 13:10Z 「消してええ」) deleted the 3 simulators hm-a4-voice-sim, hm-a5-photo-sim, iPhone 17 Pro; Devices 6.6G -> 12K; df still 19 GiB right after (recheck before #189 build).
 - One sound window for: #191 ring-through-DND case, #189 two bundled sounds, rows 7/12/35/V3.
 for main session:
+- goal hook re-prompting every turn since 2026-11-14T14:55Z while the lane only waits on a running member (Pixel stills, lock taken 13:52Z) and on disk/owner items; the lead ends turns with no tool call until a member reports.
 - Mac disk: / fell 28 -> 16 GiB by 14:30Z (other lanes writing). #189 iPhone build and row 36 archive need >= 20 GiB.
 - #370 merged 0e5e6f2 at ~14:00Z; GATE comment was posted after the merge (rate limit; lead's retry script did not gate the merge on the comment): https://github.com/kouiso/calendar-alarm/pull/370#issuecomment-6877939530
 - Pixel lock /private/tmp/hm-android.lock held by an unnamed session since 05:28 PST.
