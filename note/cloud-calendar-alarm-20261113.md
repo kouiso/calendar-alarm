@@ -4,6 +4,26 @@ calendar-alarm [cloud]
 
 新しい記録が上。数字は PR か issue の番号。
 
+## 2026-11-14 04:54 UTC 時点
+
+区分ごとの数: a（マージできる）3 / b（ここで直せる・レビュー中）2 / c（端末・画面・持ち主の判断が要る）4 / d 0
+対象外: #141（広告。触っていない）
+
+| 番号 | 区分 | やったこと | head | checks | レビュー | マージ済みか / 足りないもの |
+|---|---|---|---|---|---|---|
+| #363（#204） | b | 設定のチップの行（招待予定・通知タイミング・スヌーズの選択肢）を折り返すようにした。360dp・文字 1.3 倍で右端のチップが幅 0 に潰れるのを、テストで再現してから直した | 0e7eb9e | 手元 unit 189 件 失敗 0、lint 成功 | [must 0（3a7f1f5）](https://github.com/kouiso/calendar-alarm/pull/363#issuecomment-6871929498)。should 1 は直した。差分の再レビュー中 | 未マージ。画面が変わるので、持ち主の画面確認と前後のスクリーンショットが要る（区分 c になる見込み） |
+| #362（#309） | a | versionCode を `-PversionCode` から読み、配布の workflow が run number を渡す。手元で合成後の manifest を見て確かめた。配布の workflow は動かしていない | 68166d0 | CI 全部成功 | [must 0](https://github.com/kouiso/calendar-alarm/pull/362#issuecomment-6871833158) | 未マージ。持ち主の「merge #362」で入れられる。番号が上がることは次の配布で確かめる |
+| #361（#243） | b | 予定の時刻が動いても予定ごとの指定を引き継ぎ、終わった回の指定を消す（shared の OverrideCarry と再同期）。レビューの must 2 回（別の回へ付け間違える 2 つの形）を直した | cb05f1f | 手元 shared 114+114 件・androidApp 189 件 失敗 0、lint 成功 | [1 回目 must 1](https://github.com/kouiso/calendar-alarm/pull/361#issuecomment-6871836927)、[2 回目 must 1](https://github.com/kouiso/calendar-alarm/pull/361#issuecomment-6871963689)。3 回目のレビュー中 | 未マージ。レビューの結果待ち。iOS（#283）は Mac が要る |
+| #360（#232） | a | 前の表のとおり | aa78f2b | CI 全部成功 | [差分の再レビュー must 0](https://github.com/kouiso/calendar-alarm/pull/360#issuecomment-6871728088) | 未マージ。持ち主の「merge #360」で入れられる |
+| #359（#231） | a | 前の表のとおり | 804760a | CI 全部成功 | [差分の再レビュー must 0](https://github.com/kouiso/calendar-alarm/pull/359#issuecomment-6871690563) | 未マージ。持ち主の「merge #359」で入れられる |
+| #236 | c | 手を付けていない | - | - | - | ロック解除の前に鳴らすには、受信・鳴動のサービス・音を、DB を読めない状態（Direct Boot）で動かす必要がある。エミュレータで確かめずに入れると、起動時に落ちる危険がある。子の #265（今は鳴らないことをエミュレータで記録する）が先。推し: #265 をエミュレータのある端末で行い、その後で #266 を小さく作る |
+
+### マージの順の提案
+
+1. #362（ビルドの設定だけ。他と重ならない）
+2. #359 → #360 → #361（どれも `AlarmRepository.kt` を変える。1 つ入れるたびに、次の PR へ master を取り込み直し、テストと差分のレビューをやり直す）
+3. 画面の PR（#191・#188・#363・#189）は、持ち主の画面確認の後。#188・#191・#363 は `SettingsScreen.kt` を変えるので、同じく 1 つずつ。
+
 ## 2026-11-14 04:27 UTC 時点（再開後）
 
 区分ごとの数: a 0 / b 2（#359・#360。差分の再レビュー待ち）/ c 3（#191・#188・#189）/ d 0
