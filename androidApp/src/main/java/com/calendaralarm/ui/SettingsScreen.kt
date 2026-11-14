@@ -95,6 +95,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.calendaralarm.R
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.db.CalendarPrefEntity
@@ -1680,7 +1681,7 @@ internal fun LargeButtonsRow(checked: Boolean, onChange: (Boolean) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "停止ボタンを大きくする",
+            stringResource(R.string.settings_large_stop_button),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),

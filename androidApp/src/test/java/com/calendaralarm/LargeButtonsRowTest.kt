@@ -23,7 +23,7 @@ import org.robolectric.annotation.Config
 
 /** 「停止ボタンを大きくする」は、見出しとスイッチが 1 つの切り替えとして読み上げられ、行を押すと切り替わる (#154)。 */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "ja")
 class LargeButtonsRowTest {
 
     @OptIn(ExperimentalTestApi::class)

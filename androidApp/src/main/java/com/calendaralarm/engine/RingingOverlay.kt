@@ -18,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.annotation.VisibleForTesting
+import com.calendaralarm.R
 import com.calendaralarm.shared.logic.SlideToStopRule
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -300,7 +301,7 @@ object RingingOverlay {
         // TalkBack はこのトラックへのダブルタップ (performClick) で停止できる。
         val stop = if (largeButtons) {
             android.widget.Button(context).apply {
-                text = "停止"
+                text = context.getString(R.string.common_stop)
                 textSize = 32f
                 tag = LARGE_STOP_TAG
                 setTextColor(Color.parseColor("#26247A"))

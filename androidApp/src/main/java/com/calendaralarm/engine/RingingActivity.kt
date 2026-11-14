@@ -60,6 +60,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
@@ -71,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
+import com.calendaralarm.R
 import com.calendaralarm.shared.logic.SlideToStopRule
 import com.calendaralarm.shared.model.CurrentWeather
 import com.calendaralarm.ui.WeatherBackdrop
@@ -523,7 +525,7 @@ private fun RingingScreen(
                         contentColor = onAccent,
                     ),
                 ) {
-                    Text("停止", fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.common_stop), fontSize = 32.sp, fontWeight = FontWeight.Bold)
                 }
             } else {
                 SlideToStop(accent = accent, onAccent = onAccent, onStop = onDismiss)
