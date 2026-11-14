@@ -1,6 +1,13 @@
-IN-PROGRESS 2026-11-14 12:20 UTC
-
-calendar-alarm [cloud]
+STATE RUNNING 2026-11-14T12:20Z | counts pending (start-up of exec-prompt v2)
+mission: それぞれのプロジェクトに書いてあるプランに書いてある作業をやること。どのプロジェクトもまず既存のPRを本質的に対処することを作業を優先してください。そうしないと溜まってばっかりなので
+model claude-opus-5-5 (lead, medium) | advisor present (fable) | github via gh api (REST; GraphQL blocked, so the Project board's Iteration cannot be read) | push via git | png ok (Playwright/Chromium)
+goal: owner RESUME 2026-11-14 18:45 JST (AI rows landed, passed reviews merged, own PRs landed or closed, rest OWNER/DEVICE) | DONE-WAITING satisfies it: yes
+repo rules read: AGENTS.md, doc/test-spec.md 検証の証跡「鳴動・UI系の修正は実際に鳴らして止めた動画/スクショを PR に添付する」 (stricter than G4 for screen PRs: real-device evidence), .github/scrum-board.yml (project 10), unresolved review threads 0 before merge
+DEPLOY | merge to master -> nothing (CI builds a debug APK as a 14-day artifact only) | evidence .github/workflows/all_check.yml:50-55 (upload-artifact); fad.yml:1-3 is workflow_dispatch only (tester distribution, never on merge); ios-device-sync.yml:8-30,248 is a daily cron that may dispatch fad.yml (iOS) to testers from master = staging, independent of merges
+---
+calendar-alarm [cloud] — this session is the cloud lane. Mac lane (another session) holds #370, #189 and the device evidence.
+START 2026-11-14T12:20Z exec-prompt v2 adopted. handoff: this file's 引き継ぎ section; next step = existing open PRs (#373 #374 #376 in review; #365 #188 #191 #363 waiting on device evidence).
+worktrees 2026-11-14T12:20Z: all 19 clean, nothing unpushed. /home/user/{calendar-alarm master, calendar-alarm-notes notes, wt188, wt189 (Mac's PR, untouched), wt191, wt204, wt231, wt232, wt243, wt271, wt297, wt309, wt366, wt371, wt-advisor (no commits)} match their upstream; wt367 e41db5c, wt375 3ce3f77, wtpl 47bfae9 match the remote branch; wt289 0991bb6 = merged into master as b831a9c (remote branch gone).
 
 ## 2026-11-14 12:20 UTC の進み
 
