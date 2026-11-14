@@ -101,7 +101,7 @@ class RingingOverlaySlideStopTest {
         largeRoot.findViewsWithText(sliders, SLIDER, View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION)
         assertTrue(sliders.isEmpty())
         val button = largeRoot.findViewWithTag<View>(LARGE_STOP_TAG)
-        assertEquals(96, button.layoutParams.height)
+        assertEquals(RingingSlideSpec.LARGE_BUTTON_HEIGHT_DP, button.layoutParams.height)
         assertTrue(button.performClick())
         val intent = dismissBroadcasts().single()
         assertEquals(ID, intent.getStringExtra(AlarmService.EXTRA_INSTANCE_ID))
