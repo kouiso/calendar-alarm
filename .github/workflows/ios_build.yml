@@ -4,6 +4,20 @@ name: iOS Build
 #      署名・Secrets・配布なしの simulator Debug ビルドだけを PR で走らせる。
 #      配布は fad.yml (手動) の仕事で、ここでは触らない。
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - "iosApp/**"
+      - "shared/**"
+      - "scripts/ci.sh"
+      - ".github/workflows/ios_build.yml"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - "gradle/**"
+      - "gradlew"
+      - "gradlew.bat"
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
@@ -13,18 +27,22 @@ on:
       - ".github/workflows/ios_build.yml"
       - "build.gradle.kts"
       - "settings.gradle.kts"
-      - "gradle/**"
       - "gradle.properties"
+      - "gradle/**"
+      - "gradlew"
+      - "gradlew.bat"
 
 permissions:
   contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # WHY: master の連続 push で前の実行を打ち切ると、どのコミットが緑か分からなくなる。打ち切りは PR だけ
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   ios-build:
+    # push では pull_request.draft が null なので != true で通す
     if: github.event.pull_request.draft != true
     # WHY: 標準の macos-latest だけを使う。larger runner / self-hosted にしない
     runs-on: macos-latest
@@ -44,8 +62,18 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Select Xcode 26 (AlarmKit は iOS 26 SDK が必要)
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          [ -n "$XCODE" ] || XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Using: $XCODE"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+
       - name: Install xcodegen
-        run: brew install xcodegen
+        run: |
+          brew install xcodegen
+          xcodegen --version
 
       - name: Build iOS app for simulator (no signing)
         run: bash scripts/ci.sh ios
