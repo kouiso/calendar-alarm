@@ -22,6 +22,7 @@ import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
 import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
+import androidx.room.withTransaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -675,6 +676,8 @@ class AlarmRepository(
                 )
             }
             var overrides = storedOverrides
+            // DB への書き込みは展開に成功した後に行う。書き込みの失敗を読み取りの失敗と取り違えないため
+            var pendingCarry: com.calendaralarm.shared.logic.OverrideCarry.Result? = null
             val snoozeDefault = appSettings.defaultSnoozeMinutes
             // calendar_prefs 行が無いカレンダーはグローバル既定が効く。
             // アジェンダ表示も同じ既定を読むため、UIとエンジンを一致させる。
@@ -726,7 +729,7 @@ class AlarmRepository(
                     storedOverrides, events, now.toEpochMilliseconds(), 1.days.inWholeMilliseconds,
                 )
                 overrides = carry.overrides
-                applyOverrideCarry(overrideRows, carry)
+                pendingCarry = carry
                 val disabledCalIds = accountApplied.disabledCalendarIds
                 liveEventKeys = events.asSequence()
                     .filter { overrides[it.instanceKey]?.muted != true }
@@ -750,6 +753,7 @@ class AlarmRepository(
                 )
             }.getOrNull()
             if (expanded != null) {
+                pendingCarry?.let { applyOverrideCarry(overrideRows, it) }
                 // イベント由来インスタンスは固有のスヌーズ設定を持たないため
                 // 設定の既定を載せる
                 desired += expanded.map { it.copy(snoozeMinutes = snoozeDefault) }
@@ -965,12 +969,22 @@ class AlarmRepository(
     ) {
         if (carry.moved.isEmpty() && carry.dropped.isEmpty()) return
         val byKey = rows.associateBy { it.instanceKey }
-        carry.moved.forEach { (old, new) ->
-            byKey[old]?.let { db.eventOverrides().upsert(it.copy(instanceKey = new)) }
-            db.eventOverrides().delete(old)
+        try {
+            // 途中で失敗して古いキーと新しいキーが両方残らないよう、まとめて 1 つのトランザクションで書く
+            db.withTransaction {
+                carry.moved.forEach { (old, new) ->
+                    byKey[old]?.let { db.eventOverrides().upsert(it.copy(instanceKey = new)) }
+                    db.eventOverrides().delete(old)
+                }
+                carry.dropped.forEach { db.eventOverrides().delete(it) }
+            }
+            audit("OVERRIDE_CARRY", "moved=${carry.moved.size} dropped=${carry.dropped.size}")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 今回の展開は付け替えた後の指定で済んでいる。次の再同期でもう一度付け替える
+            audit("ERROR", "予定ごとの指定の付け替えに失敗: ${e.javaClass.simpleName}")
         }
-        carry.dropped.forEach { db.eventOverrides().delete(it) }
-        audit("OVERRIDE_CARRY", "moved=${carry.moved.size} dropped=${carry.dropped.size}")
     }
 
     suspend fun setEventOverride(

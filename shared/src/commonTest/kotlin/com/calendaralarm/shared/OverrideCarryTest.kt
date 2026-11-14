@@ -78,4 +78,39 @@ class OverrideCarryTest {
         assertEquals(overrides, r.overrides)
         assertEquals(emptySet(), r.dropped)
     }
+
+    @Test
+    fun 読み取り範囲から出た過去の回の指定を新しく入った先の回へ付けない() {
+        // 毎月の予定: 過去の回が範囲の外へ出て、先の回が範囲に入った (数は 1 対 1 で合う)
+        val past = now - 15 * day
+        val future = now + 16 * day
+        val r = reconcile(mapOf("1:9:$past" to mute), listOf(ev("9", future)))
+        assertEquals(emptyMap(), r.moved)
+        assertEquals(setOf("1:9:$past"), r.dropped)
+        assertEquals(emptyMap(), r.overrides)
+    }
+
+    @Test
+    fun 繰り返しの1回が消えて別の回が入っても指定を付け替えない() {
+        // 指定のある回 X が消え、同じ再同期で先の回 Y が範囲に入った。残る回 A にも指定がある。
+        // はぐれた指定 (X) と指定の無い回 (Y) が 1 対 1 で数は合うが、X と Y は別の回
+        val a = now + day
+        val x = now + 3 * day
+        val y = now + 20 * day
+        val overrides = mapOf("1:9:$a" to mute, "1:9:$x" to thirty)
+        val events = listOf(ev("9", a), ev("9", y))
+        val r = reconcile(overrides, events)
+        assertEquals(emptyMap(), r.moved)
+        assertEquals(overrides, r.overrides)
+    }
+
+    @Test
+    fun 繰り返しで回ごとの時刻の差がそろわない時は付け替えない() {
+        val a = now + day
+        val b = now + 2 * day
+        val overrides = mapOf("1:9:$a" to mute, "1:9:$b" to thirty)
+        val events = listOf(ev("9", a + hour), ev("9", b + 3 * hour))
+        val r = reconcile(overrides, events)
+        assertEquals(emptyMap(), r.moved)
+    }
 }
