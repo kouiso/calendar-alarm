@@ -27,16 +27,18 @@ Gradle も Android SDK も要らず、Node 22 だけで数秒で終わる。Andr
 - 数えるもの: `"..."` と `"""..."""` の中の日本語（ひらがな・カタカナ・漢字・全角半角形・CJK 記号句読点、`\uXXXX` 書きも）。`${...}` の中の文字列は別に 1 個と数える。
 - 数えないもの: `//` `/* */` `/** */` のコメントと KDoc（AGENTS.md が日本語コメントを求めるため）。
 - 判定は構文だけで、文の意味は見ない。
-- 比べる相手は `scripts/hardcoded-ja-baseline.json`（今の master のファイルごとの個数）。1 ファイルでも増える、または載っていないファイルに 1 個でも出れば失敗する。減るのは通る。
-- 失敗の文は、ファイル名と何個から何個に増えたかを出し、文言は `strings.xml` へ移すよう案内する。
-- 文言を `strings.xml` へ移して減らしたら `node scripts/hardcoded-ja/check.mjs --update` で baseline を下げる。baseline の差分は PR で見える。
+- 比べる相手は base ブランチの `scripts/hardcoded-ja-baseline.json`（ファイルごとの個数）。PR（`GITHUB_BASE_REF` あり）では `git show origin/<base>:scripts/hardcoded-ja-baseline.json` で読むので、PR の中で baseline を上げても通らない。workflow は `fetch-depth: 0` で base ref を取る。ローカルや push では作業ツリーのファイルと比べる。
+- 1 ファイルでも base より増える、または載っていないファイルに 1 個でも出れば失敗する。baseline ファイルを base より上げる変更も失敗する。baseline を下げるのは通る。
+- 減ったのに baseline を下げていないときも失敗する（余白を後の PR が再利用できないように）。`node scripts/hardcoded-ja/check.mjs --update` を実行し、下がった数字をコミットする。
+- base に baseline ファイルがまだ無いとき（この検査を入れる最初の PR）だけ、その PR の baseline を基準にする。base ref が取れないときは失敗する。
+- 失敗の文は、ファイル名と何個から何個に増えたかを出す。androidApp のファイルには `strings.xml`（values と values-en）へ移して `stringResource` / `getString` を使うよう、shared のファイルには shared から種類（kind / enum）か引数を返し、文言への変換は各プラットフォーム側で行うよう案内する。
 
 数えない常設の許可（`scripts/hardcoded-ja/check.mjs` の `ALLOWLIST`。理由もそこに書く）:
 
 - `NotificationRuleTemplates.kt` はファイル全体。キーワード一覧は通知本文との照合用で、表示文言ではない。
 - `Models.kt` は `hit(...)` の直接引数だけ。予定タイトルとの照合キーワードである。
-- `StopUiPlan.kt` はファイル全体。停止手段の警告文は診断欄に出す開発者向けの文である。
-- どのファイルでも、`audit(` `markMissed(` `markMissedIfFired(` `markSkipped(` と `Log.v/d/i/w/e(` の直接引数。診断ログで、画面に出ない。
+- `StopUiPlan.kt` はファイル全体。停止手段の警告文は設定の「鳴動ログ」にそのまま出るが、診断ログの文面であり、このフェーズの対象外とするのがプロダクト判断（#289）。
+- どのファイルでも、`audit(` `markMissed(` `markMissedIfFired(` `markDndSuppressed(` `markSkipped(` と `Log.v/d/i/w/e(` の直接引数。診断ログの文面（detail）で、鳴動ログには出るが、このフェーズの対象外とするのがプロダクト判断。
 
 ## Emulator の各レーン
 

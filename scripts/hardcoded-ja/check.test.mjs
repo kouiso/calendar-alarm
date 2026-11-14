@@ -97,11 +97,65 @@ test("全角記号・半角カナ・漢字・カタカナ・ひらがなを日�
   assert.equal(countJapaneseLiterals('val a = "abc 123 -+"'), 0);
 });
 
-test("baseline より減るのは通る", () => {
+test("減らして baseline を下げれば通る", () => {
   const root = fixture({ [UI]: 'val a = "保存"\n' });
   try {
-    assert.deepEqual(compare(countAll(root), { [UI]: 5 }), []);
+    assert.deepEqual(compare(countAll(root), { [UI]: 1 }, { [UI]: 5 }), []);
   } finally { rmSync(root, { recursive: true }); }
+});
+
+test("減らしたのに baseline を下げないと --update を案内して失敗する", () => {
+  const root = fixture({ [UI]: 'val a = "保存"\n' });
+  try {
+    const errors = compare(countAll(root), { [UI]: 5 }, { [UI]: 5 });
+    assert.deepEqual(errors, [{ file: UI, was: 5, now: 1, kind: "stale" }]);
+    assert.match(formatError(errors[0]), /check\.mjs --update/);
+  } finally { rmSync(root, { recursive: true }); }
+});
+
+test("PR 側で baseline を引き上げても base の baseline と比べるので失敗する", () => {
+  const root = fixture({ [UI]: 'val a = "保存"\nval b = "削除"\nval c = "追加"\n' });
+  try {
+    // PR が --update で baseline を 3 に上げた。base は 2。
+    const errors = compare(countAll(root), { [UI]: 3 }, { [UI]: 2 });
+    assert.deepEqual(errors, [{ file: UI, was: 2, now: 3 }]);
+  } finally { rmSync(root, { recursive: true }); }
+});
+
+test("使われていないのに baseline だけ引き上げても失敗する", () => {
+  const root = fixture({ [UI]: 'val a = "保存"\n' });
+  try {
+    const errors = compare(countAll(root), { [UI]: 4 }, { [UI]: 1 });
+    assert.ok(errors.some((e) => e.kind === "raised"));
+    assert.ok(errors.some((e) => e.kind === "stale"));
+  } finally { rmSync(root, { recursive: true }); }
+});
+
+test("base に無い新規ファイルの baseline 追加は失敗する", () => {
+  const root = fixture({ [UI]: 'val a = "保存"\n' });
+  try {
+    assert.deepEqual(compare(countAll(root), { [UI]: 1 }, {}), [{ file: UI, was: 0, now: 1 }]);
+  } finally { rmSync(root, { recursive: true }); }
+});
+
+test("失敗文の案内は androidApp と shared で分かれる", () => {
+  const sh = "shared/src/commonMain/kotlin/com/calendaralarm/shared/logic/Baz.kt";
+  const android = formatError({ file: UI, was: 0, now: 1 });
+  assert.match(android, /strings\.xml/);
+  assert.match(android, /values-en/);
+  assert.match(android, /stringResource/);
+  const shared = formatError({ file: sh, was: 0, now: 1 });
+  assert.match(shared, /kind/);
+  assert.match(shared, /enum/);
+  assert.doesNotMatch(shared, /^[^]*移し、stringResource/);
+});
+
+test("markDndSuppressed の直接引数は診断として数えない", () => {
+  assert.equal(countJapaneseLiterals('repo.markDndSuppressed(id, "OSがアラームを止めている")\nval x = "表示"\n'), 1);
+});
+
+test("CJK 拡張B (サロゲートペア) だけの文字列も数える", () => {
+  assert.equal(countJapaneseLiterals('val a = "𠮷"\nval b = "abc"\n'), 1);
 });
 
 test("許可リストのファイルは数えない (照合キーワード)", () => {

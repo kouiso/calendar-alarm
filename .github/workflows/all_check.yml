@@ -63,6 +63,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # WHY: PR 自身の baseline ではなく base ブランチの baseline と比べる。base ref を取るため全履歴を取る (#289)
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
