@@ -33,6 +33,21 @@ merged since HOUR 12:40Z: none new; closed: #385 (throwaway lint probe, CI lint 
 near miss 2026-11-14T12:4xZ: the #378 member's first revert command included `--amend`; the auto-mode classifier blocked the whole command, nothing ran; redone as `git revert -n` + a normal commit. Prevention: every member brief already says "no amend"; the classifier is the second net. No history was changed.
 #378: negative control done (12b36d5 red: Models.swift:638 compile error; 93b6ba6 revert green); net diff vs 01b00db empty. Under review.
 #191 9a2551c / #188 90ef21b aligned to boards p149 / p154; reviews running in parallel. Board differences for the owner: #191 OFF behaviour; #191 switch locked without permission; #188 row placement (board: top of a group with 文字の大きさ・鳴動画面の背景; PR: end of the appearance card).
+merged: #380 (a88254a), #387 (89af2d1, target SDK 36; CI emulator API 36 follow-up = #395). #201 decisions A-D recorded on GitHub: https://github.com/kouiso/calendar-alarm/issues/201#issuecomment-6877487819
+GitHub secondary rate limit hit 2026-11-14T12:5xZ (PR creation 403). Prevention: one GitHub write at a time per agent, no retry loops; the lead opens queued PRs.
+JUDGE 3.1/3.2/3.3/3.4 (manager, 2026-11-14): CLOUD NOW = #306 (in work), #211 audit table (with #203 comparison), #269 (method changed: on restore clear scheduled rows and per-event overrides, then resync; backup rules cannot exclude single tables in one db file), #220 SBI-1 and SBI-4 audits (public repo: only a non-exploitable summary on GitHub) and R8 as its own PR gated on the stop E2E on the minified build, #301 without classifyEventType. QUEUED (screen, device queue): #217 after #363, #218 after #205, #317-#324 (#323 first). CLOSE: #124 (superseded). DEVICE: #139. HOLD: #215, #332, #333. #208 decided for the owner: no app-sent email in v1. #213 option A decided (display + link), timing = owner Q9. #237/#268 key decided (account + Google stable calendar id, name fallback), migration = owner Q8 (DB, excluded from lane merges). #382 does not wait for #207.
+needs owner (manager's picks in brackets):
+  Q1 #68 accept a muted Android run as the device record? [yes]
+  Q2 #203 delete the タイトルコード setting? [delete]
+  Q3 #207 new users: event with no calendar reminder -> (a) silent or (b) ring at 開始時 by default as a visible switch; existing users unchanged? [b, yes]
+  Q4 #241 repeating alarm rang 7:00, moved to 22:00 the same day: ring tonight? [yes]
+  Q5 #244 add この回だけ／全部の回 for mute and minutes-before? per-occurrence wins [yes, after launch items]
+  Q6 #245/#286 start share-the-ring-log with titles always removed? [yes]
+  Q7 #315 approve the reason table (account / calendar / ring-mode / all-day / invite / type / title word / this event; all-muted only on the band) [yes]
+  Q8 #237/#268 allow one database migration that re-keys per-calendar settings? [yes]
+  Q9 #208/#213/#215 leave popup/email display and bulk apply until after the first release? [yes]
+  Q10 #154 appearance all free in the first release? [yes]
+  plus: #191 OFF behaviour (keep follow-the-OS vs board's notification-only) [keep]; #194 CI macOS cost approval (free while public) ; text-only screen PRs: may CI-emulator shots count? [yes]; #306 decided for the owner (B) — tell him.
 rule 1(b): 11 open items carry claude-cloud; the others go first.
 rule 1(a): Project 10's Iteration cannot be read from this session (GraphQL and user-level project REST both 403). Moved to front by 1(a): 0 (unknown). -> for main session.
 manager (Fable high) spawned for scene (a): pass line and policy pending.
