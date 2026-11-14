@@ -2,6 +2,11 @@
 <resources>
     <string name="app_name" translatable="false">Calendar Alarm</string>
     <!-- 文言の元は日本語。英語は values-en (#105)。%1$s などは差し込む値 -->
+    <string name="agenda_all_day">終日</string>
+    <string name="agenda_no_events">予定なし</string>
+    <string name="agenda_now_label">今 %1$s</string>
+    <string name="agenda_time_range">%1$s〜%2$s</string>
+    <string name="agenda_untitled">(タイトルなし)</string>
     <string name="alarm_edit_add_skip_date">休止日を追加</string>
     <string name="alarm_edit_anchor">起点: %1$s</string>
     <string name="alarm_edit_change">変更</string>
@@ -34,7 +39,9 @@
     <string name="ask_ready_title">これで、鳴ってすぐ止められる</string>
     <string name="ask_retry_body">設定の「%1$s」をオンにすると、%2$s。</string>
     <string name="ask_still_off">まだオフのまま</string>
+    <string name="ask_test_ring_label">テスト鳴動</string>
     <string name="ask_turn_on_in_settings">設定でオンにする</string>
+    <string name="calendar_default_name">カレンダー</string>
     <string name="common_add">追加</string>
     <string name="common_back">戻る</string>
     <string name="common_cancel">キャンセル</string>
@@ -75,6 +82,16 @@
     </plurals>
     <string name="missed_one">「%1$s」を鳴らせませんでした</string>
     <string name="missed_service_failed">鳴動サービスを起動できなかったため、アラームを鳴らせませんでした</string>
+    <string name="palette_amber">琥珀</string>
+    <string name="palette_forest">森</string>
+    <string name="palette_indigo">インディゴ</string>
+    <string name="palette_mono">墨</string>
+    <string name="palette_ocean">海</string>
+    <string name="palette_orange">橙</string>
+    <string name="palette_rose">薔薇</string>
+    <string name="palette_sakura">桜</string>
+    <string name="palette_sky">空</string>
+    <string name="palette_violet">紫</string>
     <string name="perm_calendar_ask_body">カレンダーをつなぐと、予定の前に自動でアラームが入る。</string>
     <string name="perm_calendar_ask_title">予定に合わせて、前もって鳴らすために</string>
     <string name="perm_calendar_label">カレンダー</string>
@@ -160,6 +177,17 @@
     <string name="share_to_event">予定に変換</string>
     <string name="sync_channel">同期</string>
     <string name="sync_running">カレンダーを同期しています</string>
+    <string name="tab_agenda">予定</string>
+    <string name="tab_alarms">アラーム</string>
+    <string name="tab_settings">設定</string>
+    <string name="tab_timer">タイマー</string>
+    <string name="timer_default_boiled_egg">ゆで卵</string>
+    <string name="timer_default_focus">集中</string>
+    <string name="timer_default_nap">仮眠</string>
+    <string name="timer_default_pasta">パスタ</string>
+    <string name="timer_default_pizza">ピザ</string>
+    <string name="timer_default_tea">紅茶</string>
+    <string name="timer_default_workout_break">筋トレ休憩</string>
     <string name="timer_lap">ラップ</string>
     <string name="timer_lap_row">ラップ %1$d: %2$s</string>
     <string name="timer_preset_add">プリセットを追加</string>
@@ -204,6 +232,22 @@
     <string name="trouble_title">トラブルシューティング</string>
     <string name="unit_minutes_short">分</string>
     <string name="unit_minutes_value">%1$d分</string>
+    <string name="weather_clear">快晴</string>
+    <string name="weather_drizzle">霧雨</string>
+    <string name="weather_fog">霧</string>
+    <string name="weather_freezing_drizzle">着氷霧雨</string>
+    <string name="weather_freezing_rain">着氷雨</string>
+    <string name="weather_mainly_clear">晴れ</string>
+    <string name="weather_overcast">曇り</string>
+    <string name="weather_partly_cloudy">一部曇り</string>
+    <string name="weather_rain">雨</string>
+    <string name="weather_rain_showers">にわか雨</string>
+    <string name="weather_snow">雪</string>
+    <string name="weather_snow_grains">雪粒</string>
+    <string name="weather_snow_showers">にわか雪</string>
+    <string name="weather_thunderstorm">雷雨</string>
+    <string name="weather_thunderstorm_hail">雹伴う雷雨</string>
+    <string name="weather_unknown">不明</string>
     <string name="weekday_separator"></string>
     <string name="weekday_short_friday">金</string>
     <string name="weekday_short_monday">月</string>

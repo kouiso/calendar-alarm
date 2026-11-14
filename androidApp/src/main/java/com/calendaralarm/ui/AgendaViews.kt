@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.calendaralarm.R
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.shared.logic.WeekCalendar
 import kotlinx.datetime.Clock
@@ -172,7 +174,7 @@ fun MonthView(
             )
             if (dayItems.isEmpty()) {
                 Text(
-                    "予定なし",
+                    stringResource(R.string.agenda_no_events),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -238,12 +240,12 @@ fun ThreeDayView(
                             .padding(6.dp),
                     ) {
                         Text(
-                            if (allDay) "終日" else hm(item.event.startMillis),
+                            if (allDay) stringResource(R.string.agenda_all_day) else hm(item.event.startMillis),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            item.event.title.ifBlank { "(タイトルなし)" },
+                            item.event.title.ifBlank { stringResource(R.string.agenda_untitled) },
                             style = MaterialTheme.typography.bodySmall,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
@@ -300,7 +302,7 @@ fun DayTimelineView(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 allDayItems.forEach { item ->
                     Text(
-                        item.event.title.ifBlank { "(タイトルなし)" },
+                        item.event.title.ifBlank { stringResource(R.string.agenda_untitled) },
                         Modifier.background(
                             Color(item.calendarColor).copy(alpha = 0.2f),
                             RoundedCornerShape(8.dp),
@@ -350,14 +352,14 @@ fun DayTimelineView(
                         .padding(horizontal = 8.dp, vertical = 2.dp),
                 ) {
                     Text(
-                        item.event.title.ifBlank { "(タイトルなし)" },
+                        item.event.title.ifBlank { stringResource(R.string.agenda_untitled) },
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = if (durMin < 45) 1 else 3,
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (durMin >= 45) {
                         Text(
-                            "${hm(s)}〜${hm(e)}",
+                            stringResource(R.string.agenda_time_range, hm(s), hm(e)),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -368,7 +370,7 @@ fun DayTimelineView(
             // テーマ色は「鳴る/オン」専用なので、色表の赤で引く
             if (isToday) {
                 val lineColor = com.calendaralarm.ui.theme.StatusColors.nowLine
-                val label = "今 %02d:%02d".format(nowMinute / 60, nowMinute % 60)
+                val label = stringResource(R.string.agenda_now_label, "%02d:%02d".format(nowMinute / 60, nowMinute % 60))
                 Row(
                     Modifier.fillMaxWidth().offset(y = hourHeight * (nowMinute / 60f) - 8.dp)
                         .semantics { contentDescription = label },

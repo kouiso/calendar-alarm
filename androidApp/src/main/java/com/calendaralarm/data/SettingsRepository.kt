@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.core.DataMigration
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.calendaralarm.R
 import com.calendaralarm.shared.logic.WeekCalendar
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.InviteFilter
@@ -138,7 +139,7 @@ class SettingsRepository(private val context: Context) {
         /** 停止後に次のアラームを表示するか。 */
         val showNextAlarmAfterDismiss: Boolean = false,
         /** タイマープリセット。 */
-        val timerPresets: List<TimerPreset> = DEFAULT_TIMER_PRESETS,
+        val timerPresets: List<TimerPreset> = emptyList(),
         /** 通知アラーム (他アプリ通知→アラーム) の有効フラグ */
         val notificationAlarmEnabled: Boolean = false,
         /** 通知アラームのルール一覧 */
@@ -199,7 +200,7 @@ class SettingsRepository(private val context: Context) {
             weatherLocation = p[KEY_WEATHER_LOCATION] ?: "",
             showNextAlarmAfterDismiss = p[KEY_NEXT_ALARM_MSG] ?: false,
             timerPresets = (p[KEY_TIMER_PRESETS]
-                ?: DEFAULT_TIMER_PRESETS.joinToString(";") { "${it.label}|sec:${it.seconds}" })
+                ?: defaultTimerPresets(context).joinToString(";") { "${it.label}|sec:${it.seconds}" })
                 .split(';').mapNotNull { part ->
                     val (label, num) = part.split('|').let {
                         it.getOrNull(0) to it.getOrNull(1)
@@ -213,7 +214,7 @@ class SettingsRepository(private val context: Context) {
                             else -> num?.toIntOrNull()?.let { m -> TimerPreset(l, m * 60) }
                         }
                     }
-                }.ifEmpty { DEFAULT_TIMER_PRESETS },
+                }.ifEmpty { defaultTimerPresets(context) },
             notificationAlarmEnabled = p[KEY_NOTIF_ALARM] ?: false,
             notificationRules = runCatching {
                 rulesJson.decodeFromString<List<com.calendaralarm.shared.model.NotificationRuleSpec>>(
@@ -480,16 +481,23 @@ class SettingsRepository(private val context: Context) {
         /** 直近で正常に decode できた通知ルール。壊れたJSON時の退避先。 */
         private var lastGoodRules: List<com.calendaralarm.shared.model.NotificationRuleSpec>? = null
 
-        /** 元アプリの定型タイマー (ゆで卵/パスタ/紅茶/ピザ/仮眠/集中/筋トレ休憩)。 */
-        val DEFAULT_TIMER_PRESETS = listOf(
-            TimerPreset("ゆで卵", 5 * 60),
-            TimerPreset("パスタ", 9 * 60),
-            TimerPreset("紅茶", 4 * 60),
-            TimerPreset("ピザ", 12 * 60),
-            TimerPreset("仮眠", 20 * 60),
-            TimerPreset("集中", 25 * 60),
-            TimerPreset("筋トレ休憩", 90),
+        /**
+         * 元アプリの定型タイマー (ゆで卵/パスタ/紅茶/ピザ/仮眠/集中/筋トレ休憩)。名前は文字リソースで、秒は固定。
+         * 保存する形 (`label|sec:N`) は変えない。保存済みの名前はその人のデータとしてそのまま読む。
+         */
+        private val DEFAULT_TIMER_PRESET_SPECS: List<Pair<Int, Int>> = listOf(
+            R.string.timer_default_boiled_egg to 5 * 60,
+            R.string.timer_default_pasta to 9 * 60,
+            R.string.timer_default_tea to 4 * 60,
+            R.string.timer_default_pizza to 12 * 60,
+            R.string.timer_default_nap to 20 * 60,
+            R.string.timer_default_focus to 25 * 60,
+            R.string.timer_default_workout_break to 90,
         )
+
+        /** 何も保存されていない時の既定プリセット。名前は今の言語で解決する。 */
+        fun defaultTimerPresets(context: Context): List<TimerPreset> =
+            DEFAULT_TIMER_PRESET_SPECS.map { (nameRes, seconds) -> TimerPreset(context.getString(nameRes), seconds) }
 
         fun String?.toCsvList(): List<String> =
             this?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()

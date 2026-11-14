@@ -3,6 +3,7 @@ package com.calendaralarm.data.calendar
 import android.content.ContentUris
 import android.content.Context
 import android.provider.CalendarContract
+import com.calendaralarm.R
 import com.calendaralarm.shared.model.Availability
 import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.CalendarSource
@@ -38,7 +39,7 @@ class CalendarContractReader(private val context: Context) {
                 // 鳴動は起きるのに設定画面で制御不可にならないよう全件返す
                 out += CalendarSource(
                     id = c.getLong(0).toString(),
-                    name = c.getString(1) ?: c.getString(2) ?: "カレンダー",
+                    name = c.getString(1) ?: c.getString(2) ?: context.getString(R.string.calendar_default_name),
                     accountName = c.getString(2) ?: "",
                     color = c.getInt(3),
                     isPrimary = c.getInt(4) == 1,
