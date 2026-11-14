@@ -707,6 +707,8 @@ class AlarmRepository(
      * カレンダー権限が無くても単発アラームは展開する（部分動作を優先）。
      */
     suspend fun resync(reason: String) = withContext(Dispatchers.IO) {
+        // 復元後の削除が済むまで待つ (#269)。門は削除と印の消費だけで開く
+        restoreGate?.await()
         // 差分計算は desired に無い PENDING を CANCELLED に倒すため、期限切れを
         // 先に MISSED 化しないと「鳴らせなかった」事実が通知も状態も残さず消える。
         // boot/時刻変更/手動/アプリ起動のどの入口からでも必ずここを通る。
@@ -924,6 +926,11 @@ class AlarmRepository(
     }
 
     /** 試験用の差込口: 再同期が全行を読んだ直後に呼ぶ (#232 の競合の再現) */
+    @Volatile private var restoreGate: kotlinx.coroutines.Deferred<Unit>? = null
+
+    /** 復元直後の削除 (#269) が済むまで [resync] を待たせる。起動時に1回だけ置く */
+    fun holdResyncUntil(gate: kotlinx.coroutines.Deferred<Unit>) { restoreGate = gate }
+
     @Volatile internal var afterResyncReadForTest: (suspend () -> Unit)? = null
 
     private suspend fun applyPlan(

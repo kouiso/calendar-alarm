@@ -39,11 +39,22 @@ object RestoreReset {
      * [resync] を呼ぶ。印が無ければ何も触らない。捨てた時 true。
      * 印は行を捨てた後で消す。途中で落ちても次の起動でやり直せる (消すのは冪等)。
      */
-    suspend fun runIfRestored(context: Context, db: AppDatabase, resync: suspend () -> Unit): Boolean {
-        if (!RestoreMarker.isPending(context)) return false
-        db.scheduledInstances().deleteAll()
-        db.eventOverrides().deleteAll()
-        RestoreMarker.consume(context)
+    suspend fun runIfRestored(
+        context: Context,
+        db: AppDatabase,
+        onCleared: () -> Unit = {},
+        resync: suspend () -> Unit,
+    ): Boolean {
+        // 起動時の resync を待たせる門は、削除と印の消費だけで開ける。
+        // resync 自身の完了まで待たせると、ここから呼ぶ resync が自分を待って固まる
+        try {
+            if (!RestoreMarker.isPending(context)) return false
+            db.scheduledInstances().deleteAll()
+            db.eventOverrides().deleteAll()
+            RestoreMarker.consume(context)
+        } finally {
+            onCleared()
+        }
         resync()
         return true
     }

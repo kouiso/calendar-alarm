@@ -19,6 +19,7 @@ import com.calendaralarm.data.db.AppDatabase
 import com.calendaralarm.data.sync.SyncWorker
 import com.calendaralarm.engine.AlarmScheduler
 import com.calendaralarm.shared.weather.WeatherApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -101,11 +102,22 @@ class CalendarAlarmApp : Application() {
         // 画面のスコープで呼ぶと、保存の直後に画面を閉じた時に再同期が消える
         container.repository.watchScheduleDefaults(container.appScope)
         // バックアップから復元された直後なら、端末と時刻に結びつく行を捨てて再同期する (#269)
+        // 起動時の resync が復元直後の古い指定を読んで書き戻さないよう、削除が済むまで resync を待たせる
+        val restoreGate = CompletableDeferred<Unit>()
+        container.repository.holdResyncUntil(restoreGate)
         container.appScope.launch {
-            runCatching {
-                RestoreReset.runIfRestored(this@CalendarAlarmApp, container.db) {
-                    container.repository.resync("restored from backup")
+            try {
+                runCatching {
+                    RestoreReset.runIfRestored(
+                        this@CalendarAlarmApp,
+                        container.db,
+                        onCleared = { restoreGate.complete(Unit) },
+                    ) {
+                        container.repository.resync("restored from backup")
+                    }
                 }
+            } finally {
+                restoreGate.complete(Unit)
             }
         }
         scheduleHealthCheck()

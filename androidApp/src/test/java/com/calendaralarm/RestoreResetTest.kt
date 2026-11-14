@@ -1,6 +1,7 @@
 package com.calendaralarm
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.db.AppDatabase
@@ -110,5 +111,29 @@ class RestoreResetTest {
     fun markerLivesInNoBackupDir() {
         RestoreMarker.mark(context)
         assertTrue(java.io.File(context.noBackupFilesDir, "restored-from-backup").exists())
+    }
+
+    @Test
+    fun manifestWiresRestoreMarkerAgentWithFullBackupOnly() {
+        val info = context.packageManager.getApplicationInfo(context.packageName, 0)
+        assertEquals(RestoreMarkerAgent::class.java.name, info.backupAgentName)
+        assertTrue((info.flags and ApplicationInfo.FLAG_ALLOW_BACKUP) != 0)
+        assertTrue((info.flags and ApplicationInfo.FLAG_FULL_BACKUP_ONLY) != 0)
+    }
+
+    @Test
+    fun gateOpensAfterDeleteAndBeforeResync() {
+        seed()
+        RestoreMarker.mark(context)
+        val order = mutableListOf<String>()
+        runBlocking {
+            RestoreReset.runIfRestored(context, db, onCleared = { order += "cleared:${counts()}" }) { order += "resync" }
+        }
+        assertEquals(listOf("cleared:(0, 0)", "resync"), order)
+
+        // 印が無くても門は開く (開かないと以後の resync が止まる)
+        order.clear()
+        runBlocking { RestoreReset.runIfRestored(context, db, onCleared = { order += "cleared" }) { order += "resync" } }
+        assertEquals(listOf("cleared"), order)
     }
 }
