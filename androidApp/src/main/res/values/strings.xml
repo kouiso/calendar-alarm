@@ -150,7 +150,7 @@
     <string name="rules_target_apps">対象アプリ (空=全アプリ)</string>
     <string name="rules_title">通知アラーム</string>
     <string name="rules_title_needs_permission">通知アラーム (要権限)</string>
-    <string name="settings_large_stop_button">停止ボタンを大きくする</string>
+    <string name="settings_large_stop_button">鳴動画面を大きいボタンにする</string>
     <string name="share_import_ai_unavailable">このビルドでは AI の読み取りを使えません。日時を入れて追加してください</string>
     <string name="share_import_cancel">やめる</string>
     <string name="share_import_no_event">本文から予定を見つけられませんでした。日時を入れて追加してください</string>

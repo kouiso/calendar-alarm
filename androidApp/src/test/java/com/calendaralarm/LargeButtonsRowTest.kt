@@ -21,7 +21,7 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** 「停止ボタンを大きくする」は、見出しとスイッチが 1 つの切り替えとして読み上げられ、行を押すと切り替わる (#154)。 */
+/** 「鳴動画面を大きいボタンにする」は、見出しとスイッチが 1 つの切り替えとして読み上げられ、行を押すと切り替わる (#154)。 */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "ja")
 class LargeButtonsRowTest {
@@ -37,10 +37,10 @@ class LargeButtonsRowTest {
         activity.setContent { MaterialTheme { LargeButtonsRow(checked = false) { changed = it } } }
         compose.waitForIdle()
         // 見出しを持つ部品そのものが切り替え (スイッチだけが別の部品だと、読み上げで何のスイッチか分からない)
-        compose.onNodeWithText("停止ボタンを大きくする").assertIsToggleable().assertIsOff()
+        compose.onNodeWithText("鳴動画面を大きいボタンにする").assertIsToggleable().assertIsOff()
             // 押せる大きさ (48dp) と上下の余白 4dp を保ち、隣の設定の行と同じ 56dp の高さにする
             .assertHeightIsAtLeast(56.dp)
-        compose.onNodeWithText("停止ボタンを大きくする").performClick()
+        compose.onNodeWithText("鳴動画面を大きいボタンにする").performClick()
         assertEquals(true, changed)
     }
 }
