@@ -100,7 +100,7 @@ internal fun normalizeTitleForMatch(title: String): String {
 /**
  * タイトル文字からイベント種別を分類する。判定順 = 先勝ち (「誕生日」最優先)。
  * 終日の予定 ([allDay]=true) は題に語を含めば分類する。時刻のある予定は題全体が語と一致する時だけ分類する (#306)。
- * オフィス・自宅・在宅は終日でも時刻付きでも題全体の一致だけで勤務場所にする。
+ * ooo は不在、オフィス・自宅・在宅は勤務場所として、終日でも時刻付きでも題全体の一致だけで判定する。
  */
 fun classifyEventType(title: String, allDay: Boolean): EventType {
     val t = title.lowercase()
@@ -110,7 +110,8 @@ fun classifyEventType(title: String, allDay: Boolean): EventType {
     fun wholeTitle(vararg needles: String) = needles.any { whole == it }
     return when {
         hit("誕生日", "バースデー", "birthday") -> EventType.BIRTHDAY
-        hit("不在", "休暇", "休み", "有休", "欠勤", "absence", "absent", "away", "out of office") -> EventType.ABSENCE
+        hit("不在", "休暇", "休み", "有休", "欠勤", "absence", "absent", "away", "out of office") ||
+            wholeTitle("ooo") -> EventType.ABSENCE
         hit("勤務場所", "出社", "在宅勤務", "リモートワーク", "workplace", "work location", "office") ||
             wholeTitle("オフィス", "自宅", "在宅") -> EventType.WORKPLACE
         hit("サイレントモード", "フォーカスタイム", "集中タイム", "focus time") -> EventType.FOCUS_TIME

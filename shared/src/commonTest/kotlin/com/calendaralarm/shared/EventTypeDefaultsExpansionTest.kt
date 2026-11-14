@@ -211,4 +211,24 @@ class EventTypeDefaultsExpansionTest {
         assertEquals(EventType.EVENT, resolveEventType(e))
         assertEquals(1, expand(listOf(e)).size)
     }
+
+    @Test
+    fun `oooは題全体の一致だけで不在になり終日でも部分一致しない`() {
+        for (allDay in listOf(false, true)) {
+            assertEquals(EventType.ABSENCE, typeOf("OOO", allDay), "OOO allDay=$allDay")
+            assertEquals(EventType.ABSENCE, typeOf(" ｏｏｏ ", allDay), "ｏｏｏ allDay=$allDay")
+            assertEquals(EventType.EVENT, typeOf("foood", allDay), "foood allDay=$allDay")
+            assertEquals(EventType.EVENT, typeOf("ooo会議", allDay), "ooo会議 allDay=$allDay")
+        }
+    }
+
+    @Test
+    fun `時刻のある予定は5種類とも題全体の一致だけで判定する_サイレントモードとタスクを含む題は分類されない`() {
+        assertEquals(EventType.EVENT, typeOf("サイレントモード明けの定例", allDay = false))
+        assertEquals(EventType.EVENT, typeOf("Focus time review", allDay = false))
+        assertEquals(EventType.EVENT, typeOf("タスク整理ミーティング", allDay = false))
+        assertEquals(EventType.FOCUS_TIME, typeOf("サイレントモード", allDay = false))
+        assertEquals(EventType.TASK, typeOf("タスク", allDay = false))
+        assertEquals(EventType.FOCUS_TIME, typeOf("サイレントモード明けの定例", allDay = true))
+    }
 }
