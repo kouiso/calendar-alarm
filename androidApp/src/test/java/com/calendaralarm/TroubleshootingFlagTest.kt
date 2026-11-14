@@ -17,7 +17,9 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.click
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.ui.TroubleshootingScreen
@@ -81,6 +83,10 @@ class TroubleshootingFlagTest {
 
         compose.onNodeWithTag("troubleshoot_calendar").assertHasNoClickAction()
         assertEquals(1, compose.onAllNodesWithText("カレンダー権限あり").fetchSemanticsNodes().size)
+
+        // クリック操作が無いことの確認に加え、実際に指で触れても何も起きないことを見る
+        compose.onNodeWithTag("troubleshoot_calendar").performTouchInput { click() }
+        compose.waitForIdle()
         assertNull(shadowOf(app).nextStartedActivity)
     }
 
