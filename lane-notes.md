@@ -21,7 +21,7 @@ DISK 2026-11-14T13:00Z | / 19 GiB free. Big: ~/ghq 90G, /private/tmp 9.3G, CoreS
 BRAIN ALERT-11 | Sonnet member: the 3 brain-sync stash commits' line is already in HEAD (6bd140a8c); nothing to apply; clears after 24h.
 IN WORK 13:00Z | #370 master merged (1823870), independent Opus review running | manager (Fable high, name ca-manager) scene a running | Pixel member (ca-pixel): stills for #363 #365 #373 #188 #191 from CI APKs, muted, no ringing, files to evidence/
 needs owner:
-- Free disk for iOS builds (adhoc_local for #189): delete the 3 unused simulators (6.6 GiB; sims banned on this Mac)? recommend yes.
+- (answered 13:10Z 「消してええ」) deleted the 3 simulators hm-a4-voice-sim, hm-a5-photo-sim, iPhone 17 Pro; Devices 6.6G -> 12K; df still 19 GiB right after (recheck before #189 build).
 - One sound window for: #191 ring-through-DND case, #189 two bundled sounds, rows 7/12/35/V3.
 for main session:
 - fad.yml x2 (row 19, #309): the owner's 「してよい」 is quoted only in the cloud notes (relayed by its manager); no source on this machine. This lane will not dispatch it without a source line.
