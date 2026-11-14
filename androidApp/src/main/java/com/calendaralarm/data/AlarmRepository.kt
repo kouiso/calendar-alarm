@@ -727,6 +727,8 @@ class AlarmRepository(
                 // 読み取りに成功した時だけ行う (失敗時はどの指定もはぐれて見えるため)
                 val carry = com.calendaralarm.shared.logic.OverrideCarry.reconcile(
                     storedOverrides, events, now.toEpochMilliseconds(), 1.days.inWholeMilliseconds,
+                    fromMillis = (now - 14.days).toEpochMilliseconds(),
+                    untilMillis = fetchUntil.toEpochMilliseconds(),
                 )
                 overrides = carry.overrides
                 pendingCarry = carry

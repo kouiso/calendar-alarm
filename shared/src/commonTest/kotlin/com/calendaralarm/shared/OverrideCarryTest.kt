@@ -19,8 +19,12 @@ class OverrideCarryTest {
         startMillis = start, endMillis = start + hour, allDay = false,
     )
 
-    private fun reconcile(overrides: Map<String, EventOverride>, events: List<CalendarEvent>) =
-        OverrideCarry.reconcile(overrides, events, now, day)
+    /** 再同期と同じく、読み取り範囲は今の 14 日前から 28 日先まで */
+    private fun reconcile(
+        overrides: Map<String, EventOverride>,
+        events: List<CalendarEvent>,
+        until: Long = now + 28 * day,
+    ) = OverrideCarry.reconcile(overrides, events, now, day, now - 14 * day, until)
 
     @Test
     fun 時刻が動いた予定は指定を引き継ぐ() {
@@ -111,6 +115,26 @@ class OverrideCarryTest {
         val overrides = mapOf("1:9:$a" to mute, "1:9:$b" to thirty)
         val events = listOf(ev("9", a + hour), ev("9", b + 3 * hour))
         val r = reconcile(overrides, events)
+        assertEquals(emptyMap(), r.moved)
+    }
+
+    @Test
+    fun 読み取り範囲が縮んで先の回が範囲から出ても指定を近い回へ付けない() {
+        // 毎月の予定: 近い回 Y は指定無し、先の回 X は鳴らさない。設定で範囲が 28 日先から 14 日先へ縮み、X が範囲から出た
+        val y = now + 3 * day
+        val x = now + 33 * day
+        val r = reconcile(mapOf("1:9:$x" to mute), listOf(ev("9", y)), until = now + 14 * day)
+        assertEquals(emptyMap(), r.moved)
+        assertEquals(emptySet(), r.dropped)
+        assertEquals(mapOf("1:9:$x" to mute), r.overrides)
+    }
+
+    @Test
+    fun 範囲から出た先の回が全部同じ間隔でも近い回へ付けない() {
+        val x1 = now + 30 * day
+        val x2 = now + 37 * day
+        val events = listOf(ev("9", now + 2 * day), ev("9", now + 9 * day))
+        val r = reconcile(mapOf("1:9:$x1" to mute, "1:9:$x2" to mute), events, until = now + 14 * day)
         assertEquals(emptyMap(), r.moved)
     }
 }

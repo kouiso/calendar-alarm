@@ -15,8 +15,10 @@ import com.calendaralarm.shared.model.EventOverride
  *   - 繰り返しの全体のずれ: 同じ「カレンダー:予定」の今の回が全部指定無しで、はぐれた指定と同じ数あり、
  *     開始の早い順に組にした時の時刻の差が全部同じ
  *   繰り返しの 1 回が消えて別の回が読み取り範囲に入った時などは、どれがどれか決められないので付け替えない
- * - 開始が [keepPastMillis] より前のはぐれた指定 (終わった回) は付け替えず、消す。
- *   まだ先の回のはぐれた指定は、読み取り範囲の外へ出ただけかもしれないので残す
+ * - 付け替えるのは、開始が今回の読み取り範囲 ([fromMillis], [untilMillis]) の中のはぐれた指定だけ。
+ *   範囲の外のはぐれた指定は、動いたのではなく範囲から出ただけかもしれない
+ *   (設定で読み取り範囲が縮んだ時など)。範囲の外の先の回の指定は、触らずに残す
+ * - 開始が [keepPastMillis] より前のはぐれた指定 (終わった回) は付け替えず、消す
  *
  * カレンダーの読み取りに成功した時だけ呼ぶこと (失敗時に呼ぶと全部がはぐれて見える)。
  */
@@ -35,6 +37,8 @@ object OverrideCarry {
         events: List<CalendarEvent>,
         nowMillis: Long,
         keepPastMillis: Long,
+        fromMillis: Long,
+        untilMillis: Long,
     ): Result {
         val currentKeys = events.map { it.instanceKey }.toSet()
         // はぐれた指定。開始が数で読めないキーは触らない
@@ -48,7 +52,8 @@ object OverrideCarry {
         val moved = mutableMapOf<String, String>()
         val cutoff = nowMillis - keepPastMillis
         val seriesInstances = events.groupBy { "${it.calendarId}:${it.id}" }
-        orphans.filter { it.second >= cutoff }.groupBy { it.first }.forEach { (series, list) ->
+        orphans.filter { it.second >= cutoff && it.second >= fromMillis && it.second < untilMillis }
+            .groupBy { it.first }.forEach { (series, list) ->
             val all = seriesInstances[series].orEmpty()
             val targets = unmatchedBySeries[series].orEmpty().sortedBy { it.startMillis }
             val sorted = list.sortedBy { it.second }
