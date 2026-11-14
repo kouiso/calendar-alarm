@@ -1,0 +1,151 @@
+/* Night UI 第2版: calendar-alarm のデザインキャンバス共通スタイル。
+   色・角丸・書体は repo の実装値に合わせる
+   (androidApp/.../ui/theme/Theme.kt・Palettes.kt・StatusColors.kt、iosApp/iosApp/Theme.swift)。 */
+.r,.r[data-theme=light] .dk{--stage:#050609;--bezel:#10131A;--bg:#0A0C11;--card:#12151C;--raised:#1A1F2A;--div:#1F2430;--bd:#262C38;--out:#7B8494;--segtr:#141821;--segon:#262C38;--tx:#ECEEF3;--mu:#9AA3B2;--ac:#FFB870;--onac:#4A2800;--acs:rgba(255,184,112,.15);--acl:rgba(255,184,112,.30);--gg:#8AB4F8;--ggs:rgba(138,180,248,.16);--ok:#6FD6A6;--oks:rgba(111,214,166,.13);--okl:rgba(111,214,166,.32);--ng:#FF8A80;--ngs:rgba(255,138,128,.12);--ngl:rgba(255,138,128,.32);--onng:#3A0906;--now:#FF6B6B;--hair:rgba(255,255,255,.06);--scrim:rgba(3,4,7,.64);--glass:rgba(255,255,255,.08);--shadow:0 36px 70px -34px rgba(0,0,0,.95)}
+.r[data-theme=light]{--stage:#E7E9F0;--bezel:#FFFFFF;--bg:#F4F5F8;--card:#FFFFFF;--raised:#EDEFF4;--div:#E6E8EE;--bd:#D7D8E3;--out:#737B8A;--segtr:#E6E8EE;--segon:#FFFFFF;--tx:#14171F;--mu:#5B6372;--ac:#8B5000;--onac:#FFFFFF;--acs:rgba(139,80,0,.10);--acl:rgba(139,80,0,.26);--gg:#1A56C4;--ggs:rgba(26,86,196,.10);--ok:#18734B;--oks:rgba(24,115,75,.10);--okl:rgba(24,115,75,.28);--ng:#B3261E;--ngs:#FDECEA;--ngl:rgba(179,38,30,.28);--onng:#FFFFFF;--now:#D32F2F;--hair:rgba(20,23,31,.07);--scrim:rgba(20,23,31,.46);--glass:rgba(20,23,31,.06);--shadow:0 36px 70px -38px rgba(40,48,70,.55)}
+
+/* 台紙と列 */
+.r{background:var(--stage);color:var(--tx);font-family:'IBM Plex Sans JP','Hiragino Sans','Noto Sans JP',sans-serif;box-sizing:border-box;padding:48px;display:flex;gap:48px;align-items:flex-start;-webkit-font-smoothing:antialiased}
+.r *{box-sizing:border-box}
+.r button,.r input{font-family:inherit}
+.col{display:flex;flex-direction:column;gap:10px;width:360px;flex:none}
+.cap{font-size:15px;font-weight:600;line-height:1.6;display:flex;align-items:center;gap:8px;min-height:24px;white-space:nowrap}
+.sub{font-size:13px;color:var(--mu);min-height:41px;line-height:1.55}
+.case{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:12px;background:var(--ggs);color:var(--gg);font-size:12px;font-weight:600;flex:none}
+
+/* 端末 */
+.ph{width:360px;height:740px;border-radius:40px;background:var(--bg);color:var(--tx);overflow:hidden;display:flex;flex-direction:column;position:relative;flex:none;box-shadow:0 0 0 1px var(--bd),0 0 0 7px var(--bezel),0 0 0 8px var(--bd),var(--shadow)}
+.top{padding:26px 12px 8px;display:flex;align-items:center;gap:2px;min-height:78px;flex:none}
+.top.pl{padding-left:20px;padding-right:20px}
+.back,.ib{width:44px;height:44px;border:0;background:none;color:var(--tx);display:flex;align-items:center;justify-content:center;border-radius:22px;padding:0;flex:none}
+.ib{color:var(--mu)}
+.h1{font-size:21px;font-weight:600;margin:0;line-height:1.35}
+.h1.lg{font-size:27px}
+.body{padding:6px 16px 16px;display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}
+
+/* 文字 */
+.t{font-size:15px;font-weight:500;margin:0;line-height:1.45}
+.m{font-size:13px;color:var(--mu);line-height:1.55;margin:0}
+.eye{font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--ac);margin:0;line-height:1.4}
+.sec{font-size:12px;color:var(--mu);font-weight:600;letter-spacing:.08em;margin:8px 6px -2px}
+.st{font-size:21px;font-weight:600;margin:0;line-height:1.45}
+.num{font-family:Outfit,'IBM Plex Sans JP',sans-serif;font-variant-numeric:tabular-nums}
+.c-ac{color:var(--ac)}.c-ok{color:var(--ok)}.c-ng{color:var(--ng)}.c-gg{color:var(--gg)}.c-mu{color:var(--mu)}.c-tx{color:var(--tx)}
+.grow{flex:1;min-width:0}
+
+/* アイコン (線画。色は親の文字色) */
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.i.s{width:16px;height:16px;stroke-width:2}
+.i.l{width:28px;height:28px;stroke-width:1.6}
+.i.f{fill:currentColor;stroke:none}
+
+/* 面 */
+.card{background:var(--card);border-radius:20px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;box-shadow:inset 0 0 0 1px var(--hair)}
+.card.ls{gap:0;padding-top:4px;padding-bottom:4px}
+.it{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 0;border-bottom:1px solid var(--div)}
+.it:last-child{border-bottom:0}
+.prev{background:var(--raised);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+
+/* ボタン */
+.btn,.btn2,.dng{height:52px;border-radius:26px;border:0;font-size:16px;font-weight:600;width:100%;flex:none;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn{background:var(--ac);color:var(--onac)}
+.btn2{background:var(--raised);color:var(--tx);font-size:15px;font-weight:500;box-shadow:inset 0 0 0 1px var(--hair)}
+.dng{background:var(--ng);color:var(--onng)}
+.lnk{background:none;border:0;color:var(--mu);font-size:14px;font-weight:500;min-height:44px;width:100%}
+.ghost{height:40px;padding:0 14px;border-radius:20px;border:0;background:var(--raised);color:var(--tx);font-size:13px;font-weight:500;flex:none;display:inline-flex;align-items:center;gap:6px;box-shadow:inset 0 0 0 1px var(--hair)}
+.sbtn{height:40px;padding:0 16px;border-radius:20px;border:0;background:var(--ng);color:var(--onng);font-size:13px;font-weight:600;flex:none}
+.sbtn.a{background:var(--ac);color:var(--onac)}
+
+/* 選ぶ部品 */
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.c{height:40px;padding:0 15px;border-radius:20px;border:0;background:var(--raised);color:var(--tx);font-size:13px;font-weight:500;box-shadow:inset 0 0 0 1px var(--hair)}
+.c.on{background:var(--ac);color:var(--onac);font-weight:600;box-shadow:none}
+.c:disabled{opacity:.45}
+.seg{display:flex;gap:2px;padding:2px;border-radius:16px;background:var(--segtr);flex:1;min-width:0}
+.seg button{flex:1;height:40px;border:0;border-radius:12px;background:transparent;color:var(--mu);font-size:14px;font-weight:500;padding:0}
+.seg button.on{background:var(--segon);color:var(--tx);font-weight:600}
+.sw{width:52px;height:32px;border-radius:16px;background:transparent;border:2px solid var(--out);position:relative;flex:none;padding:0}
+.sw::before{content:'';position:absolute;left:-2px;right:-2px;top:-8px;bottom:-8px}
+.sw::after{content:'';position:absolute;top:6px;left:6px;width:16px;height:16px;border-radius:50%;background:var(--out)}
+.sw.on{background:var(--ac);border-color:var(--ac)}
+.sw.on::after{top:2px;left:22px;width:24px;height:24px;background:var(--onac)}
+.sw:disabled{opacity:.4}
+.rad,.chk{width:22px;height:22px;border:2px solid var(--out);flex:none}
+.rad{border-radius:50%}.chk{border-radius:6px}
+.rad.on{border:7px solid var(--ac)}
+.chk.on{background:var(--ac);border-color:var(--ac)}
+.slider{height:6px;border-radius:3px;background:var(--bd);position:relative}
+.slider span{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--ac)}
+.slider i{position:absolute;top:-9px;width:24px;height:24px;border-radius:12px;background:var(--ac);box-shadow:0 0 0 4px var(--card)}
+
+/* 状態 */
+.chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:12px;font-size:11px;font-weight:600;flex:none;white-space:nowrap}
+.chip::before{content:'';width:6px;height:6px;border-radius:3px;background:currentColor}
+.ok{background:var(--oks);color:var(--ok)}.ng{background:var(--ngs);color:var(--ng)}.ac{background:var(--acs);color:var(--ac)}.mu{background:var(--raised);color:var(--mu)}.gg{background:var(--ggs);color:var(--gg)}
+.banner{display:flex;align-items:center;gap:10px;border-radius:16px;padding:8px 10px 8px 14px;min-height:56px;flex:none}
+.banner .t{font-size:13px;line-height:1.5;color:inherit}
+.live{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--mu);margin:0;padding-left:4px}
+.live::before{content:'';width:8px;height:8px;border-radius:4px;background:var(--ok);box-shadow:0 0 0 4px var(--oks);flex:none}
+.live.w::before{background:var(--ng);box-shadow:0 0 0 4px var(--ngs)}
+.ico{--rc:var(--acl);width:60px;height:60px;border-radius:50%;border:1px solid var(--rc);color:var(--ac);display:flex;align-items:center;justify-content:center;position:relative;margin:9px;flex:none}
+.ico::after{content:'';position:absolute;left:-10px;top:-10px;right:-10px;bottom:-10px;border-radius:50%;border:1px solid var(--rc);opacity:.5}
+.ico.okc{--rc:var(--okl);color:var(--ok)}
+.ico.ngc{--rc:var(--ngl);color:var(--ng)}
+.ico.muc{--rc:var(--bd);color:var(--mu)}
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:0 28px}
+.ad{height:64px;border-radius:14px;border:1px dashed var(--bd);display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--mu)}
+
+/* 予定画面 */
+.hero{position:relative;overflow:hidden;border-radius:22px;background:var(--acs);padding:14px 18px;display:flex;flex-direction:column;gap:8px;flex:none}
+.hero::before,.hero::after{content:'';position:absolute;border-radius:50%;border:1px solid var(--acl);pointer-events:none}
+.hero::before{width:148px;height:148px;right:-9px;top:-33px}
+.hero::after{width:104px;height:104px;right:13px;top:-11px;opacity:.6}
+.hero>*{position:relative}
+.hr{display:flex;align-items:center;gap:12px}
+.big{font-family:Outfit,sans-serif;font-weight:300;font-size:44px;line-height:1;letter-spacing:-.02em;flex:none;font-variant-numeric:tabular-nums}
+.segrow{display:flex;align-items:center;gap:2px;flex:none}
+.dh{display:flex;align-items:center;gap:8px;padding:4px 6px 0;font-size:13px;font-weight:600;margin-bottom:-4px}
+.dh .num{font-size:16px;font-weight:500}
+.dh small{font-size:12px;color:var(--mu);font-weight:500;margin-left:auto}
+.ev{display:flex;align-items:center;gap:10px;min-height:62px;padding:8px 0;border-bottom:1px solid var(--div)}
+.ev:last-child{border-bottom:0}
+.tm{width:50px;flex:none;display:flex;flex-direction:column;font-family:Outfit,'IBM Plex Sans JP',sans-serif;font-size:20px;font-weight:500;line-height:1.15;font-variant-numeric:tabular-nums}
+.tm small{font-size:11px;font-weight:400;color:var(--mu)}
+.cal{width:8px;height:8px;border-radius:4px;flex:none}
+.tab{display:flex;height:72px;background:var(--card);box-shadow:0 -1px 0 var(--hair);flex:none;padding:0 6px}
+.tab button{flex:1;border:0;background:none;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:11px;font-weight:500;color:var(--mu)}
+.tab i{width:56px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center}
+.tab .on{color:var(--tx);font-weight:600}
+.tab .on i{background:var(--acs);color:var(--ac)}
+
+/* 重ねる面 */
+.dim{position:absolute;left:0;right:0;top:0;bottom:0;background:var(--scrim)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-radius:28px 28px 0 0;padding:12px 22px 26px;display:flex;flex-direction:column;gap:12px;box-shadow:0 -1px 0 var(--hair)}
+.sheet::before{content:'';align-self:center;width:36px;height:4px;border-radius:2px;background:var(--bd);margin-bottom:6px}
+.dlg{position:absolute;left:20px;right:20px;top:210px;background:var(--card);border-radius:28px;padding:24px 22px 16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 0 0 1px var(--hair),0 24px 60px rgba(0,0,0,.5)}
+
+/* 鳴動画面 (テーマに関わらず常にダーク) */
+.ph.rg{padding:30px 24px 18px}
+.pill{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 16px;border-radius:18px;background:var(--glass);box-shadow:inset 0 0 0 1px var(--hair);font-size:13px;color:var(--mu);flex:none;align-self:center}
+.ring{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center}
+.dial{width:240px;height:240px;border-radius:50%;border:1.5px solid var(--acl);display:flex;align-items:center;justify-content:center;position:relative;flex:none;margin-bottom:12px}
+.dial::after{content:'';position:absolute;left:24px;top:24px;right:24px;bottom:24px;border-radius:50%;border:1px solid var(--acl);opacity:.6}
+.dial b{font-family:Outfit,sans-serif;font-weight:200;font-size:92px;letter-spacing:-.035em;line-height:1;color:#F4F5F8;font-variant-numeric:tabular-nums}
+.dial.sm{width:176px;height:176px}
+.dial.sm::after{left:18px;top:18px;right:18px;bottom:18px}
+.dial.sm b{font-size:66px}
+.rt{font-size:25px;font-weight:600;line-height:1.35;margin:0;color:#F4F5F8}
+.acts{display:flex;flex-direction:column;gap:10px;flex:none}
+.snz{height:64px;border-radius:32px;border:0;background:var(--glass);color:var(--tx);font-size:19px;font-weight:600;width:100%;flex:none}
+.track{height:72px;border-radius:36px;background:var(--glass);box-shadow:inset 0 0 0 1px var(--acl);display:flex;align-items:center;padding:6px;position:relative;flex:none}
+.track b{position:absolute;left:66px;right:0;text-align:center;font-size:17px;font-weight:600;color:var(--tx)}
+.knob{width:60px;height:60px;border-radius:30px;background:var(--ac);display:flex;align-items:center;justify-content:center;flex:none}
+.knob::after{content:'';width:20px;height:20px;border-radius:4px;background:var(--onac)}
+.foot{font-size:12px;color:var(--mu);text-align:center;margin:0}
+
+/* 鳴る時刻の線 */
+.tl{position:relative;height:64px;margin:6px 10px 0}
+.tl .ln{position:absolute;left:0;right:0;top:30px;height:2px;border-radius:1px;background:var(--bd)}
+.dot{position:absolute;top:24px;width:14px;height:14px;border-radius:7px;margin-left:-7px;box-shadow:0 0 0 4px var(--card)}
+.lb{position:absolute;top:0;font-size:15px;font-weight:500;white-space:nowrap;transform:translateX(-50%)}
+.lb2{position:absolute;top:45px;font-size:11px;color:var(--mu);white-space:nowrap;transform:translateX(-50%)}

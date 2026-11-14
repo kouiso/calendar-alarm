@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#150 通知アラームのルール（Android）</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.rl{display:flex;align-items:center;gap:8px;min-height:56px;border-bottom:1px solid var(--div)}
+.tps{display:flex;flex-wrap:wrap;gap:6px}
+.tps button{height:32px;padding:0 11px;border-radius:16px;border:0;background:var(--raised);color:var(--tx);font-size:12px;font-weight:500;box-shadow:inset 0 0 0 1px var(--hair)}
+.tx{background:none;border:0;color:var(--ac);font-size:14px;font-weight:600;min-height:44px;padding:0 6px}
+.fl{height:44px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--bd);display:flex;align-items:center;padding:0 12px;font-size:13px;color:var(--mu);flex:1;min-width:0;white-space:nowrap;overflow:hidden}
+.fl.v{color:var(--tx)}
+.d{width:34px;height:34px;border-radius:50%;border:0;background:var(--raised);color:var(--tx);font-size:13px;font-weight:500;padding:0}
+.d.on{background:var(--ac);color:var(--onac);font-weight:600}
+.da{display:flex;justify-content:flex-end;gap:4px}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1272px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 設定のカード <span class="case">#226</span></div>
+    <div class="sub">ルールの行を押すと直せる。型の名前を押すと、その場でルールが入る</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card" style="gap: 0; padding-top: 4px">
+          <div class="rl"><svg class="i c-ac" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><p class="t grow">通知アラーム</p><button class="sw on" aria-label="通知アラーム"></button></div>
+          <div class="rl"><div class="grow"><p class="t" style="font-size: 14px">Gmail 重要なメール</p><p class="m" style="font-size: 12px">com.google.android.gm</p></div><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="rl"><div class="grow"><p class="t" style="font-size: 14px">平日の会議</p><p class="m" style="font-size: 12px">会議/招集</p></div><svg class="i s c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div style="display: flex; gap: 8px; padding: 4px 0"><button class="tx">＋ルール</button><button class="tx">AI生成</button></div>
+          <div class="tps"><button>Gmail 重要なメール</button><button>Outlook 重要なメール</button><button>WhatsApp 優先連絡先</button><button>Telegram 緊急連絡</button><button>配達通知</button><button>フライト・ゲート変更</button><button>セキュリティ・確認コード</button><button>X (Twitter) 投稿</button><button>YouTube ライブ開始</button><button>Twitch 配信開始</button><button>Google タスク</button><button>ニュース速報</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">今は行を押せず、ごみ箱で消すことしかできない。「AI生成」は AI を入れたビルドだけに出る。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. ルールを直す <span class="case">#226</span></div>
+    <div class="sub">行を押すと中身が入って開く。「保存」で上書きし、「削除」もここに置く</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body"><div class="card"><p class="t">通知アラーム</p></div></div>
+      <div class="dim"></div>
+      <div class="dlg" role="dialog" aria-label="通知ルール" style="top: 96px; gap: 8px; padding-top: 20px">
+        <p class="st" style="font-size: 20px; margin-bottom: 4px">通知ルール</p>
+        <div style="display: flex"><span class="fl v">平日の会議</span></div>
+        <div style="display: flex"><span class="fl">対象アプリ (空=全アプリ)</span></div>
+        <div style="display: flex"><span class="fl">必須キーワード (カンマ区切り)</span></div>
+        <div style="display: flex"><span class="fl v">会議, 招集</span></div>
+        <div style="display: flex"><span class="fl v">キャンセル</span></div>
+        <div style="display: flex; gap: 8px"><span class="fl v num">09:00</span><span class="fl v num">18:00</span></div>
+        <div style="display: flex; gap: 5px; padding-top: 4px"><button class="d on">月</button><button class="d on">火</button><button class="d on">水</button><button class="d on">木</button><button class="d on">金</button><button class="d">土</button><button class="d">日</button></div>
+        <div class="da"><button class="tx c-ng" style="margin-right: auto">削除</button><button class="tx c-mu">戻る</button><button class="tx">保存</button></div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">新しく足す時は同じ形で、ボタンは「戻る／追加」になる。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">3. 許可がまだ無い</div>
+    <div class="sub">見出しに「(要権限)」が付き、通知を読む許可への道が1つ出る</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card" style="gap: 0; padding-top: 4px; padding-bottom: 6px">
+          <div class="rl" style="border-bottom: 0"><svg class="i c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><p class="t grow">通知アラーム (要権限)</p><button class="sw" aria-label="通知アラーム"></button></div>
+          <button class="tx" style="align-self: flex-start">通知へのアクセスを許可</button>
+        </div>
+        <p class="m" style="padding: 0 6px">iPhone にこの機能は無い。</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1272,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

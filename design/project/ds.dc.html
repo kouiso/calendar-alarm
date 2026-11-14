@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>デザインの決まり</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.hd{font-size:12px;color:var(--mu);font-weight:600;letter-spacing:.08em;margin:0 0 4px}
+.cr{display:flex;align-items:center;gap:12px;min-height:44px}
+.cr i{width:34px;height:34px;border-radius:11px;flex:none;box-shadow:inset 0 0 0 1px var(--bd)}
+.cr b{font-size:14px;font-weight:500;flex:1;min-width:0}
+.cr span{font-family:Outfit,sans-serif;font-size:12px;color:var(--mu);white-space:nowrap}
+.th{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px 4px;justify-items:center;font-size:11px;color:var(--mu);text-align:center}
+.th span{display:flex;flex-direction:column;align-items:center;gap:4px}
+.th i{width:26px;height:26px;border-radius:50%}
+.sp{display:flex;align-items:baseline;gap:12px;min-height:40px}
+.sp small{font-size:12px;color:var(--mu);margin-left:auto;white-space:nowrap;font-family:'IBM Plex Sans JP',sans-serif;font-weight:400;letter-spacing:0}
+.rl{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:22px}
+.rl .t{font-weight:600;margin-bottom:4px}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1600px; height: 900px; padding: 52px 64px; flex-direction: column; gap: 24px; align-items: stretch">
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <p class="eye">NIGHT UI 第2版</p>
+    <h1 style="margin: 0; font-size: 32px; font-weight: 600; line-height: 1.35">デザインの決まり</h1>
+    <p class="m" style="font-size: 15px">色と書体は repo の実装値のまま。面の重ね方、時刻の見せ方、状態の伝え方をそろえ直した。値の正本は Theme.kt・Palettes.kt・StatusColors.kt（Android）と Theme.swift（iOS）。</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px">
+    <div class="card" style="padding: 18px 20px; gap: 0">
+      <p class="hd">面と文字（ダーク / ライト）</p>
+      <div class="cr"><i style="background: var(--bg)"></i><b>背景</b><span>#0A0C11 / #F4F5F8</span></div>
+      <div class="cr"><i style="background: var(--card)"></i><b>カード</b><span>#12151C / #FFFFFF</span></div>
+      <div class="cr"><i style="background: var(--raised)"></i><b>持ち上げ</b><span>#1A1F2A / #EDEFF4</span></div>
+      <div class="cr"><i style="background: var(--div)"></i><b>区切り線</b><span>#1F2430 / #E6E8EE</span></div>
+      <div class="cr"><i style="background: var(--tx)"></i><b>文字</b><span>#ECEEF3 / #14171F</span></div>
+      <div class="cr"><i style="background: var(--mu)"></i><b>補助の文字</b><span>#9AA3B2 / #5B6372</span></div>
+    </div>
+
+    <div class="card" style="padding: 18px 20px; gap: 0">
+      <p class="hd">意味の色</p>
+      <div class="cr"><i style="background: var(--ac)"></i><b>鳴る・オン・選択中</b><span>#FFB870 / #8B5000</span></div>
+      <div class="cr"><i style="background: var(--ok)"></i><b>準備OK</b><span>#6FD6A6 / #18734B</span></div>
+      <div class="cr"><i style="background: var(--ng)"></i><b>要対応</b><span>#FF8A80 / #B3261E</span></div>
+      <div class="cr"><i style="background: var(--now)"></i><b>今の時刻の線</b><span>#FF6B6B / #D32F2F</span></div>
+      <p class="hd" style="margin-top: 14px">テーマ10色（既定は琥珀）</p>
+      <div class="th">
+        <span><i style="background: #FFB870"></i>琥珀</span><span><i style="background: #BDBDFF"></i>インディゴ</span><span><i style="background: #A4D396"></i>森</span><span><i style="background: #92CCFF"></i>海</span><span><i style="background: #FFB1C4"></i>薔薇</span>
+        <span><i style="background: #DEBDFE"></i>紫</span><span><i style="background: #C2C2C2"></i>墨</span><span><i style="background: #9FCAFF"></i>空</span><span><i style="background: #FFB877"></i>橙</span><span><i style="background: #FFB1C2"></i>桜</span>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 18px 20px; gap: 0">
+      <p class="hd">書体</p>
+      <p class="sp num" style="font-size: 88px; font-weight: 200; line-height: 1; letter-spacing: -.035em; margin: 0 0 6px">8:50<small>Outfit 200 · 鳴動画面</small></p>
+      <p class="sp num" style="font-size: 44px; font-weight: 300; line-height: 1.1; margin: 0">8:50<small>Outfit 300 · 次のアラーム</small></p>
+      <p class="sp num" style="font-size: 20px; font-weight: 500; margin: 0">9:00<small>Outfit 500 · 並びの時刻</small></p>
+      <p class="sp" style="font-size: 27px; font-weight: 600; margin: 0">10月27日 (火)<small>27 / 600</small></p>
+      <p class="sp" style="font-size: 15px; font-weight: 500; margin: 0">定例ミーティング<small>IBM Plex Sans JP 15 / 500</small></p>
+      <p class="sp m"><span><span class="num">8:50</span> に鳴る</span><small>13 / 400</small></p>
+      <p class="sp eye">次のアラーム<small>11 / 600 · 字間 0.14em</small></p>
+    </div>
+
+    <div class="card" style="padding: 18px 20px; gap: 14px">
+      <p class="hd" style="margin: 0">部品</p>
+      <div style="display: flex; align-items: center; gap: 12px"><button class="sw on" aria-label="オンの見本"></button><button class="sw" aria-label="オフの見本"></button><span class="chip ok">許可済み</span><span class="chip ng">未許可</span></div>
+      <div class="chips"><button class="c">5分前</button><button class="c on">10分前</button><button class="c">15分前</button></div>
+      <div class="seg" role="group" aria-label="切り替えの見本" style="flex: none"><button class="on">一覧</button><button>3日</button><button>月</button><button>時間軸</button></div>
+      <div style="display: flex; gap: 10px"><button class="btn" style="flex: 1; width: auto">許可する</button><button class="btn2" style="flex: 1; width: auto">あとで</button></div>
+      <div class="dk" style="background: #0A0C11; border-radius: 22px; padding: 10px"><div class="track" role="group" aria-label="スライドして停止の見本"><span class="knob"></span><b>スライドして停止</b></div></div>
+    </div>
+  </div>
+
+  <div class="rl">
+    <div><p class="t">琥珀は「鳴る」だけ</p><p class="m">テーマ色は、鳴る・オン・選択中にだけ使う。準備OK・要対応・今の時刻は、テーマを替えても変わらない固定色。</p></div>
+    <div><p class="t">面は明るさで分ける</p><p class="m">背景 → カード → 持ち上げ の3段。枠線で囲まず、明るさの差で分ける。区切り線はカードの中だけ。</p></div>
+    <div><p class="t">時刻が主役</p><p class="m">時刻と数字は Outfit、文は IBM Plex Sans JP。画面の中で、時刻を一番大きく置く。</p></div>
+    <div><p class="t">二重の輪は「鳴る」の印</p><p class="m">鳴動画面の輪を、次のアラームと許可を頼む画面にも使う。ほかの飾りは足さない。</p></div>
+    <div><p class="t">言葉は1つにそろえる</p><p class="m">鳴らし方は「アラーム／通知のみ／鳴らさない」。何分前は「5分前」の形。見出しの無い行は作らない。</p></div>
+    <div><p class="t">止めるは1つ</p><p class="m">鳴動画面は常にダーク。止める操作は下の大きなスライド1つ。丸の中は停止の■。</p></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1600,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

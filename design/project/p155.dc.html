@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#155 招待された予定</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.chip.nd::before{content:none}
+.ev .chip{height:20px;padding:0 7px}
+.mt{display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden}
+.ir{display:flex;align-items:center;gap:12px}
+.ir>.i{color:var(--mu)}
+.s48{display:flex;align-items:center;gap:12px;min-height:48px;border-bottom:1px solid var(--div)}
+.s48:last-child{border-bottom:0}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 864px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 設定: 招待の返事と種類 <span class="case">#211</span> <span class="case">#204</span></div>
+    <div class="sub">鳴らす返事を複数選ぶ。新しく入れた人は「出席」だけがオン</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card">
+          <div><p class="t">招待の返事</p><p class="m">鳴らす返事を選ぶ（いくつでも）</p></div>
+          <div class="chips"><button class="c on">出席</button><button class="c">未定</button><button class="c">未回答</button><button class="c">辞退</button></div>
+        </div>
+        <div class="card" style="gap: 2px">
+          <p class="t">鳴らす予定の種類</p>
+          <p class="m" style="font-size: 12px; margin-bottom: 4px">種類は予定のタイトルから推定します。Google 連携をすると Google の種類で判定します。</p>
+          <div class="s48"><p class="t grow" style="font-size: 14px">予定</p><button class="sw on" aria-label="予定"></button></div>
+          <div class="s48"><p class="t grow" style="font-size: 14px">タスク</p><button class="sw on" aria-label="タスク"></button></div>
+          <div class="s48"><p class="t grow" style="font-size: 14px">不在</p><button class="sw" aria-label="不在"></button></div>
+          <div class="s48"><p class="t grow" style="font-size: 14px">サイレントモード</p><button class="sw" aria-label="サイレントモード"></button></div>
+          <div class="s48"><p class="t grow" style="font-size: 14px">勤務場所</p><button class="sw" aria-label="勤務場所"></button></div>
+          <div class="s48"><p class="t grow" style="font-size: 14px">誕生日</p><button class="sw" aria-label="誕生日"></button></div>
+          <div class="s48"><p class="t grow" style="font-size: 14px">「予定なし」にした予定</p><button class="sw on" aria-label="「予定なし」にした予定"></button></div>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">今は返事の行に見出しが無く、種類の札は横に流れて一部が隠れる。選択肢と既定は今のまま。</p>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 予定画面での見え方 <span class="case">#227</span></div>
+    <div class="sub">鳴らない招待は、下の段に理由を1行で出す。今は理由が出ない</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">10月27日 (火)</h2></div>
+      <div class="body">
+        <div class="hero">
+          <div class="hr"><div class="grow"><p class="eye">次のアラーム</p><p class="t">定例ミーティング</p></div><span class="big">8:50</span></div>
+          <p class="live">鳴る準備ができています</p>
+        </div>
+        <p class="dh"><span class="num">10/27(火)</span><span class="c-ac">今日</span></p>
+        <div class="card ls">
+          <div class="ev"><span class="tm">9:00<small>~10:00</small></span><span class="cal" style="background: #8AB4F8"></span><div class="grow"><p class="t">定例ミーティング</p><p class="m mt"><span class="chip ac nd">10分前 +1</span>仕事</p></div><button class="sw on" aria-label="定例ミーティングで鳴らす"></button></div>
+          <div class="ev"><span class="tm">11:00<small>~12:00</small></span><span class="cal" style="background: #8AB4F8"></span><div class="grow"><p class="t c-mu">製品説明会</p><p class="m mt">招待の返事で対象外</p></div><button class="sw" aria-label="製品説明会で鳴らす"></button></div>
+          <div class="ev"><span class="tm">15:00<small>~17:00</small></span><span class="cal" style="background: #86D2C7"></span><div class="grow"><p class="t c-mu">打ち上げ</p><p class="m mt">招待の返事で対象外</p></div><button class="sw" aria-label="打ち上げで鳴らす"></button></div>
+        </div>
+      </div>
+      <nav class="tab" aria-label="タブ"><button class="on"><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg></i>予定</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5M5 4L3 6M19 4l2 2"/></svg></i>アラーム</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="7"/><path d="M12 14v-3.5M10 3h4"/></svg></i>タイマー</button><button><i><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></i>設定</button></nav>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":864,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

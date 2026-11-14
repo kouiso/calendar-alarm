@@ -13,9 +13,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,13 +27,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.AddAlert
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
@@ -42,7 +48,9 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Snooze
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Vibration
@@ -50,8 +58,10 @@ import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -79,6 +89,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.calendaralarm.data.AlarmRepository
@@ -1015,6 +1026,57 @@ private fun EventRulesCard(
                     },
                 )
             }
+            // 全イベント共通の追加リマインダー (競合の Default Alarms, #143)。
+            // 日:時:分で登録し、個別予定の設定で上書き可能
+            var showAddReminder by remember { mutableStateOf(false) }
+            IconSettingRow(Icons.Default.AddAlert) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "全イベントへの追加リマインダー",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        "予定ごとの指定とは別に、全ての予定に共通で鳴らす時刻を登録します。同じ時刻は1回だけ鳴ります",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                        prefs.extraReminderOffsets.forEach { minutes ->
+                            InputChip(
+                                selected = false,
+                                onClick = {
+                                    scope.launch {
+                                        settings.setExtraReminderOffsets(prefs.extraReminderOffsets - minutes)
+                                        repository.resync("settings")
+                                    }
+                                },
+                                label = { Text(reminderOffsetLabel(minutes)) },
+                                trailingIcon = {
+                                    Icon(Icons.Default.Close, contentDescription = "削除", modifier = Modifier.size(16.dp))
+                                },
+                                modifier = Modifier.padding(end = 6.dp),
+                            )
+                        }
+                        AssistChip(
+                            onClick = { showAddReminder = true },
+                            label = { Text("追加") },
+                        )
+                    }
+                }
+            }
+            if (showAddReminder) {
+                ExtraReminderDialog(
+                    existing = prefs.extraReminderOffsets,
+                    onDismiss = { showAddReminder = false },
+                    onAdd = { minutes ->
+                        scope.launch {
+                            settings.setExtraReminderOffsets(prefs.extraReminderOffsets + minutes)
+                            repository.resync("settings")
+                        }
+                        showAddReminder = false
+                    },
+                )
+            }
         }
     }
     if (showCodes) {
@@ -1154,7 +1216,8 @@ private fun AuditRow(log: AuditLogEntity) {
     }
 }
 
-// ---- 鳴動設定: 元アプリの音量系 (独立音量・徐々に音量UP・バイブ) + 一括ミュート ----
+// ---- 鳴動設定: 元アプリの音量系 (独立音量・徐々に音量UP・バイブ・持続時間) + 一括ミュート ----
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RingingCard(
     p: SettingsRepository.Settings,
@@ -1162,6 +1225,17 @@ private fun RingingCard(
     repository: AlarmRepository,
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
+    val context = LocalContext.current
+    var soundSelectionFailed by remember { mutableStateOf(false) }
+    val soundPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                soundSelectionFailed = !settings.selectDefaultSound(uri)
+            }
+        }
+    }
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -1186,6 +1260,42 @@ private fun RingingCard(
                 },
                 modifier = Modifier.padding(horizontal = 12.dp),
             )
+            // 360dp でも「選ぶ」が押し出されないよう、表示と操作を行で分けて操作は折り返す
+            IconSettingRow(Icons.Default.Notifications) {
+                Text(
+                    if (p.defaultSoundUri == null) "アラーム音: 標準" else "アラーム音: カスタム",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            FlowRow(
+                Modifier.fillMaxWidth().padding(start = 32.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = p.defaultSoundUri != null,
+                    onClick = { soundPicker.launch(arrayOf("audio/*")) },
+                    label = { Text("選ぶ", maxLines = 1) },
+                )
+                if (p.defaultSoundUri != null) {
+                    FilterChip(
+                        selected = false,
+                        onClick = {
+                            scope.launch { settings.setDefaultSoundUri(null) }
+                            soundSelectionFailed = false
+                        },
+                        label = { Text("標準に戻す", maxLines = 1) },
+                    )
+                }
+            }
+            if (soundSelectionFailed) {
+                Text(
+                    "音声への継続アクセスを取得できませんでした。端末に保存したファイルを選び直してください。",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 32.dp),
+                )
+            }
             // スヌーズプリセット (鳴動画面の +N分 ボタンに出る一覧)
             IconSettingRow(Icons.Default.Snooze) {
                 listOf(1, 5, 10, 15, 20, 30, 45, 60, 90).forEach { m ->
@@ -1224,6 +1334,74 @@ private fun RingingCard(
                     checked = p.vibrateWhileRinging,
                     onCheckedChange = { scope.launch { settings.setVibrateWhileRinging(it) } },
                 )
+            }
+            // 鳴動持続時間 (競合の Alarm Duration, #148)。時間切れで自動停止し
+            // 「鳴らせなかった」扱いにする。制限なしは従来どおり10分の安全上限
+            IconSettingRow(Icons.Default.Timer) {
+                // 秒数のチップだけでは何の設定か伝わらないので、見出しを付ける (読み上げもチップの前に読む)
+                Column {
+                Text(
+                    "鳴動持続時間",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow {
+                    listOf(5, 10, 30, 60, 120, 300, 0).forEach { sec ->
+                        FilterChip(
+                            selected = p.ringDurationSec == sec,
+                            onClick = { scope.launch { settings.setRingDurationSec(sec) } },
+                            label = {
+                                Text(
+                                    when {
+                                        sec == 0 -> "制限なし"
+                                        sec < 60 -> "${sec}秒"
+                                        else -> "${sec / 60}分"
+                                    },
+                                    maxLines = 1,
+                                )
+                            },
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    }
+                }
+                }
+            }
+            // 自動スヌーズ (競合の Auto-snooze, #145)。放置で鳴動上限に達した時、
+            // ON なら既定分数で鳴り直し、OFF なら従来どおり「鳴らせなかった」扱い
+            IconSettingRow(Icons.Default.Snooze) {
+                Text(
+                    "放置したら自動でスヌーズ",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                Switch(
+                    checked = p.autoSnooze,
+                    onCheckedChange = { scope.launch { settings.setAutoSnooze(it) } },
+                )
+            }
+            // 自動スヌーズの回数上限。ON の時だけ出す。
+            // 360dp で切れないよう、見出しと選択肢を行で分けて選択肢は折り返す
+            if (p.autoSnooze) {
+                IconSettingRow(Icons.Default.Repeat) {
+                    Text(
+                        "自動スヌーズの回数上限",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(start = 32.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf(2, 3, 4).forEach { n ->
+                        FilterChip(
+                            selected = p.autoSnoozeMax == n,
+                            onClick = { scope.launch { settings.setAutoSnoozeMax(n) } },
+                            label = { Text("${n}回", maxLines = 1) },
+                        )
+                    }
+                }
             }
             // 全アラーム一括ミュート (通知・タイマーは止めない)
             IconSettingRow(Icons.Default.VolumeOff) {
@@ -1347,8 +1525,10 @@ private fun AppearanceCard(
             WeekDisplaySettings(
                 showWeekNumbers = p.showWeekNumbers,
                 firstWeekday = p.firstWeekday,
+                showNextEvent = p.showNextEvent,
                 onShowWeekNumbers = { scope.launch { settings.setShowWeekNumbers(it) } },
                 onFirstWeekday = { scope.launch { settings.setFirstWeekday(it) } },
+                onShowNextEvent = { scope.launch { settings.setShowNextEvent(it) } },
             )
             // 大ボタンモード (競合の Large Button Mode, #154)。
             // 鳴動画面の停止をスライドから押しやすい大ボタンに変える
@@ -1377,8 +1557,10 @@ private fun AppearanceCard(
 private fun WeekDisplaySettings(
     showWeekNumbers: Boolean,
     firstWeekday: Int,
+    showNextEvent: Boolean,
     onShowWeekNumbers: (Boolean) -> Unit,
     onFirstWeekday: (Int) -> Unit,
+    onShowNextEvent: (Boolean) -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -1391,6 +1573,19 @@ private fun WeekDisplaySettings(
             modifier = Modifier.weight(1f),
         )
         Switch(checked = showWeekNumbers, onCheckedChange = onShowWeekNumbers)
+    }
+    // 競合の「Show upcoming event」相当 (#151)
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "メイン画面に次のアラームを出す",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = showNextEvent, onCheckedChange = onShowNextEvent)
     }
     Text(
         "週の始まり",
@@ -1663,4 +1858,74 @@ private fun AddGoogleAccountRow() {
         },
         modifier = Modifier.padding(top = 4.dp),
     ) { Text("Google アカウントを追加") }
+}
+
+/** オフセットの表示名 (20分前 / 2時間前 / 1日前 など)。競合の D:H:M 表記と同じ粒度 (#143)。 */
+internal fun reminderOffsetLabel(minutes: Int): String {
+    val d = minutes / 1440
+    val h = (minutes % 1440) / 60
+    val m = minutes % 60
+    val parts = buildList {
+        if (d > 0) add("${d}日")
+        if (h > 0) add("${h}時間")
+        if (m > 0 || (d == 0 && h == 0)) add("${m}分")
+    }
+    return parts.joinToString("") + "前"
+}
+
+/** 共通リマインダーの追加ダイアログ: 競合の DAYS:HRS:MIN ホイール相当を数値入力で (#143)。 */
+@Composable
+private fun ExtraReminderDialog(
+    existing: List<Int>,
+    onDismiss: () -> Unit,
+    onAdd: (Int) -> Unit,
+) {
+    var days by remember { mutableStateOf("") }
+    var hours by remember { mutableStateOf("") }
+    var mins by remember { mutableStateOf("") }
+    val total = extraReminderMinutes(days.toIntOrNull() ?: 0, hours.toIntOrNull() ?: 0, mins.toIntOrNull() ?: 0)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                // 0分と登録済みは追加できない (0分は開始時刻の鳴動と同じなので意味を持たない)
+                enabled = total != null && total !in existing,
+                onClick = { total?.let(onAdd) },
+            ) { Text("追加") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } },
+        title = { Text("追加リマインダー") },
+        text = {
+            Column {
+                Text("予定の開始の何日前・何時間前・何分前に鳴らすかを入力してください", style = MaterialTheme.typography.bodySmall)
+                Row(Modifier.padding(top = 12.dp)) {
+                    OutlinedTextField(
+                        value = days, onValueChange = { days = it.filter(Char::isDigit).take(3) },
+                        label = { Text("日") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f).padding(end = 6.dp), singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = hours, onValueChange = { hours = it.filter(Char::isDigit).take(2) },
+                        label = { Text("時間") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f).padding(end = 6.dp), singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = mins, onValueChange = { mins = it.filter(Char::isDigit).take(2) },
+                        label = { Text("分") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f), singleLine = true,
+                    )
+                }
+                if (total == null && listOf(days, hours, mins).any { it.isNotBlank() }) {
+                    Text("0〜30日・0〜23時間・0〜59分で指定してください", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                } else if (total in existing) {
+                    Text("同じ時刻はすでに登録済みです", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        },
+    )
+}
+
+internal fun extraReminderMinutes(days: Int, hours: Int, minutes: Int): Int? {
+    if (days !in 0..30 || hours !in 0..23 || minutes !in 0..59) return null
+    return (days * 1440 + hours * 60 + minutes).takeIf { it > 0 }
 }

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>#154 大きいボタン・外観</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.lnk.mo{display:flex;align-items:center;justify-content:center;gap:6px;min-height:40px}
+.pal{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px 4px;justify-items:center;font-size:11px;color:var(--mu)}
+.pal span{display:flex;flex-direction:column;align-items:center;gap:4px}
+.swt{width:40px;height:40px;border-radius:50%;border:0;padding:0}
+.swt.on{box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--tx)}
+.s52{display:flex;align-items:center;gap:12px;min-height:52px}
+.bb{height:124px;border-radius:32px;border:0;font-size:24px;font-weight:600;width:100%;flex:none}
+.bb.s{background:var(--glass);color:var(--tx)}
+.bb.p{background:var(--ac);color:var(--onac)}
+.lock{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gg);font-weight:600;margin:0}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1680px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. 今の鳴動画面 <span class="chip ok">実装あり</span></div>
+    <div class="sub">スライドで止める。スヌーズは大きいボタン1つ</div>
+    <div class="ph dk rg">
+      <span class="pill">10月27日 (火)</span>
+      <div class="ring">
+        <div class="dial"><b>8:50</b></div>
+        <p class="t c-ac" style="font-weight: 600">10分後に開始</p>
+        <p class="rt">定例ミーティング</p>
+      </div>
+      <div class="acts">
+        <button class="snz">スヌーズ <span class="num">5</span>分</button>
+        <button class="lnk mo">スヌーズ時間を選ぶ<svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+        <div class="track" role="group" aria-label="スライドして停止"><span class="knob"></span><b>スライドして停止</b></div>
+        <p class="foot">Calendar Alarm</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 大きいボタン <span class="chip mu">未実装の案</span></div>
+    <div class="sub">画面の下半分を2つの大きなボタンに。止めるは下、押し間違えにくい大きさ</div>
+    <div class="ph dk rg">
+      <span class="pill">10月27日 (火)</span>
+      <div class="ring">
+        <div class="dial sm"><b>8:50</b></div>
+        <p class="t c-ac" style="font-weight: 600">10分後に開始</p>
+        <p class="rt" style="font-size: 22px">定例ミーティング</p>
+      </div>
+      <div class="acts" style="gap: 12px">
+        <button class="bb s">スヌーズ <span class="num">5</span>分</button>
+        <button class="bb p">停止</button>
+        <p class="foot">Calendar Alarm</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">3. 今の見た目の設定 <span class="chip ok">実装あり</span></div>
+    <div class="sub">テーマ10色と見本、背景画像。背景画像はアプリの背景で、鳴動画面には出ない</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card" style="gap: 10px">
+          <div class="pal">
+            <span><button class="swt" style="background: #BDBDFF" aria-label="インディゴ"></button>インディゴ</span><span><button class="swt on" style="background: #FFB870" aria-label="琥珀"></button>琥珀</span><span><button class="swt" style="background: #A4D396" aria-label="森"></button>森</span><span><button class="swt" style="background: #92CCFF" aria-label="海"></button>海</span><span><button class="swt" style="background: #FFB1C4" aria-label="薔薇"></button>薔薇</span>
+            <span><button class="swt" style="background: #DEBDFE" aria-label="紫"></button>紫</span><span><button class="swt" style="background: #C2C2C2" aria-label="墨"></button>墨</span><span><button class="swt" style="background: #9FCAFF" aria-label="空"></button>空</span><span><button class="swt" style="background: #FFB877" aria-label="橙"></button>橙</span><span><button class="swt" style="background: #FFB1C2" aria-label="桜"></button>桜</span>
+          </div>
+          <div class="prev" style="flex-direction: row; align-items: center; gap: 10px"><div class="grow"><p class="eye">次のアラーム</p><p class="m">チーム朝会 · <span class="num">7:00</span> 開始</p></div><span class="num" style="font-size: 30px; font-weight: 300">6:30</span><button class="sw on" aria-label="見本のスイッチ"></button></div>
+          <div class="s52"><p class="t grow">背景画像</p><button class="ghost">選ぶ</button></div>
+        </div>
+        <p class="m" style="padding: 0 6px">大きいボタン・文字の大きさ・鳴動画面の背景を選ぶ行は、今は無い。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">4. 足す行 <span class="case">案A／B</span> <span class="chip mu">未実装の案</span></div>
+    <div class="sub">案A は全部無料。案B は鍵の付いた所（追加テーマ・写真の背景）だけ Pro</div>
+    <div class="ph">
+      <div class="top pl"><h2 class="h1 lg">設定</h2></div>
+      <div class="body">
+        <div class="card ls"><div class="it"><p class="t grow">鳴動画面を大きいボタンにする</p><button class="sw on" aria-label="大きいボタン"></button></div></div>
+        <div class="card">
+          <p class="t">文字の大きさ</p>
+          <div class="seg" role="group" aria-label="文字の大きさ"><button>小</button><button class="on">ふつう</button><button>大</button></div>
+        </div>
+        <div class="card">
+          <p class="t">鳴動画面の背景</p>
+          <div class="chips"><button class="c on">天気の色</button><button class="c">単色</button><button class="c">写真を選ぶ</button></div>
+          <p class="lock"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>案B: 写真は Pro · [価格は局長が決める]</p>
+        </div>
+        <div class="card">
+          <p class="t">テーマ</p>
+          <p class="lock"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>案B: 2色は無料、残り8色は Pro</p>
+        </div>
+      </div>
+    </div>
+    <p class="m" style="margin-top: 8px">無料か Pro かは #140（広告）の後に決める。今は10色とも無料で選べる。</p>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1680,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>
