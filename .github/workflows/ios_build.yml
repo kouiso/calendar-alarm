@@ -1,0 +1,51 @@
+name: iOS Build
+
+# WHY: iOS (Swift) の変更が PR の CI で一度もコンパイルされていなかった (#194)。
+#      署名・Secrets・配布なしの simulator Debug ビルドだけを PR で走らせる。
+#      配布は fad.yml (手動) の仕事で、ここでは触らない。
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "iosApp/**"
+      - "shared/**"
+      - "scripts/ci.sh"
+      - ".github/workflows/ios_build.yml"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle/**"
+      - "gradle.properties"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-build:
+    if: github.event.pull_request.draft != true
+    # WHY: 標準の macos-latest だけを使う。larger runner / self-hosted にしない
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # WHY: Xcode のビルド手順が Gradle (:shared:embedAndSignAppleFrameworkForXcode) を呼ぶ
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Build iOS app for simulator (no signing)
+        run: bash scripts/ci.sh ios

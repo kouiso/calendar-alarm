@@ -13,6 +13,7 @@ UTF-8 のロケールが要る。テスト名が日本語なので、`C` など�
 
 `task ci:ios` は既存手順と同じ iOS simulator ビルドである。
 Xcode と xcodegen が必要である。署名、端末登録、配布は行わない。
+`iosApp/**` か `shared/**` を変える PR では、同じ simulator ビルドを `.github/workflows/ios_build.yml`（標準の macOS ランナー、署名・Secrets・配布なし）が走らせる。
 `bash scripts/ci.sh ios-logic` は iOS の画面や SharedKit に依存しない計算（`iosApp/iosApp/ring-history.swift`）を
 macOS の swiftc で動かす単体テストである。シミュレータは要らない。
 Android の検査成功を iOS や emulator の成功とは扱わない。
