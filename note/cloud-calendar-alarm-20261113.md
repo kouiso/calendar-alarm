@@ -1,6 +1,20 @@
-IN-PROGRESS 2026-11-14 11:40 UTC
+IN-PROGRESS 2026-11-14 12:05 UTC
 
 calendar-alarm [cloud]
+
+## 2026-11-14 12:05 UTC の進み
+
+- 取り込み: #369（b831a9c）。#289 を閉じた。
+- #365: 判断役の「基準を 5 から 6 に上げる」は、入れた検査が base より上げるのを止めるので通らない。代わりに #291 を #365 に入れた（23ec50d）。shared は種類と数だけを返し、Android は 6 つの 1 行を strings.xml（ja・en、数のある 2 つは plurals）から引く。基準は 309 から 304。iOS は自分の Swift の文言を持つので変わらない。戻し方: 23ec50d の revert。shared 116 件・androidApp 210 件 失敗 0。
+- #188（6398aca）・#191（523163f）: 新しい文言を strings.xml へ移し、master を取り込んだ。#191 は AlarmRepository.kt の衝突を解いた（PR の markDndSuppressed と master の条件付き markMissed の両方を残した）。#191 は 237 件・#188 は 211 件 失敗 0。
+- #372: 7c72dfa で must 0。`verify (control)` が 2 回とも emulator の `adb: device offline` で落ちた（そのレーンは固定の対照 3d106817 をビルドする）。master を取り込んで（a0a68d6）CI をもう一度走らせた。
+- #365・#188・#191 の独立レビュー中。
+
+### ops への依頼の head（2026-11-14 12:05 UTC 時点。撮る前に PR のページで最新の head を確かめる）
+- #363: 585e6ab（変わらず）
+- #188: 6398aca
+- #191: 523163f
+- #365: 23ec50d（日本語と英語の両方で、予定の画面と設定の画面の状態の 1 行）
 
 ## 2026-11-14 11:40 UTC の進み
 
