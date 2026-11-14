@@ -62,6 +62,7 @@ data class InviteFilter(
 /**
  * イベント種別 (元アプリのイベントタイプメニュー仕様)。
  * 誕生日/不在/勤務場所/タスクはタイトル文字列で分類し、残りは通常予定。
+ * 終日は題に語を含めば、時刻のある予定は題全体が語と一致した時だけ分類する (#306)。
  * (Googleカレンダーの誕生日はタイトルに「誕生日」または"birthday"を含む前提)
  */
 @Serializable
@@ -76,14 +77,55 @@ enum class EventType { BIRTHDAY, ABSENCE, WORKPLACE, FOCUS_TIME, TASK, EVENT }
 @Serializable
 enum class Availability { BUSY, FREE, TENTATIVE, UNKNOWN }
 
-/** タイトル文字からイベント種別を分類する。判定順 = 先勝ち (「誕生日」最優先)。 */
-fun classifyEventType(title: String): EventType {
+/**
+ * 題の照合用に整える。前後の空白を除き、全角英数記号 (U+FF01-FF5E) と全角空白を半角にし、
+ * Unicode の空白 (NBSP を含む) の連なりを1つにして小文字へ揃える。NFKC は commonMain で使えないため、この範囲だけを自前で行う
+ * (半角カナなど、この範囲に無い互換文字は変換しない)。
+ */
+internal fun normalizeTitleForMatch(title: String): String {
+    val half = buildString {
+        for (c in title) {
+            append(
+                when (c) {
+                    '\u3000' -> ' '
+                    in '\uFF01'..'\uFF5E' -> (c.code - 0xFEE0).toChar()
+                    else -> c
+                },
+            )
+        }
+    }
+    // Regex の \s は JVM では U+00A0 などを空白とみなさず、trim() (Char.isWhitespace) と定義が食い違う。
+    // 端も中も Char.isWhitespace で揃えるため、文字単位で畳む (プラットフォーム非依存)
+    val collapsed = StringBuilder()
+    var inSpace = false
+    for (c in half.trim()) {
+        if (c.isWhitespace()) {
+            if (!inSpace) collapsed.append(' ')
+            inSpace = true
+        } else {
+            collapsed.append(c)
+            inSpace = false
+        }
+    }
+    return collapsed.toString().lowercase()
+}
+
+/**
+ * タイトル文字からイベント種別を分類する。判定順 = 先勝ち (「誕生日」最優先)。
+ * 終日の予定 ([allDay]=true) は題に語を含めば分類する。時刻のある予定は題全体が語と一致する時だけ分類する (#306)。
+ * オフィス・自宅・在宅は勤務場所として、終日でも時刻付きでも題全体の一致だけで判定する。
+ */
+fun classifyEventType(title: String, allDay: Boolean): EventType {
     val t = title.lowercase()
-    fun hit(vararg needles: String) = needles.any { t.contains(it) }
+    val whole = normalizeTitleForMatch(title)
+    fun hit(vararg needles: String) =
+        if (allDay) needles.any { t.contains(it) } else needles.any { whole == it }
+    fun wholeTitle(vararg needles: String) = needles.any { whole == it }
     return when {
         hit("誕生日", "バースデー", "birthday") -> EventType.BIRTHDAY
         hit("不在", "休暇", "休み", "有休", "欠勤", "absence", "absent", "away", "out of office") -> EventType.ABSENCE
-        hit("勤務場所", "出社", "在宅勤務", "リモートワーク", "workplace", "work location", "office") -> EventType.WORKPLACE
+        hit("勤務場所", "出社", "在宅勤務", "リモートワーク", "workplace", "work location", "office") ||
+            wholeTitle("オフィス", "自宅", "在宅") -> EventType.WORKPLACE
         hit("サイレントモード", "フォーカスタイム", "集中タイム", "focus time") -> EventType.FOCUS_TIME
         hit("タスク", "todo", "to-do", "task") -> EventType.TASK
         else -> EventType.EVENT
@@ -103,10 +145,11 @@ fun googleEventTypeToEventType(googleType: String?): EventType? = when (googleTy
 
 /**
  * イベントの実種別。Google Calendar API の eventType が取れていればそれを正本、
- * 取れないイベントはタイトル文字列判定へフォールバックする。
+ * 取れないイベントはタイトル文字列判定へフォールバックする
+ * (終日は部分一致、時刻のある予定は題全体の一致。classifyEventType を参照)。
  */
 fun resolveEventType(event: CalendarEvent): EventType =
-    googleEventTypeToEventType(event.googleEventType) ?: classifyEventType(event.title)
+    googleEventTypeToEventType(event.googleEventType) ?: classifyEventType(event.title, event.allDay)
 
 /**
  * 予定の種類ごとと「予定なし」の、鳴らす・鳴らさない (#79)。false のものは鳴らさない。
@@ -169,8 +212,8 @@ data class CalendarSource(
  * - startMillis は「その日付の UTC 0時」。Android の CalendarContract が終日イベントをこの形で返す。
  *   ローカル0時 (例: JST 0時 = 前日 UTC 15時) を渡してはならない。
  * - AlarmExpander は startMillis を UTC の日付に直し、その日付のローカル allDayMinutes
- *   (AlarmRule の既定 540 = 9:00) に倒して鳴動時刻を決める。負数なら鳴らさない。
- * - このため UTC 0時以外を渡すと日付がずれる (ローカル0時なら前日になる)。
+ *   (ルールの allDayMinutes。既定 540 = 9:00) に倒して鳴動時刻を決める。負数なら鳴らさない。
+ * - このため UTC の日付が意図した日付と違うと日付がずれる。例えば JST のように UTC+ の地域でローカル0時を渡すと前日になる。
  *   現状の挙動は AlarmExpanderTest の「終日開始の契約」テストで固定している。
  */
 @Serializable
