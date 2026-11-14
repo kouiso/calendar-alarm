@@ -1,0 +1,10 @@
+$ fastlane ios testflight_upload   # head 18238701d2f1417d04ce82ae7ba8eb3b4895c842
++------+------------------+-------------+
+| Step | Action           | Time (in s) |
++------+------------------+-------------+
+| 1    | default_platform | 0           |
++------+------------------+-------------+
+[04:53:33]: [31mfastlane finished with errors[0m
+[31m
+[!] build_number を渡してください（例: build_number:2611131200）[0m
+exit=1
