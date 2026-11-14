@@ -15,6 +15,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.InviteStatus
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Snooze
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Text
+import com.calendaralarm.ui.IconChipRow
 import com.calendaralarm.ui.InviteFilterRow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.Assert.assertEquals
@@ -28,13 +33,14 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * 設定の招待予定のチップ (出席・未定・未回答・辞退) が、狭い画面と大きい文字でも全部見えて押せる (#204)。
+ * 設定の行 (アイコン + チップやスイッチ) が、狭い画面と大きい文字でも全部見えて押せる (#204)。
+ * 招待予定のチップ (出席・未定・未回答・辞退) と、同じ部品 (IconChipRow) を使うスヌーズの選択肢 9 枚を見る。
  * 文字幅を実測させるため NATIVE グラフィックスで描く。外側の余白は設定画面のカード (画面 16dp + カード 14dp) と同じにする。
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w360dp-h800dp-xxhdpi", fontScale = 1.3f)
-class InviteFilterChipLayoutTest {
+class SettingRowLayoutTest {
 
     @OptIn(ExperimentalTestApi::class)
     @get:Rule
@@ -72,5 +78,33 @@ class InviteFilterChipLayoutTest {
         show { toggled = it }
         compose.onNodeWithText("辞退").performClick()
         assertEquals(InviteStatus.DECLINED, toggled)
+    }
+
+    private fun showRow(content: @androidx.compose.runtime.Composable androidx.compose.foundation.layout.FlowRowScope.() -> Unit) {
+        val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        activity.setContent {
+            MaterialTheme {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp)) {
+                    IconChipRow(Icons.Default.Snooze, content)
+                }
+            }
+        }
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun `スヌーズの選択肢9枚も折り返して全部見える`() {
+        val minutes = listOf(1, 5, 10, 15, 20, 30, 45, 60, 90)
+        showRow {
+            minutes.forEach { m ->
+                FilterChip(selected = m == 10, onClick = {}, label = { Text("${m}分", maxLines = 1) }, modifier = Modifier.padding(end = 4.dp))
+            }
+        }
+        val rootRight = compose.onRoot().fetchSemanticsNode().boundsInRoot.right
+        minutes.forEach { m ->
+            val b = compose.onNodeWithText("${m}分", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertTrue("${m}分 が画面の中にあること (right=${b.right} root=$rootRight)", b.right <= rootRight)
+            assertTrue("${m}分 の幅が潰れないこと (width=${b.width} height=${b.height})", b.width > b.height)
+        }
     }
 }
