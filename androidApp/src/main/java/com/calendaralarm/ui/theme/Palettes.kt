@@ -1,7 +1,11 @@
 package com.calendaralarm.ui.theme
 
+import androidx.annotation.StringRes
 import androidx.compose.material3.ColorScheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import com.calendaralarm.R
 
 /**
  * カラーテーマ10種 (元アプリのテーマ選択に相当)。
@@ -26,12 +30,12 @@ class AccentColors(
 
 enum class AppPalette(
     val id: String,
-    val label: String,
+    @StringRes val labelRes: Int,
     val light: AccentColors,
     val dark: AccentColors,
 ) {
     INDIGO(
-        "indigo", "インディゴ",
+        "indigo", R.string.palette_indigo,
         light = AccentColors(
             primary = Color(0xFF4A46D4), onPrimary = Color(0xFFFFFFFF),
             primaryContainer = Color(0xFFE3E0FF), onPrimaryContainer = Color(0xFF120D69),
@@ -50,7 +54,7 @@ enum class AppPalette(
         ),
     ),
     AMBER(
-        "amber", "琥珀",
+        "amber", R.string.palette_amber,
         light = AccentColors(
             primary = Color(0xFF8B5000), onPrimary = Color(0xFFFFFFFF),
             primaryContainer = Color(0xFFFFDCBE), onPrimaryContainer = Color(0xFF2C1600),
@@ -69,7 +73,7 @@ enum class AppPalette(
         ),
     ),
     FOREST(
-        "forest", "森",
+        "forest", R.string.palette_forest,
         light = AccentColors(
             primary = Color(0xFF386A20), onPrimary = Color(0xFFFFFFFF),
             primaryContainer = Color(0xFFC0EFB0), onPrimaryContainer = Color(0xFF042100),
@@ -88,7 +92,7 @@ enum class AppPalette(
         ),
     ),
     OCEAN(
-        "ocean", "海",
+        "ocean", R.string.palette_ocean,
         light = AccentColors(
             primary = Color(0xFF006496), onPrimary = Color(0xFFFFFFFF),
             primaryContainer = Color(0xFFCDE5FF), onPrimaryContainer = Color(0xFF001E31),
@@ -107,7 +111,7 @@ enum class AppPalette(
         ),
     ),
     ROSE(
-        "rose", "薔薇",
+        "rose", R.string.palette_rose,
         light = AccentColors(
             primary = Color(0xFFA61B5E), onPrimary = Color(0xFFFFFFFF),
             primaryContainer = Color(0xFFFFD9E2), onPrimaryContainer = Color(0xFF3E001B),
@@ -126,7 +130,7 @@ enum class AppPalette(
         ),
     ),
     VIOLET(
-        "violet", "紫",
+        "violet", R.string.palette_violet,
         light = AccentColors(
             primary = Color(0xFF7B4FA6), onPrimary = Color(0xFFFFFFFF),
             primaryContainer = Color(0xFFF1DAFF), onPrimaryContainer = Color(0xFF2C0050),
@@ -145,7 +149,7 @@ enum class AppPalette(
         ),
     ),
     MONO(
-        "mono", "墨",
+        "mono", R.string.palette_mono,
         light = AccentColors(
             primary = Color(0xFF424242), onPrimary = Color(0xFFFFFFFF),
             primaryContainer = Color(0xFFE0E0E0), onPrimaryContainer = Color(0xFF111111),
@@ -164,7 +168,7 @@ enum class AppPalette(
         ),
     ),
     SKY(
-        "sky", "空",
+        "sky", R.string.palette_sky,
         light = AccentColors(
             primary = Color(0xFF0061A4), onPrimary = Color(0xFFFFFFFF),
             primaryContainer = Color(0xFFD1E4FF), onPrimaryContainer = Color(0xFF001D36),
@@ -183,7 +187,7 @@ enum class AppPalette(
         ),
     ),
     ORANGE(
-        "orange", "橙",
+        "orange", R.string.palette_orange,
         light = AccentColors(
             primary = Color(0xFF964900), onPrimary = Color(0xFFFFFFFF),
             primaryContainer = Color(0xFFFFDCC2), onPrimaryContainer = Color(0xFF311300),
@@ -202,7 +206,7 @@ enum class AppPalette(
         ),
     ),
     SAKURA(
-        "sakura", "桜",
+        "sakura", R.string.palette_sakura,
         light = AccentColors(
             primary = Color(0xFF984061), onPrimary = Color(0xFFFFFFFF),
             primaryContainer = Color(0xFFFFD9E1), onPrimaryContainer = Color(0xFF3E001D),
@@ -221,6 +225,10 @@ enum class AppPalette(
         ),
     ),
     ;
+
+    /** 設定のテーマ選択に出す名前。保存するのは [id] だけで、名前は今の言語で解決する。 */
+    val label: String
+        @Composable get() = stringResource(labelRes)
 
     companion object {
         /** 設定に保存された ID → パレット。未知 ID/未設定は既定 (琥珀) に落とす。 */

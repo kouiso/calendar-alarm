@@ -179,24 +179,71 @@ class WeatherApi(
     }
 
     companion object {
-        /** WMO weather code → 表示名 (ja)。 */
-        fun describe(code: Int): String = when (code) {
-            0 -> "快晴"
-            1 -> "晴れ"
-            2 -> "一部曇り"
-            3 -> "曇り"
-            45, 48 -> "霧"
-            51, 53, 55 -> "霧雨"
-            56, 57 -> "着氷霧雨"
-            61, 63, 65 -> "雨"
-            66, 67 -> "着氷雨"
-            71, 73, 75 -> "雪"
-            77 -> "雪粒"
-            80, 81, 82 -> "にわか雨"
-            85, 86 -> "にわか雪"
-            95 -> "雷雨"
-            96, 99 -> "雹伴う雷雨"
-            else -> "不明"
+        /**
+         * WMO weather code → 種類。shared には文字リソースが無いので、画面の文言は持たずに種類だけ返し、
+         * Android は [WeatherKind] から文字リソースを引く (ja/en)。コードと種類の対応はここ1箇所に置く。
+         */
+        fun kindOf(code: Int): WeatherKind = when (code) {
+            0 -> WeatherKind.CLEAR
+            1 -> WeatherKind.MAINLY_CLEAR
+            2 -> WeatherKind.PARTLY_CLOUDY
+            3 -> WeatherKind.OVERCAST
+            45, 48 -> WeatherKind.FOG
+            51, 53, 55 -> WeatherKind.DRIZZLE
+            56, 57 -> WeatherKind.FREEZING_DRIZZLE
+            61, 63, 65 -> WeatherKind.RAIN
+            66, 67 -> WeatherKind.FREEZING_RAIN
+            71, 73, 75 -> WeatherKind.SNOW
+            77 -> WeatherKind.SNOW_GRAINS
+            80, 81, 82 -> WeatherKind.RAIN_SHOWERS
+            85, 86 -> WeatherKind.SNOW_SHOWERS
+            95 -> WeatherKind.THUNDERSTORM
+            96, 99 -> WeatherKind.THUNDERSTORM_HAIL
+            else -> WeatherKind.UNKNOWN
+        }
+
+        /**
+         * WMO weather code → 日本語の表示名。iOS (SharedKitBridge が呼ぶ。多言語化は #296) と、
+         * まだ [kindOf] へ移っていない Android の画面 (AgendaScreen・RingingActivity) 用に残す。
+         * Android で新しく文言を出す時はこれを使わず [kindOf] から文字リソースを引く。
+         */
+        fun describe(code: Int): String = when (kindOf(code)) {
+            WeatherKind.CLEAR -> "快晴"
+            WeatherKind.MAINLY_CLEAR -> "晴れ"
+            WeatherKind.PARTLY_CLOUDY -> "一部曇り"
+            WeatherKind.OVERCAST -> "曇り"
+            WeatherKind.FOG -> "霧"
+            WeatherKind.DRIZZLE -> "霧雨"
+            WeatherKind.FREEZING_DRIZZLE -> "着氷霧雨"
+            WeatherKind.RAIN -> "雨"
+            WeatherKind.FREEZING_RAIN -> "着氷雨"
+            WeatherKind.SNOW -> "雪"
+            WeatherKind.SNOW_GRAINS -> "雪粒"
+            WeatherKind.RAIN_SHOWERS -> "にわか雨"
+            WeatherKind.SNOW_SHOWERS -> "にわか雪"
+            WeatherKind.THUNDERSTORM -> "雷雨"
+            WeatherKind.THUNDERSTORM_HAIL -> "雹伴う雷雨"
+            WeatherKind.UNKNOWN -> "不明"
         }
     }
+}
+
+/** WMO weather code の天気の種類。文言は持たない (Android は文字リソース、iOS は当面 [WeatherApi.describe])。 */
+enum class WeatherKind {
+    CLEAR,
+    MAINLY_CLEAR,
+    PARTLY_CLOUDY,
+    OVERCAST,
+    FOG,
+    DRIZZLE,
+    FREEZING_DRIZZLE,
+    RAIN,
+    FREEZING_RAIN,
+    SNOW,
+    SNOW_GRAINS,
+    RAIN_SHOWERS,
+    SNOW_SHOWERS,
+    THUNDERSTORM,
+    THUNDERSTORM_HAIL,
+    UNKNOWN,
 }

@@ -4,6 +4,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -272,15 +274,15 @@ private fun AppBackground(imageUri: String?, content: @Composable () -> Unit) {
 
 private data class Tab(
     val route: String,
-    val label: String,
+    @StringRes val labelRes: Int,
     val icon: @Composable () -> Unit,
 )
 
 private val tabs = listOf(
-    Tab("agenda", "予定", { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "予定") }),
-    Tab("alarms", "アラーム", { Icon(Icons.Default.Alarm, contentDescription = "アラーム") }),
-    Tab("timer", "タイマー", { Icon(Icons.Default.Timer, contentDescription = "タイマー") }),
-    Tab("settings", "設定", { Icon(Icons.Default.Settings, contentDescription = "設定") }),
+    Tab("agenda", R.string.tab_agenda, { Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.tab_agenda)) }),
+    Tab("alarms", R.string.tab_alarms, { Icon(Icons.Default.Alarm, contentDescription = stringResource(R.string.tab_alarms)) }),
+    Tab("timer", R.string.tab_timer, { Icon(Icons.Default.Timer, contentDescription = stringResource(R.string.tab_timer)) }),
+    Tab("settings", R.string.tab_settings, { Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.tab_settings)) }),
 )
 
 @Composable
@@ -328,7 +330,7 @@ private fun MainScaffold(
                             ) {
                                 tab.icon()
                                 Text(
-                                    tab.label,
+                                    stringResource(tab.labelRes),
                                     fontSize = 11.sp,
                                     fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
                                     color = if (sel) {
