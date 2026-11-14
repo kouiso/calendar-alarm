@@ -1,6 +1,18 @@
-IN-PROGRESS 2026-11-14 12:05 UTC
+IN-PROGRESS 2026-11-14 12:20 UTC
 
 calendar-alarm [cloud]
+
+## 2026-11-14 12:20 UTC の進み
+
+- 取り込み: #372（10247cb、#371 を閉じた）。独立レビュー must 0 を a0a68d6 で確かめ、CI 全部成功で入れた。
+- 画面の 4 つの PR の独立レビューはすべて must 0（その head で CI 全部成功）。残りは ops の実機の証跡だけ（DEVICE）。
+  - #365 23ec50d: https://github.com/kouiso/calendar-alarm/pull/365#issuecomment-6876886952
+  - #188 6398aca: https://github.com/kouiso/calendar-alarm/pull/188#issuecomment-6876945779
+  - #191 523163f: https://github.com/kouiso/calendar-alarm/pull/191#issuecomment-6876945995
+  - #363 1ef6a65: https://github.com/kouiso/calendar-alarm/pull/363#issuecomment-6876946144
+  - master が #372 で進んだので、取り込む直前にそれぞれへ master を取り込み直す（コードが変われば別のレビュー）。
+- 新しい PR #373（#367 の残りの画面の文言。タブ・テーマ・タイマーの既定・天気など。基準 309 → 275）。Refs #367（天気の表示を切り替える所は AgendaScreen.kt と RingingActivity.kt にあり、画面の PR と重なるので後で）。独立レビュー中。実機の証跡（ja・en）が要る。
+- 新しい PR #374（テストだけ: plurals も日英の食い違いを見る。#365 のレビューの should）。独立レビュー中。画面は変えないので証跡は要らない。
 
 ## 2026-11-14 12:05 UTC の進み
 
