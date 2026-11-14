@@ -37,6 +37,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -58,6 +60,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
@@ -69,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
+import com.calendaralarm.R
 import com.calendaralarm.shared.logic.SlideToStopRule
 import com.calendaralarm.shared.model.CurrentWeather
 import com.calendaralarm.ui.WeatherBackdrop
@@ -137,6 +141,9 @@ class RingingActivity : ComponentActivity() {
                     val presets by app.container.settings.flow
                         .map { it.snoozePresets }
                         .collectAsState(initial = listOf(instance?.snoozeMinutes ?: 10))
+                    val largeButtons by app.container.settings.flow
+                        .map { it.largeButtons }
+                        .collectAsState(initial = false)
                     // 鳴動画面の天気演出: 地点設定がある時だけ引く。
                     // 鳴動画面でネットが遅くても鳴動自体を待たせないよう非同期読み。
                     var weather by androidx.compose.runtime.remember {
@@ -174,6 +181,7 @@ class RingingActivity : ComponentActivity() {
                             eventStartMillis = instance?.eventStartMillis,
                             snoozeMinutes = instance?.snoozeMinutes ?: 10,
                             snoozePresets = presets,
+                            largeButtons = largeButtons,
                             canOpenSource = canOpenSource,
                             onOpenSource = { openSourcePendingIntent() },
                             onDismiss = { pinned(AlarmService.ACTION_DISMISS, null) },
@@ -329,6 +337,7 @@ private fun RingingScreen(
     snoozeMinutes: Int,
     snoozePresets: List<Int>,
     weather: CurrentWeather?,
+    largeButtons: Boolean = false,
     canOpenSource: Boolean = false,
     onOpenSource: () -> Unit = {},
     onDismiss: () -> Unit,
@@ -388,26 +397,34 @@ private fun RingingScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 // 本来の高さ (リング 290 + 下の文字群) に足りない分だけリングと時刻を縮める
-                val ringScale = ((maxHeight - 170.dp) / 290.dp).coerceIn(0.35f, 1f)
-                val ringOuter = minOf(290.dp * ringScale, maxWidth)
+                // 大きいボタンモードの文字盤は盤の dial.sm (176) に縮める (#154)
+                val ringBase = if (largeButtons) RingingSlideSpec.LARGE_DIAL_DP.dp else 290.dp
+                val ringScale = ((maxHeight - 170.dp) / ringBase).coerceIn(0.35f, 1f)
+                val ringOuter = minOf(ringBase * ringScale, maxWidth)
+                val ringInnerRatio = if (largeButtons) 140f / 176f else 230f / 290f
+                val timeRatio = if (largeButtons) {
+                    RingingSlideSpec.LARGE_DIAL_TIME_SP / RingingSlideSpec.LARGE_DIAL_DP.toFloat()
+                } else {
+                    112f / 290f
+                }
                 val density = LocalDensity.current
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     // アクセントリング 2重 (290/230) + 大時刻
                     Box(contentAlignment = Alignment.Center) {
                         Box(
-                            Modifier.size(ringOuter).border(
+                            Modifier.size(ringOuter).testTag(RING_DIAL_TAG).border(
                                 1.5.dp, accent.copy(alpha = 0.25f), CircleShape,
                             ),
                         )
                         Box(
-                            Modifier.size(ringOuter * (230f / 290f)).border(
+                            Modifier.size(ringOuter * ringInnerRatio).border(
                                 1.dp, accent.copy(alpha = 0.15f), CircleShape,
                             ),
                         )
                         // 時刻はリングに収める飾りなので端末の文字サイズ設定では拡大しない
                         Text(
                             text = time,
-                            fontSize = with(density) { (ringOuter * (112f / 290f)).toSp() },
+                            fontSize = with(density) { (ringOuter * timeRatio).toSp() },
                             fontFamily = OutfitFontFamily,
                             fontWeight = FontWeight.ExtraLight,
                             letterSpacing = with(density) { (ringOuter * (-4f / 290f)).toSp() },
@@ -432,9 +449,10 @@ private fun RingingScreen(
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = title,
-                        fontSize = 32.sp,
+                        modifier = Modifier.testTag(TITLE_TAG),
+                        fontSize = if (largeButtons) RingingSlideSpec.LARGE_TITLE_SP.sp else 32.sp,
                         fontWeight = FontWeight.SemiBold,
-                        lineHeight = 42.sp,
+                        lineHeight = if (largeButtons) (RingingSlideSpec.LARGE_TITLE_SP * 1.35f).sp else 42.sp,
                         color = Color(0xFFF4F5F8),
                         textAlign = TextAlign.Center,
                         maxLines = 2,
@@ -461,52 +479,89 @@ private fun RingingScreen(
                     }
                 }
             }
-            // スヌーズは大きい1ボタンのみ: プリセット常時表示は押し間違いの元なので畳む
+            // スヌーズは大きい1ボタンのみ: プリセット常時表示は押し間違いの元なので畳む。
+            // 大きいボタンモード (#154) では盤 p154 の 2 列目どおり、スヌーズも停止と同じ大きさ (.bb) にして、
+            // 「スヌーズ時間を選ぶ」は出さない (チップは小さく、大きいボタンにした目的に反する)
             Surface(
                 onClick = onSnooze,
-                modifier = Modifier.fillMaxWidth().height(RingingSlideSpec.SNOOZE_HEIGHT_DP.dp),
+                modifier = Modifier.fillMaxWidth()
+                    .height(
+                        if (largeButtons) RingingSlideSpec.LARGE_BUTTON_HEIGHT_DP.dp
+                        else RingingSlideSpec.SNOOZE_HEIGHT_DP.dp,
+                    )
+                    .testTag(SNOOZE_BUTTON_TAG),
                 color = Color.White.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(RingingSlideSpec.TRACK_CORNER_DP.dp),
+                shape = RoundedCornerShape(
+                    if (largeButtons) RingingSlideSpec.LARGE_BUTTON_CORNER_DP.dp
+                    else RingingSlideSpec.TRACK_CORNER_DP.dp,
+                ),
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text("スヌーズ ${snoozeMinutes}分", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFECEEF3))
+                    Text(
+                        "スヌーズ ${snoozeMinutes}分",
+                        fontSize = if (largeButtons) RingingSlideSpec.LARGE_BUTTON_TEXT_SP.sp else 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFFECEEF3),
+                    )
                 }
             }
-            // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開
-            var presetsOpen by remember { mutableStateOf(false) }
-            Surface(
-                onClick = { presetsOpen = !presetsOpen },
-                color = Color.Transparent,
-                shape = RoundedCornerShape(14.dp),
-            ) {
-                Text(
-                    if (presetsOpen) "スヌーズ時間を選ぶ ▴" else "スヌーズ時間を選ぶ ▾",
-                    fontSize = 14.sp,
-                    color = Color(0xFFB7BECB),
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                )
-            }
-            if (presetsOpen) {
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    snoozePresets.take(6).forEach { m ->
-                        Surface(
-                            onClick = { onSnoozeAt(m) },
-                            modifier = Modifier.weight(1f).height(40.dp),
-                            color = Color.White.copy(alpha = 0.08f),
-                            shape = RoundedCornerShape(14.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("+${m}分", fontSize = 14.sp, color = Color(0xFFECEEF3))
+            if (!largeButtons) {
+                // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開
+                var presetsOpen by remember { mutableStateOf(false) }
+                Surface(
+                    onClick = { presetsOpen = !presetsOpen },
+                    modifier = Modifier.testTag(SNOOZE_CHOOSE_TAG),
+                    color = Color.Transparent,
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Text(
+                        if (presetsOpen) "スヌーズ時間を選ぶ ▴" else "スヌーズ時間を選ぶ ▾",
+                        fontSize = 14.sp,
+                        color = Color(0xFFB7BECB),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
+                if (presetsOpen) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        snoozePresets.take(6).forEach { m ->
+                            Surface(
+                                onClick = { onSnoozeAt(m) },
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                color = Color.White.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(14.dp),
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("+${m}分", fontSize = 14.sp, color = Color(0xFFECEEF3))
+                                }
                             }
                         }
                     }
                 }
             }
             Spacer(Modifier.height(12.dp))
-            // 停止はスライド式: 誤タップで止まらないよう左端の丸を右へドラッグ
-            SlideToStop(accent = accent, onAccent = onAccent, onStop = onDismiss)
-            Spacer(Modifier.height(10.dp))
+            // 停止は既定でスライド式: 誤タップで止まらないよう左端の丸を右へドラッグ。
+            // 大ボタンモード (#154) ではスライドを止めて、盤の .bb.p (高さ124・角丸32・24px・太さ600) にする
+            if (largeButtons) {
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().height(RingingSlideSpec.LARGE_BUTTON_HEIGHT_DP.dp).testTag(LARGE_STOP_TAG),
+                    shape = RoundedCornerShape(RingingSlideSpec.LARGE_BUTTON_CORNER_DP.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accent,
+                        contentColor = onAccent,
+                    ),
+                ) {
+                    Text(
+                        stringResource(R.string.common_stop),
+                        fontSize = RingingSlideSpec.LARGE_BUTTON_TEXT_SP.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            } else {
+                SlideToStop(accent = accent, onAccent = onAccent, onStop = onDismiss)
+            }
+            Spacer(Modifier.height(if (largeButtons) RingingSlideSpec.LARGE_BUTTON_GAP_DP.dp else 10.dp))
             Row(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
@@ -524,6 +579,15 @@ private fun RingingScreen(
 }
 
 internal const val SLIDE_THUMB_TAG = "slide-stop-thumb"
+
+/** 大ボタンモード (#154) の停止ボタン。テストで押す対象を他の「停止」と取り違えないための目印 */
+internal const val LARGE_STOP_TAG = "large-stop-button"
+
+/** スヌーズの大ボタン・「スヌーズ時間を選ぶ」・文字盤の目印。大きいボタンモードの寸法と出し分けをテストで確かめる */
+internal const val SNOOZE_BUTTON_TAG = "snooze-button"
+internal const val SNOOZE_CHOOSE_TAG = "snooze-choose"
+internal const val RING_DIAL_TAG = "ring-dial"
+internal const val TITLE_TAG = "ring-title"
 
 /**
  * 「スライドして停止」トラック。左端の丸を右へドラッグし、トラック幅の80%を

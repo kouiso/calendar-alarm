@@ -12,4 +12,15 @@ internal object RingingSlideSpec {
     const val SNOOZE_HEIGHT_DP = 80
     const val STOP_ICON_DP = 24
     const val TRACK_CORNER_DP = TRACK_HEIGHT_DP / 2
+
+    // 大きいボタンモード (#154)。盤 p154 の 2 列目 (.bb / .dial.sm / .rt) の値で、盤の 1px = 1dp。
+    // スヌーズと停止は同じ大きさ (.bb: 高さ124・角丸32・24px・太さ600)、ボタンの間は 12
+    const val LARGE_BUTTON_HEIGHT_DP = 124
+    const val LARGE_BUTTON_CORNER_DP = 32
+    const val LARGE_BUTTON_TEXT_SP = 24
+    const val LARGE_BUTTON_GAP_DP = 12
+    // 文字盤は 176 (通常は 290 のまま)、時刻は 66、予定名は 22
+    const val LARGE_DIAL_DP = 176
+    const val LARGE_DIAL_TIME_SP = 66
+    const val LARGE_TITLE_SP = 22
 }

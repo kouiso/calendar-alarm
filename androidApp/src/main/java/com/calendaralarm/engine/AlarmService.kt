@@ -352,6 +352,7 @@ class AlarmService : Service() {
                 this, instance.id, instance.title,
                 instance.snoozeMinutes.takeIf { it > 0 } ?: ringSettings.defaultSnoozeMinutes,
                 ringSettings.snoozePresets,
+                largeButtons = ringSettings.largeButtons,
                 stillValid = { synchronized(ringLock) { !destroyed && ringGen == gen } },
             )
         }
