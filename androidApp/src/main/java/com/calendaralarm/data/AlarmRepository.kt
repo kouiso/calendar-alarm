@@ -789,14 +789,17 @@ class AlarmRepository(
         // 書き戻しは鳴動・停止・スヌーズと同じロックの中で行う (#232)。
         // 上の読み取りから後に通信などを挟むので、その間に状態が変わった行がある。
         // ロックの中で読み直し、蘇生させない状態 (鳴動中・停止・スヌーズ・見逃し・飛ばし) になった行は書き戻さない。
-        // 取り消し (CANCELLED) の行は今までどおり、理想状態にあれば予約し直す (スイッチを ON に戻した時など)。
+        // 読んだ時にもう取り消し (CANCELLED) だった行は今までどおり、理想状態にあれば予約し直す (スイッチを ON に戻した時など)。
         // 読み取りの後にできた PENDING の行 (スヌーズの子など) は、この再同期では触らない (次の再同期で扱う)。
         // 再同期の全体はロックに入れない: 通信の間に停止ボタンが待たされるため
         ringTransitionLock.withLock {
             val current = db.scheduledInstances().all().associateBy { it.id }
             val noReviveNow = current.values.filter { it.state in NO_REVIVE_STATES }.map { it.id }.toSet()
             val stillPending = pendingRows.filter { current[it.id]?.state == AlarmState.PENDING.name }
-            val finalDesired = desired.filterNot { it.id in noReviveNow }
+            // 読んだ時に PENDING で、今は PENDING でない行も書き戻さない。停止がスヌーズの子を
+            // 取り消した (CANCELLED) 時に、持ち越しの予約として鳴らし直さないため
+            val leftPending = pendingRows.map { it.id }.toSet() - stillPending.map { it.id }.toSet()
+            val finalDesired = desired.filterNot { it.id in noReviveNow || it.id in leftPending }
             val scheduled = stillPending.associate { it.id to it.triggerAtMillis }
             val plan = AlarmPlanner.plan(scheduled, finalDesired, now)
             applyPlan(plan, finalDesired, reason, scheduled.keys)

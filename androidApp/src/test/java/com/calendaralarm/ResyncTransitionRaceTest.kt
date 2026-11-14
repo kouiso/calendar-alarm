@@ -170,4 +170,20 @@ class ResyncTransitionRaceTest {
         repository.resync("during ring")
         assertEquals(AlarmState.FIRED.name, state(rowId))
     }
+
+    @Test
+    fun `読み取りの後に停止で取り消されたスヌーズの子は、再同期で予約し直さない`() = runBlocking {
+        repository.resync("start")
+        repository.onFired(rowId)
+        repository.onSnoozed(rowId, 5)
+        val child = db.scheduledInstances().all().single { it.id.startsWith("$rowId:snz") }.id
+        assertEquals(AlarmState.PENDING.name, state(child))
+        // 停止と自動スヌーズが重なった時、停止がスヌーズの子を取り消す (dismissRow) のと同じ状態にする
+        repository.afterResyncReadForTest = {
+            repository.afterResyncReadForTest = null
+            repository.setState(child, AlarmState.CANCELLED)
+        }
+        repository.resync("during stop")
+        assertEquals(AlarmState.CANCELLED.name, state(child))
+    }
 }
