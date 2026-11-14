@@ -120,6 +120,16 @@
     <string name="repeat_monthly_day">毎月%1$d日</string>
     <string name="repeat_once">1回のみ</string>
     <string name="repeat_weekly_days">毎週 %1$s</string>
+    <string name="ring_status_alarm_muted">アラームの音量が0です。鳴っても音が出ません</string>
+    <string name="ring_status_all_muted">すべてのアラームをミュート中です。通知とタイマーは届きます</string>
+    <plurals name="ring_status_missed_recently">
+        <item quantity="other">直近24時間に鳴らせなかったアラームが%1$d件あります</item>
+    </plurals>
+    <plurals name="ring_status_missing_permission">
+        <item quantity="other">許可が%1$dつ足りません。このままだと鳴らないことがあります</item>
+    </plurals>
+    <string name="ring_status_no_alarm">予約中のアラームはありません</string>
+    <string name="ring_status_ready">鳴る準備ができています</string>
     <string name="rule_template_breaking_news">ニュース速報</string>
     <string name="rule_template_delivery">配達通知</string>
     <string name="rule_template_flight">フライト・ゲート変更</string>

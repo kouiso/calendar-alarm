@@ -14,7 +14,6 @@
   "shared/src/commonMain/kotlin/com/calendaralarm/shared/ai/MailEventExtractor.kt": 2,
   "shared/src/commonMain/kotlin/com/calendaralarm/shared/ai/NotificationRuleGenerator.kt": 1,
   "shared/src/commonMain/kotlin/com/calendaralarm/shared/logic/AlarmExpander.kt": 3,
-  "shared/src/commonMain/kotlin/com/calendaralarm/shared/logic/RingStatus.kt": 5,
   "shared/src/commonMain/kotlin/com/calendaralarm/shared/logic/SettingsPreview.kt": 4,
   "shared/src/commonMain/kotlin/com/calendaralarm/shared/weather/WeatherApi.kt": 16
 }
