@@ -29,6 +29,7 @@ xcodebuild -project CalendarAlarm.xcodeproj -target iosApp -sdk iphonesimulator 
 - コミット件名は英語 Conventional Commits (`type(scope): english subject`)
 
 ### Testing
+- UTF-8 のロケールが要る（テスト名が日本語のため）。`scripts/ci.sh` は自分で設定する。`./gradlew` を直接動かす時は `LC_ALL=C.UTF-8` を付ける
 ```bash
 ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest
 ```
