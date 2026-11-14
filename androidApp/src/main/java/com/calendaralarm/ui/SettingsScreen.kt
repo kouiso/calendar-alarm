@@ -942,20 +942,8 @@ private fun EventRulesCard(
                 TextButton(onClick = { showCodes = true }) { Text("編集") }
             }
             // 招待予定フィルタ
-            IconSettingRow(Icons.Default.FilterList) {
-                listOf(
-                    InviteStatus.ACCEPTED to "出席",
-                    InviteStatus.TENTATIVE to "未定",
-                    InviteStatus.NEEDS_ACTION to "未回答",
-                    InviteStatus.DECLINED to "辞退",
-                ).forEach { (s, label) ->
-                    FilterChip(
-                        selected = prefs.inviteFilter.allows(s),
-                        onClick = { scope.launch { settings.toggleInviteStatus(s); repository.resync("settings") } },
-                        label = { Text(label, maxLines = 1) },
-                        modifier = Modifier.padding(end = 4.dp),
-                    )
-                }
+            InviteFilterRow(prefs.inviteFilter) { s ->
+                scope.launch { settings.toggleInviteStatus(s); repository.resync("settings") }
             }
             // 鳴らす予定の種類と「予定なし」を一か所でまとめて切り替える (#79)
             EventTypeRingSwitches(
@@ -1654,6 +1642,45 @@ private fun RingTimesCard(appMinutesBefore: Int, useCalendarReminders: Boolean) 
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 招待予定のどの返事を鳴らすか。4 枚のチップ (出席・未定・未回答・辞退) を並べる。
+ * 1 行の Row だと、狭い画面や大きい文字で右端の「辞退」が幅 0 に潰れて押せなかった (#204)。
+ * 入りきらない時は次の行へ折り返す
+ */
+@Composable
+internal fun InviteFilterRow(
+    filter: com.calendaralarm.shared.model.InviteFilter,
+    onToggle: (InviteStatus) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Default.FilterList,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        FlowRow(Modifier.weight(1f)) {
+            listOf(
+                InviteStatus.ACCEPTED to "出席",
+                InviteStatus.TENTATIVE to "未定",
+                InviteStatus.NEEDS_ACTION to "未回答",
+                InviteStatus.DECLINED to "辞退",
+            ).forEach { (s, label) ->
+                FilterChip(
+                    selected = filter.allows(s),
+                    onClick = { onToggle(s) },
+                    label = { Text(label, maxLines = 1) },
+                    modifier = Modifier.padding(end = 4.dp),
                 )
             }
         }
