@@ -1059,25 +1059,24 @@ class AlarmService : Service() {
 }
 
 /**
- * 鳴動通知のチャンネル・全画面の入力 (#149, #153)。known=false は設定を読めていない状態で、
- * その間の仮の通知は DND を素通りするチャンネルも全画面 Intent も使わない
+ * 鳴動通知のチャンネル・全画面の入力 (#149, #153)。要求ごとに持ち、鳴動の座席を取った時の値を鳴動中の通知に使う
  */
 internal data class RingChannelInputs(
     val vibrate: Boolean,
     val ignoreDnd: Boolean,
     val forceFullScreen: Boolean,
-    val known: Boolean,
 ) {
     companion object {
-        /** 設定を読めなかった時。値は鳴らす経路の既定 (バイブあり・DND無視・全画面) だが、通知は known=false で絞る */
-        val UNKNOWN = RingChannelInputs(vibrate = true, ignoreDnd = true, forceFullScreen = true, known = false)
-        val DEFAULT = UNKNOWN
+        /**
+         * 設定を読めなかった時。鳴らす経路の既定 (バイブあり・DND無視・全画面) で出す。
+         * 静かな仮の通知にすると、後で鳴らす時の張り替えが「更新」扱いになり全画面が出ないため
+         */
+        val UNKNOWN = RingChannelInputs(vibrate = true, ignoreDnd = true, forceFullScreen = true)
 
         fun of(s: SettingsRepository.Settings) = RingChannelInputs(
             vibrate = s.vibrateWhileRinging,
             ignoreDnd = s.ignoreDnd,
             forceFullScreen = s.forceFullScreen,
-            known = true,
         )
     }
 }
