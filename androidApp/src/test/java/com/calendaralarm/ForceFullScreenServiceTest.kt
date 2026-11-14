@@ -60,6 +60,7 @@ class ForceFullScreenServiceTest {
             app.container.settings.setVibrateWhileRinging(true)
         }
         StopUiPermissions.lastProbedVibrate = null
+        StopUiPermissions.lastProbedIgnoreDnd = null
     }
 
     private fun seed(id: String) = runBlocking {
@@ -133,5 +134,17 @@ class ForceFullScreenServiceTest {
         assertTrue(waitUntil(5_000) { c.get().isPlaying() })
         assertTrue(waitUntil(3_000) { StopUiPermissions.lastProbedVibrate != null })
         assertEquals("バイブなしで鳴る時はバイブなしのチャンネルで判定すること", false, StopUiPermissions.lastProbedVibrate)
+    }
+
+    @Test
+    fun `おやすみモード尊重で鳴る時は停止手段の判定にも尊重側のチャンネルを渡す`() {
+        // おやすみモード中ではない (割り込みフィルタ=すべて許可) ので鳴る。通知は尊重側のチャンネルに出る
+        runBlocking { app.container.settings.setIgnoreDnd(false) }
+        seed("fsi-dnd")
+        val c = start("fsi-dnd")
+        assertTrue(waitUntil(5_000) { c.get().isPlaying() })
+        assertEquals(AlarmService.CHANNEL_ID_VIB_DND, shadowOf(c.get()).lastForegroundNotification!!.channelId)
+        assertTrue(waitUntil(3_000) { StopUiPermissions.lastProbedIgnoreDnd != null })
+        assertEquals("通知を出したのと同じチャンネルで判定すること", false, StopUiPermissions.lastProbedIgnoreDnd)
     }
 }

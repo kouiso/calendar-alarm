@@ -1,10 +1,11 @@
 # Android の宣言の表
 
-対象は `androidApp/src/main/AndroidManifest.xml` の権限 14 とサービス 3 と受信 4 である。
+対象は `androidApp/src/main/AndroidManifest.xml` の権限 15 とサービス 3 と受信 4 である。
 この表は棚卸しだけを行う。残すか消すかは決めない。
 「持ち主の判断」の欄は空けてある。答えが出たら埋める。
 
 - 行番号は 2026-11-13 時点の `master` のもの。
+  - 例外: 権限 #15 は #191 で足した行。#191 は manifest の 15 行目にコメント、16 行目に権限の計 2 行を足す（`git diff origin/master...HEAD` で確認）。#7 WAKE_LOCK（15）以降の行番号は、権限もサービスも受信も 2 つずつ後ろへずれる（表の行番号は直していない）。
 - 「審査で要る説明」の出典は Google Play ヘルプと Android の公式資料（2026-11-13 に確認）。
   - 正確なアラームは https://support.google.com/googleplay/android-developer/answer/13986130
   - 全画面の通知は https://support.google.com/googleplay/android-developer/answer/13161072
@@ -14,7 +15,7 @@
 - Play Console の申告画面は操作していない。
 - Play が見るのはライブラリの manifest を合成した後の manifest である。ライブラリが足す権限は末尾にまとめた。
 
-## 権限（14）
+## 権限（15）
 
 | # | 宣言（manifest の行） | 使っている場所 | 無いと何が起きるか | 審査で要る説明 | 持ち主の判断 |
 |---|---|---|---|---|---|
@@ -32,6 +33,7 @@
 | 12 | RECEIVE_BOOT_COMPLETED（24） | `engine/BootReceiver.kt:17-25`（再起動後と自分の更新後に `SyncWorker.enqueueNow`） | work-runtime 2.10.0 が同じ権限を足す。この行だけを消しても合成後の manifest には残る。権限が合成後にも無い場合は `BootReceiver` が再起動後の放送を受けられない | 申告の項目なし | |
 | 13 | REQUEST_IGNORE_BATTERY_OPTIMIZATIONS（26） | `ui/SettingsScreen.kt:597`、`ui/TroubleshootingScreen.kt:187`（省電力の解除を頼む画面を直接開く）。確認は `ui/SettingsScreen.kt:513`、`ui/TroubleshootingScreen.kt:112` | 解除を頼む画面を直接開けない。鳴動そのものは影響を受けない（最適化の対象でも鳴ると `ui/TroubleshootingScreen.kt:181` のコメントが書いている。`res/values/strings.xml:173` の文言も同じ） | 申告の項目なし。ただし Android の公式資料は次のように書いている。Doze と App Standby の除外を直接要求することを Play の規約が禁じている。アプリの中核機能に悪影響が出る場合だけが例外である。出典は https://developer.android.com/training/monitoring-device-state/doze-standby 。この表の作成者は規約の文面そのものを読んでいない。このアプリが当たるかは未判断 | |
 | 14 | INTERNET（28） | `shared/.../weather/WeatherApi.kt:33`、`:45`、`:77`（天気の取得）<br>`shared/.../ai/OpenRouterApi.kt:35`（AI による予定の抽出）<br>`data/calendar/GoogleCalendarTypes.kt:33`（Google カレンダー API） | 天気と AI による予定の抽出と Google カレンダーの取り込みが使えない。端末のカレンダーとアラーム本体は動く | 申告の項目なし。通信先と送るデータ（予定の文章と地名）がデータの安全性の申告の材料になる見込み | |
+| 15 | ACCESS_NOTIFICATION_POLICY（16。#191 で追加） | `engine/DndPolicy.kt` の `readPolicyAccessGranted`（`isNotificationPolicyAccessGranted` で許可を確認。鳴動の判断・設定画面 `ui/SettingsScreen.kt`・検査画面 `ui/TroubleshootingScreen.kt:137` が共通で使う）、`ui/SettingsScreen.kt:1421` と `ui/TroubleshootingScreen.kt:212`、`:230`（`ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS` を開く）。許可が無い間は、設定が ON でも OFF と同じに扱う | 設定の「通知ポリシーへのアクセス」の一覧にこのアプリが出ない。利用者が許可できないので、おやすみモード中に鳴動チャンネルの bypassDnd が効かない（#191 のレビュー指摘） | 申告の項目なし（未確認） | |
 
 ## サービス（3）
 
@@ -71,7 +73,7 @@ work-runtime 2.10.0 の manifest にある権限は WAKE_LOCK と ACCESS_NETWORK
 
 | 種類 | 計画の数 | 実際の数 | 方法 |
 |---|---|---|---|
-| 権限（`uses-permission`） | 14 | 14 | manifest の 6-28 行を数えた |
+| 権限（`uses-permission`） | 14 | 15 | manifest の 6-30 行を数えた。#15 は #191 で追加 |
 | サービス（`service`） | 3 | 3 | AlarmService と NotificationAlarmService と MailPrintService |
 | 受信（`receiver`） | 4 | 4 | AlarmReceiver と BootReceiver と TimeChangeReceiver と NextAlarmWidgetReceiver |
 | ライブラリが足す権限 | なし | 1 | ACCESS_NETWORK_STATE（上の節） |

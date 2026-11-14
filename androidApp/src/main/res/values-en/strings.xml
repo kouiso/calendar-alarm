@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="alarm_channel_novib_dnd">Alarm (no vibration, respects Do Not Disturb)</string>
+    <string name="alarm_channel_vib_dnd">Alarm (respects Do Not Disturb)</string>
     <string name="alarm_edit_add_skip_date">Add skip date</string>
     <string name="alarm_edit_anchor">Starts: %1$s</string>
     <string name="alarm_edit_change">Change</string>
@@ -153,6 +155,13 @@
     <string name="rules_target_apps">Apps (empty = all apps)</string>
     <string name="rules_title">Notification alarms</string>
     <string name="rules_title_needs_permission">Notification alarms (needs permission)</string>
+    <string name="settings_ignore_dnd_hint_off">No ring during Do Not Disturb; only a notification is left</string>
+    <string name="settings_ignore_dnd_preview_lead">If you turn it off</string>
+    <string name="settings_ignore_dnd_hint_on">Alarms ring even when your phone is on silent</string>
+    <string name="settings_ignore_dnd_switch_needs_permission">Ring during Do Not Disturb (permission needed)</string>
+    <string name="settings_ignore_dnd_policy_missing">This needs the “Do Not Disturb exception” permission.</string>
+    <string name="settings_ignore_dnd_open_permission">Open permission</string>
+    <string name="settings_ignore_dnd_title">Ring during Do Not Disturb</string>
     <string name="share_import_ai_unavailable">AI reading is not available in this build. Enter the date and time to add it.</string>
     <string name="share_import_cancel">Cancel</string>
     <string name="share_import_no_event">No event was found in the text. Enter the date and time to add it.</string>
@@ -188,6 +197,13 @@
     <string name="trouble_dnd_desc">Allow “Alarms” in Do Not Disturb so alarms ring while it is on.</string>
     <string name="trouble_dnd_ng">Alarms won\'t ring in Do Not Disturb</string>
     <string name="trouble_dnd_ok">Alarms allowed in Do Not Disturb</string>
+    <string name="trouble_dnd_off">During Do Not Disturb, alarms do not ring and only a notification is left (Do Not Disturb is off right now)</string>
+    <string name="trouble_dnd_blocked">Do Not Disturb is on, so alarms do not ring; only a notification is left</string>
+    <string name="trouble_dnd_blocked_desc">Turn on “Ring during Do Not Disturb” and allow notification policy access, and alarms ring during Do Not Disturb.</string>
+    <string name="trouble_dnd_policy_desc">“Ring during Do Not Disturb” needs notification policy access. Tap to grant it for this app.</string>
+    <string name="trouble_dnd_policy_na">Not needed while “Ring during Do Not Disturb” is off</string>
+    <string name="trouble_dnd_policy_ng">Cannot ring during Do Not Disturb (policy access not granted)</string>
+    <string name="trouble_dnd_policy_ok">Can ring during Do Not Disturb</string>
     <string name="trouble_exact_desc">The exact alarm permission is needed to ring on time.</string>
     <string name="trouble_exact_ng">Exact alarms not allowed</string>
     <string name="trouble_exact_ok">Exact alarms allowed</string>

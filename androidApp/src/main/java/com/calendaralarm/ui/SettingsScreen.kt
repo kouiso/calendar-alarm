@@ -67,6 +67,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
@@ -83,15 +85,21 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.calendaralarm.R
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.db.CalendarPrefEntity
@@ -1226,6 +1234,9 @@ private fun RingingCard(
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
     val context = LocalContext.current
+    // 通知ポリシーへのアクセス許可は設定アプリで変わるので、画面に戻った時に読み直す
+    val policyTick = rememberResumeTick()
+    val policyGranted = remember(policyTick) { com.calendaralarm.engine.readPolicyAccessGranted(context) }
     var soundSelectionFailed by remember { mutableStateOf(false) }
     val soundPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -1403,6 +1414,15 @@ private fun RingingCard(
                     }
                 }
             }
+            // ON は通知チャンネルの bypassDnd。効くには通知ポリシーへのアクセス許可が要る。無い間はスイッチを押せなくして許可への道を下に置く (#149)
+            IgnoreDndRow(
+                checked = p.ignoreDnd,
+                policyGranted = policyGranted,
+                onCheckedChange = { scope.launch { settings.setIgnoreDnd(it) } },
+                onOpenPermission = {
+                    context.openSafely(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+                },
+            )
             // 全アラーム一括ミュート (通知・タイマーは止めない)
             IconSettingRow(Icons.Default.VolumeOff) {
                 Text(
@@ -1659,6 +1679,110 @@ private fun RingTimesCard(appMinutesBefore: Int, useCalendarReminders: Boolean) 
         }
     }
 }
+
+/**
+ * 「おやすみモード中も鳴らす」の行 (#149、盤 p149)。許可が無い間は、保存値に関係なくスイッチを OFF で押せない表示にし、
+ * 見出し・説明・アイコンを薄くして、下に案内 (普通の文字色) と枠付きの「許可を開く」を置く。
+ * 許可が無い ON は鳴動側も OFF と同じに扱う ([com.calendaralarm.engine.effectiveIgnoreDnd]) ので、画面と動きが一致する
+ */
+@Composable
+internal fun IgnoreDndRow(
+    checked: Boolean,
+    policyGranted: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onOpenPermission: () -> Unit,
+) {
+    val title = stringResource(R.string.settings_ignore_dnd_title)
+    val dim = if (policyGranted) 1f else 0.6f
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val iconTint = if (policyGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+        Icon(
+            CrescentMoonIcon,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(20.dp).testTag(IGNORE_DND_ICON_TAG),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f).alpha(dim)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                stringResource(R.string.settings_ignore_dnd_hint_on),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        val label = if (policyGranted) title else stringResource(R.string.settings_ignore_dnd_switch_needs_permission)
+        Switch(
+            checked = checked && policyGranted,
+            onCheckedChange = onCheckedChange,
+            enabled = policyGranted,
+            modifier = Modifier.semantics { contentDescription = label },
+        )
+    }
+    if (!policyGranted) {
+        Column(
+            Modifier.fillMaxWidth().padding(start = 32.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                stringResource(R.string.settings_ignore_dnd_policy_missing),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            // 盤の .btn: 塗りつぶしのアクセント (--ac / --onac)、高さ 52、角丸 26、幅いっぱい
+            val container = MaterialTheme.colorScheme.primary
+            Button(
+                onClick = onOpenPermission,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag(IGNORE_DND_OPEN_PERMISSION_TAG),
+                shape = RoundedCornerShape(26.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = container,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
+            ) {
+                Text(stringResource(R.string.settings_ignore_dnd_open_permission), fontWeight = FontWeight.SemiBold)
+            }
+        }
+    } else {
+        // 盤 1. のカードの下の .prev 箱。許可がある間だけ、スイッチの ON/OFF に関わらず「オフにすると」を見せる
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 8.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .testTag(IGNORE_DND_PREVIEW_TAG),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                stringResource(R.string.settings_ignore_dnd_preview_lead),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                stringResource(R.string.settings_ignore_dnd_hint_off),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+}
+
+internal const val IGNORE_DND_ICON_TAG = "ignore_dnd_icon"
+internal const val IGNORE_DND_OPEN_PERMISSION_TAG = "ignore_dnd_open_permission"
+internal const val IGNORE_DND_PREVIEW_TAG = "ignore_dnd_preview"
 
 /** 鳴らす予定の種類 6 つと「予定なし」を、名前つきのスイッチで並べる (#79)。 */
 @Composable

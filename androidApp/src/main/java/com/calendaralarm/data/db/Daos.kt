@@ -70,6 +70,10 @@ interface ScheduledInstanceDao {
     @Query("UPDATE scheduled_instances SET state = 'PENDING' WHERE id = :id AND state = 'FIRED'")
     suspend fun setPendingIfFired(id: String): Int
 
+    /** 鳴動中 (FIRED) の行だけを MISSED にする。先に停止された終端は上書きしない (更新行数を返す, #149)。 */
+    @Query("UPDATE scheduled_instances SET state = 'MISSED' WHERE id = :id AND state = 'FIRED'")
+    suspend fun setMissedIfFired(id: String): Int
+
     /** 鳴ったが片付いていない行 (FIRED)。途中で途切れた鳴動の鳴らし直しに使う。 */
     @Query("SELECT * FROM scheduled_instances WHERE state = 'FIRED' AND triggerAtMillis > :since AND triggerAtMillis <= :now ORDER BY triggerAtMillis ASC")
     suspend fun firedBetween(since: Long, now: Long): List<ScheduledInstanceEntity>

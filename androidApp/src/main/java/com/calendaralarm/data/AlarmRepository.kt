@@ -986,6 +986,23 @@ class AlarmRepository(
         return db.scheduledInstances().latestFiredSince(since)?.toInstance()
     }
 
+    /**
+     * おやすみモードで鳴らさなかった行を「鳴らせなかった」にする (#149)。鳴動中 (FIRED) のままの時だけ書き、
+     * 先に停止された行を MISSED で上書きしない。停止・スヌーズと同じ [ringTransitionLock] の中で書き、
+     * onScheduleChanged はロックを放してから呼ぶ。書いたら true (見逃しの通知はその時だけ出す)
+     */
+    suspend fun markDndSuppressed(id: String, detail: String): Boolean {
+        val done = ringTransitionLock.withLock {
+            if (db.scheduledInstances().setMissedIfFired(id) == 0) return@withLock false
+            val row = db.scheduledInstances().byId(id)
+            audit("MISS", "$id: $detail", row)
+            row?.standaloneAlarmId?.let { disableConsumedOneShots(setOf(it)) }
+            true
+        }
+        if (done) onScheduleChanged?.invoke()
+        return done
+    }
+
     /** 試験用の差込口: [markMissed] が MISSED を書く直前に呼ぶ。id 指定・引数なしの両方 (#366) */
     @Volatile internal var beforeMissedWriteForTest: (suspend () -> Unit)? = null
 

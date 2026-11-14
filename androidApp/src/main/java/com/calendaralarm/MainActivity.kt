@@ -148,7 +148,9 @@ class MainActivity : ComponentActivity() {
                         val force = prefs?.forceFullScreen ?: true
                         val notificationsOk = runCatching {
                             com.calendaralarm.engine.StopUiPermissions.notificationsUsable(
-                                this@MainActivity, prefs?.vibrateWhileRinging ?: true,
+                                this@MainActivity,
+                                prefs?.vibrateWhileRinging ?: true,
+                                prefs?.ignoreDnd ?: true,
                             )
                         }.getOrDefault(true)
                         id?.takeIf {

@@ -103,6 +103,8 @@ class SettingsRepository(private val context: Context) {
         val volumeCrescendo: Boolean = false,
         /** 鳴動中にバイブするか。 */
         val vibrateWhileRinging: Boolean = true,
+        /** おやすみモード(DND)中でも鳴動通知を割り込ませるか。通知ポリシーへのアクセス許可が無いとOSが無視する。 */
+        val ignoreDnd: Boolean = true,
         /** 鳴動の持続時間 (秒)。0=制限なし (従来どおり10分の安全上限で自動停止)。
          *  競合の Alarm Duration (5s〜infinite, #148) に対応。 */
         val ringDurationSec: Int = 0,
@@ -179,6 +181,7 @@ class SettingsRepository(private val context: Context) {
             alarmVolumePercent = p[KEY_ALARM_VOLUME] ?: 0,
             volumeCrescendo = p[KEY_VOL_CRESCENDO] ?: false,
             vibrateWhileRinging = p[KEY_VIBRATE] ?: true,
+            ignoreDnd = p[KEY_IGNORE_DND] ?: true,
             // 鳴動持続時間 (#148)。負数は来ないはずだが、来ても「制限なし」と同じ扱いに倒す
             ringDurationSec = (p[KEY_RING_DURATION] ?: 0).coerceAtLeast(0),
             autoSnooze = p[KEY_AUTO_SNOOZE] ?: false,
@@ -287,6 +290,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAlarmVolumePercent(v: Int) = edit { it[KEY_ALARM_VOLUME] = v }
     suspend fun setVolumeCrescendo(v: Boolean) = edit { it[KEY_VOL_CRESCENDO] = v }
     suspend fun setVibrateWhileRinging(v: Boolean) = edit { it[KEY_VIBRATE] = v }
+    suspend fun setIgnoreDnd(v: Boolean) = edit { it[KEY_IGNORE_DND] = v }
     /** 鳴動持続時間 (秒)。0=制限なし (#148)。 */
     suspend fun setRingDurationSec(v: Int) = edit { it[KEY_RING_DURATION] = v.coerceAtLeast(0) }
     /** 放置で自動スヌーズするか (#145)。 */
@@ -454,6 +458,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_ALARM_VOLUME = intPreferencesKey("alarm_volume_percent")
         val KEY_VOL_CRESCENDO = booleanPreferencesKey("volume_crescendo")
         val KEY_VIBRATE = booleanPreferencesKey("vibrate_while_ringing")
+        val KEY_IGNORE_DND = booleanPreferencesKey("ignore_dnd")
         val KEY_RING_DURATION = intPreferencesKey("ring_duration_sec")
         val KEY_AUTO_SNOOZE = booleanPreferencesKey("auto_snooze")
         val KEY_AUTO_SNOOZE_MAX = intPreferencesKey("auto_snooze_max")
