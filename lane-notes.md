@@ -21,6 +21,13 @@ DISK 2026-11-14T13:00Z | / 19 GiB free. Big: ~/ghq 90G, /private/tmp 9.3G, CoreS
 BRAIN ALERT-11 | Sonnet member: the 3 brain-sync stash commits' line is already in HEAD (6bd140a8c); nothing to apply; clears after 24h.
 IN WORK 13:00Z | #370 master merged (1823870), independent Opus review running | manager (Fable high, name ca-manager) scene a running | Pixel member (ca-pixel): stills for #363 #365 #373 #188 #191 from CI APKs, muted, no ringing, files to evidence/
 370 | FIX | review FAIL must 1 (body evidence named old head a06a6b5) want 1 (no CI guard for readonly:true -> separate PR) nit 2 | head 1823870 | Android CI 43595992282 success | https://github.com/kouiso/calendar-alarm/pull/370#pullrequestreview-5904393746 | body fix drafted, tone check running; then fresh re-review
+MANAGER scene a (ca-manager, Fable high, 13:2xZ):
+- #370 may land without a lane run if, all at 1823870: (1) non-author review must 0 saying why "never run" lanes are approved; (2) ruby -c + `fastlane lanes` lists ios fad, testflight_upload, adhoc_local; (3) run each new lane with no build_number and show the abort (non-zero + user_error text) as the PR image evidence (reviewer confirms guard is first statement, no before_all). Merge note: merge != row 36 done; no permission to run testflight_upload with upload on.
+- order: free disk >=20 GiB -> #370 -> read-only #189 probes (12 mini UDID in the 3 ad-hoc profiles, AC-9, pending alarms) -> Pixel stills only at heads the cloud lane names frozen (on signature mismatch never uninstall; build locally) -> #189 iPhone -> row 6 -> row 19.
+- fad.yml: WAIT; ask main session for the owner's verbatim line + locator for "fad.yml, android, 2 runs".
+- sound: one owner message when silent work runs out (#191 DND ring, #189 two sounds, rows 7/12/35/V3). #191 build: no alarm fires. iPhone: 0 pending alarms before chip taps. Row 6: pin harness APK SHA and show DND silences it.
+- #189: 6 XCTests must be seen executing at head; ad-hoc cannot host XCTest -> run what needs no UI/AlarmKit via scripts/ci.sh:37-40 swiftc route; rest -> owner message (iphone-install.md:38).
+- PASS LINE evidence comment: PR + 40-char head + proof installed build is that head (CI run id / lane + version read back); device model, OS, locale, width/font; mute log before launch; design board frame; before (base SHA) and after images; not-covered list; no real names/events/UDIDs.
 needs owner:
 - (answered 13:10Z 「消してええ」) deleted the 3 simulators hm-a4-voice-sim, hm-a5-photo-sim, iPhone 17 Pro; Devices 6.6G -> 12K; df still 19 GiB right after (recheck before #189 build).
 - One sound window for: #191 ring-through-DND case, #189 two bundled sounds, rows 7/12/35/V3.
