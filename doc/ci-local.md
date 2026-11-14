@@ -75,6 +75,16 @@ FAD 配布と iOS device sync の既存 workflow は保持する。
 bash scripts/test-ci-contract.sh
 ```
 
+この契約検査は `task`（go-task）の実物を使う。無い環境では、入れ方を出して非ゼロで止まる。
+入れ方は次のいずれか。
+
+- macOS: `brew install go-task`
+- どの OS でも: `go install github.com/go-task/task/v3/cmd/task@latest`
+- そのほか: <https://taskfile.dev/installation/>
+
+`scripts/ci.sh`・`scripts/emulator/**`・`scripts/test-ci-contract.sh`・`Taskfile.yml` を変える PR では、
+CI の `CI contract test` workflow（`.github/workflows/ci-contract.yml`、go-task 3.40.1 を固定）が同じ検査を回す。
+
 契約検査では Gradle、Xcode、実デバイス呼出しを代替する。
 既存 harness 注入と evaluator は実際のコードを実行する。
 この結果は実 SDK の build、emulator、実機、配布の成功とは区別する。
