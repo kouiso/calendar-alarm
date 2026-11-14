@@ -57,7 +57,8 @@ jobs:
           ls -la ~/.android/debug.keystore
 
       - name: Build debug APK
-        run: ./gradlew :androidApp:assembleDebug --stacktrace
+        # versionCode は run number で上げる（FAD の新旧判別のため。iOS の CFBundleVersion と同じ番号）
+        run: ./gradlew :androidApp:assembleDebug -PversionCode="${{ github.run_number }}" --stacktrace
 
       - name: Verify APK signature
         run: |
