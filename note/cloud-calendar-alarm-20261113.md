@@ -1,4 +1,4 @@
-IN-PROGRESS 2026-11-14 07:07 UTC（RESUME を受けて再開）
+IN-PROGRESS 2026-11-14 07:14 UTC（RESUME を受けて再開）
 
 calendar-alarm [cloud]
 
@@ -8,11 +8,204 @@ calendar-alarm [cloud]
 
 - 開いている PR 10（うち #141 は対象外、#358 はこの記録）/ 開いている issue 174
 
+## PR の今（2026-11-14 07:15 UTC）
+
+| PR | 区分 | head | CI | 独立レビュー | 足りないもの（持ち主） |
+|---|---|---|---|---|---|
+| #362（#309） | a | 68166d0 | 成功 | [must 0](https://github.com/kouiso/calendar-alarm/pull/362#issuecomment-6871833158) | 「merge #362」 |
+| #359（#231） | a | 804760a | 成功 | [must 0](https://github.com/kouiso/calendar-alarm/pull/359#issuecomment-6871690563) | 「merge #359」 |
+| #360（#232） | a | aa78f2b | 成功 | [must 0](https://github.com/kouiso/calendar-alarm/pull/360#issuecomment-6871728088) | 「merge #360」（#359 の後。master を取り込み直す） |
+| #361（#243） | a | 8c28816 | 成功 | [must 0](https://github.com/kouiso/calendar-alarm/pull/361#issuecomment-6873615277) | 「merge #361」（#360 の後。master を取り込み直す） |
+| #364（#297） | b | dc98b92 | 実行中 | レビュー中 | レビューの結果 |
+| #191（#149） | c | 3a66da2 | 実行中 | レビュー中（OFF の意味を判断役の決定に合わせて直した後） | 画面の確認、端末での比較、「merge #191」 |
+| #188（#154） | c | aecf600 | 成功 | [must 0](https://github.com/kouiso/calendar-alarm/pull/188#issuecomment-6873609241) | 画面の確認、外観の料金の判断、「merge #188」 |
+| #363（#204） | c | 0e7eb9e | 成功 | [must 0](https://github.com/kouiso/calendar-alarm/pull/363#issuecomment-6873503995) | 画面の確認と前後のスクリーンショット、「merge #363」 |
+| #189（#147） | c | fc92a5f | 成功（Android だけ） | [must 0（読んだだけ）](https://github.com/kouiso/calendar-alarm/pull/189#issuecomment-6871360657) | Mac での iOS ビルドとテスト 2 件、実機での鳴動、画面の確認、「merge #189」 |
+| #141 | 対象外 | - | - | - | 依頼文どおり触っていない |
+| #358 | この記録 | - | - | - | - |
+
+### プロダクトの判断（判断役 Fable の決定。2026-11-14 07:15 UTC）
+
+1. #191 の OFF の意味: OS に従う。OS がアラームを通す時は鳴らし、止める時だけ鳴らさない。→ 3a66da2 で入れた。
+2. #191 のスイッチ: 許可が無くても押せるまま。ON で許可が無い時は、その状態をスイッチの所に出す。→ 3a66da2 で入れた。#149 のデザイン案（押せない）とは違う。画面の確認で見てほしい。
+3. #188: フォント選択は持たない。iOS は各画面がテーマに従うところまで。→ aecf600 で仕様書に書いた。料金は持ち主のまま。
+4. #189: 「任意の MP3 は使えない」とは書かない（実際に使えるため）。代わりに「選ぶ」の近くに、使えるファイルの種類と、先頭の約 30 秒だけを使うことを書く。→ Swift の文言なので Mac で入れる（DEVICE）。#147 の終了条件の言い換えも要る。
+5. #255 の残り（画面の再同期の呼び出しを 1 か所へ）: #359・#188・#191・#363 が全部入ってから。
+6. #236: 先に #265（エミュレータで今は鳴らないことの記録）。`emulator_verify.yml` で取れる見込み（未確認）。その後、#360 が入ってから #266 を小さく作る。
+
 ## マージ（取り込み）について
 
 - RESUME の文は「取り込みを任せる」と言うが、最初の依頼文には「このチャットで持ち主が merge #N と打った時だけマージする。持ち主のものらしい GitHub の承認でも足りない」とある。取り込みは元に戻しにくく、別のセッション経由の委任はこの条件を満たさない。
 - そこでマージはしない。どの PR も、独立レビューが must 0・CI 成功まで持っていき、下の OWNER に「merge #N を打てば入る」と書く。
 - 持ち主がこのチャットで「merge #359」などと打てば、すぐ入れる。
+
+## 残りの issue 145 件の仕分け（2026-11-14 07:14 UTC）
+
+### IN-PR（開いている PR が作業を持つ）
+
+- #204: PR #363
+- #254: PR #359
+- #255: PR #359
+- #257: PR #360
+- #258: PR #360
+- #282: PR #361
+- #297: PR #364
+- #309: PR #362
+
+### DEVICE（端末・エミュレータ・スクリーンショットが要る）
+
+- #221: iOS 26+ 多機種の実機 E2E 基盤（選択肢比較は DOC で可、PoC と複数機種実行は実機/Mac）。費用ゼロ既定はオーナー決定済み
+- #261: 裏の更新が実機でどの頻度で走るか計測
+- #265: ロック解除前の再起動でアラームが鳴らないことを emulator/実機で記録
+- #267: ロック解除前に鳴動画面と音が動くことを emulator/実機で確認
+- #270: バックアップから戻した端末で設定の付き先・見逃し通知を確認（実機/emulator）
+- #274: 実機か Mac で端末カレンダーの終日予定の開始が現地0時で返ることを確かめる
+- #337: ロック中と他アプリ上の RingingOverlay を emulator/実機で撮って鳴動画面と並べる
+- #338: emulator/実機 360x740dp のライト・ダーク screenshot を板と並べる（予定画面。コードの形そろえ自体は Kotlin で可）
+- #340: emulator/実機 360x740dp のライト・ダーク screenshot を板と並べる（アラーム一覧・編集。コードの形そろえ自体は Kotlin で可）
+- #342: emulator/実機 360x740dp のライト・ダーク screenshot を板と並べる（タイマー/ストップウォッチ。コードの形そろえ自体は Kotlin で可）
+- #344: emulator/実機 360x740dp のライト・ダーク screenshot を板と並べる（設定画面。コードの形そろえ自体は Kotlin で可）
+- #346: emulator/実機 360x740dp のライト・ダーク screenshot を板と並べる（鳴動画面・通知。コードの形そろえ自体は Kotlin で可）
+- #348: emulator/実機 360x740dp のライト・ダーク screenshot を板と並べる（権限の画面。コードの形そろえ自体は Kotlin で可）
+- #350: emulator/実機 360x740dp のライト・ダーク screenshot を板と並べる（許可を頼む画面。コードの形そろえ自体は Kotlin で可）
+- #352: emulator/実機 360x740dp のライト・ダーク screenshot を板と並べる（下タブ MainActivity.kt。コードの形そろえ自体は Kotlin で可）
+- #354: emulator/実機 360x740dp のライト・ダーク screenshot を板と並べる（TroubleshootingScreen。コードの形そろえ自体は Kotlin で可）
+- #356: targetSdk 35→36 (gradle/libs.versions.toml; code S) の後、emulator で予約・鳴動・停止・スヌーズ・再起動後鳴動を確認し Android 16 挙動変更の確認結果を記録
+- #266: Direct Boot の作り直し。判断役の決定で、先に #265（エミュレータでの再現の記録）を取り、#360 が入ってから小さく作る。
+
+### DEVICE（iOS。Mac と Xcode が要る。この Linux では作れない）
+
+- #219: iCloud/EventKit 正式対応。合格は実機 iOS 26+ で iCloud 予定が AlarmKit で鳴ること
+- #256: iOS 設定変更から再同期へ
+- #259: EKEventStoreChanged で再同期
+- #260: BGAppRefreshTask 追加
+- #262: 最後の取り込み時刻を予定画面とウィジェットに
+- #263: CAPACITY_SKIP を失敗に数えない
+- #264: iOS 「○月○日 ○時の分まで予約済み」表示
+- #273: iOS に「すべてミュート中」表示
+- #276: EventKit 終日を UTC 0時に直して渡す
+- #277: 起点日読み込みを保存の逆変換にし TZ 往復テスト
+- #279: iOS 同じ直し（今日鳴るか）
+- #281: iOS 一覧「次」に日を入れる
+- #283: iOS に同じ直し（指定の引き継ぎ）
+- #285: iOS 保存と画面に入れる（全部/この回だけ）
+- #287: iOS 診断共有の入口
+- #294: iOS 日付時刻表示を端末設定に
+- #295: 設定画面を Localizable.xcstrings で引き英語追加
+- #296: 天気の言語を端末に合わせる
+- #302: 同じ表を Swift テストで読み iOS 写しと照合
+- #303: SharedBridge へ判定を移し Swift の写しを消す
+- #305: iOS resync を shared の突き合わせに差し替え。Mac と実機
+- #307: iOS 側の種類判定を直す（#306 の決定待ちでもある）
+- #310: ci.sh に ios-test(xcodebuild) 追加＋macOS job。Mac/macOS CI で XCTest 11本が走ること
+- #311: ci.sh ios-logic に swiftc 2本をまとめる（Mac で走らせる検証）。スクリプト/文書変更自体は Linux でも書けるが合格は Mac 実行
+- #312: iOS 題の既定を文字の表から引く
+- #326: iOS 設定・予定詳細の鳴らし方/終日の言葉
+- #328: iOS でテーマ既定の時の印とインディゴ保存を直す
+- #331: iOS 予定行の「○分前」札を下段へ
+- #334: iOS 予定行の鳴らない理由1行（#333 の後）
+- #339: Swift/SwiftUI の形そろえ＋Mac のビルドと機種別 screenshot
+- #341: Swift/SwiftUI の形そろえ＋Mac のビルドと機種別 screenshot
+- #343: Swift/SwiftUI の形そろえ＋Mac のビルドと機種別 screenshot
+- #345: Swift/SwiftUI の形そろえ＋Mac のビルドと機種別 screenshot
+- #347: Swift/SwiftUI の形そろえ＋Mac のビルドと機種別 screenshot
+- #349: Swift/SwiftUI の形そろえ＋Mac のビルドと機種別 screenshot
+- #351: Swift/SwiftUI の形そろえ＋Mac のビルドと機種別 screenshot
+- #353: Swift/SwiftUI の形そろえ＋Mac のビルドと機種別 screenshot
+
+### OWNER（持ち主の判断・操作が要る）
+
+- #140: 未チェック項目は同意管理・ストア申告・本番 AdMob 設定。iOS 証跡の扱いもオーナー判断。PR #141 は open
+- #203: 「タイトルコード」を削除するか維持するかの判断（必要性の記録は DOC で先行）。既存保存値の移行設計が要る
+- #208: メール/端末通知/アラームの経路別ON/OFF。メール実現可否の先行調査と判断。#213/#215 と重複範囲あり
+- #209: ロゴ/アイコン3案比較をオーナーが採用承認（デザイン好み）
+- #210: ストア公開前の公開可否判定表・法務/プライバシー/サポート情報・オーナー承認
+- #211: 設定画面の各機能の存廃判断（監査表は DOC で先行可）。#203 #217 #218 を含む上位
+- #213: 「カレンダーの通知設定を使う」を popup/email に分離する設計判断（Google 書込 scope 含む）。#208/#215 と重複範囲あり
+- #214: App Store 提出・TestFlight 実機検証・オーナー承認後の申請
+- #215: Google 側 popup/email の書込可否・一括適用の方針判断。#213 #208 #207 と範囲が重なる（統合要検討）
+- #216: ポートフォリオ掲載。公開ステータス確認と文面・モバイル表示のオーナー確認が要る
+- #217: スヌーズ時間プリセットの維持/整理/削除の判断。先に使用箇所の監査は DOC 可
+- #218: 設定の「人＋/ⓘ/再同期」アイコンの採否（存廃判断）と導線の再設計。監査記録は DOC で先行可
+- #268: カレンダー設定を引く組（アカウント+名前など）の持ち主の判断待ち。出たら Android+移行 L
+- #278: 鳴動 id に時刻を含めるか終端行を消すか、今日鳴らすかの持ち主の判断待ち。出たら shared+Android M
+- #284: 全部の回への指定を入れるか・優先順位の持ち主の判断待ち。出たら shared+Android L
+- #286: 診断の記録共有。親 #245 の持ち主の判断（共有文字で予定の題を伏せるか）待ち。出たら Android M
+- #298: クラウド環境へ Android SDK を入れる準備。SDK 取得先への通信と環境登録に持ち主の承認が要る（セットアップスクリプトと AGENTS.md 追記は書ける）
+- #306: 題による種類判定の直し方の案を持ち主が選ぶまで着手不可（#201 コメント）。出たら shared S-M
+- #332: 親 #315 の持ち主の判断（理由の種類）待ち。出たら shared+Android S-M（AgendaItem に理由種別）
+- #333: 親 #315「持ち主の判断が要る点」（鳴らない理由の種類と文言）の答えが出るまで着手不可。出たら Android S-M
+
+### OWNER（新しい機能の作業。依頼文が「新しい機能の PR は作らない」としているので、着手の許可が要る）
+
+推し: 依頼の範囲を広げてよければ、小さい物（S）から 1 つずつ PR にする。#271 → #272、#269、#327、#330、#325、#275 の順を推す。
+
+- #205: アカウントごとのグルーピング自体は実装済み(AccountRules.groupByAccount)。足りないのはアカウント行の件数表示と折り畳み/展開と保持（AccountHeader に無い）。目視確認は emulator
+- #206: アカウント一括 OFF は「このアカウントの予定で鳴らす」(SettingsScreen AccountHeader/AccountRules)で実装済み。残りは OFF 中の子行の抑止表示・再同期での取消と ON 復元のテスト・iOS（未確認）
+- #207: 元カレンダー通知設定の継承。調査表（DOC）から。#75/#142 で既実装の部分が多い可能性（未確認）。差分のみ実装
+- #220: 配布物の逆解析対策。Android(R8/難読化/secret scan CI)は Linux で可、iOS・配布物の E2E は Mac/実機。SBI 未分割。脅威モデルは DOC から
+- #222: 全非同期ボタンの押下フィードバック。SBI 未分割（本文に SBI-1..5 候補）。Android の Compose 実装＋テストは可、iOS は Mac、操作証跡は emulator。まず棚卸しの DOC から
+- #266: BootReceiver を directBootAware にし LOCKED_BOOT_COMPLETED で端末保護領域の控えから setAlarmClock を張り直す。Robolectric（Manifest 現状 directBootAware 無…
+- #269: scheduled_instances と event_overrides を dataExtractionRules/fullBackupContent で除外（Manifest 35行は allowBackup=true のみ、res/xml に規則無し）…
+- #271: RingStatus.Kind に「すべてミュート中」を足し許可不足の次に強く出す（現 Kind は ALARM_MUTED=音量0 のみ）。shared 単体テスト
+- #272: 予定・アラーム両タブ上に「すべてミュート中 ― 解除」帯、アラーム行を鳴らない見た目に（#271 後）。目視は emulator
+- #275: CalendarEvent の注釈に終日開始は UTC 0時と明記し、東京ゾーンで UTC 0時/現地0時の展開日付をテスト固定（shared commonTest）
+- #280: 一覧「次」を今日/明日/11/15(土) 形にし、保存直後に「明日 7:00 に鳴ります」を1回知らせる。日付文字の単体テスト
+- #288: SettingsScreen の直書き日本語を文字リソース化し英語追加（量が多い）
+- #290: AgendaScreen の直書き日本語を文字リソース化し英語追加
+- #291: shared RingStatus を文ではなく種類と数で返し、Android の文字リソースで引く
+- #292: 鳴動画面・通知の直書き日本語と shared 題の既定を文字リソース化し英語追加
+- #293: Locale.JAPAN と "H:mm" 決め打ち廃止、端末の地域・12/24h に従う書式＋時刻入力。地域違いの単体テスト（12/24h の目視は emulator）
+- #300: all_check.yml に lintDebug を足し lint-baseline.xml に既存指摘を固定。baseline 生成には Android SDK が要る（ここに SDK 無し・未確認）
+- #301: 同じ入力/期待値の JSON 表を置き shared の判定と Kotlin テストで照合（:shared:jvmTest）
+- #304: AlarmRepository.kt の行の残す/予約/取消/見逃し判定を shared AlarmPlanner の純粋関数へ出す。先に現行動作固定テスト。#258 の後
+- #313: shared SettingsPreview の「アプリ」「Google」を種類で返し、Android は strings.xml で引き英語追加。shared 単体テスト
+- #325: 設定・予定画面の言葉: 3択「アラーム/通知のみ/鳴らさない」、「5分前」形、終日OFF→鳴らさない 等。360dp で切れないテスト
+- #327: SettingsScreen のテーマ丸: 保存値 "default" で琥珀に選択印、ダークで丸をダーク色にする(現状 1477/1485行は default を INDIGO に印)。テスト固定
+- #329: NotificationRulesCard のルール行タップで編集ダイアログ（上書き保存・削除）。Robolectric＋shared NotificationRuleSpecTest
+- #330: AgendaScreen EventRow の「○分前」札を予定名の下段へ移す。幅 360dp で「定例ミーティング」が切れないテスト
+- #335: TroubleshootRow に状態の札(OK/要対応/対象外/参考)と「設定を開く」を出す。strings.xml に OK 追加。2倍文字の Robolectric テスト
+- #336: RingingOverlay を鳴動画面と同じ形・テーマ色にし、日付/二重の輪/○分後に開始を足す。Robolectric で位置・大きさを比べるテスト
+- #289: 画面のコードに日本語を直書きしたら CI で止める検査。既存の直書きの基準ファイルが要る。上と同じく着手の許可が要る。
+- #299: `scripts/test-ci-contract.sh` の守りと軽い CI のジョブ。#364（#297）が入った後。上と同じく着手の許可が要る。
+
+### 子の issue が作業を持つ PBI（PARENT。子が全部片付くと閉じられる）
+
+- #201: 勤務場所・誕生日・不在の既定OFF
+- #223: SOLID 監査の段階的リファクタ
+- #231: 設定→再同期（子の Android 2件は PR #359）
+- #232: 競合の直し（子は両方 PR #360）
+- #233: iOS 再同期
+- #234: iOS 最終取り込み時刻
+- #235: iOS 予約枠
+- #236: ロック中の再起動で鳴動
+- #237: バックアップ/機種変更
+- #238: ミュート中表示
+- #239: iOS 終日予定
+- #240: iOS 周期アラーム起点日
+- #241: 今日鳴るかの表示と合わせる（owner decision #278）
+- #242: 次に鳴る日時の表示
+- #243: 指定の引き継ぎ
+- #244: 全部の回への指定（owner decision gate #284）
+- #245: 診断ログ共有（owner decision gate #286）
+- #246: 設定画面の英語化
+- #247: 予定画面の英語化
+- #248: 鳴動画面・通知の英語化
+- #249: 日付時刻の地域対応
+- #250: iOS 英語化
+- #251: ci.sh fast がクラウドで通ること
+- #252: 契約テスト CI は子で
+- #253: lint CI 化は子で
+- #315: 鳴らない理由の種類・文言は持ち主の判断待ち
+- #316: 形そろえは各 SBI。screenshot 並置が合格条件（Android=device, iOS=Mac）
+- #317: 形そろえは各 SBI。screenshot 並置が合格条件（Android=device, iOS=Mac）
+- #318: 形そろえは各 SBI。screenshot 並置が合格条件（Android=device, iOS=Mac）
+- #319: 形そろえは各 SBI。screenshot 並置が合格条件（Android=device, iOS=Mac）
+- #320: 形そろえは各 SBI。screenshot 並置が合格条件（Android=device, iOS=Mac）
+- #321: 形そろえは各 SBI。screenshot 並置が合格条件（Android=device, iOS=Mac）
+- #322: 形そろえは各 SBI。screenshot 並置が合格条件（Android=device, iOS=Mac）
+- #323: 形そろえは各 SBI。screenshot 並置が合格条件（Android=device, iOS=Mac）
+- #324: open children: 354（Android screenshot 要）；#335 は別 PBI #228 の子
 
 ## issue の仕分け（PR が紐づく 29 件。2026-11-14 07:07 UTC）
 
@@ -59,8 +252,8 @@ calendar-alarm [cloud]
 
 ## OWNER（持ち主だけが出せるもの）
 
-- 「merge #N」: #362・#359・#360（画面は変えない。この順を推す）。#361 と #363 はレビュー中。
-- 画面の確認: #191・#188・#189・#363。
+- 「merge #N」: 上の表の a の PR。#362 → #359 → #360 → #361 の順を推す（画面は変えない）。
+- 画面の確認: #191・#188・#189・#363（区分 c）。
 - #188: 外観を無料にするか Pro と連動させるか（料金の判断）。
 
 ## DEVICE
