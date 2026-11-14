@@ -155,8 +155,9 @@
     <string name="rules_target_apps">Apps (empty = all apps)</string>
     <string name="rules_title">Notification alarms</string>
     <string name="rules_title_needs_permission">Notification alarms (needs permission)</string>
-    <string name="settings_ignore_dnd_hint_off">While off, the OS setting applies. Alarms ring when the OS allows alarms; when it blocks them, they do not ring and only a “could not ring” notification is left</string>
+    <string name="settings_ignore_dnd_hint_off">No ring during Do Not Disturb; only a notification is left</string>
     <string name="settings_ignore_dnd_hint_on">Alarms ring even when your phone is on silent</string>
+    <string name="settings_ignore_dnd_switch_needs_permission">Ring during Do Not Disturb (permission needed)</string>
     <string name="settings_ignore_dnd_policy_missing">This needs the “Do Not Disturb exception” permission.</string>
     <string name="settings_ignore_dnd_open_permission">Open permission</string>
     <string name="settings_ignore_dnd_title">Ring during Do Not Disturb</string>
@@ -195,7 +196,9 @@
     <string name="trouble_dnd_desc">Allow “Alarms” in Do Not Disturb so alarms ring while it is on.</string>
     <string name="trouble_dnd_ng">Alarms won\'t ring in Do Not Disturb</string>
     <string name="trouble_dnd_ok">Alarms allowed in Do Not Disturb</string>
-    <string name="trouble_dnd_off">“Ring during Do Not Disturb” is off. Following the OS setting, alarms ring right now</string>
+    <string name="trouble_dnd_off">During Do Not Disturb, alarms do not ring and only a notification is left (Do Not Disturb is off right now)</string>
+    <string name="trouble_dnd_blocked">Do Not Disturb is on, so alarms do not ring; only a notification is left</string>
+    <string name="trouble_dnd_blocked_desc">Turn on “Ring during Do Not Disturb” and allow notification policy access, and alarms ring during Do Not Disturb.</string>
     <string name="trouble_dnd_policy_desc">“Ring during Do Not Disturb” needs notification policy access. Tap to grant it for this app.</string>
     <string name="trouble_dnd_policy_na">Not needed while “Ring during Do Not Disturb” is off</string>
     <string name="trouble_dnd_policy_ng">Cannot ring during Do Not Disturb (policy access not granted)</string>

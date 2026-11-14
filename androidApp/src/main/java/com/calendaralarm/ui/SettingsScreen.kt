@@ -73,6 +73,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -84,7 +85,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -1230,11 +1234,7 @@ private fun RingingCard(
     val context = LocalContext.current
     // 通知ポリシーへのアクセス許可は設定アプリで変わるので、画面に戻った時に読み直す
     val policyTick = rememberResumeTick()
-    val policyGranted = remember(policyTick) {
-        runCatching {
-            context.getSystemService(android.app.NotificationManager::class.java)?.isNotificationPolicyAccessGranted
-        }.getOrNull() == true
-    }
+    val policyGranted = remember(policyTick) { com.calendaralarm.engine.readPolicyAccessGranted(context) }
     var soundSelectionFailed by remember { mutableStateOf(false) }
     val soundPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -1679,8 +1679,9 @@ private fun RingTimesCard(appMinutesBefore: Int, useCalendarReminders: Boolean) 
 }
 
 /**
- * 「おやすみモード中も鳴らす」の行 (#149、盤 p149)。通知ポリシーへのアクセスが無い間はスイッチを押せず、
- * 下に「許可を開く」を置く。ON/OFF の説明は盤の文言 (OFF は実際の動作に合わせた文言)
+ * 「おやすみモード中も鳴らす」の行 (#149、盤 p149)。許可が無い間は、保存値に関係なくスイッチを OFF で押せない表示にし、
+ * 見出し・説明・アイコンを薄くして、下に案内 (普通の文字色) と枠付きの「許可を開く」を置く。
+ * 許可が無い ON は鳴動側も OFF と同じに扱う ([com.calendaralarm.engine.effectiveIgnoreDnd]) ので、画面と動きが一致する
  */
 @Composable
 internal fun IgnoreDndRow(
@@ -1689,36 +1690,57 @@ internal fun IgnoreDndRow(
     onCheckedChange: (Boolean) -> Unit,
     onOpenPermission: () -> Unit,
 ) {
-    IconSettingRow(Icons.Default.DoNotDisturbOn) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    val title = stringResource(R.string.settings_ignore_dnd_title)
+    val dim = if (policyGranted) 1f else 0.6f
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Default.DoNotDisturbOn,
+            contentDescription = null,
+            tint = if (policyGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f).alpha(dim)) {
             Text(
-                stringResource(R.string.settings_ignore_dnd_title),
+                title,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.weight(1f))
-            Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = policyGranted)
+            Text(
+                stringResource(
+                    // 許可が無い間の説明は盤 2. のとおり (薄く出す)。許可があれば、いまの ON/OFF が実際にすることを書く
+                    if (!policyGranted || checked) R.string.settings_ignore_dnd_hint_on else R.string.settings_ignore_dnd_hint_off,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-    }
-    Text(
-        stringResource(
-            if (checked) R.string.settings_ignore_dnd_hint_on else R.string.settings_ignore_dnd_hint_off,
-        ),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 32.dp, end = 12.dp),
-    )
-    if (!policyGranted) {
-        Text(
-            stringResource(R.string.settings_ignore_dnd_policy_missing),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(start = 32.dp, end = 12.dp, top = 4.dp),
+        Spacer(Modifier.width(12.dp))
+        val label = if (policyGranted) title else stringResource(R.string.settings_ignore_dnd_switch_needs_permission)
+        Switch(
+            checked = checked && policyGranted,
+            onCheckedChange = onCheckedChange,
+            enabled = policyGranted,
+            modifier = Modifier.semantics { contentDescription = label },
         )
-        TextButton(
-            onClick = onOpenPermission,
-            modifier = Modifier.padding(start = 24.dp),
-        ) { Text(stringResource(R.string.settings_ignore_dnd_open_permission)) }
+    }
+    if (!policyGranted) {
+        Column(
+            Modifier.fillMaxWidth().padding(start = 32.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                stringResource(R.string.settings_ignore_dnd_policy_missing),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            OutlinedButton(onClick = onOpenPermission, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_ignore_dnd_open_permission))
+            }
+        }
     }
 }
 

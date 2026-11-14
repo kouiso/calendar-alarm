@@ -152,8 +152,9 @@
     <string name="rules_target_apps">対象アプリ (空=全アプリ)</string>
     <string name="rules_title">通知アラーム</string>
     <string name="rules_title_needs_permission">通知アラーム (要権限)</string>
-    <string name="settings_ignore_dnd_hint_off">OFF の間は OS の設定に従います。OS がアラームを許可している時は鳴らし、止めている時は鳴らさず、「鳴らせなかった」として通知だけ残します</string>
+    <string name="settings_ignore_dnd_hint_off">おやすみモード中は鳴らさず、通知だけ残す</string>
     <string name="settings_ignore_dnd_hint_on">サイレントにしていても、アラームだけは鳴ります</string>
+    <string name="settings_ignore_dnd_switch_needs_permission">おやすみモード中も鳴らす（許可が必要）</string>
     <string name="settings_ignore_dnd_policy_missing">使うには「おやすみモードの例外」の許可が要ります。</string>
     <string name="settings_ignore_dnd_open_permission">許可を開く</string>
     <string name="settings_ignore_dnd_title">おやすみモード中も鳴らす</string>
@@ -192,7 +193,9 @@
     <string name="trouble_dnd_desc">おやすみモード中でもアラームが鳴るよう、おやすみモードの「アラーム」を許可してください。</string>
     <string name="trouble_dnd_ng">おやすみモードでアラームが鳴りません</string>
     <string name="trouble_dnd_ok">おやすみモード中にアラーム可能</string>
-    <string name="trouble_dnd_off">「おやすみモード中も鳴らす」はOFFです。OSの設定に従い、いまはアラームが鳴ります</string>
+    <string name="trouble_dnd_off">おやすみモード中は鳴らさず、通知だけ残します（いまはおやすみモードではありません）</string>
+    <string name="trouble_dnd_blocked">おやすみモード中なので鳴らさず、通知だけ残します</string>
+    <string name="trouble_dnd_blocked_desc">「おやすみモード中も鳴らす」をONにして、通知ポリシーの許可を出すと、おやすみモード中も鳴ります。</string>
     <string name="trouble_dnd_policy_desc">「おやすみモード中も鳴らす」を使うには通知ポリシーへのアクセス許可が要ります。タップしてこのアプリを許可してください。</string>
     <string name="trouble_dnd_policy_na">「おやすみモード中も鳴らす」がOFFのため不要</string>
     <string name="trouble_dnd_policy_ng">おやすみモード中も鳴らせません（通知ポリシー未許可）</string>

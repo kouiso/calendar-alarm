@@ -28,8 +28,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowMediaPlayer
 
 /**
- * 「おやすみモード中も鳴らす」(#149)。サービスを実際に動かし、OFF でおやすみモード中は鳴らさず
- * すぐ終えること、鳴動中の同じアラームは上書きしないこと、その間の通知に全画面とバイブを
+ * 「おやすみモード中も鳴らす」(#149、盤 p149)。サービスを実際に動かし、効いていない (OFF、または許可なしの ON) 間は
+ * おやすみモード中 (すべて許可以外のフィルタ) に鳴らさず通知だけ残してすぐ終えること、鳴動中の同じアラームは上書きしないこと、その間の通知に全画面とバイブを
  * 付けないこと、おやすみモード尊重のチャンネルが bypassDnd しないことを確かめる。
  */
 @RunWith(RobolectricTestRunner::class)
@@ -61,6 +61,11 @@ class DndServiceTest {
         }
         nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
         shadowOf(nm).setConsolidatedNotificationPolicy(NotificationManager.Policy(0, 0, 0))
+        shadowOf(nm).setNotificationPolicyAccessGranted(false)
+    }
+
+    private fun grantPolicyAccess(granted: Boolean = true) {
+        shadowOf(nm).setNotificationPolicyAccessGranted(granted)
     }
 
     private fun setPolicy(alarmsAllowed: Boolean) {
@@ -153,28 +158,62 @@ class DndServiceTest {
     }
 
     @Test
-    fun `無視OFFでもアラームのみなら鳴る`() {
+    fun `無視OFFでアラームのみでも鳴らさず鳴らせなかったになる`() {
         runBlocking { app.container.settings.setIgnoreDnd(false) }
         nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALARMS)
         seed("dnd-alarms")
         val c = start("dnd-alarms")
-        assertTrue(waitUntil(5_000) { c.get().isPlaying() })
-        assertEquals(AlarmState.FIRED.name, state("dnd-alarms"))
+        assertTrue(waitUntil(5_000) { shadowOf(c.get()).isStoppedBySelf })
+        assertFalse(c.get().isPlaying())
+        assertEquals(AlarmState.MISSED.name, state("dnd-alarms"))
     }
 
     @Test
-    fun `無視OFFで優先モードにアラーム許可があれば鳴る`() {
+    fun `無視OFFで優先モードにアラーム許可があっても鳴らさず鳴らせなかったになる`() {
         runBlocking { app.container.settings.setIgnoreDnd(false) }
         setPolicy(alarmsAllowed = true)
         nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
         seed("dnd-prio-yes")
         val c = start("dnd-prio-yes")
-        assertTrue(waitUntil(5_000) { c.get().isPlaying() })
-        assertEquals(AlarmState.FIRED.name, state("dnd-prio-yes"))
+        assertTrue(waitUntil(5_000) { shadowOf(c.get()).isStoppedBySelf })
+        assertFalse(c.get().isPlaying())
+        assertEquals(AlarmState.MISSED.name, state("dnd-prio-yes"))
     }
 
     @Test
-    fun `無視ONならおやすみモード中でも鳴る`() {
+    fun `無視OFFでもおやすみモードでなければ鳴る`() {
+        runBlocking { app.container.settings.setIgnoreDnd(false) }
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+        seed("dnd-all")
+        val c = start("dnd-all")
+        assertTrue(waitUntil(5_000) { c.get().isPlaying() })
+        assertEquals(AlarmState.FIRED.name, state("dnd-all"))
+    }
+
+    @Test
+    fun `無視ONでも通知ポリシーの許可が無ければOFFと同じでおやすみモード中は鳴らさない`() {
+        // 画面は許可が無い間スイッチを OFF で出す。鳴動の判断も同じにする (保存値は ON のまま)
+        grantPolicyAccess(false)
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALARMS)
+        seed("dnd-on-nopolicy")
+        val c = start("dnd-on-nopolicy")
+        assertTrue(waitUntil(5_000) { shadowOf(c.get()).isStoppedBySelf })
+        assertFalse(c.get().isPlaying())
+        assertEquals(AlarmState.MISSED.name, state("dnd-on-nopolicy"))
+    }
+
+    @Test
+    fun `無視ONで許可が無くてもおやすみモードでなければ鳴る`() {
+        grantPolicyAccess(false)
+        seed("dnd-on-nopolicy-all")
+        val c = start("dnd-on-nopolicy-all")
+        assertTrue(waitUntil(5_000) { c.get().isPlaying() })
+        assertEquals(AlarmState.FIRED.name, state("dnd-on-nopolicy-all"))
+    }
+
+    @Test
+    fun `無視ONで許可があればおやすみモード中でも鳴る`() {
+        grantPolicyAccess()
         nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
         seed("dnd-on")
         val c = start("dnd-on")

@@ -51,3 +51,25 @@ private const val PRIORITY_CATEGORY_ALARMS_BIT = 1 shl 5
 /** いまの端末の状態で、OS がアラーム音を通すか */
 fun dndAllowsAlarmsNow(context: Context): Boolean =
     dndAllowsAlarms(readInterruptionFilter(context), readPolicyAllowsAlarms(context))
+
+/** 通知ポリシーへのアクセスを許可しているか。読めなければ未許可 (許可が無い側に倒す) */
+fun readPolicyAccessGranted(context: Context): Boolean =
+    runCatching { context.getSystemService(NotificationManager::class.java)?.isNotificationPolicyAccessGranted }
+        .getOrNull() == true
+
+/**
+ * 「おやすみモード中も鳴らす」が実際に効く状態か (#149、盤 p149)。許可が無い間は設定画面もスイッチを OFF の表示にするので、
+ * ON でも許可が無ければ OFF と同じに扱う。画面と鳴動の判断はこの1つを通す
+ */
+fun effectiveIgnoreDnd(ignoreDnd: Boolean, policyAccessGranted: Boolean): Boolean = ignoreDnd && policyAccessGranted
+
+/**
+ * おやすみモードが有効か。OS が「すべて許可」以外のフィルタを返している間 (優先・アラームのみ・サイレント)。
+ * 読めない・知らない値は有効と断定できないので false (鳴らす側に倒す)
+ */
+fun dndActive(filter: Int?): Boolean = when (filter) {
+    NotificationManager.INTERRUPTION_FILTER_PRIORITY,
+    NotificationManager.INTERRUPTION_FILTER_ALARMS,
+    NotificationManager.INTERRUPTION_FILTER_NONE -> true
+    else -> false
+}

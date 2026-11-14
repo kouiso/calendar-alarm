@@ -9,6 +9,8 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -55,20 +57,34 @@ class IgnoreDndRowTest {
         compose.onNodeWithText("おやすみモード中も鳴らす").assertExists()
         compose.onNodeWithText("サイレントにしていても、アラームだけは鳴ります").assertExists()
         compose.onNodeWithText("許可を開く").assertDoesNotExist()
+        compose.onNode(isToggleable() and hasContentDescription("おやすみモード中も鳴らす")).assertExists()
         compose.onNode(isToggleable()).assertIsEnabled().assertIsOn().performClick()
         assertEquals(false, changed)
     }
 
     @Test
-    fun `許可が無い間はスイッチを押せず許可を開くが出て押せる`() {
+    fun `許可があってOFFなら盤のOFFの文言を出す`() {
+        show(checked = false, policyGranted = true)
+        compose.onNode(isToggleable()).assertIsEnabled().assertIsOff()
+        compose.onNodeWithText("おやすみモード中は鳴らさず、通知だけ残す").assertExists()
+    }
+
+    @Test
+    fun `許可が無い間は保存値がONでもスイッチはOFFで押せず許可を開くが出る`() {
         var changed: Boolean? = null
         var opened = 0
         show(checked = true, policyGranted = false, onChange = { changed = it }, onOpen = { opened++ })
-        compose.onNode(isToggleable()).assertIsNotEnabled()
+        compose.onNode(isToggleable()).assertIsNotEnabled().assertIsOff()
         compose.onNodeWithText("使うには「おやすみモードの例外」の許可が要ります。").assertExists()
         compose.onNode(hasText("許可を開く") and hasClickAction()).assertIsEnabled().performClick()
         assertEquals(1, opened)
         assertEquals(null, changed)
+    }
+
+    @Test
+    fun `許可が無い間のスイッチは何のスイッチで許可が要ると読み上げる`() {
+        show(checked = true, policyGranted = false)
+        compose.onNode(isToggleable() and hasContentDescription("おやすみモード中も鳴らす（許可が必要）")).assertExists()
     }
 
     @Test
