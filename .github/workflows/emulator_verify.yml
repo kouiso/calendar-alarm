@@ -111,6 +111,9 @@ jobs:
       - name: Verifier unit tests
         run: python3 verifier/scripts/emulator/test_emu_check.py
 
+      - name: Verifier retry loop test (adb stubbed)
+        run: bash verifier/scripts/emulator/test_run_scenarios_retry.sh
+
       - name: Checkout app under test
         uses: actions/checkout@v4
         with:
