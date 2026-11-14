@@ -47,15 +47,28 @@ jobs:
       - name: Run all unit tests and build debug APK
         run: bash scripts/ci.sh all
 
-      # WHY: 翻訳漏れや権限まわりの新しい lint 指摘を止める。今ある指摘は lint-baseline.xml に固定 (#300)
-      - name: Android lint (new findings fail)
-        run: bash scripts/ci.sh lint
-
+      # WHY: lint が落ちても APK は残す。lint の失敗と APK 生成の成否は別の問いなので、APK の後に lint を置く (#386)
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: calendar-alarm-debug-apk
           path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          retention-days: 14
+
+      # WHY: 翻訳漏れや権限まわりの新しい lint 指摘を止める。今ある指摘は lint-baseline.xml に固定 (#300)
+      - name: Android lint (new findings fail)
+        run: bash scripts/ci.sh lint
+
+      # WHY: CI にだけ出る警告の中身が分からなかった (#386)。lint が落ちても報告を残すので always
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-alarm-lint-report
+          path: |
+            androidApp/build/reports/lint-results-debug.html
+            androidApp/build/reports/lint-results-debug.xml
+          if-no-files-found: ignore
           retention-days: 14
 
   # WHY: 画面に出す日本語を Kotlin に直書きする増加を止める。Gradle 不要なので build と別の軽い job にする (#289)
