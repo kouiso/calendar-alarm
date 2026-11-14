@@ -136,8 +136,8 @@ class EventFilterTest {
 
     @Test
     fun タイトルからサイレントモードを推定する() {
-        assertEquals(EventType.FOCUS_TIME, classifyEventType("サイレントモード"))
-        assertEquals(EventType.FOCUS_TIME, classifyEventType("Focus time"))
+        assertEquals(EventType.FOCUS_TIME, classifyEventType("サイレントモード", allDay = false))
+        assertEquals(EventType.FOCUS_TIME, classifyEventType("Focus time", allDay = false))
     }
 
     @Test

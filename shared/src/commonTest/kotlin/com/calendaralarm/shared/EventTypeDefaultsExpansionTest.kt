@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
 /**
  * #201: 勤務場所・誕生日・不在の予定が、既定の絞り込みで終日・繰り返し・日付の境目でも予約されないこと、
  * 設定を ON にした時に今の通知時刻のままであること、個別指定の優先順を固定する。
- * 現在の挙動を固定する試験で、挙動を変える試験ではない。
+ * 「現在の挙動を固定」の試験は挙動を変えない。題での判定は #306 で時刻のある予定だけ題全体の一致に変わり、その試験は名前を変えて残している。
  */
 class EventTypeDefaultsExpansionTest {
 
@@ -103,7 +103,7 @@ class EventTypeDefaultsExpansionTest {
     }
 
     @Test
-    fun `題で判定される3種類も既定では予約されない(現在の挙動を固定)`() {
+    fun `題が語そのものの3種類も既定では予約されない(現在の挙動を固定)`() {
         val titles = listOf("勤務場所", "誕生日", "不在")
         val events = titles.mapIndexed { i, t ->
             CalendarEvent(
@@ -145,27 +145,70 @@ class EventTypeDefaultsExpansionTest {
         assertEquals(setOf(local(2026, 11, 6, 0, 0), local(2026, 11, 6, 9, 0)), triggers)
     }
 
+    private fun titled(id: String, title: String, allDay: Boolean) = CalendarEvent(
+        id = id, calendarId = "c1", title = title,
+        startMillis = if (allDay) utcMidnight(2026, 11, 6) else local(2026, 11, 6, 10, 0),
+        endMillis = if (allDay) utcMidnight(2026, 11, 7) else local(2026, 11, 6, 11, 0), allDay = allDay,
+    )
+
+    private fun typeOf(title: String, allDay: Boolean) = resolveEventType(titled("x", title, allDay))
+
     @Test
-    fun `現在の挙動を固定_題に語を含む普通の予定は3種類に分類されて予約されない`() {
-        // #306: 時刻のある予定は題だけでは3種類に入れない方向で直す予定。直すとこの試験は反転する。
-        // 2026-11-11 の issue コメントの例 (普通の予定なのに、今は誤って鳴らない)
+    fun `時刻のある予定は題全体の一致だけで判定する_語を含む普通の予定は分類されず鳴る`() {
+        // #306 (#201 の判断B): 2026-11-11 の issue コメントの例。普通の予定なので鳴る
         val titles = listOf(
             "出社して面談", "有休申請の締切", "Microsoft Office 研修", "昼休み明けの定例", "Takeaway 発注締切",
+            "オフィス周辺ランチ",
         )
-        val events = titles.mapIndexed { i, t ->
-            CalendarEvent(
-                id = "t$i", calendarId = "c1", title = t, startMillis = local(2026, 11, 6, 10, 0),
-                endMillis = local(2026, 11, 6, 11, 0), allDay = false,
-            )
+        val events = titles.mapIndexed { i, t -> titled("t$i", t, allDay = false) }
+        assertEquals(titles.map { EventType.EVENT }, events.map { resolveEventType(it) })
+        assertEquals(titles.size, expand(events).size)
+    }
+
+    @Test
+    fun `時刻のある予定は題全体の一致だけで判定する_題が語そのものなら分類されて予約されない`() {
+        val cases = mapOf(
+            "不在" to EventType.ABSENCE, "在宅" to EventType.WORKPLACE, "出社" to EventType.WORKPLACE,
+            "オフィス" to EventType.WORKPLACE, "自宅" to EventType.WORKPLACE, "誕生日" to EventType.BIRTHDAY,
+        )
+        cases.forEach { (title, type) -> assertEquals(type, typeOf(title, allDay = false), title) }
+        assertEquals(emptyList(), expand(cases.keys.mapIndexed { i, t -> titled("t$i", t, allDay = false) }))
+    }
+
+    @Test
+    fun `時刻のある予定は題全体の一致だけで判定する_大文字小文字と空白と全角の違いは同じ語として扱う`() {
+        assertEquals(EventType.ABSENCE, typeOf("  OUT OF OFFICE ", allDay = false))
+        assertEquals(EventType.ABSENCE, typeOf("Out\u3000of  Office", allDay = false))
+        assertEquals(EventType.ABSENCE, typeOf("ＡＢＳＥＮＴ", allDay = false))
+        assertEquals(EventType.WORKPLACE, typeOf("Ｗｏｒｋ　Ｌｏｃａｔｉｏｎ", allDay = false))
+        assertEquals(EventType.WORKPLACE, typeOf(" 在宅 ", allDay = false))
+        assertEquals(EventType.FOCUS_TIME, typeOf("Focus Time", allDay = false))
+    }
+
+    @Test
+    fun `終日の予定は今までどおり題に語を含めば分類される`() {
+        assertEquals(EventType.BIRTHDAY, typeOf("○○さんの誕生日", allDay = true))
+        assertEquals(EventType.ABSENCE, typeOf("夏季休暇", allDay = true))
+        assertEquals(EventType.WORKPLACE, typeOf("勤務場所: オフィス", allDay = true))
+        assertEquals(EventType.WORKPLACE, typeOf("Microsoft Office 研修", allDay = true))
+    }
+
+    @Test
+    fun `オフィスと自宅と在宅は題全体の一致だけで勤務場所になり終日でも部分一致しない`() {
+        for (allDay in listOf(false, true)) {
+            assertEquals(EventType.EVENT, typeOf("オフィス周辺ランチ", allDay), "オフィス周辺ランチ allDay=$allDay")
+            assertEquals(EventType.EVENT, typeOf("自宅へ配送", allDay), "自宅へ配送 allDay=$allDay")
+            assertEquals(EventType.EVENT, typeOf("在宅ワーク相談", allDay), "在宅ワーク相談 allDay=$allDay")
+            assertEquals(EventType.WORKPLACE, typeOf("オフィス", allDay), "オフィス allDay=$allDay")
+            assertEquals(EventType.WORKPLACE, typeOf("自宅", allDay), "自宅 allDay=$allDay")
+            assertEquals(EventType.WORKPLACE, typeOf("在宅", allDay), "在宅 allDay=$allDay")
         }
-        assertEquals(
-            listOf(
-                EventType.WORKPLACE, EventType.ABSENCE, EventType.WORKPLACE, EventType.ABSENCE, EventType.ABSENCE,
-            ),
-            events.map { resolveEventType(it) },
-        )
-        assertEquals(emptyList(), expand(events))
-        // 対照: 語を含まない題は予約される
-        assertEquals(1, expand(listOf(events[0].copy(id = "ctl", title = "1on1"))).size)
+    }
+
+    @Test
+    fun `GoogleのeventTypeが取れていれば時刻のある予定でも題の推定より優先する`() {
+        val e = titled("g", "不在", allDay = false).copy(googleEventType = "default")
+        assertEquals(EventType.EVENT, resolveEventType(e))
+        assertEquals(1, expand(listOf(e)).size)
     }
 }
