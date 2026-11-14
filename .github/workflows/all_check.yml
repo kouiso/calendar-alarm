@@ -53,3 +53,21 @@ jobs:
           name: calendar-alarm-debug-apk
           path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
           retention-days: 14
+
+  # WHY: 画面に出す日本語を Kotlin に直書きする増加を止める。Gradle 不要なので build と別の軽い job にする (#289)
+  i18n-check:
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: No new hardcoded Japanese string literals
+        run: bash scripts/ci.sh i18n-check
