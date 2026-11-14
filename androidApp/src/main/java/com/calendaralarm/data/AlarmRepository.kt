@@ -360,7 +360,8 @@ class AlarmRepository(
         // 停止が先に届いたレースで DISMISSED 等の終端を FIRED で上書き
         // しないよう、遷移元を UPDATE の WHERE で atomic に制限する。
         // 終端行が FIRED に戻ると kill 復活や再鳴動の対象に残ってしまう
-        val rows = db.scheduledInstances().setFiredIfPending(id)
+        // 再同期の書き戻し (#232) と同じロックで、PENDING の確認と書き戻しの間に FIRED が挟まらないようにする
+        val rows = ringTransitionLock.withLock { db.scheduledInstances().setFiredIfPending(id) }
         audit(
             if (rows > 0) "FIRE" else "STALE_FIRE",
             if (rows > 0) id else "$id: 終端状態のため FIRED 化を抑止",
@@ -661,14 +662,9 @@ class AlarmRepository(
 
         // 終端行は先に読む。同 id の蘇生防止と単発アラームの消費判定の両方で使う
         val allRows = db.scheduledInstances().all()
+        afterResyncReadForTest?.invoke()
         val terminalIds = allRows.asSequence()
-            .filter {
-                it.state in setOf(
-                    AlarmState.FIRED.name, AlarmState.DISMISSED.name,
-                    AlarmState.SNOOZED.name, AlarmState.MISSED.name,
-                    AlarmState.SKIPPED.name,
-                )
-            }
+            .filter { it.state in NO_REVIVE_STATES }
             .map { it.id }
             .toSet()
 
@@ -851,10 +847,29 @@ class AlarmRepository(
             }
         desired += adhoc
 
-        val scheduled = pendingRows.associate { it.id to it.triggerAtMillis }
-        val plan = AlarmPlanner.plan(scheduled, desired, now)
-        applyPlan(plan, desired, reason, scheduled.keys)
+        // 書き戻しは鳴動・停止・スヌーズと同じロックの中で行う (#232)。
+        // 上の読み取りから後に通信などを挟むので、その間に状態が変わった行がある。
+        // ロックの中で読み直し、蘇生させない状態 (鳴動中・停止・スヌーズ・見逃し・飛ばし) になった行は書き戻さない。
+        // 読んだ時にもう取り消し (CANCELLED) だった行は今までどおり、理想状態にあれば予約し直す (スイッチを ON に戻した時など)。
+        // 読み取りの後にできた PENDING の行 (スヌーズの子など) は、この再同期では触らない (次の再同期で扱う)。
+        // 再同期の全体はロックに入れない: 通信の間に停止ボタンが待たされるため
+        ringTransitionLock.withLock {
+            val current = db.scheduledInstances().all().associateBy { it.id }
+            val noReviveNow = current.values.filter { it.state in NO_REVIVE_STATES }.map { it.id }.toSet()
+            val stillPending = pendingRows.filter { current[it.id]?.state == AlarmState.PENDING.name }
+            // 読んだ時に PENDING で、今は PENDING でない行も書き戻さない。停止がスヌーズの子を
+            // 取り消した (CANCELLED) 時に、持ち越しの予約として鳴らし直さないため
+            val leftPending = pendingRows.map { it.id }.toSet() - stillPending.map { it.id }.toSet()
+            val finalDesired = desired.filterNot { it.id in noReviveNow || it.id in leftPending }
+            val scheduled = stillPending.associate { it.id to it.triggerAtMillis }
+            val plan = AlarmPlanner.plan(scheduled, finalDesired, now)
+            applyPlan(plan, finalDesired, reason, scheduled.keys)
+        }
+        onScheduleChanged?.invoke()
     }
+
+    /** 試験用の差込口: 再同期が全行を読んだ直後に呼ぶ (#232 の競合の再現) */
+    @Volatile internal var afterResyncReadForTest: (suspend () -> Unit)? = null
 
     private suspend fun applyPlan(
         plan: AlarmPlanner.Plan,
@@ -893,7 +908,9 @@ class AlarmRepository(
             // 先に行を作ってから終端化する (残さないと次回 resync で再展開される)。
             if (fire.id !in armedIds && fire.id.startsWith("ev:")) {
                 db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
-                markSkipped(fire.id, "予約前に通知時刻が過ぎていた")
+                // markSkipped はウィジェットの更新を呼ぶので、ロックの中では状態と記録だけ書く
+                setState(fire.id, AlarmState.SKIPPED)
+                audit("SKIP", "${fire.id}: 予約前に通知時刻が過ぎていた")
                 continue
             }
             db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
@@ -906,7 +923,6 @@ class AlarmRepository(
             "reason=$reason +${plan.toSchedule.size} -${plan.toCancel.size} fire=${plan.toFireNow.size}",
         )
         appScope.launch { pruneOldLogs() }
-        onScheduleChanged?.invoke()
     }
 
     /** 鳴動中にプロセスが殺された後の再起動用: 鳴動猶予内の最新 FIRED を返す。 */
@@ -1150,6 +1166,12 @@ class AlarmRepository(
     )
 
     companion object {
+        /** 再同期が同じ id を予約し直さない状態。ユーザーが止めた・スヌーズした・鳴っている意味を守る */
+        private val NO_REVIVE_STATES = setOf(
+            AlarmState.FIRED.name, AlarmState.DISMISSED.name,
+            AlarmState.SNOOZED.name, AlarmState.MISSED.name,
+            AlarmState.SKIPPED.name,
+        )
         /** 終わった行。遅れて届いたスヌーズで子を作らない (#145) */
         private val TERMINAL_STATES = setOf(
             AlarmState.DISMISSED.name, AlarmState.MISSED.name,
