@@ -38,9 +38,9 @@ class DndSilenceTest {
 
     @Test
     fun `チャンネルは無視ONで既存のbypassDnd側を使う`() {
-        assertEquals(AlarmService.CHANNEL_ID, AlarmService.channelIdFor(vibrate = true, ignoreDnd = true))
-        assertEquals(AlarmService.CHANNEL_ID_NOVIB, AlarmService.channelIdFor(vibrate = false, ignoreDnd = true))
-        assertEquals(AlarmService.CHANNEL_ID_VIB_DND, AlarmService.channelIdFor(vibrate = true, ignoreDnd = false))
-        assertEquals(AlarmService.CHANNEL_ID_NOVIB_DND, AlarmService.channelIdFor(vibrate = false, ignoreDnd = false))
+        assertEquals(AlarmService.CHANNEL_ID, AlarmService.ringChannelId(vibrate = true, ignoreDnd = true))
+        assertEquals(AlarmService.CHANNEL_ID_NOVIB, AlarmService.ringChannelId(vibrate = false, ignoreDnd = true))
+        assertEquals(AlarmService.CHANNEL_ID_VIB_DND, AlarmService.ringChannelId(vibrate = true, ignoreDnd = false))
+        assertEquals(AlarmService.CHANNEL_ID_NOVIB_DND, AlarmService.ringChannelId(vibrate = false, ignoreDnd = false))
     }
 }

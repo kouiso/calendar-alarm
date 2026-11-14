@@ -89,6 +89,8 @@ class AlarmService : Service() {
     // おやすみモードで鳴らさない要求の id (#149)。前面化の通知を出す前に決め、その要求の通知から全画面とバイブを外す。
     // サービス全体の 1 つの値にすると、同時に始まった別の要求が書き換えて取り違えるので、要求ごとに持つ
     private val dndSilentIds: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    // 「フルスクリーンを強制」(#153)。既定ON=従来どおり常にFSI。OFFならヘッズアップのみ
+    @Volatile private var forceFullScreen = true
     // 直近に受け取ったコマンドの startId (ringLock 内のみ)。終了判定時点の値で
     // stopSelfResult すると、判定後に届いた ACTION_START があればサービスは止まらない
     // (引数なし stopSelf は判定〜停止の間に届いた新しい鳴動ごと殺す)
@@ -195,8 +197,8 @@ class AlarmService : Service() {
                         finishIfIdle()
                         return@launch
                     }
-                    // チャンネル (バイブ有無・DND尊重か) は前面化の通知で決まるので先に設定を読む。
-                    // 前面化の期限があるので読めなければ既定 (バイブあり・DND無視) で進む
+                    // チャンネル (バイブ有無・DND尊重か) と全画面の強制は前面化の通知で決まるので先に設定を読む。
+                    // 前面化の期限があるので読めなければ既定 (バイブあり・DND無視・全画面) で進む
                     if (readRingChannelSettings()) dndSilentIds += id else dndSilentIds -= id
                     if (!startForegroundWithNotification(id)) {
                         // BOOT_COMPLETED 処理中など、mediaPlayback FGS の起動が
@@ -369,7 +371,8 @@ class AlarmService : Service() {
         // 端末ロック解除中に他アプリが前面だと heads-up が畳まれて画面上の停止手段が無くなる。
         // SYSTEM_ALERT_WINDOW は BAL 対象外なので、許可済みなら FSI の可否に関係なく
         // 停止画面をオーバーレイでも出す (鳴動画面と共存しないよう後者が出れば畳む)。
-        val plan = StopUiPlan.of(StopUiPermissions.probe(this))
+        // 「フルスクリーンを強制」OFF なら通知の FSI と同じく全画面のオーバーレイも出さない (#153)
+        val plan = StopUiPlan.of(StopUiPermissions.probe(this, vibrateForRing, ignoreDndForRing), forceFullScreen = forceFullScreen)
         if (plan.showOverlay) {
             // 表示自体はメインスレッドで行い、成否はオーバーレイ側が鳴動ログへ記録する。
             // stillValid は addView 直前にメインスレッド上で評価される: 停止の hide が
@@ -388,24 +391,59 @@ class AlarmService : Service() {
         }
         // 最終防衛線: 通知権限なし + FSI拒否 だと停止UIが1つも存在せず
         // 電源断まで鳴り続ける。上限に達したら自動停止して MISSED 扱いにする。
+        // 「鳴動持続時間」(#148) を設定していればその秒数で自動停止。
+        // 制限なし (0) は従来どおり10分の安全上限とする — 停止UIが無い構成で
+        // 本当に無制限に鳴らすと電源断まで止まらないため、ここは競合の
+        // infinite 相当を安全側に読み替える。
         // 上限タイマーの差し替えも世代ゲートの内側で行う。ゲート外で
         // cancel/assign すると新世代のタイマーを殺したり、stale 世代の
         // タイマーが残って後から現行世代の鳴動を止め得る
+        // 鳴動ごとの設定の写し (ringSettings) から決める。サービス全体の値だと、同時に鳴り始めた
+        // 別の鳴動が先に上書きして、この鳴動の上限を取り違える
+        val ringTimeoutMs = if (ringSettings.ringDurationSec > 0) {
+            ringSettings.ringDurationSec * 1000L
+        } else {
+            RING_TIMEOUT_MS
+        }
         adoptIfCurrent(gen) {
             ringTimeoutJob?.cancel()
             ringTimeoutJob = scope.launch {
-                kotlinx.coroutines.delay(RING_TIMEOUT_MS)
+                kotlinx.coroutines.delay(ringTimeoutMs)
                 // 発火時点で後始末権を奪取できた場合だけ、同じロック内で自分の鳴動を畳む。
                 // 畳みの中でこのジョブ自身もキャンセルされるので、以降は NonCancellable で行う
                 if (!stopIfCurrent(gen)) return@launch
                 withContext(NonCancellable) {
-                    runCatching {
-                        app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
+                    // 自動スヌーズ (#145): 放置時に既定分数の再鳴動へ置き換える。
+                    // 上限 (snoozeSeq が回数に達した連鎖) または OFF なら従来どおり MISSED。
+                    // 「Alarm missed」相当の扱いは MISSED 一本化 — 上限到達後は
+                    // 鳴らせなかった履歴として残すのが競合の見え方と同じ。
+                    val autoSnooze = ringSettings.autoSnooze &&
+                        instance.snoozeSeq < ringSettings.autoSnoozeMax
+                    if (autoSnooze) {
+                        val mins = instance.snoozeMinutes.takeIf { it > 0 }
+                            ?: ringSettings.defaultSnoozeMinutes
+                        // 停止と重なったら停止を優先する (先に停止済みなら子を作らない)
+                        val snoozed = runCatching {
+                            app.container.repository.onAutoSnoozed(instance.id, mins)
+                        }.getOrDefault(false)
+                        if (snoozed) {
+                            runCatching {
+                                app.container.repository.audit(
+                                    "SNOOZE", "${instance.id}: 放置${ringTimeoutMs / 1000}秒で自動スヌーズ ${mins}分 (seq ${instance.snoozeSeq})")
+                            }
+                        }
+                    } else {
+                        // 停止と重なったら停止を優先する: 先に停止済みなら見逃しにせず通知も出さない
+                        val missed = runCatching {
+                            app.container.repository.markMissedIfFired(instance.id, "鳴動が${ringTimeoutMs / 1000}秒続き自動停止")
+                        }.getOrDefault(false)
+                        if (missed) {
+                            runCatching {
+                                app.container.repository.audit("ERROR", "${instance.id}: 鳴動上限到達で自動停止")
+                            }
+                            MissedNotifier.post(this@AlarmService, instance.title)
+                        }
                     }
-                    runCatching {
-                        app.container.repository.markMissed(instance.id, "鳴動が${RING_TIMEOUT_MS / 60_000}分続き自動停止")
-                    }
-                    MissedNotifier.post(this@AlarmService, instance.title)
                     releaseWaitingRings(instance.id)
                     finishIfIdle()
                 }
@@ -547,7 +585,7 @@ class AlarmService : Service() {
         // おやすみモードで鳴らさない要求は、すぐ畳むまでの間もバイブ・全画面を出さない (#149)。
         // CATEGORY_ALARM の通知は「アラームは許可」のおやすみモードを素通りするため
         val dndSilent = instanceId in dndSilentIds
-        val channel = if (dndSilent) CHANNEL_ID_NOVIB_DND else channelIdFor(vibrateForRing, ignoreDndForRing)
+        val channel = if (dndSilent) CHANNEL_ID_NOVIB_DND else ringChannelId(vibrateForRing, ignoreDndForRing)
         return NotificationCompat.Builder(this, channel)
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle(currentInstance?.title ?: "アラーム")
@@ -562,7 +600,10 @@ class AlarmService : Service() {
             // setSilent(true) は入れない: Android 15 で「抑制グループ」扱いされ
             // フルスクリーン Intent が自動起動しない (E2E 実測)。無音化は
             // チャンネル側の setSound(null) に一本化し、音は MediaPlayer が出す。
-            .apply { if (!dndSilent) setFullScreenIntent(fullScreen, true) }
+            // 「フルスクリーンを強制」OFF なら FSI を付けずヘッズアップだけにする (#153)。
+            // 既定ON=従来どおり。OFF中も「停止」アクションと contentIntent で止められる。
+            // おやすみモードで鳴らさない要求にも付けない (#149)
+            .apply { if (forceFullScreen && !dndSilent) setFullScreenIntent(fullScreen, true) }
             .setContentIntent(fullScreen)
             .setDeleteIntent(dismiss)
             // 鳴動画面に辿り着けなくても通知シェードから必ず止められる退路
@@ -802,7 +843,7 @@ class AlarmService : Service() {
         stopSelfResult(finishId)
     }
 
-    /** チャンネルを決める設定を読む。おやすみモードで鳴らさない要求なら true を返す (#149) */
+    /** チャンネルと全画面の強制 (#153) を決める設定を読む。おやすみモードで鳴らさない要求なら true を返す (#149) */
     private suspend fun readRingChannelSettings(): Boolean {
         val st = try {
             withTimeoutOrNull(SETTINGS_READ_TIMEOUT_MS) {
@@ -815,6 +856,7 @@ class AlarmService : Service() {
         }
         vibrateForRing = st?.vibrateWhileRinging ?: true
         ignoreDndForRing = st?.ignoreDnd ?: true
+        forceFullScreen = st?.forceFullScreen ?: true
         return silencedByDnd(ignoreDndForRing, currentInterruptionFilter())
     }
 
@@ -911,8 +953,12 @@ class AlarmService : Service() {
                 interruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL &&
                 interruptionFilter != NotificationManager.INTERRUPTION_FILTER_UNKNOWN
 
-        /** 鳴動通知が使うチャンネル。ignoreDnd=ON は既存チャンネル (bypassDnd=true)、OFF は DND 尊重側 */
-        fun channelIdFor(vibrate: Boolean, ignoreDnd: Boolean): String = when {
+        /**
+         * 鳴動通知を出すチャンネル。停止手段が見えるかの判定 (StopUiPermissions.notificationsUsable) と
+         * 検査画面も必ずこれで同じチャンネルを見る (#153)。チャンネルの選び方を変える時はここだけを変える。
+         * ignoreDnd=ON は既存チャンネル (bypassDnd=true)、OFF はおやすみモード尊重側 (#149)
+         */
+        fun ringChannelId(vibrate: Boolean, ignoreDnd: Boolean): String = when {
             ignoreDnd && vibrate -> CHANNEL_ID
             ignoreDnd -> CHANNEL_ID_NOVIB
             vibrate -> CHANNEL_ID_VIB_DND

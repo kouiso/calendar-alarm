@@ -1,10 +1,14 @@
 package com.calendaralarm.data
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.core.DataMigration
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.calendaralarm.shared.logic.WeekCalendar
 import com.calendaralarm.shared.model.EventAction
@@ -17,7 +21,41 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 // テストから旧キーの残存を確かめるため internal にしている
-internal val Context.settingsDataStore by preferencesDataStore(name = "settings")
+internal val Context.settingsDataStore by preferencesDataStore(
+    name = "settings",
+    produceMigrations = { ctx -> listOf(InviteDefaultMigration { ctx.isUpgradeInstall() }) },
+)
+
+/** 前の版から更新して入った端末か (新しく入れた端末なら最初の導入と最後の更新が同じ時刻)。読めなければ更新扱い */
+internal fun Context.isUpgradeInstall(): Boolean = runCatching {
+    val info = packageManager.getPackageInfo(packageName, 0)
+    info.firstInstallTime != info.lastUpdateTime
+}.getOrDefault(true)
+
+/**
+ * 招待フィルタの既定を「承諾のみ」に変えた時 (#155) の、前から使っている人の扱い。
+ * 保存キーが無い人は今まで「全部オン」(7) で鳴っていたので、更新しただけで未定・未回答の予定が
+ * 黙って鳴らなくならないよう、7 を保存して今までの動きを残す。iOS も保存済みの設定はそのまま残る。
+ * 前からの利用者は「何か保存済み」か「前の版から更新して入った」で見分ける (設定を一度も変えていない人もいるため)。
+ * 新しく入れた人は保存せず、新しい既定 (承諾のみ) になる。判定は一度だけ (印のキーを書く)
+ */
+internal class InviteDefaultMigration(private val isUpgrade: () -> Boolean) : DataMigration<Preferences> {
+    override suspend fun shouldMigrate(currentData: Preferences): Boolean =
+        currentData[SettingsRepository.KEY_INVITE_DEFAULT_MIGRATED] == null
+
+    override suspend fun migrate(currentData: Preferences): Preferences =
+        currentData.toMutablePreferences().apply {
+            // 設定を一度も変えていない前からの利用者は保存が空なので、空かどうかだけでは新しい人と区別できない。
+            // アプリの更新で入ったかも見る
+            val existingUser = currentData.asMap().isNotEmpty() || isUpgrade()
+            if (this[SettingsRepository.KEY_INVITE_MASK] == null && existingUser) {
+                this[SettingsRepository.KEY_INVITE_MASK] = SettingsRepository.LEGACY_INVITE_MASK
+            }
+            this[SettingsRepository.KEY_INVITE_DEFAULT_MIGRATED] = true
+        }.toPreferences()
+
+    override suspend fun cleanUp() = Unit
+}
 
 /** アプリ全体設定。DataStore Preferences で保持する。 */
 class SettingsRepository(private val context: Context) {
@@ -55,6 +93,8 @@ class SettingsRepository(private val context: Context) {
         /** 予定側リマインダーを鳴動対象にするか。既定は ON —
          *  このアプリは元カレンダー通知の「何分前」を正本として鳴らす仕様。 */
         val importEventReminders: Boolean = true,
+        /** 全イベント共通の追加リマインダー (開始何分前かの分数リスト, #143)。 */
+        val extraReminderOffsets: List<Int> = emptyList(),
         /** 鳴動画面のスヌーズプリセット (分)。 */
         val snoozePresets: List<Int> = listOf(5, 10, 15, 30, 45, 60),
         /** アラーム音量。0以下はシステムの音量に追従、1〜100はアプリ固定音量。 */
@@ -65,12 +105,26 @@ class SettingsRepository(private val context: Context) {
         val vibrateWhileRinging: Boolean = true,
         /** おやすみモード(DND)中でも鳴動通知を割り込ませるか。通知ポリシーへのアクセス許可が無いとOSが無視する。 */
         val ignoreDnd: Boolean = true,
+        /** 鳴動の持続時間 (秒)。0=制限なし (従来どおり10分の安全上限で自動停止)。
+         *  競合の Alarm Duration (5s〜infinite, #148) に対応。 */
+        val ringDurationSec: Int = 0,
+        /** 放置で自動スヌーズするか (競合の Auto-snooze, #145)。
+         *  既定 OFF: ON にすると鳴動上限到達が「見逃し」ではなく既定分数の再鳴動になる
+         *  挙動を黙って変えないため、利用者が明示して有効化する。 */
+        val autoSnooze: Boolean = false,
+        /** 自動スヌーズの回数上限 (2/3/4)。スヌーズ連鎖の snoozeSeq と比較する。 */
+        val autoSnoozeMax: Int = 3,
         /** 一括ミュート: ALARM鳴動を全て止める (通知のみは残す)。 */
         val muteAll: Boolean = false,
         /** 既定の鳴動音 URI (カスタムMP3等)。null=システム既定。 */
         val defaultSoundUri: String? = null,
         /** 週番号を予定一覧に表示するか。 */
         val showWeekNumbers: Boolean = false,
+        /** メイン画面に次の予定 (次のアラーム欄) を出すか。競合の Show upcoming event 相当。 */
+        val showNextEvent: Boolean = true,
+        /** 鳴動を常にフルスクリーン通知で出すか (競合の Force full-screen alarm, #153)。
+         *  false ならヘッズアップ通知のみ。既定 true = 従来どおり常時FSI。 */
+        val forceFullScreen: Boolean = true,
         /** 週の開始曜日 (1=月 … 7=日)。既定はこれまでの月表示と同じ日曜。 */
         val firstWeekday: Int = WeekCalendar.DEFAULT_FIRST_WEEKDAY,
         /** テーマ ID。 */
@@ -109,26 +163,38 @@ class SettingsRepository(private val context: Context) {
                 applyToStart = (p[KEY_CODE_SCOPE] ?: 0) != 2,
                 applyToReminders = (p[KEY_CODE_SCOPE] ?: 0) != 1,
             ),
+            // キー未保存 (一度も触っていない) 人の既定は元アプリと同じ「承諾した招待のみ」(#155)。
+            // 保存済みの選択はそのまま残る
             inviteFilter = InviteFilter(
-                accepted = (p[KEY_INVITE_MASK] ?: 7) and 1 != 0,
-                tentative = (p[KEY_INVITE_MASK] ?: 7) and 2 != 0,
-                needsAction = (p[KEY_INVITE_MASK] ?: 7) and 4 != 0,
-                declined = (p[KEY_INVITE_MASK] ?: 7) and 8 != 0,
+                accepted = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) and 1 != 0,
+                tentative = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) and 2 != 0,
+                needsAction = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) and 4 != 0,
+                declined = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) and 8 != 0,
             ),
             eventTypeFilter = eventTypeFilterOf(p),
             googleAccountEmails = googleAccountsOf(p),
             accountSettings = accountSettingsOf(p),
             importEventReminders = p[KEY_IMPORT_REMINDERS] ?: true,
+            extraReminderOffsets = p[KEY_COMMON_REMINDERS].toCsvIntList(),
             snoozePresets = (p[KEY_SNOOZE_PRESETS] ?: "5,10,15,30,45,60")
                 .toCsvList().mapNotNull { it.toIntOrNull() }.ifEmpty { listOf(10) },
             alarmVolumePercent = p[KEY_ALARM_VOLUME] ?: 0,
             volumeCrescendo = p[KEY_VOL_CRESCENDO] ?: false,
             vibrateWhileRinging = p[KEY_VIBRATE] ?: true,
             ignoreDnd = p[KEY_IGNORE_DND] ?: true,
+            // 鳴動持続時間 (#148)。負数は来ないはずだが、来ても「制限なし」と同じ扱いに倒す
+            ringDurationSec = (p[KEY_RING_DURATION] ?: 0).coerceAtLeast(0),
+            autoSnooze = p[KEY_AUTO_SNOOZE] ?: false,
+            // 自動スヌーズ上限 (#145) は競合の選択肢 2/3/4 に丸める。それ以外は既定3
+            autoSnoozeMax = (p[KEY_AUTO_SNOOZE_MAX] ?: 3).coerceIn(2, 4),
             muteAll = p[KEY_MUTE_ALL] ?: false,
             defaultSoundUri = p[KEY_SOUND_URI],
             showWeekNumbers = p[KEY_WEEK_NUMBERS] ?: false,
             firstWeekday = WeekCalendar.normalize(p[KEY_FIRST_WEEKDAY] ?: WeekCalendar.DEFAULT_FIRST_WEEKDAY),
+            // 競合の「Show upcoming event」相当 (#151)。既定は競合に合わせて表示
+            showNextEvent = p[KEY_SHOW_NEXT_EVENT] ?: true,
+            // 「フルスクリーンを強制」(#153)。既定ON=従来どおり常にFSIを付ける
+            forceFullScreen = p[KEY_FORCE_FSI] ?: true,
             themeId = p[KEY_THEME_ID] ?: "default",
             backgroundImageUri = p[KEY_BG_IMAGE_URI],
             weatherOnAlarmScreen = p[KEY_WEATHER_ALARM] ?: true,
@@ -193,7 +259,9 @@ class SettingsRepository(private val context: Context) {
             InviteStatus.NEEDS_ACTION -> 4
             InviteStatus.DECLINED -> 8
         }
-        p[KEY_INVITE_MASK] = (p[KEY_INVITE_MASK] ?: 7) xor bit
+        // 未保存の人は表示と同じ既定 (承諾のみ) から反転する。7 から反転すると
+        // 初回タップで触っていない「未回答」まで ON になる (#155)
+        p[KEY_INVITE_MASK] = (p[KEY_INVITE_MASK] ?: DEFAULT_INVITE_MASK) xor bit
     }
     suspend fun toggleEventType(type: EventType) = edit { p ->
         val current = eventTypeFilterOf(p)
@@ -213,11 +281,22 @@ class SettingsRepository(private val context: Context) {
         p[KEY_RING_FREE] = v
     }
     suspend fun setImportEventReminders(v: Boolean) = edit { it[KEY_IMPORT_REMINDERS] = v }
+
+    /** 全イベント共通の追加リマインダー (分リスト, #143)。重複は展開側で弾く。 */
+    suspend fun setExtraReminderOffsets(v: List<Int>) = edit {
+        it[KEY_COMMON_REMINDERS] = v.sorted().distinct().joinToString(",")
+    }
     suspend fun setSnoozePresets(v: List<Int>) = edit { it[KEY_SNOOZE_PRESETS] = v.joinToString(",") }
     suspend fun setAlarmVolumePercent(v: Int) = edit { it[KEY_ALARM_VOLUME] = v }
     suspend fun setVolumeCrescendo(v: Boolean) = edit { it[KEY_VOL_CRESCENDO] = v }
     suspend fun setVibrateWhileRinging(v: Boolean) = edit { it[KEY_VIBRATE] = v }
     suspend fun setIgnoreDnd(v: Boolean) = edit { it[KEY_IGNORE_DND] = v }
+    /** 鳴動持続時間 (秒)。0=制限なし (#148)。 */
+    suspend fun setRingDurationSec(v: Int) = edit { it[KEY_RING_DURATION] = v.coerceAtLeast(0) }
+    /** 放置で自動スヌーズするか (#145)。 */
+    suspend fun setAutoSnooze(v: Boolean) = edit { it[KEY_AUTO_SNOOZE] = v }
+    /** 自動スヌーズの回数上限 (2/3/4, #145)。 */
+    suspend fun setAutoSnoozeMax(v: Int) = edit { it[KEY_AUTO_SNOOZE_MAX] = v.coerceIn(2, 4) }
     suspend fun setMuteAll(v: Boolean) = edit { it[KEY_MUTE_ALL] = v }
 
     /** Googleカレンダー連携のアカウントを足す。旧版の1アカウントのキーはここで新しいキーへ移す */
@@ -245,8 +324,24 @@ class SettingsRepository(private val context: Context) {
     suspend fun setDefaultSoundUri(v: String?) = edit {
         if (v == null) it.remove(KEY_SOUND_URI) else it[KEY_SOUND_URI] = v
     }
+    internal suspend fun selectDefaultSound(
+        uri: Uri,
+        grantReadPermission: (Uri) -> Unit = {
+            context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        },
+    ): Boolean {
+        if (runCatching { grantReadPermission(uri) }.isFailure) return false
+        setDefaultSoundUri(uri.toString())
+        return true
+    }
     suspend fun setShowWeekNumbers(v: Boolean) = edit { it[KEY_WEEK_NUMBERS] = v }
     suspend fun setFirstWeekday(v: Int) = edit { it[KEY_FIRST_WEEKDAY] = v }
+
+    /** メイン画面に次の予定欄を出すか (#151)。 */
+    suspend fun setShowNextEvent(v: Boolean) = edit { it[KEY_SHOW_NEXT_EVENT] = v }
+
+    /** 鳴動を常にフルスクリーン通知で出すか (#153)。 */
+    suspend fun setForceFullScreen(v: Boolean) = edit { it[KEY_FORCE_FSI] = v }
     suspend fun setThemeId(v: String) = edit { it[KEY_THEME_ID] = v }
     suspend fun setBackgroundImageUri(v: String?) = edit {
         if (v == null) it.remove(KEY_BG_IMAGE_URI) else it[KEY_BG_IMAGE_URI] = v
@@ -302,6 +397,11 @@ class SettingsRepository(private val context: Context) {
         val KEY_NEVER_CODES = stringPreferencesKey("title_never_codes")
         val KEY_CODE_SCOPE = intPreferencesKey("title_code_scope")
         val KEY_INVITE_MASK = intPreferencesKey("invite_mask")
+        /** 招待フィルタの既定 = 承諾のみ (bit 1)。読み出しとトグルで同じ値を使う (#155) */
+        const val DEFAULT_INVITE_MASK = 1
+        /** 既定を変える前の招待フィルタ (承諾・未定・未回答)。前から使っている人に残す (#155) */
+        const val LEGACY_INVITE_MASK = 7
+        val KEY_INVITE_DEFAULT_MIGRATED = booleanPreferencesKey("invite_default_migrated")
         val KEY_EVENT_TYPE_MASK = intPreferencesKey("event_type_mask")
         // サイレントモードと予定なしは、旧版の event_type_mask と別のキーにする (#79)
         val KEY_EVENT_TYPE_FOCUS = booleanPreferencesKey("event_type_focus_time")
@@ -353,15 +453,21 @@ class SettingsRepository(private val context: Context) {
             com.calendaralarm.shared.model.AccountSetting.serializer(),
         )
         val KEY_IMPORT_REMINDERS = booleanPreferencesKey("import_event_reminders")
+        val KEY_COMMON_REMINDERS = stringPreferencesKey("common_extra_reminders")
         val KEY_SNOOZE_PRESETS = stringPreferencesKey("snooze_presets")
         val KEY_ALARM_VOLUME = intPreferencesKey("alarm_volume_percent")
         val KEY_VOL_CRESCENDO = booleanPreferencesKey("volume_crescendo")
         val KEY_VIBRATE = booleanPreferencesKey("vibrate_while_ringing")
         val KEY_IGNORE_DND = booleanPreferencesKey("ignore_dnd")
+        val KEY_RING_DURATION = intPreferencesKey("ring_duration_sec")
+        val KEY_AUTO_SNOOZE = booleanPreferencesKey("auto_snooze")
+        val KEY_AUTO_SNOOZE_MAX = intPreferencesKey("auto_snooze_max")
         val KEY_MUTE_ALL = booleanPreferencesKey("mute_all")
         val KEY_SOUND_URI = stringPreferencesKey("default_sound_uri")
         val KEY_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
         val KEY_FIRST_WEEKDAY = intPreferencesKey("first_weekday")
+        val KEY_SHOW_NEXT_EVENT = booleanPreferencesKey("show_next_event")
+        val KEY_FORCE_FSI = booleanPreferencesKey("force_full_screen")
         val KEY_THEME_ID = stringPreferencesKey("theme_id")
         val KEY_BG_IMAGE_URI = stringPreferencesKey("background_image_uri")
         val KEY_WEATHER_ALARM = booleanPreferencesKey("weather_on_alarm_screen")
@@ -392,5 +498,8 @@ class SettingsRepository(private val context: Context) {
 
         fun String?.toCsvList(): List<String> =
             this?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+
+        fun String?.toCsvIntList(): List<Int> =
+            toCsvList().mapNotNull { it.toIntOrNull() }
     }
 }

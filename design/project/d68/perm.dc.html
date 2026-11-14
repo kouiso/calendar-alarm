@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>権限</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/41384cd4ff5e02c5cffc251dcfb23a2b">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&amp;family=Outfit:wght@200;300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.sum{display:flex;flex-direction:column;gap:14px}
+.sh{display:flex;align-items:center;gap:12px}
+.sic{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
+.sh .t{font-size:16px;font-weight:600}
+.pr{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--div)}
+.pr:last-child{border-bottom:0}
+.pr .s{font-size:12px;font-weight:600;margin:2px 0 0}
+</style>
+</helmet>
+<div class="r" data-theme="{{theme}}" style="width: 1680px; height: 940px">
+
+  <div class="col">
+    <div class="cap">1. まだ何も許可されていない</div>
+    <div class="sub">「全部許可する」は未許可を順に1つずつ開く。重ねて表示は並べない（決定3）</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1">権限</h2></div>
+      <div class="body">
+        <div class="card sum">
+          <div class="sh"><span class="sic ng"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v8M12 18v.5"/></svg></span><div class="grow"><p class="t">まだ何も許可されていない</p><p class="m">未許可の順に、1つずつ設定を開く</p></div></div>
+          <button class="btn">全部許可する</button>
+        </div>
+        <div class="card ls">
+          <div class="pr"><div class="grow"><p class="t">カレンダー</p><p class="m">予定を読んで、前もって鳴らす</p><p class="s c-ng">未許可</p></div><button class="sw" aria-label="カレンダー"></button></div>
+          <div class="pr"><div class="grow"><p class="t">通知</p><p class="m">鳴ったことを知らせる</p><p class="s c-ng">未許可</p></div><button class="sw" aria-label="通知"></button></div>
+          <div class="pr"><div class="grow"><p class="t">正確なアラーム</p><p class="m">時刻ちょうどに鳴らす</p><p class="s c-ng">未許可</p></div><button class="sw" aria-label="正確なアラーム"></button></div>
+          <div class="pr"><div class="grow"><p class="t">全画面で表示</p><p class="m">止めるボタンを画面いっぱいに出す</p><p class="s c-ng">未許可</p></div><button class="sw" aria-label="全画面で表示"></button></div>
+        </div>
+        <p class="m" style="padding: 0 6px">押すと端末のその設定が直接開く。戻ると、ここの状態が自動で変わる。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">2. 未許可がある</div>
+    <div class="sub">行かスイッチを押すと、その項目の設定か OS の確認を直接開く</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1">権限</h2></div>
+      <div class="body">
+        <div class="card sum">
+          <div class="sh"><span class="sic ng"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v8M12 18v.5"/></svg></span><div class="grow"><p class="t">未許可がある</p><p class="m">未許可の順に、1つずつ設定を開く</p></div></div>
+          <button class="btn">全部許可する</button>
+        </div>
+        <div class="card ls">
+          <div class="pr"><div class="grow"><p class="t">カレンダー</p><p class="m">予定を読んで、前もって鳴らす</p><p class="s c-ac">許可済み</p></div><button class="sw on" aria-label="カレンダー"></button></div>
+          <div class="pr"><div class="grow"><p class="t">通知</p><p class="m">鳴ったことを知らせる</p><p class="s c-ac">許可済み</p></div><button class="sw on" aria-label="通知"></button></div>
+          <div class="pr"><div class="grow"><p class="t">正確なアラーム</p><p class="m">時刻ちょうどに鳴らす</p><p class="s c-ng">未許可</p></div><button class="sw" aria-label="正確なアラーム"></button></div>
+          <div class="pr"><div class="grow"><p class="t">全画面で表示</p><p class="m">止めるボタンを画面いっぱいに出す</p><p class="s c-ng">未許可</p></div><button class="sw" aria-label="全画面で表示"></button></div>
+        </div>
+        <p class="m" style="padding: 0 6px">押すと端末のその設定が直接開く。戻ると、ここの状態が自動で変わる。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">3. 全部許可済み</div>
+    <div class="sub">ボタンは出さない。テスト鳴動は設定の「鳴動の状態」にある</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1">権限</h2></div>
+      <div class="body">
+        <div class="card sum">
+          <div class="sh"><span class="sic ac"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><div class="grow"><p class="t">アラームは正しく鳴る</p><p class="m">全部許可済み</p></div></div>
+        </div>
+        <div class="card ls">
+          <div class="pr"><div class="grow"><p class="t">カレンダー</p><p class="m">予定を読んで、前もって鳴らす</p><p class="s c-ac">許可済み</p></div><button class="sw on" aria-label="カレンダー"></button></div>
+          <div class="pr"><div class="grow"><p class="t">通知</p><p class="m">鳴ったことを知らせる</p><p class="s c-ac">許可済み</p></div><button class="sw on" aria-label="通知"></button></div>
+          <div class="pr"><div class="grow"><p class="t">正確なアラーム</p><p class="m">時刻ちょうどに鳴らす</p><p class="s c-ac">許可済み</p></div><button class="sw on" aria-label="正確なアラーム"></button></div>
+          <div class="pr"><div class="grow"><p class="t">全画面で表示</p><p class="m">止めるボタンを画面いっぱいに出す</p><p class="s c-ac">許可済み</p></div><button class="sw on" aria-label="全画面で表示"></button></div>
+        </div>
+        <p class="m" style="padding: 0 6px">押すと端末のその設定が直接開く。戻ると、ここの状態が自動で変わる。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="cap">4. iPhone の権限</div>
+    <div class="sub">項目は カレンダー・アラーム・通知 の3つ。全部そろうとボタンは「すべて許可済み」</div>
+    <div class="ph">
+      <div class="top"><button class="back" aria-label="戻る"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 class="h1">権限</h2></div>
+      <div class="body">
+        <button class="btn">全部許可する</button>
+        <div class="card ls">
+          <div class="pr"><svg class="i c-mu" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><div class="grow"><p class="t">カレンダー</p><p class="m">予定を読んで、前もって鳴らす</p></div><button class="sw on" aria-label="カレンダー"></button></div>
+          <div class="pr"><svg class="i c-mu" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5M5 4L3 6M19 4l2 2"/></svg><div class="grow"><p class="t">アラーム</p><p class="m">マナー中でも時刻ちょうどに鳴らす</p></div><button class="sw" aria-label="アラーム"></button></div>
+          <div class="pr"><svg class="i c-mu" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><div class="grow"><p class="t">通知</p><p class="m">鳴らせなかった時に知らせる</p></div><button class="sw on" aria-label="通知"></button></div>
+        </div>
+        <p class="m" style="padding: 0 6px">オフにする時は iPhone の設定が開きます。</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1680,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme ?? 'dark' }; }
+}
+</script>
+</body>
+</html>

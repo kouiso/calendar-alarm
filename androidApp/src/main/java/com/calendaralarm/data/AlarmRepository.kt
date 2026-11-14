@@ -1,6 +1,7 @@
 package com.calendaralarm.data
 
 import android.util.Log
+import java.util.concurrent.ConcurrentHashMap
 import com.calendaralarm.data.calendar.CalendarContractReader
 import com.calendaralarm.data.db.AppDatabase
 import com.calendaralarm.data.db.AuditLogEntity
@@ -35,6 +36,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DayOfWeek
@@ -44,6 +47,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * 鳴動ドメインの統合リポジトリ。
@@ -66,6 +70,13 @@ class AlarmRepository(
     /** 期限切れが MISSED 化された件数の通知 (missed 通知用)。 */
     private val onMissed: (suspend (Int) -> Unit)? = null,
 ) {
+    // 自動スヌーズ・手動スヌーズ・停止の状態遷移を一つずつ通す (#145)
+    private val ringTransitionLock = Mutex()
+    // 自動スヌーズで作った子 (親 id → 子 id と作った時刻)。直後に届いた停止で子ごと取り消す
+    private val autoSnoozedChildren = ConcurrentHashMap<String, Pair<String, Long>>()
+    // 自動スヌーズと停止の重なりを測る時計。テストで 30 秒経過を作るための差込口
+    internal var nowMillis: () -> Long = System::currentTimeMillis
+
     // ---- Google Calendar eventType 取得 ----
 
     /**
@@ -183,7 +194,10 @@ class AlarmRepository(
         /** 解決後のリマインダーアクション。 */
         val reminderAction: EventAction,
         val minutesBefore: Int,
+        /** 予定ごとの指定かカレンダー既定の追加リマインダー (共通リマインダーは含めない) */
         val extraOffsets: List<Int>,
+        /** 実際に効く追加リマインダー (共通リマインダー込み, #143)。一覧の表示と詳細シートのチップに使う */
+        val effectiveExtraOffsets: List<Int> = extraOffsets,
         val hasOverride: Boolean,
         /** カレンダーを鳴らさない設定にしている (予定ごとの指定より強い。展開がカレンダー単位で外すため) */
         val calendarOff: Boolean = false,
@@ -272,6 +286,11 @@ class AlarmRepository(
                     ?: appSettings.defaultReminderAction,
             )
             val override = ov?.toModel()
+            // 展開と同じ規則で、この予定に効く追加リマインダー (共通リマインダー込み, #143)。
+            // 一覧の鳴る／鳴らない表示が、共通リマインダーだけで鳴る予定を OFF と出さないようにする
+            val effectiveExtras = AlarmExpander.effectiveExtraOffsets(
+                ov?.extraOffsetsCsv?.toOffsets(), rule, appSettings.extraReminderOffsets,
+            )
             // 招待フィルタも反映する: 展開側で鳴らない予定が「アラーム」
             // アイコン表示になるのは矛盾
             // 予約の展開と同じ判定関数を使い、一覧の鳴る／鳴らない表示を実際の予約と一致させる (#79)
@@ -293,23 +312,25 @@ class AlarmRepository(
                 startAction = start,
                 reminderAction = reminder,
                 minutesBefore = ov?.minutesBefore ?: rule.minutesBefore,
+                // 共通リマインダーは含めない。詳細シートはチップを触った時だけ一覧を書く (#143)
                 extraOffsets = ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets,
+                effectiveExtraOffsets = effectiveExtras,
                 hasOverride = ov != null,
                 calendarOff = pref?.enabled == false,
                 accountOff = accountOff,
                 allDayOff = allDayOff,
-                hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
+                hasReminderTriggers = effectiveExtras.isNotEmpty() ||
                     (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
                 muteAll = appSettings.muteAll,
                 defaultSilenced = AlarmExpander.silencedWithoutOverride(
                     ev, rule, appSettings.titleCodes, appSettings.inviteFilter, appSettings.eventTypeFilter,
                     // 何分前などの個別指定は ON でも残すので、リマインダー側の時刻は指定の分まで数える
-                    hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
+                    hasReminderTriggers = effectiveExtras.isNotEmpty() ||
                         (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
                 ),
                 restoreSilenced = AlarmExpander.silencedWithoutOverride(
                     ev, rule, appSettings.titleCodes, appSettings.inviteFilter, appSettings.eventTypeFilter,
-                    hasReminderTriggers = (ov?.extraOffsetsCsv?.toOffsets() ?: rule.extraOffsets).isNotEmpty() ||
+                    hasReminderTriggers = effectiveExtras.isNotEmpty() ||
                         (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
                     muteAll = appSettings.muteAll,
                 ),
@@ -352,15 +373,28 @@ class AlarmRepository(
 
     suspend fun onDismissed(id: String?) {
         if (id == null) return
+        ringTransitionLock.withLock { dismissRow(id) }
+        onScheduleChanged?.invoke()
+    }
+
+    private suspend fun dismissRow(id: String) {
         setState(id, AlarmState.DISMISSED)
         scheduler.cancel(id)
         audit("DISMISS", id, db.scheduledInstances().byId(id))
+        // 放置の自動スヌーズと停止が重なった時は停止を優先し、直前に作った子も取り消す (#145)
+        autoSnoozedChildren.remove(id)?.let { (childId, at) ->
+            val child = db.scheduledInstances().byId(childId)
+            if (nowMillis() - at <= AUTO_SNOOZE_RACE_MS && child?.state == AlarmState.PENDING.name) {
+                setState(childId, AlarmState.CANCELLED)
+                scheduler.cancel(childId)
+                audit("DISMISS", "$childId: 停止が自動スヌーズと重なったので子も取り消す", child)
+            }
+        }
         // 単発アラームは終端到達=消費。アラーム本体も OFF に倒して
         // 「有効表示なのに二度と鳴らない」状態を残さない
         db.scheduledInstances().byId(id)?.standaloneAlarmId?.let {
             disableConsumedOneShots(setOf(it))
         }
-        onScheduleChanged?.invoke()
     }
 
     /**
@@ -476,7 +510,65 @@ class AlarmRepository(
     private val waitingRings = WaitingRingStore(calendarReader.appContext())
 
     suspend fun onSnoozed(id: String?, snoozeMinutes: Int? = null) {
-        val entity = id?.let { db.scheduledInstances().byId(it) } ?: return
+        if (id == null) return
+        val done = ringTransitionLock.withLock {
+            // 先に停止・見逃しで終わった行へ遅れて届いたスヌーズは、子を作らない (止めたのに鳴るのを防ぐ)
+            val entity = db.scheduledInstances().byId(id) ?: return@withLock false
+            if (entity.state in TERMINAL_STATES) {
+                audit("SNOOZE_SKIP", "$id: スヌーズの前に ${entity.state} になっていたので何もしない", entity)
+                return@withLock false
+            }
+            snoozeRow(entity, snoozeMinutes)
+            true
+        }
+        if (done) onScheduleChanged?.invoke()
+    }
+
+    /**
+     * 放置による自動スヌーズ (#145)。手動の停止 [onDismissed] と排他にし、停止を勝たせる。
+     * 鳴動中 (FIRED) のままの時だけ子を作る。先に停止された (DISMISSED など) なら何もしない。
+     * 作った子は [AUTO_SNOOZE_RACE_MS] の間だけ覚え、その間に届いた停止で子ごと取り消す
+     * (停止ボタンを押した瞬間に放置の時間切れが重なった時、押した側を優先するため)。
+     * @return 子を作ったら true
+     */
+    suspend fun onAutoSnoozed(id: String, snoozeMinutes: Int): Boolean {
+        val done = ringTransitionLock.withLock {
+            val row = db.scheduledInstances().byId(id) ?: return@withLock false
+            if (row.state != AlarmState.FIRED.name) {
+                audit("SNOOZE_SKIP", "$id: 自動スヌーズの前に ${row.state} になっていたので何もしない", row)
+                return@withLock false
+            }
+            val childId = snoozeRow(row, snoozeMinutes)
+            autoSnoozedChildren[id] = childId to nowMillis()
+            true
+        }
+        if (done) onScheduleChanged?.invoke()
+        return done
+    }
+
+    /**
+     * 放置の時間切れで「鳴らせなかった」にする (#145)。停止と排他にし、鳴動中 (FIRED) のままの時だけ書く。
+     * 先に停止されていたら DISMISSED を MISSED で上書きせず、見逃しの通知も出さないよう false を返す
+     */
+    suspend fun markMissedIfFired(id: String, detail: String): Boolean {
+        val done = ringTransitionLock.withLock {
+            val row = db.scheduledInstances().byId(id) ?: return@withLock false
+            if (row.state != AlarmState.FIRED.name) {
+                audit("MISS_SKIP", "$id: 時間切れの前に ${row.state} になっていたので見逃しにしない", row)
+                return@withLock false
+            }
+            setState(id, AlarmState.MISSED)
+            audit("MISS", "$id: $detail", row)
+            row.standaloneAlarmId?.let { disableConsumedOneShots(setOf(it)) }
+            true
+        }
+        if (done) onScheduleChanged?.invoke()
+        return done
+    }
+
+    /** スヌーズの子を予約して元を SNOOZED にする。呼び出し側が [ringTransitionLock] を持ち、
+     *  ロックを放してから onScheduleChanged を呼ぶ (ウィジェット更新で停止の書き込みを待たせない)。子の id を返す */
+    private suspend fun snoozeRow(entity: ScheduledInstanceEntity, snoozeMinutes: Int?): String {
         val instance = entity.toInstance()
         val minutes = snoozeMinutes ?: instance.snoozeMinutes
         val snoozed = instance.snoozed(
@@ -486,7 +578,7 @@ class AlarmRepository(
         if (!scheduler.schedule(snoozed)) audit("EXACT_DENIED", snoozed.id)
         setState(instance.id, AlarmState.SNOOZED)
         audit("SNOOZE", "${instance.id} +${minutes}m → ${snoozed.id}", entity)
-        onScheduleChanged?.invoke()
+        return snoozed.id
     }
 
     /** タイマーなど単発インスタンスを即座に予約する。 */
@@ -593,27 +685,39 @@ class AlarmRepository(
                 // カレンダー一覧の読み取り失敗は予定の読み取り失敗と同じ扱いにする (下の runCatching で前回の予約を維持)。
                 // 鳴らさないアカウントを無視して鳴らすことも、全部止めることもしない
                 val calendarList = calendarReader.calendars()
+                // アカウント単位の設定 (使う / 鳴らす / 何分前) を配下カレンダーへ当てはめる (#74)
+                val accountApplied = com.calendaralarm.shared.logic.AccountRules.apply(
+                    calendarList, appSettings.accountSettings, prefs, defaultRule, minutesFollowDefault,
+                )
+                // 未来側は「何分前」の最大分だけ horizon より先まで読む (#143)。
+                // 開始が14日より先でも、共通リマインダーなどの前倒しで鳴動が14日以内に入るため。
+                // 予約の範囲は展開側が鳴動時刻で horizon に切るので変わらない
+                val fetchUntil = horizon + maxOf(
+                    AlarmExpander.fetchLeadMinutes(
+                        accountApplied.calendarRules.values + defaultRule,
+                        overrides.values,
+                        appSettings.extraReminderOffsets,
+                    ),
+                    // 予定側のリマインダーは読むまで分からないので、取り込む時は上限 (4週) まで読む
+                    if (appSettings.importEventReminders) AlarmExpander.MAX_EVENT_REMINDER_MINUTES else 0,
+                ).minutes
                 // 過去側はグレース幅ではなく14日に広げる。スヌーズ連鎖が親予定の
                 // 開始から長く伸びても liveEventKeys が親を見失わず、スヌーズ子が
                 // 無言キャンセルされない。in-window 外の予定は展開側で弾かれる。
                 val events = enrichWithGoogleTypes(
                     calendarReader.events(
                         (now - 14.days).toEpochMilliseconds(),
-                        horizon.toEpochMilliseconds(),
+                        fetchUntil.toEpochMilliseconds(),
                     ).map { it.withResolvedDefaultReminders(appSettings) },
                     appSettings,
                     (now - 14.days).toEpochMilliseconds(),
-                    horizon.toEpochMilliseconds(),
+                    fetchUntil.toEpochMilliseconds(),
                 )
                 // 予定があるのにカレンダーが1件も読めないのは一覧の読み取り失敗。
                 // アカウント設定があるとアカウントへ当てはめられないので、前回の予約を維持する
                 check(calendarList.isNotEmpty() || events.isEmpty() || appSettings.accountSettings.isEmpty()) {
                     "calendar list is empty while events exist"
                 }
-                // アカウント単位の設定 (使う / 鳴らす / 何分前) を配下カレンダーへ当てはめる (#74)
-                val accountApplied = com.calendaralarm.shared.logic.AccountRules.apply(
-                    calendarList, appSettings.accountSettings, prefs, defaultRule, minutesFollowDefault,
-                )
                 val disabledCalIds = accountApplied.disabledCalendarIds
                 liveEventKeys = events.asSequence()
                     .filter { overrides[it.instanceKey]?.muted != true }
@@ -633,6 +737,7 @@ class AlarmRepository(
                     eventTypeFilter = appSettings.eventTypeFilter,
                     importEventReminders = appSettings.importEventReminders,
                     muteAll = appSettings.muteAll,
+                    commonExtraOffsets = appSettings.extraReminderOffsets,
                 )
             }.getOrNull()
             if (expanded != null) {
@@ -972,6 +1077,13 @@ class AlarmRepository(
     )
 
     companion object {
+        /** 終わった行。遅れて届いたスヌーズで子を作らない (#145) */
+        private val TERMINAL_STATES = setOf(
+            AlarmState.DISMISSED.name, AlarmState.MISSED.name,
+            AlarmState.CANCELLED.name, AlarmState.SKIPPED.name,
+        )
+        /** 自動スヌーズの直後に届いた停止を「同時に押した」とみなす長さ (#145) */
+        const val AUTO_SNOOZE_RACE_MS = 30_000L
         /** 鳴らし直しの発火までの間。停止した鳴動の後始末 (通知の掃除など) が済んでから鳴らす */
         private const val REARM_DELAY_MS = 1_500L
         /** 待ちが複数ある時の発火のずらし幅。同じ時刻に重ねず、押し出しの順を安定させる */

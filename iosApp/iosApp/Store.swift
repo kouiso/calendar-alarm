@@ -40,6 +40,10 @@ final class Store: ObservableObject {
         var alarmSoundLabel: String? = nil
         /// 予定一覧に週番号を出すか (旧版の「Show Calendar Week」)
         var showWeekNumbers: Bool = false
+        /// 全イベント共通の追加リマインダー (開始何分前かの分数リスト, #143)
+        var extraReminderOffsets: [Int] = []
+        /// メイン画面に次の予定 (次のアラーム欄) を出すか。競合の Show upcoming event 相当 (#151)
+        var showNextEvent: Bool = true
         /// 週の開始曜日 (ISO: 1=月 … 7=日)。既定はこれまでの月表示と同じ日曜
         var firstWeekday: Int = WeekDisplay.defaultFirstWeekday
         var timerPresets: [TimerPresetDTO] = TimerPresets.defaults
@@ -57,6 +61,10 @@ final class Store: ObservableObject {
         // scheduled_instances: id -> ScheduledRecord
         var scheduled: [String: ScheduledRecord] = [:]
         var audit: [AuditEntry] = []
+        /// アプリを開いていない間に「停止した」とみなした行のうち、書き残しが無く
+        /// 「起動し続けた + 予約だけ消えた」で拾った (via=boot) 累計 (#136)。
+        /// 監査ログ50件を超えると切れて数えられなくなるので永続カウンタで持つ
+        var offAppBootDismissedCount: Int = 0
         /// 停止・スヌーズ・鳴らずの記録 (7日分)。監査ログ (50件) や予約の行
         /// (単発を使い直すと消える) とは別に持ち、設定先頭の「最近の鳴動」と見逃しの数に使う
         var ringHistory: [AuditEntry] = []
@@ -152,6 +160,7 @@ final class Store: ObservableObject {
     }
     func setShowWeekNumbers(_ v: Bool) { mutate { $0.showWeekNumbers = v } }
     func setFirstWeekday(_ v: Int) { mutate { $0.firstWeekday = WeekDisplay.normalize(v) } }
+    func setShowNextEvent(_ v: Bool) { mutate { $0.showNextEvent = v } }
     func setDefaultStartAction(_ a: EventAction) { mutate { $0.defaultStartAction = a.rawValue } }
     func setDefaultReminderAction(_ a: EventAction) { mutate { $0.defaultReminderAction = a.rawValue } }
     func setTitleCodes(_ v: TitleCodeSettings) { mutate { $0.titleCodes = v } }
@@ -180,6 +189,8 @@ final class Store: ObservableObject {
         }
     }
     func setImportEventReminders(_ v: Bool) { mutate { $0.importEventReminders = v } }
+    /// 全イベント共通の追加リマインダー (分リスト, #143)。重複は展開側で弾く
+    func setExtraReminderOffsets(_ v: [Int]) { mutate { $0.extraReminderOffsets = Array(Set(v)).sorted() } }
     func setMuteAll(_ v: Bool) { mutate { $0.muteAll = v } }
     func setThemeId(_ v: String) { mutate { $0.themeId = v } }
     func setWeatherLocation(_ v: String) { mutate { $0.weatherLocation = v.trimmingCharacters(in: .whitespacesAndNewlines) } }
@@ -340,6 +351,9 @@ final class Store: ObservableObject {
         state.scheduled.compactMapValues { $0.state == .pending ? $0.instance.triggerAtMillis : nil }
     }
 
+    /// via=boot で停止とみなした累計を1つ進める (#136)
+    func incrementOffAppBootDismissed() { mutate { $0.offAppBootDismissedCount += 1 } }
+
     func markState(_ id: String, _ st: InstanceState) {
         mutate { s in
             guard var r = s.scheduled[id] else { return }
@@ -439,7 +453,8 @@ extension Store.Persisted {
         defaultStartAction = try c.decodeIfPresent(String.self, forKey: .defaultStartAction) ?? EventAction.alarm.rawValue
         defaultReminderAction = try c.decodeIfPresent(String.self, forKey: .defaultReminderAction) ?? EventAction.alarm.rawValue
         titleCodes = try c.decodeIfPresent(TitleCodeSettings.self, forKey: .titleCodes) ?? TitleCodeSettings()
-        inviteFilter = try c.decodeIfPresent(InviteFilter.self, forKey: .inviteFilter) ?? InviteFilter()
+        inviteFilter = try c.decodeIfPresent(InviteFilter.self, forKey: .inviteFilter)
+            ?? InviteFilter(accepted: true, tentative: true, needsAction: true, declined: false)
         eventTypeFilter = try c.decodeIfPresent(EventTypeFilter.self, forKey: .eventTypeFilter) ?? EventTypeFilter()
         // キーが無い=新規のみ ON。旧データに保存済みの値は識別不能のため維持する
         importEventReminders = try c.decodeIfPresent(Bool.self, forKey: .importEventReminders) ?? true
@@ -452,6 +467,8 @@ extension Store.Persisted {
         alarmSoundFile = try c.decodeIfPresent(String.self, forKey: .alarmSoundFile)
         alarmSoundLabel = try c.decodeIfPresent(String.self, forKey: .alarmSoundLabel)
         showWeekNumbers = try c.decodeIfPresent(Bool.self, forKey: .showWeekNumbers) ?? false
+        extraReminderOffsets = try c.decodeIfPresent([Int].self, forKey: .extraReminderOffsets) ?? []
+        showNextEvent = try c.decodeIfPresent(Bool.self, forKey: .showNextEvent) ?? true
         firstWeekday = WeekDisplay.normalize(try c.decodeIfPresent(Int.self, forKey: .firstWeekday) ?? WeekDisplay.defaultFirstWeekday)
         timerPresets = try c.decodeIfPresent([TimerPresetDTO].self, forKey: .timerPresets) ?? TimerPresets.defaults
         calendarRules = try c.decodeIfPresent([String: AlarmRuleDTO].self, forKey: .calendarRules) ?? [:]
@@ -464,6 +481,7 @@ extension Store.Persisted {
         standaloneAlarms = try c.decodeIfPresent([StandaloneAlarmDTO].self, forKey: .standaloneAlarms) ?? []
         scheduled = try c.decodeIfPresent([String: ScheduledRecord].self, forKey: .scheduled) ?? [:]
         audit = try c.decodeIfPresent([AuditEntry].self, forKey: .audit) ?? []
+        offAppBootDismissedCount = try c.decodeIfPresent(Int.self, forKey: .offAppBootDismissedCount) ?? 0
         if let saved = try c.decodeIfPresent([AuditEntry].self, forKey: .ringHistory) {
             ringHistory = saved
         } else {
