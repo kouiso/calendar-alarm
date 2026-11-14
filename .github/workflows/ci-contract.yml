@@ -35,3 +35,5 @@ jobs:
           version: 3.40.1
       - name: CI contract test
         run: bash scripts/test-ci-contract.sh
+      - name: Emulator retry loop test (adb stubbed, #375)
+        run: bash scripts/emulator/test_run_scenarios_retry.sh
