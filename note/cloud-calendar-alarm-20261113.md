@@ -10,6 +10,8 @@ START 2026-11-14T12:20Z exec-prompt v2 adopted. handoff: this file's 引き継�
 worktrees 2026-11-14T12:20Z: all 19 clean, nothing unpushed. /home/user/{calendar-alarm master, calendar-alarm-notes notes, wt188, wt189 (Mac's PR, untouched), wt191, wt204, wt231, wt232, wt243, wt271, wt297, wt309, wt366, wt371, wt-advisor (no commits)} match their upstream; wt367 e41db5c, wt375 3ce3f77, wtpl 47bfae9 match the remote branch; wt289 0991bb6 = merged into master as b831a9c (remote branch gone).
 DECIDED | owner additions 1-4 adopted 2026-11-14T12:25Z | reason manager message | revert none needed
 rule 2 (-ux): open PRs+issues 177 read by REST; 0 assigned to or opened by a login ending in -ux. skipped: 0.
+CYCLE 1 T=2026-11-14T12:14Z | PRs 10 | issues 167 | ledger rows: plan rows not in this session (status.tsv is on the Mac; packet says AI rows startable now = row 36, Mac lane) | list cycle-1.tsv
+  PR queues: REVIEW 3 (#373 #374 #376) | DEVICE 4 (#365 #363 #191 #188, reviews passed) | OTHER-LANE 2 (#370 #189, Mac) | NOTES 1 (#358). issues: sorting in batches of 50.
 rule 1(b): 11 open items carry claude-cloud; the others go first.
 rule 1(a): Project 10's Iteration cannot be read from this session (GraphQL and user-level project REST both 403). Moved to front by 1(a): 0 (unknown). -> for main session.
 manager (Fable high) spawned for scene (a): pass line and policy pending.
