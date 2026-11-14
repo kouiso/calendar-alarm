@@ -22,7 +22,7 @@ calendar-alarm [cloud]
 ### 開いている PR と止まっている理由
 | PR | head | 状態 | 次の一手 / 待ち |
 |---|---|---|---|
-| #360（#232） | 609a682（master を取り込み済み、衝突なし、手元 193 件 失敗 0） | CI の emulator の 2 レーンが実行中だった。元の head aa78f2b は独立レビュー must 0。取り込みの後の差分は行番号だけ違う（同じ変更）。#359 の見張りとロックの関係の確認レビューは止めた（コメント無し） | 1) CI を確かめる 2) #359 の見張り（`watchScheduleDefaults`）が `ringTransitionLock` を持ったまま resync を呼ばないことを、書いていない Opus のレビューで確かめてコメントに残す 3) squash で取り込む 4) #257 だけ閉じる（#232 の「同時に走らない」は満たしていない。外に残る 3 か所: `cancelStaleWaitingEvents`・`markMissed()`・`rearmWaitingRings`） |
+| #360（#232） | 609a682（master を取り込み済み、衝突なし、手元 193 件 失敗 0） | CI の emulator の 2 レーンが実行中だった。元の head aa78f2b は独立レビュー must 0。取り込みの後の差分は行番号だけ違う（同じ変更）。#359 の見張りとロックの関係の確認レビューは投稿済み（: https://github.com/kouiso/calendar-alarm/pull/360#issuecomment-6873870939） | 1) CI を確かめる 2) 上の確認レビューの判定が must 0 なら 3) squash で取り込む 4) #257 だけ閉じる（#232 の「同時に走らない」は満たしていない。外に残る 3 か所: `cancelStaleWaitingEvents`・`markMissed()`・`rearmWaitingRings`） |
 | #361（#243） | 8c28816 | 独立レビュー must 0（https://github.com/kouiso/calendar-alarm/pull/361#issuecomment-6873615277）、CI 成功 | #360 の後に master を取り込む。`resync` が 3 つの PR で重なるので、手で直した衝突があれば本当のレビューをかける。その後取り込む。#282 を閉じる |
 | #191（#149） | ebd28fe | 独立レビュー must 0（https://github.com/kouiso/calendar-alarm/pull/191#issuecomment-6873815540）、CI 全部成功（emulator の鳴動・停止レーンの証跡: actions run 43570843636） | 画面が変わるので持ち主の画面確認待ち（OWNER）。#359〜#361 の後に master を取り込み、取り込みをレビューしてから。DEVICE: おやすみモード中の ON/OFF の端末での比較 |
 | #188（#154） | aecf600 | 独立レビュー must 0（https://github.com/kouiso/calendar-alarm/pull/188#issuecomment-6873609241）、CI 成功 | OWNER: 画面確認、外観の料金（無料か Pro か）。DEVICE: 大ボタン ON/OFF の見た目と停止、TalkBack |
