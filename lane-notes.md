@@ -20,6 +20,7 @@ BOARD 2026-11-14T13:00Z | Project 10 open items in Iteration 7 (this week) and 8
 DISK 2026-11-14T13:00Z | / 19 GiB free. Big: ~/ghq 90G, /private/tmp 9.3G, CoreSimulator/Devices 6.6G (3 sims, none booted; sims banned here), ~/.gradle/caches 4.8G. /tmp/mac-heavy-build.lock holds pid 11684 = not running (stale, other session's). No deletion done. Mac load 21 at 13:00Z (PC-LOAD hook blocks local runs).
 BRAIN ALERT-11 | Sonnet member: the 3 brain-sync stash commits' line is already in HEAD (6bd140a8c); nothing to apply; clears after 24h.
 IN WORK 13:00Z | #370 master merged (1823870), independent Opus review running | manager (Fable high, name ca-manager) scene a running | Pixel member (ca-pixel): stills for #363 #365 #373 #188 #191 from CI APKs, muted, no ringing, files to evidence/
+370 | FIX | review FAIL must 1 (body evidence named old head a06a6b5) want 1 (no CI guard for readonly:true -> separate PR) nit 2 | head 1823870 | Android CI 43595992282 success | https://github.com/kouiso/calendar-alarm/pull/370#pullrequestreview-5904393746 | body fix drafted, tone check running; then fresh re-review
 needs owner:
 - (answered 13:10Z 「消してええ」) deleted the 3 simulators hm-a4-voice-sim, hm-a5-photo-sim, iPhone 17 Pro; Devices 6.6G -> 12K; df still 19 GiB right after (recheck before #189 build).
 - One sound window for: #191 ring-through-DND case, #189 two bundled sounds, rows 7/12/35/V3.
