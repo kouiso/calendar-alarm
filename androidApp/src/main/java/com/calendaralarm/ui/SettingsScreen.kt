@@ -156,7 +156,7 @@ fun SettingsScreen(
         }
         // ---- 鳴動の状態 (前の権限カード) と最近の鳴動記録 (#51 PR3)。#121 の完了条件で先頭は鳴る時刻なので、その直下に置く ----
         item { Spacer(Modifier.height(8.dp)) }
-        item { RingStatusCard(context, repository, onOpenPermissions) }
+        item { RingStatusCard(context, repository, onOpenPermissions, muteAll = prefs?.muteAll == true) }
         // ---- 既定値: 🔔通知タイミング / 😴スヌーズ / ☁天気 ----
         item { Spacer(Modifier.height(12.dp)) }
         item {
@@ -502,6 +502,7 @@ private fun RingStatusCard(
     context: Context,
     repository: AlarmRepository,
     onOpenPermissions: () -> Unit,
+    muteAll: Boolean = false,
 ) {
     val activity = context as? Activity
     val tick = rememberResumeTick()
@@ -522,6 +523,7 @@ private fun RingStatusCard(
         recentMissed = recentMissed,
         hasNextAlarm = pending.isNotEmpty(),
         alarmMuted = !volumeOk,
+        allMuted = muteAll,
     )
     val ngCount = perms.count { !it.value } + listOf(volumeOk, batteryOk).count { !it }
     var expanded by remember(ngCount > 0) { mutableStateOf(ngCount > 0) }

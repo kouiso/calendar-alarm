@@ -151,6 +151,7 @@ fun AgendaScreen(
         recentMissed = recentMissed,
         hasNextAlarm = nextAlarm != null,
         alarmMuted = alarmMuted,
+        allMuted = settings?.muteAll == true,
     )
 
     Column(Modifier.fillMaxSize()) {

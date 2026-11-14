@@ -2,17 +2,18 @@ package com.calendaralarm.shared.logic
 
 /**
  * 予定画面に1行で出す「鳴動の状態」(#51 PR2)。
- * 鳴らない原因の重い順に1つだけ選ぶ: 許可が足りない → アラームの音量が0 → 最近鳴らせなかった → 予約が無い → 準備OK。
+ * 鳴らない原因の重い順に1つだけ選ぶ: 許可が足りない → すべてミュート中 → アラームの音量が0 → 最近鳴らせなかった → 予約が無い → 準備OK。
  * Android と iOS で文言と優先順を揃えるため shared に置く。
  */
 object RingStatus {
-    enum class Kind { MISSING_PERMISSION, ALARM_MUTED, MISSED_RECENTLY, NO_ALARM, READY }
+    enum class Kind { MISSING_PERMISSION, ALL_MUTED, ALARM_MUTED, MISSED_RECENTLY, NO_ALARM, READY }
 
     data class Summary(val kind: Kind, val missingPermissions: Int, val recentMissed: Int) {
         /** 予定画面の1行 */
         val line: String
             get() = when (kind) {
                 Kind.MISSING_PERMISSION -> "許可が${missingPermissions}つ足りません。このままだと鳴らないことがあります"
+                Kind.ALL_MUTED -> "すべてのアラームをミュート中です。通知だけが届きます"
                 Kind.ALARM_MUTED -> "アラームの音量が0です。鳴っても音が出ません"
                 Kind.MISSED_RECENTLY -> "直近24時間に鳴らせなかったアラームが${recentMissed}件あります"
                 Kind.NO_ALARM -> "予約中のアラームはありません"
@@ -36,10 +37,19 @@ object RingStatus {
     /**
      * @param alarmMuted 端末のアラーム音量が0か。鳴動はアラームの音量で鳴るので、許可がそろっていても音が出ない。
      *   音量を読めない OS (iOS) は false のまま渡す
+     * @param allMuted アプリの「すべてのアラームをミュート」設定が入っているか。ALARM 鳴動は全て止まり通知だけが届く。
+     *   許可が足りない時の次に強く出す (設定を直さない限り音量に関係なく鳴らないため)
      */
-    fun summarize(missingPermissions: Int, recentMissed: Int, hasNextAlarm: Boolean, alarmMuted: Boolean = false): Summary {
+    fun summarize(
+        missingPermissions: Int,
+        recentMissed: Int,
+        hasNextAlarm: Boolean,
+        alarmMuted: Boolean = false,
+        allMuted: Boolean = false,
+    ): Summary {
         val kind = when {
             missingPermissions > 0 -> Kind.MISSING_PERMISSION
+            allMuted -> Kind.ALL_MUTED
             alarmMuted -> Kind.ALARM_MUTED
             recentMissed > 0 -> Kind.MISSED_RECENTLY
             !hasNextAlarm -> Kind.NO_ALARM
