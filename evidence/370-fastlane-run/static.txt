@@ -1,0 +1,6 @@
+$ ruby -c fastlane/Fastfile
+Syntax OK
+$ fastlane lanes (ios)
+[0m[32m----- fastlane ios fad[0m
+[32m----- fastlane ios testflight_upload[0m
+[32m----- fastlane ios adhoc_local[0m
