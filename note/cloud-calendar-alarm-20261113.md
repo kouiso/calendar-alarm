@@ -29,6 +29,10 @@ DECIDED (manager) | 10-minute repost window kept; open an issue for "a new messa
 withdrawn: judge packet 3 baseline 5->6 (superseded by 23ec50d); #191 "switch stays pressable".
 needs owner: (1) #191 OFF behaviour: keep "follow the OS" or board's "notification only"? recommend keep. (2) #188 free vs Pro. (3) test-spec says シミュレータ/実機: may CI-emulator screenshots count for text-only PRs (#373, #365)? recommend yes for text-only.
 for main session: (a) fad.yml x2 (above). (b) Iteration of Project 10 unreadable here.
+merged since HOUR 12:40Z: none new; closed: #385 (throwaway lint probe, CI lint failed on NewApi as intended: https://github.com/kouiso/calendar-alarm/actions/runs/43595692748/job/132449565285), #300 and #253 (all done conditions met: #377 + #385). New issue #386 (lint follow-ups).
+near miss 2026-11-14T12:4xZ: the #378 member's first revert command included `--amend`; the auto-mode classifier blocked the whole command, nothing ran; redone as `git revert -n` + a normal commit. Prevention: every member brief already says "no amend"; the classifier is the second net. No history was changed.
+#378: negative control done (12b36d5 red: Models.swift:638 compile error; 93b6ba6 revert green); net diff vs 01b00db empty. Under review.
+#191 9a2551c / #188 90ef21b aligned to boards p149 / p154; reviews running in parallel. Board differences for the owner: #191 OFF behaviour; #191 switch locked without permission; #188 row placement (board: top of a group with 文字の大きさ・鳴動画面の背景; PR: end of the appearance card).
 rule 1(b): 11 open items carry claude-cloud; the others go first.
 rule 1(a): Project 10's Iteration cannot be read from this session (GraphQL and user-level project REST both 403). Moved to front by 1(a): 0 (unknown). -> for main session.
 manager (Fable high) spawned for scene (a): pass line and policy pending.
