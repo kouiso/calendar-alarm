@@ -8,32 +8,56 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 「おやすみモードを無視」(#149)。ON は常に鳴らし、OFF はおやすみモード中だけ黙る。
- * 音は USAGE_ALARM なので、チャンネルの bypassDnd だけに任せると OFF でも鳴ってしまう。
+ * 「おやすみモードを無視」(#149)。ON は常に鳴らし、OFF は OS に従う:
+ * OS がアラームを止める時 (サイレント / アラーム許可なしの優先モード) だけ黙る。
  */
 class DndSilenceTest {
+    private val all = NotificationManager.INTERRUPTION_FILTER_ALL
+    private val priority = NotificationManager.INTERRUPTION_FILTER_PRIORITY
+    private val alarms = NotificationManager.INTERRUPTION_FILTER_ALARMS
+    private val none = NotificationManager.INTERRUPTION_FILTER_NONE
+    private val unknown = NotificationManager.INTERRUPTION_FILTER_UNKNOWN
 
     @Test
-    fun `無視ONならおやすみモードの種類に関係なく鳴らす`() {
-        listOf(
-            NotificationManager.INTERRUPTION_FILTER_ALL,
-            NotificationManager.INTERRUPTION_FILTER_PRIORITY,
-            NotificationManager.INTERRUPTION_FILTER_ALARMS,
-            NotificationManager.INTERRUPTION_FILTER_NONE,
-        ).forEach { assertFalse(AlarmService.silencedByDnd(ignoreDnd = true, interruptionFilter = it)) }
+    fun `無視ONはOSの状態に関係なく鳴らす判断`() {
+        listOf(all, priority, alarms, none, unknown).forEach { f ->
+            listOf(true, false, null).forEach { pol ->
+                assertFalse("filter=$f policy=$pol", AlarmService.silencedByDnd(true, f, pol))
+            }
+        }
     }
 
     @Test
-    fun `無視OFFはおやすみモード中だけ黙る`() {
-        assertFalse(AlarmService.silencedByDnd(false, NotificationManager.INTERRUPTION_FILTER_ALL))
-        assertTrue(AlarmService.silencedByDnd(false, NotificationManager.INTERRUPTION_FILTER_PRIORITY))
-        assertTrue(AlarmService.silencedByDnd(false, NotificationManager.INTERRUPTION_FILTER_ALARMS))
-        assertTrue(AlarmService.silencedByDnd(false, NotificationManager.INTERRUPTION_FILTER_NONE))
+    fun `無視OFFでもすべて許可なら鳴らす`() {
+        assertFalse(AlarmService.silencedByDnd(false, all, null))
     }
 
     @Test
-    fun `状態が取れない時は鳴らす側に倒す`() {
-        assertFalse(AlarmService.silencedByDnd(false, NotificationManager.INTERRUPTION_FILTER_UNKNOWN))
+    fun `無視OFFでアラームのみなら鳴らす`() {
+        assertFalse(AlarmService.silencedByDnd(false, alarms, null))
+    }
+
+    @Test
+    fun `無視OFFで優先モードにアラーム許可があれば鳴らす`() {
+        assertFalse(AlarmService.silencedByDnd(false, priority, true))
+    }
+
+    @Test
+    fun `無視OFFで優先モードにアラーム許可がなければ黙る`() {
+        assertTrue(AlarmService.silencedByDnd(false, priority, false))
+    }
+
+    @Test
+    fun `無視OFFでサイレントなら黙る`() {
+        assertTrue(AlarmService.silencedByDnd(false, none, null))
+        assertTrue(AlarmService.silencedByDnd(false, none, true))
+    }
+
+    @Test
+    fun `無視OFFで状態が取れない時は鳴らす側に倒す`() {
+        assertFalse(AlarmService.silencedByDnd(false, unknown, null))
+        assertFalse(AlarmService.silencedByDnd(false, null, null))
+        assertFalse(AlarmService.silencedByDnd(false, priority, null))
     }
 
     @Test

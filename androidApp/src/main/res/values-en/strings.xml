@@ -188,7 +188,7 @@
     <string name="trouble_dnd_desc">Allow “Alarms” in Do Not Disturb so alarms ring while it is on.</string>
     <string name="trouble_dnd_ng">Alarms won\'t ring in Do Not Disturb</string>
     <string name="trouble_dnd_ok">Alarms allowed in Do Not Disturb</string>
-    <string name="trouble_dnd_off">“Ignore Do Not Disturb” is off, so alarms stay silent in Do Not Disturb</string>
+    <string name="trouble_dnd_off">“Ignore Do Not Disturb” is off. Following the OS setting, alarms ring right now</string>
     <string name="trouble_dnd_policy_desc">“Ignore Do Not Disturb” needs notification policy access. Tap to grant it for this app.</string>
     <string name="trouble_dnd_policy_na">Not needed while “Ignore Do Not Disturb” is off</string>
     <string name="trouble_dnd_policy_ng">Cannot ignore Do Not Disturb (policy access not granted)</string>

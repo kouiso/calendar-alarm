@@ -56,6 +56,16 @@ class DndServiceTest {
         AlarmService.ringingInstanceId.value = null
         runBlocking { app.container.settings.setIgnoreDnd(true) }
         nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+        shadowOf(nm).setConsolidatedNotificationPolicy(NotificationManager.Policy(0, 0, 0))
+    }
+
+    private fun setPolicy(alarmsAllowed: Boolean) {
+        // 画面・鳴動判断は API 30+ で実効中の consolidated ポリシーを読む
+        shadowOf(nm).setConsolidatedNotificationPolicy(
+            NotificationManager.Policy(
+                if (alarmsAllowed) NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS else 0, 0, 0,
+            ),
+        )
     }
 
     private fun seed(id: String) = runBlocking {
@@ -101,9 +111,9 @@ class DndServiceTest {
         AlarmService::class.java.getDeclaredField("ringLock").apply { isAccessible = true }.get(this)!!
 
     @Test
-    fun `無視OFFでおやすみモード中は鳴らさずすぐ終えて鳴らせなかったになる`() {
+    fun `無視OFFでOSがアラームを止める時は鳴らさずすぐ終えて鳴らせなかったになる`() {
         runBlocking { app.container.settings.setIgnoreDnd(false) }
-        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
         seed("dnd-off")
         val c = Robolectric.buildService(AlarmService::class.java, startIntent("dnd-off")).create()
         controllers += c
@@ -127,6 +137,39 @@ class DndServiceTest {
     }
 
     @Test
+    fun `無視OFFで優先モードにアラーム許可がなければ鳴らさず鳴らせなかったになる`() {
+        runBlocking { app.container.settings.setIgnoreDnd(false) }
+        setPolicy(alarmsAllowed = false)
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        seed("dnd-prio-no")
+        val c = start("dnd-prio-no")
+        assertTrue(waitUntil(5_000) { shadowOf(c.get()).isStoppedBySelf })
+        assertFalse(c.get().isPlaying())
+        assertEquals(AlarmState.MISSED.name, state("dnd-prio-no"))
+    }
+
+    @Test
+    fun `無視OFFでもアラームのみなら鳴る`() {
+        runBlocking { app.container.settings.setIgnoreDnd(false) }
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALARMS)
+        seed("dnd-alarms")
+        val c = start("dnd-alarms")
+        assertTrue(waitUntil(5_000) { c.get().isPlaying() })
+        assertEquals(AlarmState.FIRED.name, state("dnd-alarms"))
+    }
+
+    @Test
+    fun `無視OFFで優先モードにアラーム許可があれば鳴る`() {
+        runBlocking { app.container.settings.setIgnoreDnd(false) }
+        setPolicy(alarmsAllowed = true)
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        seed("dnd-prio-yes")
+        val c = start("dnd-prio-yes")
+        assertTrue(waitUntil(5_000) { c.get().isPlaying() })
+        assertEquals(AlarmState.FIRED.name, state("dnd-prio-yes"))
+    }
+
+    @Test
     fun `無視ONならおやすみモード中でも鳴る`() {
         nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
         seed("dnd-on")
@@ -142,7 +185,7 @@ class DndServiceTest {
         assertTrue(waitUntil(5_000) { c.get().isPlaying() })
         // 鳴動中におやすみモードが始まり、無視が OFF に変わった後で同じ id の START が重なる
         runBlocking { app.container.settings.setIgnoreDnd(false) }
-        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
         c.withIntent(startIntent("dnd-dup")).startCommand(0, 2)
         Thread.sleep(1_500)
         shadowOf(Looper.getMainLooper()).idle()

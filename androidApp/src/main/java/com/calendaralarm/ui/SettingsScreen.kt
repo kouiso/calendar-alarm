@@ -1227,6 +1227,13 @@ private fun RingingCard(
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
     val context = LocalContext.current
+    // 通知ポリシーへのアクセス許可は設定アプリで変わるので、画面に戻った時に読み直す
+    val policyTick = rememberResumeTick()
+    val policyGranted = remember(policyTick) {
+        runCatching {
+            context.getSystemService(android.app.NotificationManager::class.java)?.isNotificationPolicyAccessGranted
+        }.getOrNull() == true
+    }
     var soundSelectionFailed by remember { mutableStateOf(false) }
     val soundPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -1420,14 +1427,31 @@ private fun RingingCard(
             // ON/OFF で何が変わるかと、ON を効かせる許可の場所 (#149)。許可の有無は検査画面が見る
             Text(
                 if (p.ignoreDnd) {
-                    "おやすみモード中も鳴らします (おやすみモードでアラームまで止める設定の時は OS が止めます)。通知と鳴動画面まで出すには、トラブルシューティングで「通知ポリシーへのアクセス」を許可してください"
+                    "おやすみモード中も鳴らします (おやすみモードでアラームまで止める設定の時は OS が止めます)"
                 } else {
-                    "おやすみモード中は鳴らさず、「鳴らせなかった」として通知だけ残します"
+                    "OFF の間は OS の設定に従います。OS がアラームを許可している時は鳴らし、止めている時は鳴らさず、「鳴らせなかった」として通知だけ残します"
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 32.dp, end = 12.dp),
             )
+            // ON でも通知ポリシーへのアクセスが無いと、おやすみモード中に通知と鳴動画面が出ない (#149)
+            if (p.ignoreDnd && !policyGranted) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 32.dp, end = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "通知ポリシーへのアクセスが未許可です。おやすみモード中は鳴動画面や通知が出ないことがあります",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = {
+                        context.openSafely(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+                    }) { Text("許可する") }
+                }
+            }
             // 全アラーム一括ミュート (通知・タイマーは止めない)
             IconSettingRow(Icons.Default.VolumeOff) {
                 Text(

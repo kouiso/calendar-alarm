@@ -63,6 +63,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.engine.AlarmService
+import com.calendaralarm.engine.dndAllowsAlarms
+import com.calendaralarm.engine.readInterruptionFilter
+import com.calendaralarm.engine.readPolicyAllowsAlarms
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -126,26 +129,10 @@ object TroubleshootChecks {
             else -> CheckState.NG
         }
 
-        // おやすみモード: 鳴動音は USAGE_ALARM。OFF なら素通り、優先モードは「アラーム」許可が要る、
-        // アラームも含めて全て遮断 (NONE) だと鳴らない
-        val dndFilter = runCatching { nm?.currentInterruptionFilter }.getOrNull()
-        val dndOk = runCatching {
-            when (dndFilter) {
-                null, NotificationManager.INTERRUPTION_FILTER_ALL,
-                NotificationManager.INTERRUPTION_FILTER_UNKNOWN -> true
-                NotificationManager.INTERRUPTION_FILTER_ALARMS -> true
-                NotificationManager.INTERRUPTION_FILTER_PRIORITY ->
-                    // 自動ルールで発動した優先モードはユーザーの既定ポリシーとは
-                    // 別物が適用されるため、実効中の consolidated ポリシーを見る (API 30+)
-                    (((if (Build.VERSION.SDK_INT >= 30) {
-                        nm?.consolidatedNotificationPolicy
-                    } else {
-                        nm?.notificationPolicy
-                    })?.priorityCategories ?: 0) and
-                        NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS) != 0
-                else -> false
-            }
-        }.getOrDefault(true)
+        // おやすみモード: 鳴動音は USAGE_ALARM。OS がアラームを通すか。
+        // 「無視」ON/OFF のどちらでも、OS が止める状態なら鳴らない (OFF は OS に従う、ON も OS の全遮断は破れない)
+        val dndFilter = readInterruptionFilter(context)
+        val dndOk = dndAllowsAlarms(dndFilter, readPolicyAllowsAlarms(context))
         // 全遮断 (NONE) の時は優先モード設定では効かないため、総合のおやすみモード設定へ分岐する。
         // ACTION_ZEN_MODE_SETTINGS は API 30 で deprecated になり新しい compileSdk の stub には
         // 残っていないため、同等の action 文字列を直接使う (無い端末は openSafely がアプリ詳細へ逃がす)
@@ -207,10 +194,10 @@ object TroubleshootChecks {
             // 「おやすみモードを無視」OFF の時は、おやすみモード中はわざと鳴らさない (#149)。
             // OS の「アラーム許可」の状態で OK/NG を出すとエンジンの動きと食い違うので対象外にする
             TroubleshootItem(
-                "dnd", if (!ignoreDnd) CheckState.NA else s(dndOk),
+                "dnd", s(dndOk),
                 context.getString(
                     when {
-                        !ignoreDnd -> R.string.trouble_dnd_off
+                        dndOk && !ignoreDnd -> R.string.trouble_dnd_off
                         dndOk -> R.string.trouble_dnd_ok
                         else -> R.string.trouble_dnd_ng
                     },
@@ -317,7 +304,7 @@ private fun ForceFsiRow(settings: SettingsRepository) {
     }
 }
 
-private fun Context.openSafely(intent: Intent?) {
+internal fun Context.openSafely(intent: Intent?) {
     if (intent == null) return
     val i = Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     // 端末によっては個別の設定画面が無い。アプリ情報へ逃がして必ずどこかへ飛ばす

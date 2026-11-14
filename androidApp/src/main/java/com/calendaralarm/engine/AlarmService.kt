@@ -239,18 +239,19 @@ class AlarmService : Service() {
         // 音は USAGE_ALARM なので、チャンネルの bypassDnd を外すだけではおやすみモードを素通りして鳴る。
         // 座席を取る前に判定し、音を出さないまま前面サービスと座席を上限まで握らず、すぐ「鳴らせなかった」で終える
         // (鳴動中の別アラームにも触れない)。後で気づけるよう見逃しの通知は出す
-        val interruptionFilter = currentInterruptionFilter()
+        val filterNow = readInterruptionFilter(this)
+        val silenced = silencedByDnd(ringSettings.ignoreDnd, filterNow, readPolicyAllowsAlarms(this))
         // 同じ鳴動の二重 START (鳴動中・座席確保済み) や、判定中に届いた停止は通常の経路に任せる。
         // ここで MISSED を書くと、鳴っている最中の行や止めた行を「鳴らせなかった」で上書きしてしまう
         val handledElsewhere = synchronized(ringLock) {
             isDismissed(instanceId) || ringingInstanceId.value == instanceId || pendingStartId == instanceId
         }
-        if (!handledElsewhere && silencedByDnd(ringSettings.ignoreDnd, interruptionFilter)) {
+        if (!handledElsewhere && silenced) {
             synchronized(ringLock) { requestedIds -= instanceId }
             withContext(NonCancellable) {
                 val marked = runCatching {
                     app.container.repository.markDndSuppressed(
-                        instanceId, "おやすみモード中のため鳴らさない (おやすみモードを無視=OFF, filter=$interruptionFilter)",
+                        instanceId, "OSがアラームを止めているため鳴らさない (おやすみモードを無視=OFF, filter=$filterNow)",
                     )
                 }.getOrDefault(false)
                 if (marked) MissedNotifier.post(this@AlarmService, instance.title)
@@ -857,12 +858,8 @@ class AlarmService : Service() {
         vibrateForRing = st?.vibrateWhileRinging ?: true
         ignoreDndForRing = st?.ignoreDnd ?: true
         forceFullScreen = st?.forceFullScreen ?: true
-        return silencedByDnd(ignoreDndForRing, currentInterruptionFilter())
+        return silencedByDnd(ignoreDndForRing, readInterruptionFilter(this), readPolicyAllowsAlarms(this))
     }
-
-    private fun currentInterruptionFilter(): Int =
-        runCatching { getSystemService(NotificationManager::class.java)?.currentInterruptionFilter }.getOrNull()
-            ?: NotificationManager.INTERRUPTION_FILTER_UNKNOWN
 
     /**
      * 世代前進から資源の畳みまでを ringLock 内で一続きに行う (呼び出し側がロック保持)。
@@ -944,14 +941,12 @@ class AlarmService : Service() {
         private const val LEGACY_CHANNEL_ID = "alarm_v1"
 
         /**
-         * 「おやすみモードを無視」OFF で、いまおやすみモード中か (#149)。
-         * 割り込みフィルタが「すべて許可」以外 (重要な通知のみ・アラームのみ・サイレント) なら黙る。
-         * 取得できない (UNKNOWN) 時は鳴らす側に倒す: 鳴らないより鳴る方が安全なため
+         * 「おやすみモードを無視」OFF で、OS がアラームを止める状態か (#149)。OFF は OS の設定に従う。
+         * 黙るのは、サイレント (NONE) か、優先モードで「アラーム」許可がない時だけ。
+         * すべて許可・アラームのみ・優先モード+アラーム許可・読めない時は鳴らす。判定は [dndAllowsAlarms] と共通
          */
-        fun silencedByDnd(ignoreDnd: Boolean, interruptionFilter: Int): Boolean =
-            !ignoreDnd &&
-                interruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL &&
-                interruptionFilter != NotificationManager.INTERRUPTION_FILTER_UNKNOWN
+        fun silencedByDnd(ignoreDnd: Boolean, interruptionFilter: Int?, policyAllowsAlarms: Boolean?): Boolean =
+            !ignoreDnd && !dndAllowsAlarms(interruptionFilter, policyAllowsAlarms)
 
         /**
          * 鳴動通知を出すチャンネル。停止手段が見えるかの判定 (StopUiPermissions.notificationsUsable) と
