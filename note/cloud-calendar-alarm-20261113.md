@@ -1,4 +1,4 @@
-IN-PROGRESS 2026-11-14 06:55 UTC（RESUME を受けて再開）
+IN-PROGRESS 2026-11-14 07:07 UTC（RESUME を受けて再開）
 
 calendar-alarm [cloud]
 
@@ -13,6 +13,49 @@ calendar-alarm [cloud]
 - RESUME の文は「取り込みを任せる」と言うが、最初の依頼文には「このチャットで持ち主が merge #N と打った時だけマージする。持ち主のものらしい GitHub の承認でも足りない」とある。取り込みは元に戻しにくく、別のセッション経由の委任はこの条件を満たさない。
 - そこでマージはしない。どの PR も、独立レビューが must 0・CI 成功まで持っていき、下の OWNER に「merge #N を打てば入る」と書く。
 - 持ち主がこのチャットで「merge #359」などと打てば、すぐ入れる。
+
+## issue の仕分け（PR が紐づく 29 件。2026-11-14 07:07 UTC）
+
+サブエージェントが issue の終了条件と、紐づく PR・master のコードを突き合わせた。DONE-ALREADY（もう閉じてよい）は 0 件。紐づく PR は、どれも `Refs` と `No-Close` で、端末での確認が残ると書いている。
+
+### DEVICE（端末・エミュレータ・Mac が要る。コードは master にある）
+
+- #200: real-device lock-screen drag-to-stop repro: lock/screen-off ring, finger slide, intermittent non-acceptance repro, OS input vs Compose vs handler isol…
+- #155: emulator/device check of accept/tentative/declined ring differences (受入条件, PR #180 No-Close)
+- #153: emulator/device check: permission OFF -> item detected -> settings guidance works
+- #151: display diff for each ON/OFF (emulator/simulator); design-canonical comparison; PR #181 toggles next ALARM not next EVENT (semantic mismatch noted by …
+- #148: emulator check of volume, crescendo, duration auto-stop; explicit spec of crescendo toggle vs existing 30s crescendo not found in doc/ (未確認)
+- #146: emulator check of ring with picked MP3 and fallback after file deletion; 360dp button crush finding (review) not confirmed fixed
+- #145: emulator/device check of snooze-minute change and auto-snooze up to cap; iOS side of auto-snooze not in PR (Android only) (未確認)
+- #144: create all-day event -> ring at set time on Android and iOS; also OWNER: body says default 10:00 but spec and code default 9:00 (not owner-confirmed)
+- #143: emulator/device check that common reminder auto-applies to new events; 14-day-ahead finding fix unconfirmed
+- #139: power-saving (Doze) and TZ/time-change behaviour on real device; own iOS real-device confirmation of substitute behaviours
+- #136: real iPhone check that lock-screen slide stop does not re-ring after narrowing; narrowing of via=boot rule not confirmed
+- #130: real iPhone: whether stop intent runs for lock-screen stop, in-app stop, banner swipe, power button; alternative cues if not
+- #124: before/after screenshots in PR comments, iOS real-device results, #118 evidence decision, other-bot review OK
+- #101: real-device confirmation of what AlarmKit can do (.named playback, volume, vibration); settings text for unsupported items
+- #68: real Android and iOS device: deny all permissions, grant all from permission screen, ring and stop; before/after dark/light screenshots per PR
+- #61: real iPhone repro: snooze with non-default minutes, kill app, stop on lock screen, reopen and check RECOVER/MISSED re-ring
+
+### OWNER（issue）
+
+- #212: Play Console account/listing/Data safety/store submission need owner approval; real-device alarm/Crash/ANR tests; child SBIs e.g. #309 open
+- #196: owner yes/no to merge #141 without/with iPhone evidence; iPhone before/after screenshots in repo (need Mac/simulator); #141 not merged
+- #194: PR ごとに macOS で iOS をビルドする CI。macOS の runner を使ってよいか（費用の判断）が持ち主待ち。推し: 公開リポジトリの標準 runner なら追加の費用は無いので、paths で iOS の変更時だけに絞って足す。
+- #197: issue・PR の書き方の自動チェック。判定の規則（どの言葉を止めるか）を持ち主から受け取っていない。推し: 規則が届くまで保留。
+
+### 子の issue が作業を持つ PBI（PARENT）
+
+- #229: child SBI #336 (overlay UI) and #337 (emulator/device check) open; theme colour/date/ring/minutes-before not in RingingOverlay.kt; parity test and scr…
+- #228: child SBI #335 open; status words/'設定を開く' strings in TroubleshootingScreen not done
+- #227: children #330 (Android) and #331 (iOS, Mac) open; badge-below-title layout not done
+- #226: child #329 open; tap-to-edit/delete in NotificationRulesCard and save->reload->match tests not done
+- #225: children #327 (Android) and #328 (iOS, Mac) open; default-theme marker fix and test not done
+- #224: children #325 (Android) and #326 (iOS, Mac) open; wording unification and word-change list comment not done
+
+### PR が作業中（NOT-DONE のうち PR がある物）
+
+- #147 → #189、#149 → #191、#154 → #188。
 
 ## OWNER（持ち主だけが出せるもの）
 
