@@ -14,9 +14,9 @@ class OverrideCarryTest {
     private val mute = EventOverride(action = EventAction.MUTE)
     private val thirty = EventOverride(minutesBefore = 30)
 
-    private fun ev(id: String, start: Long, cal: String = "1") = CalendarEvent(
+    private fun ev(id: String, start: Long, cal: String = "1", recurring: Boolean = false) = CalendarEvent(
         id = id, calendarId = cal, title = "予定$id",
-        startMillis = start, endMillis = start + hour, allDay = false,
+        startMillis = start, endMillis = start + hour, allDay = false, recurring = recurring,
     )
 
     /** 再同期と同じく、読み取り範囲は今の 14 日前から 28 日先まで */
@@ -38,7 +38,7 @@ class OverrideCarryTest {
     fun 繰り返しの全部の回が同じだけずれたら早い順に引き継ぐ() {
         val old = listOf(now + hour, now + day + hour, now + 2 * day + hour)
         val overrides = mapOf("1:9:${old[0]}" to mute, "1:9:${old[1]}" to thirty, "1:9:${old[2]}" to mute)
-        val events = old.map { ev("9", it + hour) }
+        val events = old.map { ev("9", it + hour, recurring = true) }
         val r = reconcile(overrides, events)
         assertEquals(
             mapOf("1:9:${old[0] + hour}" to mute, "1:9:${old[1] + hour}" to thirty, "1:9:${old[2] + hour}" to mute),
@@ -50,7 +50,7 @@ class OverrideCarryTest {
     fun 数が合わない時は付け替えず先の回の指定は残す() {
         // 繰り返しの 1 回だけに指定があり、その回が消えた。他の回のどれに付けるか決められない
         val overrides = mapOf("1:9:${now + day}" to mute)
-        val events = listOf(ev("9", now + 2 * day), ev("9", now + 3 * day))
+        val events = listOf(ev("9", now + 2 * day, recurring = true), ev("9", now + 3 * day, recurring = true))
         val r = reconcile(overrides, events)
         assertEquals(emptyMap(), r.moved)
         assertEquals(emptySet(), r.dropped)
@@ -102,7 +102,7 @@ class OverrideCarryTest {
         val x = now + 3 * day
         val y = now + 20 * day
         val overrides = mapOf("1:9:$a" to mute, "1:9:$x" to thirty)
-        val events = listOf(ev("9", a), ev("9", y))
+        val events = listOf(ev("9", a, recurring = true), ev("9", y, recurring = true))
         val r = reconcile(overrides, events)
         assertEquals(emptyMap(), r.moved)
         assertEquals(overrides, r.overrides)
@@ -113,7 +113,7 @@ class OverrideCarryTest {
         val a = now + day
         val b = now + 2 * day
         val overrides = mapOf("1:9:$a" to mute, "1:9:$b" to thirty)
-        val events = listOf(ev("9", a + hour), ev("9", b + 3 * hour))
+        val events = listOf(ev("9", a + hour, recurring = true), ev("9", b + 3 * hour, recurring = true))
         val r = reconcile(overrides, events)
         assertEquals(emptyMap(), r.moved)
     }
@@ -133,8 +133,18 @@ class OverrideCarryTest {
     fun 範囲から出た先の回が全部同じ間隔でも近い回へ付けない() {
         val x1 = now + 30 * day
         val x2 = now + 37 * day
-        val events = listOf(ev("9", now + 2 * day), ev("9", now + 9 * day))
+        val events = listOf(ev("9", now + 2 * day, recurring = true), ev("9", now + 9 * day, recurring = true))
         val r = reconcile(mapOf("1:9:$x1" to mute, "1:9:$x2" to mute), events, until = now + 14 * day)
         assertEquals(emptyMap(), r.moved)
+    }
+
+    @Test
+    fun 繰り返しの1回を消して別の回が1つだけ残っても指定を付けない() {
+        // 毎月の予定: 今月の回 X を鳴らさないにして、X だけを消した。範囲には来月の回 Y だけが残る
+        val x = now + 5 * day
+        val y = now + 35 * day
+        val r = reconcile(mapOf("1:9:$x" to mute), listOf(ev("9", y, recurring = true)), until = now + 42 * day)
+        assertEquals(emptyMap(), r.moved)
+        assertEquals(mapOf("1:9:$x" to mute), r.overrides)
     }
 }

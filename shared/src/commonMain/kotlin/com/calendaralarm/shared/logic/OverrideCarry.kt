@@ -11,7 +11,9 @@ import com.calendaralarm.shared.model.EventOverride
  * 利用者が見てもいない回が鳴らなくなるので、確かな時だけ付け替える。
  * - はぐれた指定: 指定が付いているのに、今は同じキーの回が無いもの
  * - 引き継ぎ (どちらかの時だけ):
- *   - 1 回だけの予定: 同じ「カレンダー:予定」の回が今は 1 つだけで、はぐれた指定も 1 つだけ
+ *   - 1 回だけの予定: 繰り返しでない予定 ([CalendarEvent.recurring] が false) で、今の回が 1 つ、はぐれた指定も 1 つ。
+ *     繰り返しの予定は、1 回を消したり動かしたりすると残った別の回が 1 つだけ範囲に残ることがあり、
+ *     その回へ付け替えると利用者が決めていない回が鳴らなくなるので、この形では付け替えない
  *   - 繰り返しの全体のずれ: 同じ「カレンダー:予定」の今の回が全部指定無しで、はぐれた指定と同じ数あり、
  *     開始の早い順に組にした時の時刻の差が全部同じ
  *   繰り返しの 1 回が消えて別の回が読み取り範囲に入った時などは、どれがどれか決められないので付け替えない
@@ -57,7 +59,7 @@ object OverrideCarry {
             val all = seriesInstances[series].orEmpty()
             val targets = unmatchedBySeries[series].orEmpty().sortedBy { it.startMillis }
             val sorted = list.sortedBy { it.second }
-            val single = all.size == 1 && sorted.size == 1 && targets.size == 1
+            val single = all.size == 1 && !all.single().recurring && sorted.size == 1 && targets.size == 1
             val wholeShift = sorted.size >= 2 && targets.size == all.size && targets.size == sorted.size &&
                 sorted.zip(targets).map { (o, ev) -> ev.startMillis - o.second }.distinct().size == 1
             if (!single && !wholeShift) return@forEach
