@@ -39,7 +39,7 @@ class RingStatusTest {
     fun `すべてミュート中なら一括ミュートの1行を出す`() {
         val s = RingStatus.summarize(0, 0, true, allMuted = true)
         assertEquals(RingStatus.Kind.ALL_MUTED, s.kind)
-        assertEquals("すべてのアラームをミュート中です。通知だけが届きます", s.line)
+        assertEquals("すべてのアラームをミュート中です。通知とタイマーは届きます", s.line)
         // 許可が足りない方を先に出す (許可が無いとミュートを外しても鳴らない)
         assertEquals(RingStatus.Kind.MISSING_PERMISSION, RingStatus.summarize(1, 0, true, allMuted = true).kind)
         // 音量0・見逃し・予約なしより先に出す (設定を戻さない限り鳴らない)

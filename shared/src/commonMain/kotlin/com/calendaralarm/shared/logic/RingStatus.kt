@@ -13,7 +13,7 @@ object RingStatus {
         val line: String
             get() = when (kind) {
                 Kind.MISSING_PERMISSION -> "許可が${missingPermissions}つ足りません。このままだと鳴らないことがあります"
-                Kind.ALL_MUTED -> "すべてのアラームをミュート中です。通知だけが届きます"
+                Kind.ALL_MUTED -> "すべてのアラームをミュート中です。通知とタイマーは届きます"
                 Kind.ALARM_MUTED -> "アラームの音量が0です。鳴っても音が出ません"
                 Kind.MISSED_RECENTLY -> "直近24時間に鳴らせなかったアラームが${recentMissed}件あります"
                 Kind.NO_ALARM -> "予約中のアラームはありません"
