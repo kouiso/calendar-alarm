@@ -611,9 +611,11 @@ class AlarmService : Service() {
         )
         // おやすみモードで鳴らさない要求は、すぐ畳むまでの間もバイブ・全画面を出さない (#149)。
         // CATEGORY_ALARM の通知は「アラームは許可」のおやすみモードを素通りするため
-        // 設定を読めていない (タイムアウト) 間も同じ扱い: 確定するまでは DND を素通りするチャンネルも全画面も使わない
+        // 設定を読めていない (タイムアウト) 間は、鳴らす側の既定 (バイブあり・DND無視・全画面) で出す。
+        // 静かな仮の通知にすると、後で鳴らす時の張り替えが「更新」扱いになり、全画面 (ロック中の鳴動画面) が出ない。
+        // 鳴らないより鳴る方が安全なので、OFF の人の設定を読めなかった短い間に通知が DND を素通りする方を取る
         val inputs = inputsFor(instanceId)
-        val dndSilent = instanceId in dndSilentIds || !inputs.known
+        val dndSilent = instanceId in dndSilentIds
         val channel = if (dndSilent) CHANNEL_ID_NOVIB_DND else ringChannelId(inputs.vibrate, inputs.ignoreDnd)
         return NotificationCompat.Builder(this, channel)
             .setSmallIcon(R.drawable.ic_alarm)

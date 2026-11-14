@@ -238,7 +238,8 @@ class DndServiceTest {
     }
 
     @Test
-    fun `設定を読めない間の仮の通知はDND尊重で全画面なし・確定したら元のチャンネルと全画面へ戻る`() {
+    fun `設定を読めない間の仮の通知も鳴らす側の既定で全画面を付け、一度目の投稿でアラートする`() {
+        // 静かな仮の通知にすると、鳴らす時の張り替えが「更新」(一度だけアラート) になって全画面が出ない
         AlarmService.settingsReadTimeoutMs = 0L // 設定の読込が時間切れになる状態
         seed("unread")
         val c = Robolectric.buildService(AlarmService::class.java, startIntent("unread")).create()
@@ -253,16 +254,12 @@ class DndServiceTest {
             }
         }
         org.junit.Assert.assertNotNull(provisional)
-        assertEquals(AlarmService.CHANNEL_ID_NOVIB_DND, provisional!!.channelId)
-        assertNull("設定が確定するまで全画面 Intent を付けないこと", provisional!!.fullScreenIntent)
-        // 鳴らす経路では prepareToRing が設定を読み直す (無視ON・バイブあり・全画面ON)。確定値で張り替わること
-        assertTrue(waitUntil(5_000) { c.get().isPlaying() })
-        assertTrue(
-            "確定後は bypass のチャンネルと全画面 Intent に戻ること",
-            waitUntil(5_000) {
-                val n = ringNotification()
-                n?.channelId == AlarmService.CHANNEL_ID && n.fullScreenIntent != null
-            },
+        assertEquals(AlarmService.CHANNEL_ID, provisional!!.channelId)
+        org.junit.Assert.assertNotNull("全画面 Intent を最初の投稿から付けること", provisional!!.fullScreenIntent)
+        assertEquals(
+            "最初の投稿は一度だけアラートの印を持たない (アラートする)",
+            0, provisional!!.flags and android.app.Notification.FLAG_ONLY_ALERT_ONCE,
         )
+        assertTrue(waitUntil(5_000) { c.get().isPlaying() })
     }
 }
