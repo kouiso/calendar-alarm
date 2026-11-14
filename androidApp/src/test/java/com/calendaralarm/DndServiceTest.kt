@@ -54,7 +54,11 @@ class DndServiceTest {
         shadowOf(Looper.getMainLooper()).idle()
         StopUiPermissions.probeOverride = null
         AlarmService.ringingInstanceId.value = null
-        runBlocking { app.container.settings.setIgnoreDnd(true) }
+        AlarmService.settingsReadTimeoutMs = 500L
+        runBlocking {
+            app.container.settings.setIgnoreDnd(true)
+            app.container.settings.setVibrateWhileRinging(true)
+        }
         nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
         shadowOf(nm).setConsolidatedNotificationPolicy(NotificationManager.Policy(0, 0, 0))
     }
@@ -199,5 +203,66 @@ class DndServiceTest {
         assertFalse(nm.getNotificationChannel(AlarmService.CHANNEL_ID_VIB_DND).canBypassDnd())
         assertFalse(nm.getNotificationChannel(AlarmService.CHANNEL_ID_NOVIB_DND).canBypassDnd())
         assertTrue(nm.getNotificationChannel(AlarmService.CHANNEL_ID).canBypassDnd())
+    }
+
+    private fun ringNotification(): android.app.Notification? =
+        nm.activeNotifications.firstOrNull { it.id == AlarmService.NOTIFICATION_ID }?.notification
+
+    @Test
+    fun `鳴動中に後発がおやすみモードで弾かれても先行の通知は先行のチャンネルのまま`() {
+        // 先行 A: 設定 X (バイブあり・DND無視ON) で鳴る → 通知は bypass のチャンネル
+        seed("own-a")
+        val c = start("own-a")
+        assertTrue(waitUntil(5_000) { c.get().isPlaying() })
+        assertEquals(AlarmService.CHANNEL_ID, ringNotification()?.channelId)
+        // 設定が Y (バイブなし・DND無視OFF) に変わり、おやすみモード (NONE) の中で後発 B が来る
+        runBlocking {
+            app.container.settings.setVibrateWhileRinging(false)
+            app.container.settings.setIgnoreDnd(false)
+        }
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+        seed("own-b")
+        c.withIntent(startIntent("own-b")).startCommand(0, 2)
+        assertTrue("B は鳴らせなかったになる", waitUntil(5_000) { state("own-b") == AlarmState.MISSED.name })
+        // B を畳んだ後 (restoreOrFinish) に A の通知が張り直されるのを待つ
+        assertTrue(
+            "A の通知は X のチャンネル (bypass) に戻ること。B の設定 Y のチャンネルで組み直さない",
+            waitUntil(5_000) { ringNotification()?.channelId == AlarmService.CHANNEL_ID },
+        )
+        Thread.sleep(300)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(AlarmService.CHANNEL_ID, ringNotification()?.channelId)
+        org.junit.Assert.assertNotNull("A の通知は全画面 Intent も持つこと", ringNotification()?.fullScreenIntent)
+        assertTrue("A は鳴り続けること", c.get().isPlaying())
+        assertEquals(AlarmState.FIRED.name, state("own-a"))
+    }
+
+    @Test
+    fun `設定を読めない間の仮の通知はDND尊重で全画面なし・確定したら元のチャンネルと全画面へ戻る`() {
+        AlarmService.settingsReadTimeoutMs = 0L // 設定の読込が時間切れになる状態
+        seed("unread")
+        val c = Robolectric.buildService(AlarmService::class.java, startIntent("unread")).create()
+        controllers += c
+        var provisional: android.app.Notification? = null
+        synchronized(c.get().ringLock()) {
+            c.startCommand(0, 1)
+            val end = System.currentTimeMillis() + 3_000
+            while (provisional == null && System.currentTimeMillis() < end) {
+                provisional = shadowOf(c.get()).lastForegroundNotification
+                Thread.sleep(20)
+            }
+        }
+        org.junit.Assert.assertNotNull(provisional)
+        assertEquals(AlarmService.CHANNEL_ID_NOVIB_DND, provisional!!.channelId)
+        assertNull("設定が確定するまで全画面 Intent を付けないこと", provisional!!.fullScreenIntent)
+        // 鳴らす経路では prepareToRing が設定を読み直す (無視ON・バイブあり・全画面ON)。確定値で張り替わること
+        assertTrue(waitUntil(5_000) { c.get().isPlaying() })
+        assertTrue(
+            "確定後は bypass のチャンネルと全画面 Intent に戻ること",
+            waitUntil(5_000) {
+                val n = ringNotification()
+                n?.channelId == AlarmService.CHANNEL_ID && n.fullScreenIntent != null
+            },
+        )
     }
 }

@@ -856,15 +856,19 @@ class AlarmRepository(
 
     /**
      * おやすみモードで鳴らさなかった行を「鳴らせなかった」にする (#149)。鳴動中 (FIRED) のままの時だけ書き、
-     * 先に停止された行を MISSED で上書きしない。書いたら true (見逃しの通知はその時だけ出す)
+     * 先に停止された行を MISSED で上書きしない。停止・スヌーズと同じ [ringTransitionLock] の中で書き、
+     * onScheduleChanged はロックを放してから呼ぶ。書いたら true (見逃しの通知はその時だけ出す)
      */
     suspend fun markDndSuppressed(id: String, detail: String): Boolean {
-        if (db.scheduledInstances().setMissedIfFired(id) == 0) return false
-        val row = db.scheduledInstances().byId(id)
-        audit("MISS", "$id: $detail", row)
-        row?.standaloneAlarmId?.let { disableConsumedOneShots(setOf(it)) }
-        onScheduleChanged?.invoke()
-        return true
+        val done = ringTransitionLock.withLock {
+            if (db.scheduledInstances().setMissedIfFired(id) == 0) return@withLock false
+            val row = db.scheduledInstances().byId(id)
+            audit("MISS", "$id: $detail", row)
+            row?.standaloneAlarmId?.let { disableConsumedOneShots(setOf(it)) }
+            true
+        }
+        if (done) onScheduleChanged?.invoke()
+        return done
     }
 
     /** 単発指定で MISSED 化する。鳴動を試みたが起動を OS に拒否された時などに使う。 */

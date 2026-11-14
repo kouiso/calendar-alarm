@@ -5,7 +5,7 @@
 「持ち主の判断」の欄は空けてある。答えが出たら埋める。
 
 - 行番号は 2026-11-13 時点の `master` のもの。
-  - 例外: 権限 #15 は #191 で足した行。#191 を取り込むと manifest の 16 行目に入り、#7 以降の行番号は 1 つずつ後ろへずれる（表の行番号は直していない）。
+  - 例外: 権限 #15 は #191 で足した行。#191 は manifest の 15 行目にコメント、16 行目に権限の計 2 行を足す（`git diff origin/master...HEAD` で確認）。#7 WAKE_LOCK（15）以降の行番号は、権限もサービスも受信も 2 つずつ後ろへずれる（表の行番号は直していない）。
 - 「審査で要る説明」の出典は Google Play ヘルプと Android の公式資料（2026-11-13 に確認）。
   - 正確なアラームは https://support.google.com/googleplay/android-developer/answer/13986130
   - 全画面の通知は https://support.google.com/googleplay/android-developer/answer/13161072

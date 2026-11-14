@@ -15,7 +15,10 @@ import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -78,5 +81,49 @@ class DndSuppressedStateTest {
         repository.onDismissed("tm:dnd-stopped")
         assertFalse(repository.markDndSuppressed("tm:dnd-stopped", "おやすみモード"))
         assertEquals(AlarmState.DISMISSED.name, db.scheduledInstances().byId("tm:dnd-stopped")?.state)
+    }
+
+    private fun transitionLock(repo: AlarmRepository): Mutex =
+        AlarmRepository::class.java.getDeclaredField("ringTransitionLock").apply { isAccessible = true }.get(repo) as Mutex
+
+    @Test
+    fun `停止やスヌーズと同じロックを待ってから書く`() = runBlocking {
+        fired("tm:dnd-lock")
+        val lock = transitionLock(repository)
+        lock.lock()
+        val pending = async(Dispatchers.IO) { repository.markDndSuppressed("tm:dnd-lock", "おやすみモード") }
+        delay(400)
+        // 停止 (onDismissed) が同じロックを持っている間は、条件つきの MISSED 書き込みも待つ
+        assertFalse("ロックを持つ間は終わらないこと", pending.isCompleted)
+        assertEquals(AlarmState.FIRED.name, db.scheduledInstances().byId("tm:dnd-lock")?.state)
+        lock.unlock()
+        assertTrue(pending.await())
+        assertEquals(AlarmState.MISSED.name, db.scheduledInstances().byId("tm:dnd-lock")?.state)
+    }
+
+    @Test
+    fun `onScheduleChangedはロックを放してから呼ぶ`() = runBlocking {
+        lateinit var repo: AlarmRepository
+        var lockFreeInCallback: Boolean? = null
+        repo = AlarmRepository(
+            db = db,
+            scheduler = AlarmScheduler(context),
+            calendarReader = CalendarContractReader(context),
+            settings = SettingsRepository(context),
+            hasCalendarPermission = { false },
+            appScope = CoroutineScope(Dispatchers.IO),
+            onScheduleChanged = {
+                val lock = transitionLock(repo)
+                lockFreeInCallback = lock.tryLock()
+                if (lockFreeInCallback == true) lock.unlock()
+            },
+        )
+        repo.scheduleAdhoc(
+            AlarmInstance(id = "tm:dnd-cb", triggerAtMillis = System.currentTimeMillis() - 1000, title = "t", kind = AlarmKind.TIMER),
+        )
+        repo.setState("tm:dnd-cb", AlarmState.FIRED)
+        lockFreeInCallback = null
+        assertTrue(repo.markDndSuppressed("tm:dnd-cb", "おやすみモード"))
+        assertEquals("コールバックの時点でロックが空いていること", true, lockFreeInCallback)
     }
 }
