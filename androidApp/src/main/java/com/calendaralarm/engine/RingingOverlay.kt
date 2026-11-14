@@ -339,7 +339,7 @@ object RingingOverlay {
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = dp(10) })
+        ).apply { topMargin = dp(if (largeButtons) RingingSlideSpec.LARGE_BUTTON_GAP_DP else 10) })
 
         return root
     }

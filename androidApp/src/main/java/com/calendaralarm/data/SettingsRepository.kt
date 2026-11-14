@@ -128,7 +128,7 @@ class SettingsRepository(private val context: Context) {
         /** テーマ ID。 */
         val themeId: String = "default",
         /** 鳴動画面の停止UIを大ボタンにするか (競合の Large Button Mode, #154)。
-         *  OFF=従来のスライド停止、ON=誤タッチしにくい大きな停止ボタン。 */
+         *  OFF=従来のスライド停止、ON=スヌーズと停止を同じ大きさの大ボタンにする（スヌーズ時間を選ぶ・チップは出さない）。 */
         val largeButtons: Boolean = false,
         /** カスタム背景画像 URI (鳴動画面/テーマ)。 */
         val backgroundImageUri: String? = null,

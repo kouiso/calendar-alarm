@@ -45,6 +45,17 @@ class RingingOverlayLargeLayoutTest {
     }
 
     @Test
+    fun `停止と下の文字の間は、大きいボタンで12、通常で10`() {
+        fun footGap(large: Boolean): Int {
+            val root = build(large) as android.view.ViewGroup
+            return (root.getChildAt(root.childCount - 1).layoutParams as android.view.ViewGroup.MarginLayoutParams).topMargin
+        }
+        assertEquals(RingingSlideSpec.LARGE_BUTTON_GAP_DP, footGap(true))
+        assertEquals(12, footGap(true))
+        assertEquals(10, footGap(false))
+    }
+
+    @Test
     fun `大きいボタンの文字は24で、予定名は22になる`() {
         val root = build(large = true)
         assertEquals(24f, (root.findViewWithTag<View>(SNOOZE_BUTTON_TAG) as TextView).textSize, 0.01f)
