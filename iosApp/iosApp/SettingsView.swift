@@ -114,6 +114,10 @@ struct SettingsView: View {
                                         .font(NightTheme.font(13)).foregroundStyle(.secondary)
                                 }
                             }
+                            // 「選ぶ」で取り込める音の説明。長い音は AlarmSoundLibrary.maxSeconds で切る (#147)
+                            Text("使える形式は mp3・m4a・wav・aiff・caf などです。長い音は先頭の約30秒だけ鳴ります。")
+                                .font(NightTheme.font(11)).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             // 同梱プリセット (#147)。AlarmKit の AlertSound.named は
                             // アプリが置いた .caf しか読めないので、選択肢は同梱音で用意する
                             Chips(

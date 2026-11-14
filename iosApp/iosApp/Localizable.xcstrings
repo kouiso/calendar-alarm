@@ -530,6 +530,16 @@
         }
       }
     },
+    "使える形式は mp3・m4a・wav・aiff・caf などです。長い音は先頭の約30秒だけ鳴ります。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usable formats: mp3, m4a, wav, aiff, caf and more. Long sounds play only the first 30 seconds or so."
+          }
+        }
+      }
+    },
     "ベル": {
       "localizations": {
         "en": {
