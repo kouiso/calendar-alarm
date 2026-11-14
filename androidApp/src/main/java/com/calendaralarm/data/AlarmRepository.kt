@@ -666,13 +666,15 @@ class AlarmRepository(
                     reminderAction = it.reminderAction.toAction(),
                 )
             }
-            val overrides = db.eventOverrides().all().associate {
+            val overrideRows = db.eventOverrides().all()
+            val storedOverrides = overrideRows.associate {
                 it.instanceKey to EventOverride(
                     action = it.action.toActionOrNull(),
                     minutesBefore = it.minutesBefore,
                     extraOffsets = it.extraOffsetsCsv?.toOffsets(),
                 )
             }
+            var overrides = storedOverrides
             val snoozeDefault = appSettings.defaultSnoozeMinutes
             // calendar_prefs 行が無いカレンダーはグローバル既定が効く。
             // アジェンダ表示も同じ既定を読むため、UIとエンジンを一致させる。
@@ -718,6 +720,13 @@ class AlarmRepository(
                 check(calendarList.isNotEmpty() || events.isEmpty() || appSettings.accountSettings.isEmpty()) {
                     "calendar list is empty while events exist"
                 }
+                // 予定の時刻が動いても予定ごとの指定を引き継ぎ、終わった回の指定は消す (#243)。
+                // 読み取りに成功した時だけ行う (失敗時はどの指定もはぐれて見えるため)
+                val carry = com.calendaralarm.shared.logic.OverrideCarry.reconcile(
+                    storedOverrides, events, now.toEpochMilliseconds(), 1.days.inWholeMilliseconds,
+                )
+                overrides = carry.overrides
+                applyOverrideCarry(overrideRows, carry)
                 val disabledCalIds = accountApplied.disabledCalendarIds
                 liveEventKeys = events.asSequence()
                     .filter { overrides[it.instanceKey]?.muted != true }
@@ -947,6 +956,21 @@ class AlarmRepository(
             ),
         )
         resync("calendar pref")
+    }
+
+    /** [OverrideCarry] の結果を DB へ書く。古いキーの行を新しいキーで作り直し、終わった回の行を消す (#243) */
+    private suspend fun applyOverrideCarry(
+        rows: List<EventOverrideEntity>,
+        carry: com.calendaralarm.shared.logic.OverrideCarry.Result,
+    ) {
+        if (carry.moved.isEmpty() && carry.dropped.isEmpty()) return
+        val byKey = rows.associateBy { it.instanceKey }
+        carry.moved.forEach { (old, new) ->
+            byKey[old]?.let { db.eventOverrides().upsert(it.copy(instanceKey = new)) }
+            db.eventOverrides().delete(old)
+        }
+        carry.dropped.forEach { db.eventOverrides().delete(it) }
+        audit("OVERRIDE_CARRY", "moved=${carry.moved.size} dropped=${carry.dropped.size}")
     }
 
     suspend fun setEventOverride(
