@@ -1,0 +1,122 @@
+{
+  "_readme": "shared の判定関数の「入力 -> 期待値」の表 (#301, #223 の子)。Kotlin (shared/src/jvmTest/.../SharedDecisionTableTest.kt) が読む。iosApp/unit-test の Swift からも同じファイルを読めるよう、リポジトリ直下の testdata/ に置く。時刻は全て UTC の ISO 文字列。展開は Asia/Tokyo (UTC+9) 固定。タイトルでの種類判定 (classifyEventType) は #306 で変更中のため表に入れない: 種類は必ず googleEventType で渡す。",
+  "version": 1,
+  "expandEvents": [
+    {
+      "name": "N分前: 開始10:00(JST)の10分前に鳴る",
+      "event": {"start": "2026-10-05T01:00:00Z", "allDay": false},
+      "rule": {"minutesBefore": 10},
+      "now": "2026-10-05T00:00:00Z", "horizon": "2026-10-06T00:00:00Z",
+      "expected": [{"trigger": "2026-10-05T00:50:00Z", "minutesBefore": 10, "delivery": "ALARM"}]
+    },
+    {
+      "name": "追加リマインダー: 同じ時刻は開始側を優先して1回、残りは並べて出す",
+      "event": {"start": "2026-10-05T01:00:00Z", "allDay": false},
+      "rule": {"minutesBefore": 10, "extraOffsets": [30, 10]},
+      "now": "2026-10-05T00:00:00Z", "horizon": "2026-10-06T00:00:00Z",
+      "expected": [
+        {"trigger": "2026-10-05T00:50:00Z", "minutesBefore": 10, "delivery": "ALARM"},
+        {"trigger": "2026-10-05T00:30:00Z", "minutesBefore": 30, "delivery": "ALARM"}
+      ]
+    },
+    {
+      "name": "予定ごとの分数はカレンダー既定より優先する",
+      "event": {"start": "2026-10-05T01:00:00Z", "allDay": false},
+      "rule": {"minutesBefore": 15},
+      "override": {"minutesBefore": 5},
+      "now": "2026-10-05T00:00:00Z", "horizon": "2026-10-06T00:00:00Z",
+      "expected": [{"trigger": "2026-10-05T00:55:00Z", "minutesBefore": 5, "delivery": "ALARM"}]
+    },
+    {
+      "name": "予定ごとのミュートは鳴らさない",
+      "event": {"start": "2026-10-05T01:00:00Z", "allDay": false},
+      "rule": {"minutesBefore": 10},
+      "override": {"action": "MUTE"},
+      "now": "2026-10-05T00:00:00Z", "horizon": "2026-10-06T00:00:00Z",
+      "expected": []
+    },
+    {
+      "name": "開始の動作が通知なら通知として出る",
+      "event": {"start": "2026-10-05T01:00:00Z", "allDay": false},
+      "rule": {"minutesBefore": 0, "startAction": "NOTIFY"},
+      "now": "2026-10-05T00:00:00Z", "horizon": "2026-10-06T00:00:00Z",
+      "expected": [{"trigger": "2026-10-05T01:00:00Z", "minutesBefore": 0, "delivery": "NOTIFY"}]
+    },
+    {
+      "name": "終日: 開始はUTC0時。ローカルの 8:00(JST) = 前日23:00Z に倒す",
+      "event": {"start": "2026-10-07T00:00:00Z", "allDay": true},
+      "rule": {"minutesBefore": 0, "allDayMinutes": 480},
+      "now": "2026-10-05T00:00:00Z", "horizon": "2026-10-08T00:00:00Z",
+      "expected": [{"trigger": "2026-10-06T23:00:00Z", "minutesBefore": 0, "delivery": "ALARM"}]
+    },
+    {
+      "name": "終日: 時刻が負数なら終日の予定は鳴らさない",
+      "event": {"start": "2026-10-07T00:00:00Z", "allDay": true},
+      "rule": {"minutesBefore": 0, "allDayMinutes": -1},
+      "now": "2026-10-05T00:00:00Z", "horizon": "2026-10-08T00:00:00Z",
+      "expected": []
+    },
+    {
+      "name": "猶予の内側(59分前に過ぎた鳴動)は残す",
+      "event": {"start": "2026-10-05T01:00:00Z", "allDay": false},
+      "rule": {"minutesBefore": 0},
+      "now": "2026-10-05T01:59:00Z", "horizon": "2026-10-06T00:00:00Z",
+      "expected": [{"trigger": "2026-10-05T01:00:00Z", "minutesBefore": 0, "delivery": "ALARM"}]
+    },
+    {
+      "name": "猶予ちょうど(60分前に過ぎた鳴動)は捨てる",
+      "event": {"start": "2026-10-05T01:00:00Z", "allDay": false},
+      "rule": {"minutesBefore": 0},
+      "now": "2026-10-05T02:00:00Z", "horizon": "2026-10-06T00:00:00Z",
+      "expected": []
+    },
+    {
+      "name": "窓の外(horizonより後)の鳴動は出さない",
+      "event": {"start": "2026-10-05T01:00:00Z", "allDay": false},
+      "rule": {"minutesBefore": 0},
+      "now": "2026-10-05T00:00:00Z", "horizon": "2026-10-05T00:59:00Z",
+      "expected": []
+    }
+  ],
+  "ringStatus": [
+    {"name": "許可が足りないが最優先 (音量0・見逃し・予約なしより上)", "in": {"missingPermissions": 2, "recentMissed": 3, "hasNextAlarm": false, "alarmMuted": true},
+     "expected": {"kind": "MISSING_PERMISSION", "missingPermissions": 2, "recentMissed": 3, "showPermissionBanner": true, "showMissedBanner": true}},
+    {"name": "許可OKなら音量0が次", "in": {"missingPermissions": 0, "recentMissed": 3, "hasNextAlarm": false, "alarmMuted": true},
+     "expected": {"kind": "ALARM_MUTED", "missingPermissions": 0, "recentMissed": 3, "showPermissionBanner": false, "showMissedBanner": true}},
+    {"name": "見逃しがあれば予約なしより上", "in": {"missingPermissions": 0, "recentMissed": 1, "hasNextAlarm": false, "alarmMuted": false},
+     "expected": {"kind": "MISSED_RECENTLY", "missingPermissions": 0, "recentMissed": 1, "showPermissionBanner": false, "showMissedBanner": true}},
+    {"name": "予約が無ければ NO_ALARM", "in": {"missingPermissions": 0, "recentMissed": 0, "hasNextAlarm": false, "alarmMuted": false},
+     "expected": {"kind": "NO_ALARM", "missingPermissions": 0, "recentMissed": 0, "showPermissionBanner": false, "showMissedBanner": false}},
+    {"name": "全部問題なしなら READY", "in": {"missingPermissions": 0, "recentMissed": 0, "hasNextAlarm": true, "alarmMuted": false},
+     "expected": {"kind": "READY", "missingPermissions": 0, "recentMissed": 0, "showPermissionBanner": false, "showMissedBanner": false}},
+    {"name": "負数は0に丸める", "in": {"missingPermissions": -1, "recentMissed": -5, "hasNextAlarm": true, "alarmMuted": false},
+     "expected": {"kind": "READY", "missingPermissions": 0, "recentMissed": 0, "showPermissionBanner": false, "showMissedBanner": false}}
+  ],
+  "eventTypeFilter": [
+    {"name": "既定: 通常の予定(default)は鳴る", "event": {"googleEventType": "default", "availability": "UNKNOWN"}, "expected": true},
+    {"name": "既定: 不在(outOfOffice)は鳴らない", "event": {"googleEventType": "outOfOffice", "availability": "UNKNOWN"}, "expected": false},
+    {"name": "既定: サイレントモード(focusTime)は鳴らない", "event": {"googleEventType": "focusTime", "availability": "UNKNOWN"}, "expected": false},
+    {"name": "既定: 勤務場所(workingLocation)は鳴らない", "event": {"googleEventType": "workingLocation", "availability": "UNKNOWN"}, "expected": false},
+    {"name": "既定: 誕生日(birthday)は鳴らない", "event": {"googleEventType": "birthday", "availability": "UNKNOWN"}, "expected": false},
+    {"name": "既定: タスク(task)は鳴る", "event": {"googleEventType": "task", "availability": "UNKNOWN"}, "expected": true},
+    {"name": "誕生日をONにすれば鳴る", "filter": {"birthday": true}, "event": {"googleEventType": "birthday", "availability": "UNKNOWN"}, "expected": true},
+    {"name": "予定なし(FREE)は既定で鳴る", "event": {"googleEventType": "default", "availability": "FREE"}, "expected": true},
+    {"name": "予定なしをOFFにすると FREE は止まる", "filter": {"free": false}, "event": {"googleEventType": "default", "availability": "FREE"}, "expected": false},
+    {"name": "予定なしOFFでも BUSY は鳴る", "filter": {"free": false}, "event": {"googleEventType": "default", "availability": "BUSY"}, "expected": true},
+    {"name": "予定なしOFFでも TENTATIVE は鳴る", "filter": {"free": false}, "event": {"googleEventType": "default", "availability": "TENTATIVE"}, "expected": true},
+    {"name": "予定なしOFFでも UNKNOWN は鳴る", "filter": {"free": false}, "event": {"googleEventType": "default", "availability": "UNKNOWN"}, "expected": true},
+    {"name": "種類で止まる予定は FREE を許しても鳴らない", "event": {"googleEventType": "outOfOffice", "availability": "FREE"}, "expected": false},
+    {"name": "個別の ALARM 指定は種類の絞り込みより優先", "override": {"action": "ALARM"}, "event": {"googleEventType": "outOfOffice", "availability": "UNKNOWN"}, "expected": true},
+    {"name": "個別の ALARM 指定は予定なしOFFより優先", "filter": {"free": false}, "override": {"action": "ALARM"}, "event": {"googleEventType": "default", "availability": "FREE"}, "expected": true},
+    {"name": "個別の MUTE 指定は通常の予定も止める", "override": {"action": "MUTE"}, "event": {"googleEventType": "default", "availability": "UNKNOWN"}, "expected": false}
+  ],
+  "snoozeClock": [
+    {"name": "6:30 を10分スヌーズ", "alarmMinuteOfDay": 390, "snoozeMinutes": 10, "expected": "6:40"},
+    {"name": "分は2桁で埋める", "alarmMinuteOfDay": 360, "snoozeMinutes": 5, "expected": "6:05"},
+    {"name": "0時をまたぐ", "alarmMinuteOfDay": 1435, "snoozeMinutes": 10, "expected": "0:05"}
+  ],
+  "ringClock": [
+    {"name": "9:00 の10分前", "eventMinuteOfDay": 540, "minutesBefore": 10, "expected": "8:50"},
+    {"name": "0:05 の10分前は前日の時刻", "eventMinuteOfDay": 5, "minutesBefore": 10, "expected": "23:55"}
+  ]
+}
