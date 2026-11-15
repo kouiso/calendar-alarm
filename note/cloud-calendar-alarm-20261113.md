@@ -1,4 +1,4 @@
-STATE HANDED-OFF 2026-11-15 | this cloud session (ritmo account) is closed by the owner's cleanup order; the project continues in the personal-account session | merged 3 on 2026-11-15 (#398 #400 #399) | see the last HANDOFF block
+STATE RUNNING 2026-11-15T06:30:44Z | personal-account lane | merged today: #412 #413 #414 #396 | open PR work: #397 (gating) #363 #365 #373
 mission: それぞれのプロジェクトに書いてあるプランに書いてある作業をやること。どのプロジェクトもまず既存のPRを本質的に対処することを作業を優先してください。そうしないと溜まってばっかりなので
 model opus (lead, order 2026-11-15 14:20 JST) ; implementers+reviewers opus, mechanical sonnet, fable <=1/h ; max 1 subagent alive | advisor unknown | github via connector (MCP; gh token invalid) | push via git | png ok (to re-confirm at first evidence)
 goal: lane until DONE or DONE-WAITING, or PAUSE | DONE-WAITING satisfies it: yes
@@ -395,3 +395,4 @@ HANDOFF 2026-11-15T06:26Z (final; cleanup order relayed 2026-11-15 JST: project 
 - Not touched tonight: #365 #363 #373 #191 #188 (previous cloud lane), #189 (Mac lane), #388 #411 (notes/handoff). Their next steps are in the HANDOFF 01:35Z block above and in doc/handoff/handoff-20261114-cloud.md on branch handoff/notes-20261114.
 - Could not be done here: Gradle (dl.google.com refused by this environment's network policy); the design page VqUeceTJYaL9Z3U2JyLnNm (other organization); Project 10 Iteration (unreadable).
 - Unposted texts still on this branch: queue/dgap-10, 11a, 11b, 11c (4 design-gap issues), old FAIL reviews queue/review39[67]-r.md.
+NOTE 2026-11-15T06:30:44Z | ritmo session's final HANDOFF (84b4566) merged in; its line-1 STATE HANDED-OFF replaced by this lane's RUNNING; items it lists are already done here except queue/dgap-10/11a/11b/11c (4 design-gap issues, unposted) -> taken after the PRs
