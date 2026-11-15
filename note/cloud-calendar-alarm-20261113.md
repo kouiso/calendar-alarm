@@ -1,6 +1,6 @@
-STATE PAUSED 2026-11-15T01:35Z (PAUSE from the managing session: allowance guard) | merged 3 tonight (#398 #400 #399) | open PR 14 | see the last HANDOFF block
+STATE RUNNING 2026-11-15T05:03:50Z | counts pending (moved to personal account)
 mission: それぞれのプロジェクトに書いてあるプランに書いてある作業をやること。どのプロジェクトもまず既存のPRを本質的に対処することを作業を優先してください。そうしないと溜まってばっかりなので
-model fable (lead, night order 2026-11-15) ; manager+reviewers fable, implementers opus, mechanical sonnet ; max 1 subagent alive | advisor unknown | github via connector (MCP; no gh in this container) | push via git | png ok (Playwright/Chromium, to be re-confirmed at first evidence)
+model opus (lead, order 2026-11-15 14:20 JST) ; implementers+reviewers opus, mechanical sonnet, fable <=1/h ; max 1 subagent alive | advisor unknown | github via connector (MCP; gh token invalid) | push via git | png ok (to re-confirm at first evidence)
 goal: lane until DONE or DONE-WAITING, or PAUSE | DONE-WAITING satisfies it: yes
 repo rules read: AGENTS.md, doc/test-spec.md 検証の証跡「鳴動・UI系の修正は実際に鳴らして止めた動画/スクショを PR に添付する」 (stricter than G4 for screen PRs: real-device evidence), .github/scrum-board.yml (project 10), unresolved review threads 0 before merge
 DEPLOY | merge to master -> nothing (CI builds a debug APK as a 14-day artifact only) | evidence .github/workflows/all_check.yml:50-55 (upload-artifact); fad.yml:1-3 is workflow_dispatch only (tester distribution, never on merge); ios-device-sync.yml:8-30,248 is a daily cron that may dispatch fad.yml (iOS) to testers from master = staging, independent of merges
@@ -363,3 +363,8 @@ HANDOFF 2026-11-15T01:35Z (PAUSE; times in tonight's lines before this one may b
 - needs owner (unchanged, none new tonight): Q1-Q11 in this file (lines "needs owner"), #194 macOS cost, #401.
 - for main session: (1) no plan rows in the first message; (2) Iteration of Project 10 unreadable; (3) two notes branches (cloud = this, Mac = notes/calendar-alarm); (4) allow dl.google.com in this cloud environment or no Gradle runs here; (5) design page VqUeceTJYaL9Z3U2JyLnNm is in another organization for this session, working from design/project/; (6) 課題 review band: not ready (lane work not complete).
 - members still running: none.
+MOVED to personal account 2026-11-15T05:03:50Z
+START 2026-11-15T05:03:50Z | order 統括 [personal] 2026-11-15 14:20 JST | lead Opus | handoff read: HANDOFF 2026-11-15T01:35Z above | next: #396 (DECIDED 01:36Z), #397, reviews #412 #413 #414, #365 #373 #363
+worktree 2026-11-15T05:03:50Z | /home/user/calendar-alarm claude/calendar-alarm-cloud-messaging-382lje (fresh container, nothing unpushed) | /home/user/notes chore/cloud-notes-calendar-alarm (this file)
+BLOCKER 2026-11-15T05:03:50Z | dl.google.com still refused (CONNECT 403) on this account's environment: no local Gradle; G3 stays per DECIDED 01:18Z (hosted rollup on the exact head)
+for main session (2026-11-15T05:03:50Z): (5) RESOLVED: design page VqUeceTJYaL9Z3U2JyLnNm opens from this account (version 1794658749-78c1 = repo copy design/project/). (4) still open: allow dl.google.com in this environment.
