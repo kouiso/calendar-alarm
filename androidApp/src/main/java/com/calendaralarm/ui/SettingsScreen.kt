@@ -1698,7 +1698,7 @@ private fun RingTimesCard(appMinutesBefore: Int, useCalendarReminders: Boolean) 
  * 「おやすみモード中も鳴らす」の行 (#149、盤 p149)。許可が無い間は、保存値に関係なくスイッチを OFF で押せない表示にし、
  * 見出し・説明・アイコンを薄くして、下に案内 (普通の文字色) と塗りつぶしの「許可を開く」を置く。
  * 許可が無い ON は、鳴動側では OS のおやすみモード設定に任せて鳴らす ([com.calendaralarm.engine.AlarmService.silencedByDnd])。
- * 鳴らさなくなるのは、許可がある状態で利用者が OFF にした時だけ
+ * 鳴らさなくなるのは、利用者が OFF にしている時だけ (OFF の保存値は、後で許可を外しても効く)
  */
 @Composable
 internal fun IgnoreDndRow(

@@ -232,13 +232,13 @@
     <string name="trouble_dnd_desc">おやすみモード中でもアラームが鳴るよう、おやすみモードの「アラーム」を許可してください。</string>
     <string name="trouble_dnd_ng">おやすみモードでアラームが鳴りません</string>
     <string name="trouble_dnd_ok">おやすみモード中にアラーム可能</string>
-    <string name="trouble_dnd_off">おやすみモード中は鳴らさず、通知だけ残します（いまはおやすみモードではありません）</string>
+    <string name="trouble_dnd_off">おやすみモード中は鳴らさず、通知だけ残す設定です</string>
     <string name="trouble_dnd_blocked">おやすみモード中なので鳴らさず、通知だけ残します</string>
-    <string name="trouble_dnd_blocked_desc">設定の「おやすみモード中も鳴らす」をオンにすると、おやすみモード中も鳴ります。</string>
+    <string name="trouble_dnd_blocked_desc">設定の「おやすみモード中も鳴らす」がオフなので、おやすみモード中はアプリが鳴動を止めます。オンにすると、端末のおやすみモードの設定に従って鳴ります。</string>
     <string name="trouble_dnd_policy_desc">「おやすみモード中も鳴らす」を使うには「おやすみモードの例外」の許可が要ります。タップしてこのアプリを許可してください。</string>
     <string name="trouble_dnd_policy_na">「おやすみモード中も鳴らす」がOFFのため不要</string>
     <string name="trouble_dnd_policy_ng">「おやすみモードの例外」の許可がありません（端末のおやすみモードの設定に従って鳴ります）</string>
-    <string name="trouble_dnd_policy_ok">おやすみモード中も鳴らせます</string>
+    <string name="trouble_dnd_policy_ok">「おやすみモードの例外」を許可済み</string>
     <string name="trouble_exact_desc">アラームを時間どおりに鳴らすには、正確なアラームの権限が必要です。</string>
     <string name="trouble_exact_ng">正確なアラームが許可されていません</string>
     <string name="trouble_exact_ok">正確なアラームを設定可能</string>

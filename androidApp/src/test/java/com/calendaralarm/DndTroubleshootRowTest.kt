@@ -56,6 +56,16 @@ class DndTroubleshootRowTest {
     }
 
     @Test
+    fun `ONの優先モードはアラームの許可があればOK、無ければ要対応で優先モードの設定へ飛ぶ`() {
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        assertEquals(CheckState.OK, row("dnd", ignoreDnd = true).state)
+        shadowOf(nm).setConsolidatedNotificationPolicy(NotificationManager.Policy(0, 0, 0))
+        val blocked = row("dnd", ignoreDnd = true)
+        assertEquals(CheckState.NG, blocked.state)
+        assertEquals(Settings.ACTION_ZEN_MODE_PRIORITY_SETTINGS, blocked.fix?.action)
+    }
+
+    @Test
     fun `利用者がOFFにしていておやすみモード中は参考で飛び先なし`() {
         nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALARMS)
         val dnd = row("dnd", ignoreDnd = false)
@@ -84,7 +94,13 @@ class DndTroubleshootRowTest {
     @Test
     fun `許可の行はONで許可済みならOK、OFFなら対象外`() {
         shadowOf(nm).setNotificationPolicyAccessGranted(true)
-        assertEquals(CheckState.OK, row("dnd_policy", ignoreDnd = true).state)
+        // 許可済みの見出しは許可の事実だけを言う。サイレント中は同じ画面の「おやすみモード」の行が要対応になるので、
+        // ここで「鳴らせます」と言うと食い違う
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+        val granted = row("dnd_policy", ignoreDnd = true)
+        assertEquals(CheckState.OK, granted.state)
+        assertEquals(app.getString(R.string.trouble_dnd_policy_ok), granted.title)
+        assertEquals(CheckState.NG, row("dnd", ignoreDnd = true).state)
         assertEquals(CheckState.NA, row("dnd_policy", ignoreDnd = false).state)
     }
 }

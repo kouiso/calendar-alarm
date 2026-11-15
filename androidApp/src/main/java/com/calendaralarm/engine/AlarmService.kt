@@ -202,8 +202,8 @@ class AlarmService : Service() {
                         return@launch
                     }
                     // チャンネル (バイブ有無・DND尊重か) と全画面の強制は前面化の通知で決まるので先に設定を読む。
-                    // 前面化の期限があるので読めなければ「未確認」で進み、確定するまでの仮の通知は
-                    // おやすみモード尊重・全画面なしにする (鳴らす経路へ進む時に確定値で張り替える)
+                    // 前面化の期限があるので読めなければ「未確認」(鳴らす側の既定: バイブあり・おやすみモード中も鳴らす・全画面あり) で進み、
+                    // 鳴らす経路へ進む時に確定値で張り替える。鳴らさないと読めた要求だけ、仮の通知に全画面とバイブを付けない
                     if (readRingChannelSettings(id)) dndSilentIds += id else dndSilentIds -= id
                     if (!startForegroundWithNotification(id)) {
                         // BOOT_COMPLETED 処理中など、mediaPlayback FGS の起動が

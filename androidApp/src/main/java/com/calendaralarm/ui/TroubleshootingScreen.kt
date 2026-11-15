@@ -340,7 +340,8 @@ private fun TroubleshootRow(item: TroubleshootItem, onFix: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .testTag("troubleshoot_${item.key}")
-            .then(if (ng || info) Modifier.clickable(onClick = onFix) else Modifier)
+            // 開く先が無い行 (本人が選んだ動きを知らせるだけの参考) は押せる要素にしない。押しても何も起きない行を作らない
+            .then(if ((ng || info) && item.fix != null) Modifier.clickable(onClick = onFix) else Modifier)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
