@@ -243,12 +243,13 @@ class AlarmService : Service() {
             return
         }
         val (instance, ringSettings) = ready
-        // 「おやすみモード中も鳴らす」が効いていない (OFF、または ON でも通知ポリシーの許可が無い) 状態で、おやすみモードが有効 (すべて許可以外のフィルタ) なら鳴らさない (#149、盤 p149)。
+        // 利用者が「おやすみモード中も鳴らす」を OFF にしていて、おやすみモードが有効 (すべて許可以外のフィルタ) なら鳴らさない (#149、盤 p149)。
+        // ON は許可が無くてもここでは止めない (OS のおやすみモード設定に任せる)。
         // 音は USAGE_ALARM なので、チャンネルの bypassDnd を外すだけではアラームのみ等のおやすみモードを素通りして鳴る。
         // 座席を取る前に判定し、音を出さないまま前面サービスと座席を上限まで握らず、すぐ「鳴らせなかった」で終える
         // (鳴動中の別アラームにも触れない)。後で気づけるよう見逃しの通知は出す
         val filterNow = readInterruptionFilter(this)
-        val silenced = silencedByDnd(ringSettings.ignoreDnd, readPolicyAccessGranted(this), filterNow)
+        val silenced = silencedByDnd(ringSettings.ignoreDnd, filterNow)
         // 同じ鳴動の二重 START (鳴動中・座席確保済み) や、判定中に届いた停止は通常の経路に任せる。
         // ここで MISSED を書くと、鳴っている最中の行や止めた行を「鳴らせなかった」で上書きしてしまう
         val handledElsewhere = synchronized(ringLock) {
@@ -259,7 +260,7 @@ class AlarmService : Service() {
             withContext(NonCancellable) {
                 val marked = runCatching {
                     app.container.repository.markDndSuppressed(
-                        instanceId, "おやすみモード中は鳴らさない (おやすみモード中も鳴らす=OFF または許可なし, filter=$filterNow)",
+                        instanceId, "おやすみモード中は鳴らさない (おやすみモード中も鳴らす=OFF, filter=$filterNow)",
                     )
                 }.getOrDefault(false)
                 if (marked) MissedNotifier.post(this@AlarmService, instance.title)
@@ -889,7 +890,7 @@ class AlarmService : Service() {
         }
         val inputs = if (st != null) RingChannelInputs.of(st) else RingChannelInputs.UNKNOWN
         requestInputs[instanceId] = inputs
-        return silencedByDnd(inputs.ignoreDnd, readPolicyAccessGranted(this), readInterruptionFilter(this))
+        return silencedByDnd(inputs.ignoreDnd, readInterruptionFilter(this))
     }
 
     /**
@@ -974,12 +975,13 @@ class AlarmService : Service() {
 
         /**
          * おやすみモード中は鳴らさない状態か (#149、盤 p149「おやすみモード中は鳴らさず、通知だけ残す」)。
-         * 「おやすみモード中も鳴らす」が実際に効いていない (OFF、または ON でも通知ポリシーの許可が無い) 時、
-         * おやすみモードが有効 (すべて許可以外のフィルタ) の間は鳴らさない。ON で許可がある時は常に鳴らす。
-         * 読めない時は鳴らす側に倒す。判定は [effectiveIgnoreDnd] と [dndActive]
+         * 利用者が「おやすみモード中も鳴らす」を自分で OFF にしている時だけ、おやすみモードが有効
+         * (すべて許可以外のフィルタ) の間は鳴らさない。ON は通知ポリシーの許可が無くてもここでは止めず、
+         * OS のおやすみモード設定に任せる (許可が無いだけで黙って鳴らさなくなるのを避ける。持ち主の決定 2026-11-15)。
+         * 読めない時は鳴らす側に倒す。判定は [dndActive]
          */
-        fun silencedByDnd(ignoreDnd: Boolean, policyAccessGranted: Boolean, interruptionFilter: Int?): Boolean =
-            !effectiveIgnoreDnd(ignoreDnd, policyAccessGranted) && dndActive(interruptionFilter)
+        fun silencedByDnd(ignoreDnd: Boolean, interruptionFilter: Int?): Boolean =
+            !ignoreDnd && dndActive(interruptionFilter)
 
         /**
          * 鳴動通知を出すチャンネル。停止手段が見えるかの判定 (StopUiPermissions.notificationsUsable) と

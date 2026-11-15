@@ -3,7 +3,6 @@ package com.calendaralarm
 import android.app.NotificationManager
 import com.calendaralarm.engine.AlarmService
 import com.calendaralarm.engine.dndActive
-import com.calendaralarm.engine.effectiveIgnoreDnd
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -12,7 +11,8 @@ import org.junit.Test
 /**
  * 「おやすみモード中も鳴らす」(#149、盤 p149)。OFF は「おやすみモード中は鳴らさず、通知だけ残す」:
  * すべて許可以外のフィルタ (優先・アラームのみ・サイレント) の間は、アラーム許可の有無に関係なく鳴らさない。
- * ON でも通知ポリシーの許可が無ければ OFF と同じ (画面がスイッチを OFF で出すのと揃える)。
+ * ON は通知ポリシーの許可が無くても止めず、OS のおやすみモード設定に任せる (持ち主の決定 2026-11-15)。
+ * 許可の有無は判定の入力に無い。
  */
 class DndSilenceTest {
     private val all = NotificationManager.INTERRUPTION_FILTER_ALL
@@ -21,54 +21,43 @@ class DndSilenceTest {
     private val none = NotificationManager.INTERRUPTION_FILTER_NONE
     private val unknown = NotificationManager.INTERRUPTION_FILTER_UNKNOWN
 
-    private fun silenced(ignoreDnd: Boolean, granted: Boolean, filter: Int?) =
-        AlarmService.silencedByDnd(ignoreDnd, granted, filter)
+    private fun silenced(ignoreDnd: Boolean, filter: Int?) =
+        AlarmService.silencedByDnd(ignoreDnd, filter)
 
     @Test
-    fun `ONで許可があればおやすみモードのどのフィルタでも鳴らす判断`() {
+    fun `ONならおやすみモードのどのフィルタでも止めない`() {
+        // 許可が無い ON もここを通る。止めるのは利用者が自分で OFF にした時だけ
         listOf(all, priority, alarms, none, unknown, null).forEach { f ->
-            assertFalse("filter=$f", silenced(true, true, f))
+            assertFalse("filter=$f", silenced(true, f))
         }
     }
 
     @Test
-    fun `OFFで優先モードはアラームを許可していてもしていなくても鳴らさない`() {
-        // アラーム許可の有無は silencedByDnd の入力に無い。許可ありでも許可なしでも同じ答えになること
-        assertTrue(silenced(false, true, priority))
-        assertTrue(silenced(false, false, priority))
+    fun `OFFで優先モードなら鳴らさない`() {
+        // 優先モードの「アラーム」許可の有無は silencedByDnd の入力に無い
+        assertTrue(silenced(false, priority))
     }
 
     @Test
     fun `OFFでアラームのみなら鳴らさない`() {
-        assertTrue(silenced(false, true, alarms))
+        assertTrue(silenced(false, alarms))
     }
 
     @Test
     fun `OFFでサイレントなら鳴らさない`() {
-        assertTrue(silenced(false, true, none))
+        assertTrue(silenced(false, none))
     }
 
     @Test
     fun `OFFでもおやすみモードでなければ鳴らす`() {
-        assertFalse(silenced(false, true, all))
+        assertFalse(silenced(false, all))
     }
 
     @Test
     fun `状態が取れない時は鳴らす側に倒す`() {
-        assertFalse(silenced(false, true, unknown))
-        assertFalse(silenced(false, true, null))
-        assertFalse(silenced(false, true, 99))
-    }
-
-    @Test
-    fun `ONでも許可が無ければOFFと同じ`() {
-        assertFalse(effectiveIgnoreDnd(ignoreDnd = true, policyAccessGranted = false))
-        assertTrue(effectiveIgnoreDnd(ignoreDnd = true, policyAccessGranted = true))
-        assertFalse(effectiveIgnoreDnd(ignoreDnd = false, policyAccessGranted = true))
-        listOf(priority, alarms, none).forEach { f ->
-            assertTrue("filter=$f", silenced(true, false, f))
-        }
-        assertFalse(silenced(true, false, all))
+        assertFalse(silenced(false, unknown))
+        assertFalse(silenced(false, null))
+        assertFalse(silenced(false, 99))
     }
 
     @Test

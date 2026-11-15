@@ -63,9 +63,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.engine.AlarmService
-import com.calendaralarm.engine.dndActive
 import com.calendaralarm.engine.dndAllowsAlarms
-import com.calendaralarm.engine.effectiveIgnoreDnd
 import com.calendaralarm.engine.readInterruptionFilter
 import com.calendaralarm.engine.readPolicyAllowsAlarms
 import kotlinx.coroutines.flow.first
@@ -131,14 +129,13 @@ object TroubleshootChecks {
             else -> CheckState.NG
         }
 
-        // おやすみモード (#149、盤 p149): 「おやすみモード中も鳴らす」が実際に効く (ON かつ通知ポリシーの許可あり) なら、
-        // 鳴動音は USAGE_ALARM なので OS がアラームを通すかで OK/NG。効かない (OFF、または許可なしの ON) なら、
-        // おやすみモード中は鳴らさず通知だけ残す。判定は鳴動側と同じ effectiveIgnoreDnd / dndActive
+        // おやすみモード (#149、盤 p149): 「おやすみモード中も鳴らす」が ON なら (許可の有無に関わらず)、
+        // 鳴動音は USAGE_ALARM なので OS がアラームを通すかで OK/NG。利用者が OFF にしている間は、
+        // おやすみモード中は鳴らさず通知だけ残す。判定は鳴動側と同じ AlarmService.silencedByDnd
         val policyGranted = com.calendaralarm.engine.readPolicyAccessGranted(context)
-        val bypassing = effectiveIgnoreDnd(ignoreDnd, policyGranted)
         val dndFilter = readInterruptionFilter(context)
         val dndOk = dndAllowsAlarms(dndFilter, readPolicyAllowsAlarms(context))
-        val blockedByApp = !bypassing && dndActive(dndFilter)
+        val blockedByApp = AlarmService.silencedByDnd(ignoreDnd, dndFilter)
         // 全遮断 (NONE) の時は優先モード設定では効かないため、総合のおやすみモード設定へ分岐する。
         // ACTION_ZEN_MODE_SETTINGS は API 30 で deprecated になり新しい compileSdk の stub には
         // 残っていないため、同等の action 文字列を直接使う (無い端末は openSafely がアプリ詳細へ逃がす)
@@ -197,28 +194,36 @@ object TroubleshootChecks {
                 context.getString(R.string.trouble_fsi_desc),
                 Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkgUri),
             ),
+            // 利用者が OFF にしている間は本人が選んだ動きなので、おやすみモード中でも「要対応」にはしない (参考)。
+            // 直す先は OS の設定ではなくアプリの設定のスイッチなので、開く先は付けない
             TroubleshootItem(
-                "dnd", s(if (bypassing) dndOk else !blockedByApp),
+                "dnd",
+                when {
+                    blockedByApp -> CheckState.INFO
+                    !ignoreDnd -> CheckState.OK
+                    else -> s(dndOk)
+                },
                 context.getString(
                     when {
                         blockedByApp -> R.string.trouble_dnd_blocked
-                        !bypassing -> R.string.trouble_dnd_off
+                        !ignoreDnd -> R.string.trouble_dnd_off
                         dndOk -> R.string.trouble_dnd_ok
                         else -> R.string.trouble_dnd_ng
                     },
                 ),
-                context.getString(if (blockedByApp) R.string.trouble_dnd_blocked_desc else R.string.trouble_dnd_desc),
-                when {
-                    blockedByApp -> if (policyGranted) null else Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-                    else -> dndFix
-                },
+                context.getString(if (!ignoreDnd) R.string.trouble_dnd_blocked_desc else R.string.trouble_dnd_desc),
+                if (!ignoreDnd) null else dndFix,
             ),
             // #149: 「おやすみモード中も鳴らす」ON の時だけ意味を持つ。
-            // 通知ポリシーへのアクセス未許可だとチャンネルの bypassDnd が OS に無視される
+            // 通知ポリシーへのアクセス未許可だとチャンネルの bypassDnd が OS に無視される。
+            // 許可が無くても OS がアラームを通す設定なら鳴るので、未許可は「要対応」ではなく「参考」にする
             TroubleshootItem(
                 "dnd_policy",
-                if (!ignoreDnd) CheckState.NA
-                else s(policyGranted),
+                when {
+                    !ignoreDnd -> CheckState.NA
+                    policyGranted -> CheckState.OK
+                    else -> CheckState.INFO
+                },
                 context.getString(
                     when {
                         !ignoreDnd -> R.string.trouble_dnd_policy_na

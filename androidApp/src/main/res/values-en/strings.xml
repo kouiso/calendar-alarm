@@ -239,10 +239,10 @@
     <string name="trouble_dnd_ok">Alarms allowed in Do Not Disturb</string>
     <string name="trouble_dnd_off">During Do Not Disturb, alarms do not ring and only a notification is left (Do Not Disturb is off right now)</string>
     <string name="trouble_dnd_blocked">Do Not Disturb is on, so alarms do not ring; only a notification is left</string>
-    <string name="trouble_dnd_blocked_desc">Turn on “Ring during Do Not Disturb” and allow notification policy access, and alarms ring during Do Not Disturb.</string>
-    <string name="trouble_dnd_policy_desc">“Ring during Do Not Disturb” needs notification policy access. Tap to grant it for this app.</string>
+    <string name="trouble_dnd_blocked_desc">Turn on “Ring during Do Not Disturb” in Settings and alarms ring during Do Not Disturb.</string>
+    <string name="trouble_dnd_policy_desc">“Ring during Do Not Disturb” needs the “Do Not Disturb exception” permission. Tap to grant it for this app.</string>
     <string name="trouble_dnd_policy_na">Not needed while “Ring during Do Not Disturb” is off</string>
-    <string name="trouble_dnd_policy_ng">Cannot ring during Do Not Disturb (policy access not granted)</string>
+    <string name="trouble_dnd_policy_ng">The “Do Not Disturb exception” permission is not granted (alarms follow the phone\'s Do Not Disturb settings)</string>
     <string name="trouble_dnd_policy_ok">Can ring during Do Not Disturb</string>
     <string name="trouble_exact_desc">The exact alarm permission is needed to ring on time.</string>
     <string name="trouble_exact_ng">Exact alarms not allowed</string>
