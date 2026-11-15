@@ -1,0 +1,7 @@
+# head b6364b6140a8a352d00190ed07c4f4df9e74ce72 in /tmp/rv396 at 2026-11-15T05:38:52Z
+$ node scripts/hardcoded-ja/check.mjs
+OK: 日本語の文字列リテラルは増えていません (合計 309 個)
+exit=0
+$ node scripts/sync-ai-rule.mjs --check
+AI rule files already in sync
+exit=0
