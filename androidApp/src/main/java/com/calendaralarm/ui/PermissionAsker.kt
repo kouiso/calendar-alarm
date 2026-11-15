@@ -52,6 +52,7 @@ fun PermissionAsker(repository: AlarmRepository, onGranted: (AppPermission) -> U
     var askedAny by rememberSaveable { mutableStateOf(false) }
     var readyClosed by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val testRingLabel = stringResource(R.string.ask_test_ring_label)
 
     // 新たに付いた許可の通知は ON_RESUME の差分だけで出す (ダイアログ結果と二重に出さない)
     var seen by remember { mutableStateOf(granted) }
@@ -95,7 +96,7 @@ fun PermissionAsker(repository: AlarmRepository, onGranted: (AppPermission) -> U
                         readyClosed = true
                         scope.launch {
                             repository.scheduleAdhoc(
-                                AlarmExpander.timerInstance(10_000L, Clock.System.now(), label = "テスト鳴動"),
+                                AlarmExpander.timerInstance(10_000L, Clock.System.now(), label = testRingLabel),
                             )
                         }
                     },

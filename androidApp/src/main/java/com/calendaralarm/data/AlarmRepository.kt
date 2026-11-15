@@ -26,6 +26,7 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -72,6 +73,11 @@ class AlarmRepository(
     private val onScheduleChanged: (suspend () -> Unit)? = null,
     /** 期限切れが MISSED 化された件数の通知 (missed 通知用)。 */
     private val onMissed: (suspend (Int) -> Unit)? = null,
+    /**
+     * 復元直後の削除 (#269) が済むまで [resync] を待たせる門。
+     * 作る時に渡すので、Application.onCreate より先に始まった resync (前のプロセスから残った SyncWorker など) も待つ
+     */
+    internal val restoreGate: Deferred<Unit>? = null,
 ) {
     // 自動スヌーズ・手動スヌーズ・停止の状態遷移を一つずつ通す (#145)
     private val ringTransitionLock = Mutex()
@@ -707,6 +713,8 @@ class AlarmRepository(
      * カレンダー権限が無くても単発アラームは展開する（部分動作を優先）。
      */
     suspend fun resync(reason: String) = withContext(Dispatchers.IO) {
+        // 復元後の削除が済むまで待つ (#269)。門は削除と印の消費だけで開く
+        restoreGate?.await()
         // 差分計算は desired に無い PENDING を CANCELLED に倒すため、期限切れを
         // 先に MISSED 化しないと「鳴らせなかった」事実が通知も状態も残さず消える。
         // boot/時刻変更/手動/アプリ起動のどの入口からでも必ずここを通る。
