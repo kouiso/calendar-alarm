@@ -32,7 +32,22 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 (縮小・難読化・最適化)。戻す時はこの 1 行を false にする (#220)
+            isMinifyEnabled = true
+            isShrinkResources = isMinifyEnabled
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+        // 停止 E2E 専用 (#220)。release と同じ R8 (縮小・難読化・最適化・リソース縮小) で作る。
+        // debuggable な variant では R8 が debug モードで動き、名前が変わらない。そのため debuggable にせず、
+        // release を初期値にして署名だけ debug 鍵にする (CI に release 鍵は無い。配布物にはならない)。
+        // applicationId は変えない (E2E のスクリプトが com.calendaralarm を前提にするため)
+        create("e2eMinified") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -59,6 +74,13 @@ android {
                 it.systemProperty("robolectric.dependency.repo.id", "gcs-mirror")
             }
         }
+    }
+
+    // 今ある指摘は lint-baseline.xml に固定し、新しい指摘だけでビルドを落とす (#300)
+    lint {
+        baseline = file("lint-baseline.xml")
+        // 日付と通信で結果が変わる「新しい版がある」系は切る。CI と手元で結果を揃えるため (#386)
+        disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "NewerVersionAvailable")
     }
 
     kotlin {

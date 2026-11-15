@@ -15,7 +15,15 @@ Android (Compose Material3) と iOS (SwiftUI + AlarmKit, iOS 26+) の両実装�
   - `iosApp/SharedKit.framework` は Gradle の `embedAndSignAppleFrameworkForXcode` タスクで自動生成される (ビルドフェーズで実行)
 
 ## Setup
+クラウド（Claude・Codex・Devin）で回せる物と回せない物（2026-11-14 時点）:
+- 回せる: Android の unit テスト（`bash scripts/ci.sh fast`）と `node scripts/hardcoded-ja/check.mjs`。先に `bash scripts/setup-android-sdk.sh` で SDK を入れ、UTF-8 ロケールは `scripts/ci.sh` が設定する
+- 回せない: iOS のビルドとテスト（Mac・Xcode が要る）、emulator・実機・音の確認
+- 持ち主の承認が要る: SDK の取得先への通信、クラウドの環境へスクリプトを常に登録するか
+
 ```bash
+# Android SDK（クラウドなど SDK が無い所で。入っていれば何もしない）
+bash scripts/setup-android-sdk.sh
+
 # Android
 ./gradlew :androidApp:assembleDebug
 

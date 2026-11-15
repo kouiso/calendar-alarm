@@ -6,13 +6,14 @@
 Android CI と同じ `scripts/ci.sh` を使う。
 Gradle の三回の起動を一回へまとめ、必要な task をすべて指定する。
 統合した検査は `--no-parallel` とし、project 間の並列実行を増やさない。
-JDK 17 と既存の Android SDK を使う。`GRADLE_USER_HOME` は変更しない。
+JDK 17 と Android SDK を使う。SDK が無い環境（クラウドなど）では `bash scripts/setup-android-sdk.sh` が commandline-tools・platform（compileSdk）・build-tools を入れ、`local.properties` を作る（入っていれば何もしない）。`GRADLE_USER_HOME` は変更しない。
 UTF-8 のロケールが要る。テスト名が日本語なので、`C` などのロケールでは Kotlin のクラスファイル名が書けずに落ちる。
 `scripts/ci.sh` は、`LC_ALL` と `LANG` が UTF-8 でない時に `C.UTF-8` を設定する。`./gradlew` を直接動かす時は自分で `LC_ALL=C.UTF-8` を付ける。
 `bash scripts/ci.sh shared` は shared JVM だけを検査する（ロケールの確認に使う軽い入口）。
 
 `task ci:ios` は既存手順と同じ iOS simulator ビルドである。
 Xcode と xcodegen が必要である。署名、端末登録、配布は行わない。
+`iosApp/**`・`shared/**`・Gradle 関連（`build.gradle.kts`・`settings.gradle.kts`・`gradle.properties`・`gradle/**`・`gradlew*`）・`scripts/ci.sh`・この workflow 自身を変える PR と master への push では、同じ simulator ビルドを `.github/workflows/ios_build.yml`（標準の macOS ランナー、署名・Secrets・配布なし）が走らせる。
 `bash scripts/ci.sh ios-logic` は iOS の画面や SharedKit に依存しない計算（`iosApp/iosApp/ring-history.swift`）を
 macOS の swiftc で動かす単体テストである。シミュレータは要らない。
 Android の検査成功を iOS や emulator の成功とは扱わない。
@@ -74,6 +75,16 @@ FAD 配布と iOS device sync の既存 workflow は保持する。
 ```bash
 bash scripts/test-ci-contract.sh
 ```
+
+この契約検査は `task`（go-task）の実物を使う。無い環境では、入れ方を出して非ゼロで止まる。
+入れ方は次のいずれか。
+
+- macOS: `brew install go-task`
+- どの OS でも: `go install github.com/go-task/task/v3/cmd/task@latest`
+- そのほか: <https://taskfile.dev/installation/>
+
+`scripts/ci.sh`・`scripts/emulator/**`・`scripts/test-ci-contract.sh`・`Taskfile.yml` を変える PR では、
+CI の `CI contract test` workflow（`.github/workflows/ci-contract.yml`、go-task 3.40.1 を固定）が同じ検査を回す。
 
 契約検査では Gradle、Xcode、実デバイス呼出しを代替する。
 既存 harness 注入と evaluator は実際のコードを実行する。
