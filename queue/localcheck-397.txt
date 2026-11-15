@@ -1,0 +1,7 @@
+# cwd: /tmp/rv397  head: 3a819333e4bba2710d3e63ee3b04a509754455fb  date: 2026-11-15T05:42:56Z
+$ node scripts/hardcoded-ja/check.mjs
+OK: 日本語の文字列リテラルは増えていません (合計 309 個)
+exit=0
+$ node scripts/sync-ai-rule.mjs --check
+AI rule files already in sync
+exit=0
