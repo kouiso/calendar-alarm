@@ -1,0 +1,8 @@
+# PR #188 local checks, worktree /home/user/w-154, head d67dbb492e99c7faa2bf60bb74c5a467e4617f1e
+d67dbb492e99c7faa2bf60bb74c5a467e4617f1e
+$ timeout 120 node /home/user/w-154/scripts/hardcoded-ja/check.mjs
+OK: 日本語の文字列リテラルは増えていません (合計 304 個)
+exit code: 0
+$ timeout 120 node /home/user/w-154/scripts/sync-ai-rule.mjs --check
+AI rule files already in sync
+exit code: 0
