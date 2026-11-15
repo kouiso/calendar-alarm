@@ -1,0 +1,63 @@
+# PR #419 local checks, head 0bbab80aeebf63ac13f22bc2a476f74523584cfb, 2026-11-15
+$ timeout 120 node /home/user/w-fu-docs/scripts/hardcoded-ja/check.mjs
+OK: 日本語の文字列リテラルは増えていません (合計 309 個)
+exit=0
+$ timeout 120 node /home/user/w-fu-docs/scripts/sync-ai-rule.mjs --check
+AI rule files already in sync
+exit=0
+$ timeout 120 git -C /home/user/w-fu-docs diff --check origin/master...HEAD
+exit=0
+$ timeout 120 git -C /home/user/w-fu-docs diff --stat origin/master...HEAD
+ design/README.md            | 3 +++
+ doc/spec/kmp-replacement.md | 6 ++++--
+ doc/spec/user-stories.md    | 6 +++---
+ 3 files changed, 10 insertions(+), 5 deletions(-)
+exit=0
+$ grep autoSnoozeMax / AUTO_SNOOZE_MAX (main, case-insensitive)
+/home/user/w-fu-docs/androidApp/src/main/java/com/calendaralarm/ui/SettingsScreen.kt:1411:                            selected = p.autoSnoozeMax == n,
+/home/user/w-fu-docs/androidApp/src/main/java/com/calendaralarm/ui/SettingsScreen.kt:1412:                            onClick = { scope.launch { settings.setAutoSnoozeMax(n) } },
+/home/user/w-fu-docs/androidApp/src/main/java/com/calendaralarm/engine/AlarmService.kt:392:                        instance.snoozeSeq < ringSettings.autoSnoozeMax
+/home/user/w-fu-docs/androidApp/src/main/java/com/calendaralarm/data/SettingsRepository.kt:114:        val autoSnoozeMax: Int = 3,
+/home/user/w-fu-docs/androidApp/src/main/java/com/calendaralarm/data/SettingsRepository.kt:186:            autoSnoozeMax = (p[KEY_AUTO_SNOOZE_MAX] ?: 3).coerceIn(2, 4),
+/home/user/w-fu-docs/androidApp/src/main/java/com/calendaralarm/data/SettingsRepository.kt:295:    suspend fun setAutoSnoozeMax(v: Int) = edit { it[KEY_AUTO_SNOOZE_MAX] = v.coerceIn(2, 4) }
+/home/user/w-fu-docs/androidApp/src/main/java/com/calendaralarm/data/SettingsRepository.kt:459:        val KEY_AUTO_SNOOZE_MAX = intPreferencesKey("auto_snooze_max")
+exit=0
+$ grep fun onSnoozed
+536:    suspend fun onSnoozed(id: String?, snoozeMinutes: Int? = null) {
+exit=0
+$ sed -n 237p RingingOverlay.kt
+        if (snoozePresets.isNotEmpty()) {
+exit=0
+$ snoozePresets の出どころ
+69:        snoozePresets: List<Int>,
+83:            val view = buildView(app, instanceId, title, snoozeMinutes, snoozePresets)
+148:        snoozePresets: List<Int>,
+237:        if (snoozePresets.isNotEmpty()) {
+259:            for (m in snoozePresets.take(6)) {
+exit=0
+$ §7.5 の他の行番号 (PR が「残り」に書いた分)
+      1 `AlarmRepository.kt:388-397,552-565,1252`
+      1 `AlarmRepository.kt:536`
+      1 `AlarmRepository.kt:589-`
+      1 `AlarmService.kt:235,372-373`
+      1 `AlarmService.kt:374-421`
+      1 `AlarmService.kt:391-392`
+      1 `AlarmService.kt:394-396`
+      1 `AlarmService.kt:409-421`
+      1 `Models.kt:294-296`
+      1 `RingingOverlay.kt:237`
+      1 `SettingsRepository.kt:108-114,291-295`
+      1 `SettingsRepository.kt:114,186`
+      1 `SettingsScreen.kt:1379-1402`
+      1 `SettingsScreen.kt:1411`
+exit=0
+$ git status --short
+exit=0
+$ git diff --stat 5fea7b2^ 5fea7b2 -- design/project/d68 (前の版と同じ中身か。空なら同じ)
+exit=0
+$ git show 5fea7b2^:doc/spec/user-stories.md | sed -n 7p (not found の出どころ)
+- デザイン正本（https://claude.ai/artifact/REkqjYhaUXMoj42bHWE6cQ）は、このリポジトリの作業アカウントから開けない（2026-10-21 に Artifact の読み取りで not found）。
+exit=0
+$ canvas.json: logo.dc.html の板
+"logo.dc.html":{"x":0,"y":9500,"w":1680,"h":1040,"title":"#209 ロゴの3案"}
+exit=0

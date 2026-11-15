@@ -1,0 +1,84 @@
+# PR #420 local checks, head dde13dc4748a6e89315a865bcd757ea81ecf8987, 2026-11-15
+$ timeout 120 node /home/user/w-fu-test/scripts/hardcoded-ja/check.mjs
+OK: 日本語の文字列リテラルは増えていません (合計 309 個)
+exit=0
+$ timeout 120 node /home/user/w-fu-test/scripts/sync-ai-rule.mjs --check
+AI rule files already in sync
+exit=0
+$ timeout 120 git -C /home/user/w-fu-test diff --check origin/master...HEAD
+exit=0
+$ timeout 120 bash /home/user/w-fu-test/scripts/emulator/test_run_scenarios_retry.sh
+ok   err,err,ok → 3 回目で採れる (result='1 1 1' captures=3)
+ok   ずっと err → 初回+採り直し3回で諦める (result='err err err' captures=4)
+ok   0 1 1 は採り直さない (鳴っていないものを通さない) (result='0 1 1' captures=1)
+ok   初回から採れる値はそのまま (result='1 1 1' captures=1)
+ok   state_capture_failed err
+ok   state_capture_failed 0 1 1
+ok   呼び出し側 1 の順序 (L365 retry < L384 state_capture_failed < L386 INFRA_ERROR < L388 probes_ringing)
+ok   呼び出し側 1 の INFRA_ERROR の枝は return で抜ける (L384 if 〜 L387 fi)
+ok   呼び出し側 2 の順序 (L510 retry < L540 state_capture_failed < L542 INFRA_ERROR < L545 probes_ringing)
+ok   呼び出し側 2 の INFRA_ERROR の枝は return で抜ける (L540 if 〜 L544 fi)
+exit=0
+$ (copy restored?) timeout 120 diff -r /home/user/w-fu-test/scripts/emulator /tmp/claude-0/-home-user-calendar-alarm/4883ef84-55b1-5e04-8735-0a29b98f7ecb/scratchpad/rv420/emulator
+exit=0
+$ timeout 120 bash /tmp/claude-0/-home-user-calendar-alarm/4883ef84-55b1-5e04-8735-0a29b98f7ecb/scratchpad/rv420/emulator/test_run_scenarios_retry.sh (restored copy)
+exit=0
+# mutation a (copy; 1st site "; return" removed): exit=1, FAIL 呼び出し側 1 の INFRA_ERROR の枝が return で抜けない
+# mutation b (copy; 1st site record line commented out): exit=1, FAIL 呼び出し側の数が揃わない infra=1
+$ timeout 120 node /tmp/claude-0/-home-user-calendar-alarm/4883ef84-55b1-5e04-8735-0a29b98f7ecb/scratchpad/nbsp-check.mjs <master 版> <head 版>
+file:///tmp/claude-0/-home-user-calendar-alarm/4883ef84-55b1-5e04-8735-0a29b98f7ecb/scratchpad/nbsp-check.mjs:24
+const odd = /[  -‏
+            ^
+
+SyntaxError: Invalid regular expression: missing /
+    at compileSourceTextModule (node:internal/modules/esm/utils:346:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:110:18)
+    at #translate (node:internal/modules/esm/loader:559:20)
+    at afterLoad (node:internal/modules/esm/loader:612:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:617:12)
+    at #createModuleJob (node:internal/modules/esm/loader:640:36)
+    at #getJobFromResolveResult (node:internal/modules/esm/loader:353:34)
+    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:321:41)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:680:25)
+
+Node.js v22.23.4
+exit=1
+$ timeout 120 grep -c (raw c2 a0) head TitleMatchRuleTest.kt
+0
+exit=1 (1 = 0 行)
+# ends_with_return regex probes
+match   [    record x; return]
+match   [    return]
+match   [    locked_restore "$name"; return]
+nomatch [    record x; return 1]
+nomatch [    record x; return  # 抜ける]
+match   [    record x  # ; return]
+nomatch [    record x || return]
+nomatch [    record x && return]
+nomatch []
+$ git status --short (worktree untouched?)
+exit=0
+# 再実行 (前の nbsp-check.mjs は script 側の構文エラー。検査対象の失敗ではない)
+$ timeout 120 node /tmp/claude-0/-home-user-calendar-alarm/4883ef84-55b1-5e04-8735-0a29b98f7ecb/scratchpad/nbsp-check.mjs /tmp/claude-0/-home-user-calendar-alarm/4883ef84-55b1-5e04-8735-0a29b98f7ecb/scratchpad/TitleMatchRuleTest.master.kt /home/user/w-fu-test/shared/src/commonTest/kotlin/com/calendaralarm/shared/TitleMatchRuleTest.kt
+master raw c2a0: 1  escape(6 bytes): 0
+head   raw c2a0: 0  escape(6 bytes): 1
+master invisible chars: 1
+head   invisible chars: 0
+master row hex: [
+  '202020202020202020202020526f7728224f7574c2a06f66206f6666696365222c2066616c73652c204576656e74547970652e414253454e43452c204576656e74547970652e574f524b504c414345292c'
+]
+head   row hex: [
+  '202020202020202020202020526f7728224f75745c75303041306f66206f6666696365222c2066616c73652c204576656e74547970652e414253454e43452c204576656e74547970652e574f524b504c414345292c'
+]
+unescaped head row === master row: true
+head lines not in master (after unescape): 2
+  + // Out と of の間は NBSP (U+00A0) をわざと入れている。題全体の一致は空白に畳むので「out of office」になる。
+  + // 今までの規則は畳まないので「out of office」を含まず、次に見る「office」の部分一致で勤務場所になる
+head minus added lines === master: true
+exit=0
+$ git diff --stat origin/master...HEAD
+ .../java/com/calendaralarm/SettingRowLayoutTest.kt |  4 +++-
+ scripts/emulator/test_run_scenarios_retry.sh       | 26 ++++++++++++++++++++--
+ .../com/calendaralarm/shared/TitleMatchRuleTest.kt |  4 +++-
+ 3 files changed, 30 insertions(+), 4 deletions(-)
+exit=0
