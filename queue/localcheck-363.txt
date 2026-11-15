@@ -1,0 +1,8 @@
+$ cd /home/user/w-fix-204-invite-chips && node scripts/hardcoded-ja/check.mjs   (HEAD b19a885)
+OK: 日本語の文字列リテラルは増えていません (合計 309 個)
+exit=0
+
+$ cd /home/user/w-fix-204-invite-chips && node scripts/sync-ai-rule.mjs --check   (HEAD b19a885)
+AI rule files already in sync
+exit=0
+
