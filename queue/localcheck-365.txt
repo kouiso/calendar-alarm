@@ -1,0 +1,10 @@
+cwd=/home/user/w-feat-271-all-muted-status
+head=26ffc3363d7bf54e4f8bb78344f981f156acd6ae
+
+$ node scripts/hardcoded-ja/check.mjs
+OK: 日本語の文字列リテラルは増えていません (合計 304 個)
+exit=0
+
+$ node scripts/sync-ai-rule.mjs --check
+AI rule files already in sync
+exit=0
