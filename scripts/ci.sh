@@ -23,6 +23,8 @@ case "$mode" in
   fast) ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest --stacktrace --no-parallel ;;
   all) ./gradlew :shared:jvmTest :shared:testDebugUnitTest :androidApp:testDebugUnitTest :androidApp:assembleDebug --stacktrace --no-parallel ;;
   android-build) ./gradlew :androidApp:assembleDebug --stacktrace ;;
+  # なぜ: 翻訳漏れ・API 版・権限まわりの新しい指摘を止める。今ある指摘は androidApp/lint-baseline.xml に固定済み (#300)
+  lint) ./gradlew :androidApp:lintDebug --stacktrace ;;
   i18n-check)
     # なぜ: 画面の日本語を Kotlin に直接書く増加を止める (#289)。Gradle 不要で数秒。先に検査器自身のテストを回す
     node --test scripts/hardcoded-ja/check.test.mjs
@@ -40,8 +42,17 @@ case "$mode" in
   emulator-build)
     app_dir="$(from_caller "${2:?An isolated app checkout is required}")"
     app_dir="$(cd "$app_dir" && pwd)"
-    bash "$root/scripts/emulator/inject_harness.sh" "$app_dir"
-    (cd "$app_dir"; ./gradlew :androidApp:assembleDebug --stacktrace)
+    # なぜ: E2E_MINIFIED=true の時だけ、release と同じ R8 (難読化あり) の e2eMinified variant で停止 E2E を回す (#220)。
+    # debug variant は R8 が debug モードで動き名前が変わらないため使わない。未設定は従来どおり debug
+    variant=debug
+    gradle_task=assembleDebug
+    if [ "${E2E_MINIFIED:-}" = true ]; then variant=e2eMinified; gradle_task=assembleE2eMinified; fi
+    bash "$root/scripts/emulator/inject_harness.sh" "$app_dir" "$variant"
+    (cd "$app_dir"; ./gradlew ":androidApp:$gradle_task" --stacktrace)
+    # なぜ: 受け渡しの切れで minify なしのまま緑になり門が素通りになるのを防ぐ。mapping が無ければ R8 は動いていない
+    if [ "$variant" = e2eMinified ]; then
+      test -s "$app_dir/androidApp/build/outputs/mapping/e2eMinified/mapping.txt" || { echo 'R8 did not run: mapping.txt is missing for e2eMinified' >&2; exit 1; }
+    fi
     ;;
   emulator-run)
     validate_scenarios

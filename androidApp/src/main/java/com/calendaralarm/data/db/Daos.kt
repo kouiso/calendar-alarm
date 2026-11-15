@@ -21,6 +21,10 @@ interface ScheduledInstanceDao {
     @Query("SELECT * FROM scheduled_instances WHERE id = :id")
     suspend fun byId(id: String): ScheduledInstanceEntity?
 
+    /** 通知アラームの鎖: [id] 自身とそのスヌーズの子 (`id:snz*`)。id は 16 進 (先頭に '-' が付くことがある) だけなので LIKE の記号は混ざらない (#371)。 */
+    @Query("SELECT * FROM scheduled_instances WHERE id = :id OR id LIKE :id || ':snz%'")
+    suspend fun chainOf(id: String): List<ScheduledInstanceEntity>
+
     /** 1行だけの監視。鳴動画面が全件取得せずに自分の状態変化を追うのに使う。 */
     @Query("SELECT * FROM scheduled_instances WHERE id = :id")
     fun byIdFlow(id: String): Flow<ScheduledInstanceEntity?>
@@ -150,6 +154,10 @@ interface AuditLogDao {
      */
     @Query("SELECT COUNT(DISTINCT instanceId) FROM audit_log WHERE action = 'MISS' AND triggerAtMillis >= :since")
     fun missedSinceFlow(since: Long): Flow<Int>
+
+    /** [ids] の行に付いた [action] の記録のうち一番新しい時刻。無ければ null (#371)。 */
+    @Query("SELECT MAX(atMillis) FROM audit_log WHERE action = :action AND instanceId IN (:ids)")
+    suspend fun latestAtMillis(action: String, ids: List<String>): Long?
 
     @Query("DELETE FROM audit_log WHERE atMillis < :before")
     suspend fun prune(before: Long)

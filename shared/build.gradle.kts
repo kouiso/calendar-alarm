@@ -37,6 +37,13 @@ kotlin {
     }
 }
 
+// 判定の表 (#301) はテストの入力。Gradle に知らせないと、表だけ直しても jvmTest が UP-TO-DATE で飛ばされる
+tasks.withType<Test>().configureEach {
+    inputs.file(rootProject.layout.projectDirectory.file("testdata/shared-decisions.json"))
+        .withPropertyName("sharedDecisionTable")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 android {
     namespace = "com.calendaralarm.shared"
     compileSdk = libs.versions.compileSdk.get().toInt()
