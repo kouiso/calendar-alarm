@@ -1,0 +1,12 @@
+$ node scripts/hardcoded-ja/check.mjs && node scripts/sync-ai-rule.mjs --check && bash -n scripts/emulator/test_run_scenarios_retry.sh && bash scripts/emulator/test_run_scenarios_retry.sh
+OK: 日本語の文字列リテラルは増えていません (合計 309 個)
+AI rule files already in sync
+ok   err,err,ok → 3 回目で採れる (result='1 1 1' captures=3)
+ok   ずっと err → 初回+採り直し3回で諦める (result='err err err' captures=4)
+ok   0 1 1 は採り直さない (鳴っていないものを通さない) (result='0 1 1' captures=1)
+ok   初回から採れる値はそのまま (result='1 1 1' captures=1)
+ok   state_capture_failed err
+ok   state_capture_failed 0 1 1
+ok   呼び出し側 1 の順序 (L365 retry < L384 state_capture_failed < L386 INFRA_ERROR < L388 probes_ringing)
+ok   呼び出し側 2 の順序 (L510 retry < L540 state_capture_failed < L542 INFRA_ERROR < L545 probes_ringing)
+exit=0

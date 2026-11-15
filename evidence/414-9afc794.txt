@@ -1,0 +1,4 @@
+$ node scripts/hardcoded-ja/check.mjs && node scripts/sync-ai-rule.mjs --check
+OK: 日本語の文字列リテラルは増えていません (合計 309 個)
+AI rule files already in sync
+exit=0
