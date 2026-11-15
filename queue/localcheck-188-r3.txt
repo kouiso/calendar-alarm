@@ -1,0 +1,27 @@
+# local checks on 033d15f35a3526a8f1b0a1271e8c0e879cd86c02 (worktree /home/user/w-154)
+
+$ timeout 120 node /home/user/w-154/scripts/hardcoded-ja/check.mjs
+OK: 日本語の文字列リテラルは増えていません (合計 270 個)
+exit=0
+
+$ timeout 120 node /home/user/w-154/scripts/sync-ai-rule.mjs --check
+AI rule files already in sync
+exit=0
+
+$ timeout 120 git -C /home/user/w-154 diff --check origin/master...HEAD
+exit=0
+
+$ node scratchpad/r3-keys.mjs (dup keys / R.string refs in PR files)
+values/strings.xml: 254 keys, dups=[], markers=false
+values-en/strings.xml: 253 keys, dups=[], markers=false
+only ja: ["app_name"] only en: []
+androidApp/src/main/java/com/calendaralarm/engine/RingingActivity.kt: refs=1 missing=[]
+   api 469: "${com.calendaralarm.shared.weather.WeatherApi.describe(weather.weatherCode)}" +
+androidApp/src/main/java/com/calendaralarm/engine/RingingOverlay.kt: refs=1 missing=[]
+androidApp/src/main/java/com/calendaralarm/ui/SettingsScreen.kt: refs=1 missing=[]
+   api 614: HealthRow(stringResource(p.label), ok) {
+   api 1524: palette.label,
+exit=0
+
+$ git -C /home/user/w-154 show --remerge-diff --format= f4f63de | wc -l   (0 = clean auto-merge)
+0
