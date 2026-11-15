@@ -3,8 +3,9 @@ name: (verify) alarm stop E2E (emulator)
 # 鳴動中の停止UIと停止経路をエミュレータ (API 35 / x86_64) で検証する。
 # 公開リポジトリなので GitHub-hosted ubuntu-latest (KVM 有り) は無料。
 #
-# PR / emu-verify/** への push では 2 レーンを並べる:
+# PR / emu-verify/** への push では 3 レーンを並べる:
 #   fix              : 対象コミット。unlocked / race / locked / locked_screen_on の全シナリオ PASS が期待値
+#   fix-minified     : 同じコミットを release と同じ R8 (縮小・難読化・最適化) で作った e2eMinified variant (署名だけ debug 鍵) で。release が出す APK でも停止経路が壊れないことの門 (#220)
 #   control-3d106817 : FAD 配布版 (オーバーレイ抑止ゲート入り) を陰性対照に同じシナリオを流し、
 #                      停止UI欠落 (STOP_UI_MISSING) を再現できること = テストがバグを検出できることを確かめる
 # workflow_dispatch では任意の ref を 1 レーンで検証する。
@@ -31,11 +32,17 @@ on:
         required: true
         default: unlocked race locked locked_screen_on
         type: string
+      minify:
+        description: release と同じ R8 (難読化あり) の e2eMinified APK で検証する
+        required: false
+        default: false
+        type: boolean
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - androidApp/src/main/**
       - androidApp/build.gradle.kts
+      - androidApp/proguard-rules.pro
       - shared/src/**
       - gradle/**
       - scripts/emulator/**
@@ -73,6 +80,7 @@ jobs:
           INPUT_APP_REF: ${{ inputs.app_ref }}
           INPUT_EXPECT: ${{ inputs.expect }}
           INPUT_SCENARIOS: ${{ inputs.scenarios }}
+          INPUT_MINIFY: ${{ inputs.minify }}
         run: |
           if [ "$EVENT" = workflow_dispatch ]; then
             # grep は行単位で照合し改行入りの値を通すので、値全体を bash の正規表現で照合する
@@ -83,12 +91,13 @@ jobs:
             if [ "$INPUT_EXPECT" = stop-ui-missing ] && [ "$INPUT_SCENARIOS" != unlocked ]; then
               echo "stop-ui-missing (negative control) runs the unlocked scenario only" >&2; exit 1
             fi
-            lanes=$(jq -cn --arg ref "${INPUT_APP_REF:-$HEAD_SHA}" --arg exp "$INPUT_EXPECT" --arg sc "$INPUT_SCENARIOS" \
-              '[{name: "dispatch", app_ref: $ref, expect: $exp, scenarios: $sc}]')
+            lanes=$(jq -cn --arg ref "${INPUT_APP_REF:-$HEAD_SHA}" --arg exp "$INPUT_EXPECT" --arg sc "$INPUT_SCENARIOS" --argjson mn "${INPUT_MINIFY:-false}" \
+              '[{name: "dispatch", app_ref: $ref, expect: $exp, scenarios: $sc, minify: $mn}]')
           else
             lanes=$(jq -cn --arg head "$HEAD_SHA" --arg ctl "$CONTROL_SHA" \
-              '[{name: "fix", app_ref: $head, expect: "pass", scenarios: "unlocked race locked locked_screen_on"},
-                {name: "control-3d106817", app_ref: $ctl, expect: "stop-ui-missing", scenarios: "unlocked"}]')
+              '[{name: "fix", app_ref: $head, expect: "pass", scenarios: "unlocked race locked locked_screen_on", minify: false},
+                {name: "fix-minified", app_ref: $head, expect: "pass", scenarios: "unlocked race locked locked_screen_on", minify: true},
+                {name: "control-3d106817", app_ref: $ctl, expect: "stop-ui-missing", scenarios: "unlocked", minify: false}]')
           fi
           echo "lanes=$lanes" >> "$GITHUB_OUTPUT"
           echo "$lanes" | jq .
@@ -129,7 +138,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Inject E2E harness and build debug APK
+      - name: Inject E2E harness and build APK (debug, or e2eMinified for the minify lane)
+        env:
+          E2E_MINIFIED: ${{ matrix.lane.minify }}
         run: bash verifier/scripts/ci.sh emulator-build app
 
       - name: Enable KVM
@@ -151,7 +162,7 @@ jobs:
           disable-animations: true
           # -noaudio は付けない (USAGE_ALARM プレイヤーの再生状態を検証するため)
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -camera-back none -camera-front none
-          script: bash verifier/scripts/ci.sh emulator-run "$GITHUB_WORKSPACE/app/androidApp/build/outputs/apk/debug/androidApp-debug.apk" "$GITHUB_WORKSPACE/out"
+          script: bash verifier/scripts/ci.sh emulator-run "$GITHUB_WORKSPACE/app/androidApp/build/outputs/apk/${{ matrix.lane.minify && 'e2eMinified' || 'debug' }}/androidApp-${{ matrix.lane.minify && 'e2eMinified' || 'debug' }}.apk" "$GITHUB_WORKSPACE/out"
 
       - name: Evaluate against lane expectation
         if: always()
