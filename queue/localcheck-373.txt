@@ -1,0 +1,9 @@
+LOCAL CHECK PR #373 head 7e8e5a1ee11a2c3cce2e77b97237b8e3eceecb20 (worktree /home/user/w-i18n-367)
+7e8e5a1ee11a2c3cce2e77b97237b8e3eceecb20
+2026-11-15T08:32Z
+$ timeout 120 node /home/user/w-i18n-367/scripts/hardcoded-ja/check.mjs
+OK: 日本語の文字列リテラルは増えていません (合計 270 個)
+exit code: 0
+$ timeout 120 node /home/user/w-i18n-367/scripts/sync-ai-rule.mjs --check
+AI rule files already in sync
+exit code: 0
