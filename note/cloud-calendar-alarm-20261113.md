@@ -1,4 +1,4 @@
-STATE PAUSED 2026-11-15T09:01:32Z | personal-account lane | PAUSE from managing session "side-personal" (allowance guard) | do not resume until RESUME
+STATE RUNNING 2026-11-15T09:56:10Z | personal-account lane | RESUME from side-personal: Opus lead, Sonnet for mechanical steps, no Fable; settle every open PR before any new task (owner); CI/hooks/flaky first, then oldest iteration; max 2 members; then HANDOFF + DONE-FOR-NOW
 HANDOFF 2026-11-15T09:01:32Z (PAUSE; no subagent alive; every branch pushed, all worktrees clean)
 - Done this session (2026-11-15, merged with REVIEW + evidence + GATE, squash, head = GATE head): #413 4712896, #414 5fea7b2, #412 e224f93 (closed #375), #396 6ba650e (closed #306), #397 6322c7e, #363 2115757, #365 ff477c2 (closed #271 #291), #419 2dce06b, #420 9edabf1. Issues posted: #415 #416 #417 #418 (design gaps). Comments: #367 (leftovers after #373), #307.
 - Half done:
@@ -449,3 +449,7 @@ DECIDED 2026-11-15T09:00:57Z | #188: spec wording 決定 for fonts and iOS scope
 needs owner | #188 fonts: no font picker, fixed bundled fonts — yes/no (default yes) | #188 iOS: follow the theme per screen only, large buttons Android only — yes/no (default yes)
 FU-emu-2 | keyguard-after-stop check records UNLOCKED_BY_STOP when adb is offline (job 132756966270): treat a failed capture as INFRA_ERROR with a retry, like the pre-stop capture (#375/#412) | fold with FU-emu-1 into one PR
 HOUR 2026-11-15T09:01:32Z | merged 3 since 08:17Z (#365 ff477c2, #419 2dce06b, #420 9edabf1) | session total merged 9 | closed by merge #271 #291 | issues posted 4 (#415-#418) | open PR 8->7 (work: #373 #188 #191) | blocked: emulator lane red twice on #373, TroubleshootingFlagTest timeout on #188, no local Gradle, no job re-run | PAUSE received, stopped
+RESUME 2026-11-15T09:56:10Z | rules: owner 「現在の起票されているPRの解消を全て達成してから新規タスクに臨む。」; no new issue/branch/feature; settle = merge, close with reason, or name the one thing it waits for
+373 | LAND 2026-11-15T09:56:10Z | hosted 7 success 1 neutral on 77fb178 (verify fix-minified green on the third run) + evidence/373-77fb178.png + GATE https://github.com/kouiso/calendar-alarm/pull/373#issuecomment-6892626225 | merged cea7184 (squash, head = GATE head) | Refs #367 (stays open) | DEVICE follow-up: en shots of 3-day labels, theme names, fresh-install timer names
+188 191 | members (Opus) running: #188 base merge + review must 2 (spec 決定 -> 判断待ち) + line numbers + body; #191 base merge only
+DECIDED 2026-11-15T09:56:10Z | no new branch for the TroubleshootingFlagTest timeout during this RESUME (owner rule: open PRs first, no new branch); #188's push re-runs build; if it is red again the failure is named as #188's blocker together with the device shots | revert open the investigation branch
