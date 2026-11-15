@@ -43,7 +43,9 @@ class TitleMatchRuleTest {
             Row("在宅", true, EventType.WORKPLACE, EventType.EVENT),
             // 正規化は題全体の一致の側だけ。今までの規則は小文字化だけで部分一致を見る
             Row("ＡＢＳＥＮＴ", false, EventType.ABSENCE, EventType.EVENT),
-            Row("Out of office", false, EventType.ABSENCE, EventType.WORKPLACE),
+            // Out と of の間は NBSP (U+00A0) をわざと入れている。題全体の一致は空白に畳むので「out of office」になる。
+            // 今までの規則は畳まないので「out of office」を含まず、次に見る「office」の部分一致で勤務場所になる
+            Row("Out\u00A0of office", false, EventType.ABSENCE, EventType.WORKPLACE),
             // ooo は語に無い。空の題はどの語とも一致しない
             Row("OOO", false, EventType.EVENT, EventType.EVENT),
             Row("", false, EventType.EVENT, EventType.EVENT),
