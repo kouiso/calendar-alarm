@@ -11,6 +11,7 @@ import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
 import com.calendaralarm.shared.model.TitleCodeSettings
+import com.calendaralarm.shared.model.TitleMatchRule
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -70,6 +71,8 @@ object AlarmExpander {
          *  指定したイベントはそれが全体を置き換える (個別設定の上書き, #160 引継)。
          *  triggerAtMillis が同じ鳴動は開始オフセット側を優先して重複させない。 */
         commonExtraOffsets: List<Int> = emptyList(),
+        /** 題から種類を推定する規則 (#306)。iOS が通る SharedBridge.expand だけが LEGACY_SUBSTRING を渡す (#307 まで)。 */
+        titleMatchRule: TitleMatchRule = TitleMatchRule.WHOLE_TITLE_FOR_TIMED,
     ): List<AlarmInstance> {
         val result = mutableListOf<AlarmInstance>()
         for (event in events) {
@@ -77,7 +80,7 @@ object AlarmExpander {
             val rule = calendarRules[event.calendarId] ?: defaultRule
             val override = overrides[event.instanceKey]
             if (!rule.enabled || override?.action == EventAction.MUTE) continue
-            if (!passesEventFilters(event, override, inviteFilter, eventTypeFilter)) continue
+            if (!passesEventFilters(event, override, inviteFilter, eventTypeFilter, titleMatchRule)) continue
             // 終日イベントは startMillis が UTC 0時。深夜に鳴らさないため
             // イベント日のローカル allDayMinutes (既定9:00) に倒す。負数なら鳴らさない。
             val eventStart = if (event.allDay) {
@@ -138,17 +141,19 @@ object AlarmExpander {
     /**
      * 予定の絞り込み (招待・種類・予定あり／なし) を通るか。予約の展開と予定一覧の表示が同じ判定を使う (#79)。
      * 判定の順番: 予定一つへの個別指定 → 招待 → 種類 → 予定あり／なし。
-     * 個別に「アラーム」を選んだ予定は、絞り込みに関係なく通す (一つの予定への指定が最も具体的な意思表示のため)
+     * 個別に「アラーム」を選んだ予定は、絞り込みに関係なく通す (一つの予定への指定が最も具体的な意思表示のため)。
+     * [titleMatchRule] は題から種類を推定する規則 (#306。expandEvents を参照)
      */
     fun passesEventFilters(
         event: CalendarEvent,
         override: EventOverride?,
         inviteFilter: InviteFilter,
         eventTypeFilter: EventTypeFilter,
+        titleMatchRule: TitleMatchRule = TitleMatchRule.WHOLE_TITLE_FOR_TIMED,
     ): Boolean {
         if (override?.action == EventAction.MUTE) return false
         if (override?.action == EventAction.ALARM) return true
-        return inviteFilter.allows(event.inviteStatus) && eventTypeFilter.allows(event)
+        return inviteFilter.allows(event.inviteStatus) && eventTypeFilter.allows(event, titleMatchRule)
     }
 
     /**
