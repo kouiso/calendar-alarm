@@ -1,0 +1,97 @@
+CHECKS | PR #399 | head fe8be934726eb9b00e741e0869ec3896cc5e4766
+verify (fix-minified) | success | 2026-11-14T14:23:29Z | https://github.com/kouiso/calendar-alarm/actions/runs/43603694016/job/132473675008
+verify (control-3d106817) | success | 2026-11-14T14:18:49Z | https://github.com/kouiso/calendar-alarm/actions/runs/43603694016/job/132473674970
+verify (fix) | success | 2026-11-14T14:21:30Z | https://github.com/kouiso/calendar-alarm/actions/runs/43603694016/job/132473674915
+CodeRabbit | neutral | 2026-11-14T14:13:00Z | https://github.com/kouiso/calendar-alarm/runs/132473664575
+build | success | 2026-11-14T14:15:06Z | https://github.com/kouiso/calendar-alarm/actions/runs/43603693975/job/132473649539
+i18n-check | success | 2026-11-14T14:13:07Z | https://github.com/kouiso/calendar-alarm/actions/runs/43603693975/job/132473649328
+plan | success | 2026-11-14T14:13:02Z | https://github.com/kouiso/calendar-alarm/actions/runs/43603694016/job/132473648993
+ios-build | success | 2026-11-14T14:16:31Z | https://github.com/kouiso/calendar-alarm/actions/runs/43603693984/job/132473648958
+contract | success | 2026-11-14T14:13:05Z | https://github.com/kouiso/calendar-alarm/actions/runs/43603693989/job/132473648946
+run 43603694016 head_sha fe8be934726eb9b00e741e0869ec3896cc5e4766 (actions_get get_workflow_run)
+--- verify (fix-minified) job 132473675008: key log lines (line no. = position in the 945-line job log)
+124:2026-11-14T14:13:11.4507641Z HEAD is now at 5db74b4 Merge fe8be934726eb9b00e741e0869ec3896cc5e4766 into 3d251e402d4b665f8eb7350edcaa0032a7fa05ba
+239:2026-11-14T14:13:13.5836179Z HEAD is now at fe8be93 fix(build): run the stop E2E on an R8 variant equivalent to release (#220)
+300:    "minify": true
+389:2026-11-14T14:13:24.4935955Z   E2E_MINIFIED: true
+393:2026-11-14T14:13:30.6617137Z Calculating task graph as no cached configuration is available for tasks: :androidApp:assembleE2eMinified
+515:2026-11-14T14:15:12.6611657Z > Task :androidApp:minifyE2eMinifiedWithR8
+526:2026-11-14T14:15:29.9654974Z > Task :androidApp:lintVitalE2eMinified
+528:2026-11-14T14:17:00.5607050Z > Task :androidApp:convertShrunkResourcesToBinaryE2eMinified
+529:2026-11-14T14:17:01.8607554Z > Task :androidApp:optimizeE2eMinifiedResources
+531:2026-11-14T14:17:02.4621154Z > Task :androidApp:assembleE2eMinified
+543:2026-11-14T14:17:02.4632146Z BUILD SUCCESSFUL in 3m 37s
+773:2026-11-14T14:18:29.3874711Z [command]/usr/bin/sh -c bash verifier/scripts/ci.sh emulator-run "$GITHUB_WORKSPACE/app/androidApp/build/outputs/apk/e2eMinified/androidApp-e2eMinified.apk" "$GITHUB_WORKSPACE/out"
+794:2026-11-14T14:19:49.7098134Z [14:19:49] RESULT unlocked: PASS OK stop UI at +12s; stopped 271ms after tap (audio/service/notification); stop UI gone
+800:2026-11-14T14:20:53.5409839Z [14:20:53] RESULT race: PASS OK early stop stopped in 116ms; no audio/service/notification/overlay for 10s
+811:2026-11-14T14:22:04.7251197Z [14:22:04] RESULT locked: PASS OK single stop UI (ringing_activity=yes overlay=0); stopped 280ms after tap; keyguard kept
+822:2026-11-14T14:23:18.6530341Z [14:23:18] RESULT locked_screen_on: PASS OK single stop UI (ringing_activity=yes overlay=0); stopped 228ms after tap; keyguard kept
+826:2026-11-14T14:23:22.4201440Z - apk: /home/runner/work/calendar-alarm/calendar-alarm/app/androidApp/build/outputs/apk/e2eMinified/androidApp-e2eMinified.apk
+--- verify (fix) job 132473674915: key log lines (no R8 task; debug APK)
+300:    "minify": false
+391:2026-11-14T14:13:26.4669156Z   E2E_MINIFIED: false
+395:2026-11-14T14:13:33.0362916Z Calculating task graph as no cached configuration is available for tasks: :androidApp:assembleDebug
+508:2026-11-14T14:14:48.8357107Z BUILD SUCCESSFUL in 1m 22s
+758:2026-11-14T14:17:50.7602558Z [14:17:50] RESULT unlocked: PASS OK stop UI at +12s; stopped 669ms after tap (audio/service/notification); stop UI gone
+764:2026-11-14T14:18:54.1156174Z [14:18:54] RESULT race: PASS OK early stop stopped in -690ms; no audio/service/notification/overlay for 10s
+775:2026-11-14T14:20:05.1847565Z [14:20:05] RESULT locked: PASS OK single stop UI (ringing_activity=yes overlay=0); stopped 803ms after tap; keyguard kept
+786:2026-11-14T14:21:19.3791043Z [14:21:19] RESULT locked_screen_on: PASS OK single stop UI (ringing_activity=yes overlay=0); stopped 942ms after tap; keyguard kept
+790:2026-11-14T14:21:23.0542370Z - apk: /home/runner/work/calendar-alarm/calendar-alarm/app/androidApp/build/outputs/apk/debug/androidApp-debug.apk
+R8 task lines in fix lane: 0
+--- local commands (worktree rv399 at fe8be93; Gradle not run: dl.google.com blocked)
+$ node --test scripts/hardcoded-ja/check.test.mjs
+# pass 27
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 128.453509
+=> exit 0
+
+$ node scripts/hardcoded-ja/check.mjs
+OK: 日本語の文字列リテラルは増えていません (合計 309 個)
+=> exit 0
+
+$ node scripts/sync-ai-rule.mjs --check
+AI rule files already in sync
+=> exit 0
+
+$ bash -n scripts/ci.sh
+=> exit 0
+
+$ bash -n scripts/emulator/inject_harness.sh
+=> exit 0
+
+$ bash -n scripts/test-ci-contract.sh
+=> exit 0
+
+$ bash scripts/emulator/test_run_scenarios_retry.sh
+ok   err,err,ok → 3 回目で採れる (result='1 1 1' captures=3)
+ok   ずっと err → 初回+採り直し3回で諦める (result='err err err' captures=4)
+ok   0 1 1 は採り直さない (鳴っていないものを通さない) (result='0 1 1' captures=1)
+ok   初回から採れる値はそのまま (result='1 1 1' captures=1)
+ok   state_capture_failed err
+ok   state_capture_failed 0 1 1
+=> exit 0
+
+$ python3 -m unittest scripts/emulator/test_emu_check.py
+...................
+----------------------------------------------------------------------
+Ran 19 tests in 0.814s
+
+OK
+=> exit 0
+
+$ extracted contract (no go-task): head ci.sh
+A minified build rc=0 cmd=[gradlew :androidApp:assembleE2eMinified --stacktrace] harness_e2e=yes harness_debug=no
+B no-mapping rc=1 msg=[R8 did not run: mapping.txt is missing for e2eMinified]
+C E2E_MINIFIED=false rc=0 cmd=[gradlew :androidApp:assembleDebug --stacktrace] harness_debug=yes
+$ mutation 1: guard (test -s mapping) removed from ci.sh
+53,55d52
+<     if [ "$variant" = e2eMinified ]; then
+<       test -s "$app_dir/androidApp/build/outputs/mapping/e2eMinified/mapping.txt" || { echo 'R8 did not run: mapping.txt is missing for e2eMinified' >&2; exit 1; }
+<     fi
+M1 no-mapping rc=0 (0 = contract assertion 'expected_failure' would fire)
+$ mutation 2: base (origin/master) ci.sh
+M2 base rc=0 cmd=[gradlew :androidApp:assembleDebug --stacktrace] harness_e2e=no
+hosted: 8 success / 0 fail / 0 cancelled / 0 pending (+1 neutral) | local checks pass 13 fail 0 | 2026-11-15T01:28:55Z
