@@ -66,8 +66,22 @@ if state_capture_failed "0 1 1"; then echo "FAIL state_capture_failed 0 1 1" >&2
 
 # 呼び出し側 (run_scenarios.sh の 2 か所) の並び: stop_state_retry → state_capture_failed →
 # FAIL INFRA_ERROR → probes_ringing。採取失敗を probes_ringing より先に INFRA_ERROR にしないと、
-# 採れなかっただけの回が PROBE_PRECONDITION (鳴っていない) に化ける。行番号は grep で拾うので、行が動いても追従する
-lines_of() { grep -nE "$1" "$SRC" | cut -d: -f1; }
+# 採れなかっただけの回が PROBE_PRECONDITION (鳴っていない) に化ける。行番号は grep で拾うので、行が動いても追従する。
+# 行頭 (空白の後) が # の行は数えない。コメントにして殺した行を「ある」と読まないため
+lines_of() { grep -nE "$1" "$SRC" | grep -vE '^[0-9]+:[[:space:]]*#' | cut -d: -f1; }
+# INFRA_ERROR の枝が return で抜けることも留める。return が無いと、採取失敗を記録したあと
+# probes_ringing へ落ちて、同じ回に PROBE_PRECONDITION をもう 1 件記録する。
+# 見るのは「if state_capture_failed の行の次から最初の fi まで」の、コメントでない最後の行。
+# 出力は "fi の行番号<TAB>その行"。枝の中に if を入れ子にしたら、ここも直すこと
+branch_last_cmd() {
+  awk -v from="$1" '
+    NR <= from { next }
+    /^[ \t]*#/ { next }
+    /^[ \t]*fi[ \t]*$/ { print NR "\t" last; exit }
+    { last = $0 }
+  ' "$SRC"
+}
+ends_with_return='(^|;)[[:space:]]*return[[:space:]]*$'
 mapfile -t L_RETRY < <(lines_of 'st=\$\(STATE_KEEP="[^"]*" stop_state_retry\)')
 mapfile -t L_CAPFAIL < <(lines_of '^[[:space:]]*if state_capture_failed "\$st"; then')
 mapfile -t L_INFRA < <(lines_of 'record "\$name" FAIL INFRA_ERROR "could not capture pre-stop')
@@ -84,6 +98,14 @@ else
       echo "ok   呼び出し側 $((i + 1)) の順序 (L$r retry < L$c state_capture_failed < L$f INFRA_ERROR < L$p probes_ringing)"
     else
       echo "FAIL 呼び出し側 $((i + 1)) の順序: retry=L$r capfail=L$c infra=L$f probes=L$p (want 昇順、次の呼び出し L$next より前)" >&2
+      fail=1
+    fi
+    e='' last=''
+    IFS=$'\t' read -r e last < <(branch_last_cmd "$c")
+    if [ -n "$e" ] && [ "$f" -lt "$e" ] && [ "$e" -lt "$p" ] && [[ "$last" =~ $ends_with_return ]]; then
+      echo "ok   呼び出し側 $((i + 1)) の INFRA_ERROR の枝は return で抜ける (L$c if 〜 L$e fi)"
+    else
+      echo "FAIL 呼び出し側 $((i + 1)) の INFRA_ERROR の枝が return で抜けない: if=L$c infra=L$f fi=L${e:-?} probes=L$p 最後の行='$last'" >&2
       fail=1
     fi
   done
