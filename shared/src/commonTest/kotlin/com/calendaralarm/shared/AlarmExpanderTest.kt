@@ -154,6 +154,53 @@ class AlarmExpanderTest {
         assertEquals(ldt("2026-10-08T09:00:00").toEpochMilliseconds(), outDefault.single().triggerAtMillis)
     }
 
+    private fun expandAllDayDefault(startMillis: Long): List<Long> =
+        AlarmExpander.expandEvents(
+            listOf(allDayEvent("ad", startMillis)), mapOf("c1" to AlarmRule()),
+            // 月末ケースが窓に入るよう、既定の horizon ではなく 11月末までの窓で展開する
+            emptyMap(), emptySet(), now, ldt("2026-11-30T08:00:00"), zone = TZ,
+        ).map { it.triggerAtMillis }
+
+    @Test
+    fun `終日開始の契約を固定_UTC0時はその日付のローカル9時に展開される`() {
+        // 契約: 終日の startMillis は日付の UTC 0時 (Android CalendarContract の形)。
+        // 東京でも日付は UTC 側で読むので 10/08 の UTC 0時 → 10/08 JST 9:00 (既定 540分)。
+        val utcMidnight = Instant.parse("2026-10-08T00:00:00Z").toEpochMilliseconds()
+        assertEquals(
+            listOf(ldt("2026-10-08T09:00:00").toEpochMilliseconds()),
+            expandAllDayDefault(utcMidnight),
+        )
+    }
+
+    @Test
+    fun `終日開始の契約を固定_ローカル0時を渡すと前日に展開される`() {
+        // 現状の挙動を固定するだけで、望ましい仕様という意味ではない。
+        // JST 10/08 0:00 (= UTC 10/07 15:00) は UTC 日付が 10/07 なので 10/07 JST 9:00 になる。
+        // 終日の開始をローカル0時で渡す実装が入ると日付が1日ずれる、という警告になる。
+        val localMidnight = ldt("2026-10-08T00:00:00").toEpochMilliseconds()
+        assertEquals(Instant.parse("2026-10-07T15:00:00Z").toEpochMilliseconds(), localMidnight)
+        assertEquals(
+            listOf(ldt("2026-10-07T09:00:00").toEpochMilliseconds()),
+            expandAllDayDefault(localMidnight),
+        )
+    }
+
+    @Test
+    fun `終日開始の契約を固定_月末でも日付は UTC 日付どおりで月をまたいでずれる`() {
+        // 月末の UTC 0時 (10/31) は 10/31 JST 9:00。
+        val utcMonthEnd = Instant.parse("2026-10-31T00:00:00Z").toEpochMilliseconds()
+        assertEquals(
+            listOf(ldt("2026-10-31T09:00:00").toEpochMilliseconds()),
+            expandAllDayDefault(utcMonthEnd),
+        )
+        // 翌月1日のローカル0時 (11/01 JST 0:00 = UTC 10/31 15:00) は前月末 10/31 に落ちる (現状の挙動)。
+        val localMonthStart = ldt("2026-11-01T00:00:00").toEpochMilliseconds()
+        assertEquals(
+            listOf(ldt("2026-10-31T09:00:00").toEpochMilliseconds()),
+            expandAllDayDefault(localMonthStart),
+        )
+    }
+
     @Test
     fun `複数日にまたがる終日予定は開始日だけ鳴る`() {
         // 仕様 §7.3: 3日間の終日予定 (end は4日目の0時・排他) も開始日の終日として1回だけ展開する

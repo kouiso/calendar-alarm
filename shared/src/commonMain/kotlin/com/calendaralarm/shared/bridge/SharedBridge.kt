@@ -12,6 +12,7 @@ import com.calendaralarm.shared.model.EventTypeFilter
 import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.StandaloneAlarm
 import com.calendaralarm.shared.model.TitleCodeSettings
+import com.calendaralarm.shared.model.TitleMatchRule
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.serialization.Serializable
@@ -73,6 +74,7 @@ object SharedBridge {
      * - 単発/曜日アラームは [standaloneDays] 日分
      * - イベントはカレンダールールと個別上書きを適用
      * - イベント由来インスタンスの snoozeMinutes はグローバル既定で上書き
+     * ただし題から種類を推定する規則だけは Android と違い、#307 まで #306 より前の部分一致 (TitleMatchRule.LEGACY_SUBSTRING)
      */
     fun expand(requestJson: String): String {
         val req = json.decodeFromString(ExpandRequest.serializer(), requestJson)
@@ -103,6 +105,10 @@ object SharedBridge {
             importEventReminders = req.importEventReminders,
             muteAll = req.muteAll,
             commonExtraOffsets = req.commonExtraOffsets,
+            // iOS の予定一覧 (Swift の写し Models.swift の classifyEventType) は #307 まで #306 より前の部分一致なので、
+            // 予約も同じ規則にして iOS を #306 の前と同じに保つ (#201 判断B「iOS は #307 まで別のまま」)。
+            // Android (AlarmRepository) は既定の WHOLE_TITLE_FOR_TIMED を使う
+            titleMatchRule = TitleMatchRule.LEGACY_SUBSTRING,
         )
         desired += expanded.map { it.copy(snoozeMinutes = req.defaultSnoozeMinutes) }
         // 一括ミュート: イベント側は expandEvents 内で ALARM を落としている。

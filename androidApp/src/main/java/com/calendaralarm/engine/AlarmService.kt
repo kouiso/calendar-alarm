@@ -203,8 +203,9 @@ class AlarmService : Service() {
                         // クラッシュループになるので見逃し扱いにして静かに畳む。
                         synchronized(ringLock) { requestedIds -= id }
                         if (!isDismissed(id)) {
-                            app.container.repository.markMissed(id, "鳴動サービスの前面化がOSに拒否")
-                            MissedNotifier.post(this@AlarmService, null)
+                            if (app.container.repository.markMissed(id, "鳴動サービスの前面化がOSに拒否")) {
+                                MissedNotifier.post(this@AlarmService, null)
+                            }
                         }
                         releaseWaitingRings(id)
                         finishIfIdle()
@@ -446,8 +447,9 @@ class AlarmService : Service() {
         // 起動直後に延々鳴らし続けるより、見逃した事実を知らせる方が正しい。
         val overdueBy = System.currentTimeMillis() - instance.triggerAtMillis
         if (overdueBy > AlarmExpander.FIRE_GRACE.inWholeMilliseconds) {
-            repo.markMissed(id = instanceId, detail = "鳴動時刻から${overdueBy / 60_000}分経過")
-            MissedNotifier.post(this, instance.title)
+            if (repo.markMissed(id = instanceId, detail = "鳴動時刻から${overdueBy / 60_000}分経過")) {
+                MissedNotifier.post(this, instance.title)
+            }
             return null
         }
         // 「ロック解除までミュート」: 端末がロック中なら鳴らさず留保し、

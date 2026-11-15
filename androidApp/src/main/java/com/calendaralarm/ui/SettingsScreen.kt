@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -102,6 +103,7 @@ import com.calendaralarm.shared.logic.WeekCalendar
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventType
+import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.InviteStatus
 import com.calendaralarm.shared.model.TitleCodeSettings
 import com.calendaralarm.ui.theme.AppPalette
@@ -156,7 +158,7 @@ fun SettingsScreen(
         }
         // ---- 鳴動の状態 (前の権限カード) と最近の鳴動記録 (#51 PR3)。#121 の完了条件で先頭は鳴る時刻なので、その直下に置く ----
         item { Spacer(Modifier.height(8.dp)) }
-        item { RingStatusCard(context, repository, onOpenPermissions) }
+        item { RingStatusCard(context, repository, onOpenPermissions, muteAll = prefs?.muteAll == true) }
         // ---- 既定値: 🔔通知タイミング / 😴スヌーズ / ☁天気 ----
         item { Spacer(Modifier.height(12.dp)) }
         item {
@@ -169,7 +171,7 @@ fun SettingsScreen(
             ) {
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
                     // 通知タイミング
-                    IconSettingRow(Icons.Default.Notifications) {
+                    IconChipRow(Icons.Default.Notifications) {
                         listOf(0, 5, 10, 15).forEach { m ->
                             FilterChip(
                                 selected = (prefs?.defaultMinutesBefore ?: 0) == m,
@@ -493,6 +495,28 @@ internal fun IconSettingRow(icon: ImageVector, content: @Composable () -> Unit) 
 }
 
 /**
+ * [IconSettingRow] のチップ用。入りきらない時は次の行へ折り返す (#204)。
+ * 1 行の Row だと、狭い画面や大きい文字で右端のチップが幅 0 に潰れて押せなかった。
+ * 見出しとスイッチの行 (Spacer の weight で右へ寄せる行) には使わない
+ */
+@Composable
+internal fun IconChipRow(icon: ImageVector, content: @Composable FlowRowScope.() -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        FlowRow(Modifier.weight(1f), itemVerticalAlignment = Alignment.CenterVertically) { content() }
+    }
+}
+
+/**
  * 設定の先頭「鳴動の状態」(#51 PR3)。前の権限カードをここへ移して名前を変えた。
  * 予定画面と同じ1行の状態、足りない許可と端末の設定、テストで鳴らす、最近の鳴動3件を1枚に置く。
  * 足りない物がある時だけ項目の一覧を開いておく。テストで鳴らすは全部 OK の時も押せる。
@@ -502,6 +526,7 @@ private fun RingStatusCard(
     context: Context,
     repository: AlarmRepository,
     onOpenPermissions: () -> Unit,
+    muteAll: Boolean = false,
 ) {
     val activity = context as? Activity
     val tick = rememberResumeTick()
@@ -522,6 +547,7 @@ private fun RingStatusCard(
         recentMissed = recentMissed,
         hasNextAlarm = pending.isNotEmpty(),
         alarmMuted = !volumeOk,
+        allMuted = muteAll,
     )
     val ngCount = perms.count { !it.value } + listOf(volumeOk, batteryOk).count { !it }
     var expanded by remember(ngCount > 0) { mutableStateOf(ngCount > 0) }
@@ -559,7 +585,7 @@ private fun RingStatusCard(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("鳴動の状態", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    Text(status.line, style = MaterialTheme.typography.bodyMedium, color = statusColor)
+                    Text(ringStatusLine(status), style = MaterialTheme.typography.bodyMedium, color = statusColor)
                 }
                 Icon(
                     if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
@@ -942,20 +968,8 @@ private fun EventRulesCard(
                 TextButton(onClick = { showCodes = true }) { Text("編集") }
             }
             // 招待予定フィルタ
-            IconSettingRow(Icons.Default.FilterList) {
-                listOf(
-                    InviteStatus.ACCEPTED to "出席",
-                    InviteStatus.TENTATIVE to "未定",
-                    InviteStatus.NEEDS_ACTION to "未回答",
-                    InviteStatus.DECLINED to "辞退",
-                ).forEach { (s, label) ->
-                    FilterChip(
-                        selected = prefs.inviteFilter.allows(s),
-                        onClick = { scope.launch { settings.toggleInviteStatus(s); repository.resync("settings") } },
-                        label = { Text(label, maxLines = 1) },
-                        modifier = Modifier.padding(end = 4.dp),
-                    )
-                }
+            InviteFilterRow(prefs.inviteFilter) { s ->
+                scope.launch { settings.toggleInviteStatus(s); repository.resync("settings") }
             }
             // 鳴らす予定の種類と「予定なし」を一か所でまとめて切り替える (#79)
             EventTypeRingSwitches(
@@ -1297,7 +1311,7 @@ private fun RingingCard(
                 )
             }
             // スヌーズプリセット (鳴動画面の +N分 ボタンに出る一覧)
-            IconSettingRow(Icons.Default.Snooze) {
+            IconChipRow(Icons.Default.Snooze) {
                 listOf(1, 5, 10, 15, 20, 30, 45, 60, 90).forEach { m ->
                     val on = m in p.snoozePresets
                     FilterChip(
@@ -1656,6 +1670,26 @@ private fun RingTimesCard(appMinutesBefore: Int, useCalendarReminders: Boolean) 
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+        }
+    }
+}
+
+/** 招待予定のどの返事を鳴らすか。4 枚のチップ (出席・未定・未回答・辞退) を並べる */
+@Composable
+internal fun InviteFilterRow(filter: InviteFilter, onToggle: (InviteStatus) -> Unit) {
+    IconChipRow(Icons.Default.FilterList) {
+        listOf(
+            InviteStatus.ACCEPTED to "出席",
+            InviteStatus.TENTATIVE to "未定",
+            InviteStatus.NEEDS_ACTION to "未回答",
+            InviteStatus.DECLINED to "辞退",
+        ).forEach { (s, label) ->
+            FilterChip(
+                selected = filter.allows(s),
+                onClick = { onToggle(s) },
+                label = { Text(label, maxLines = 1) },
+                modifier = Modifier.padding(end = 4.dp),
+            )
         }
     }
 }

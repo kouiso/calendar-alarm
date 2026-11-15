@@ -126,6 +126,12 @@ class StartState(unittest.TestCase):
         self.assertEqual(start_state("0", "1", "0"), "dirty")
         self.assertEqual(start_state("0", "0", "1"), "dirty")
 
+    def test_pre_stop_states_for_retry_decision(self):
+        # #375: 止める前の採り直しは unknown の時だけ。"0 1 1" (再生だけ見えない) は採れた値なので採り直さず PROBE_PRECONDITION のまま
+        self.assertEqual(start_state("err", "err", "err"), "unknown")
+        self.assertEqual(start_state("0", "1", "1"), "dirty")
+        self.assertEqual(start_state("1", "1", "1"), "dirty")
+
 
 if __name__ == "__main__":
     unittest.main()

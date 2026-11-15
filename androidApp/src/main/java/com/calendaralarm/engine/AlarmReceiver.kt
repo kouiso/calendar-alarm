@@ -54,11 +54,11 @@ class AlarmReceiver : BroadcastReceiver() {
                                 } catch (e: Exception) {
                                     // FGS起動自体が拒否されるコンテキストがあり得る。
                                     // 見逃しに逃がす (同じ放送枠内で記録をコミットする)
-                                    repo.markMissed(
+                                    val missed = repo.markMissed(
                                         instanceId,
                                         "鳴動サービス起動がOSに拒否: ${e.javaClass.simpleName}",
                                     )
-                                    runCatching { MissedNotifier.post(context, null) }
+                                    if (missed) runCatching { MissedNotifier.post(context, null) }
                                 }
                             }
                         }
