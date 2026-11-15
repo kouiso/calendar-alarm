@@ -3,9 +3,11 @@ package com.calendaralarm
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -80,7 +82,7 @@ class SettingRowLayoutTest {
         assertEquals(InviteStatus.DECLINED, toggled)
     }
 
-    private fun showRow(content: @androidx.compose.runtime.Composable androidx.compose.foundation.layout.FlowRowScope.() -> Unit) {
+    private fun showRow(content: @Composable FlowRowScope.() -> Unit) {
         val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         activity.setContent {
             MaterialTheme {
