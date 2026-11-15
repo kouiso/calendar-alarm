@@ -44,21 +44,33 @@ class EventTypeTest {
     // ---- classifyEventType (タイトルフォールバック) ----
 
     @Test
-    fun タイトルから各種別を分類() {
-        assertEquals(EventType.BIRTHDAY, classifyEventType("田中さんの誕生日"))
-        assertEquals(EventType.BIRTHDAY, classifyEventType("Mika's birthday"))
-        assertEquals(EventType.ABSENCE, classifyEventType("夏季休暇"))
-        assertEquals(EventType.ABSENCE, classifyEventType("Out of office"))
-        assertEquals(EventType.WORKPLACE, classifyEventType("勤務場所: オフィス"))
-        assertEquals(EventType.WORKPLACE, classifyEventType("在宅勤務"))
-        assertEquals(EventType.TASK, classifyEventType("タスク: 請求書送付"))
-        assertEquals(EventType.EVENT, classifyEventType("定例ミーティング"))
+    fun 終日の予定はタイトルに語を含めば各種別を分類() {
+        assertEquals(EventType.BIRTHDAY, classifyEventType("田中さんの誕生日", allDay = true))
+        assertEquals(EventType.BIRTHDAY, classifyEventType("Mika's birthday", allDay = true))
+        assertEquals(EventType.ABSENCE, classifyEventType("夏季休暇", allDay = true))
+        assertEquals(EventType.ABSENCE, classifyEventType("Out of office", allDay = true))
+        assertEquals(EventType.WORKPLACE, classifyEventType("勤務場所: オフィス", allDay = true))
+        assertEquals(EventType.WORKPLACE, classifyEventType("在宅勤務", allDay = true))
+        assertEquals(EventType.TASK, classifyEventType("タスク: 請求書送付", allDay = true))
+        assertEquals(EventType.EVENT, classifyEventType("定例ミーティング", allDay = true))
+    }
+
+    @Test
+    fun 時刻のある予定はタイトル全体が語と一致した時だけ分類() {
+        assertEquals(EventType.BIRTHDAY, classifyEventType("誕生日", allDay = false))
+        assertEquals(EventType.ABSENCE, classifyEventType("Out of office", allDay = false))
+        assertEquals(EventType.WORKPLACE, classifyEventType("在宅勤務", allDay = false))
+        assertEquals(EventType.TASK, classifyEventType("TODO", allDay = false))
+        assertEquals(EventType.EVENT, classifyEventType("田中さんの誕生日", allDay = false))
+        assertEquals(EventType.EVENT, classifyEventType("夏季休暇", allDay = false))
+        assertEquals(EventType.EVENT, classifyEventType("タスク: 請求書送付", allDay = false))
+        assertEquals(EventType.EVENT, classifyEventType("定例ミーティング", allDay = false))
     }
 
     @Test
     fun 誕生日は他キーワードより優先() {
         // 「誕生日に休暇」→ BIRTHDAY が先勝ち
-        assertEquals(EventType.BIRTHDAY, classifyEventType("誕生日休暇"))
+        assertEquals(EventType.BIRTHDAY, classifyEventType("誕生日休暇", allDay = true))
     }
 
     // ---- resolveEventType (正本優先 + フォールバック) ----
@@ -73,8 +85,13 @@ class EventTypeTest {
 
     @Test
     fun googleType未付与や未知値はタイトル判定へフォールバック() {
-        assertEquals(EventType.BIRTHDAY, resolveEventType(event("母の誕生日", googleType = null)))
+        assertEquals(EventType.BIRTHDAY, resolveEventType(event("誕生日", googleType = null)))
         assertEquals(EventType.ABSENCE, resolveEventType(event("休暇", googleType = "futureType")))
+        assertEquals(EventType.EVENT, resolveEventType(event("母の誕生日", googleType = null)))
+        assertEquals(
+            EventType.BIRTHDAY,
+            resolveEventType(event("母の誕生日", googleType = null).copy(allDay = true)),
+        )
     }
 
     // ---- EventTypeFilter ----

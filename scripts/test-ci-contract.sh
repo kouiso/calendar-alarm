@@ -37,6 +37,14 @@ cat > "$fixture/gradlew" <<'GRADLE'
 #!/usr/bin/env bash
 printf '%s\n' "${0##*/} $*" >> "$COMMAND_LOG"
 if [ "${GRADLE_FAIL:-false}" = true ]; then exit 42; fi
+# R8 が動いた時だけ mapping.txt ができる (e2eMinified)。FAKE_NO_MAPPING=true は R8 が動かなかった状態を作る
+case "$*" in
+  *assembleE2eMinified*)
+    if [ "${FAKE_NO_MAPPING:-false}" != true ]; then
+      mkdir -p androidApp/build/outputs/mapping/e2eMinified
+      echo 'a.B -> c.D:' > androidApp/build/outputs/mapping/e2eMinified/mapping.txt
+    fi ;;
+esac
 GRADLE
 chmod +x "$fixture/gradlew"
 cp "$fixture/gradlew" "$fixture/app under test/gradlew"
@@ -66,6 +74,20 @@ test "$(cat "$COMMAND_LOG")" = 'gradlew :androidApp:assembleDebug --stacktrace'
 : > "$COMMAND_LOG"
 if (cd "$fixture"; bash scripts/ci.sh emulator-build "$fixture/app under test") > "$fixture/output" 2>&1; then expected_failure; fi
 test ! -s "$COMMAND_LOG"
+# R8 後の停止 E2E 用 variant (#220): E2E_MINIFIED=true は e2eMinified をビルドし、harness も同じ variant に入れる。debug には入れない
+min_app="$fixture/minified app"
+mkdir -p "$min_app"
+cp "$fixture/gradlew" "$min_app/gradlew"
+: > "$COMMAND_LOG"
+(cd "$fixture"; E2E_MINIFIED=true bash scripts/ci.sh emulator-build "$min_app") > "$fixture/output" 2>&1
+test -f "$min_app/androidApp/src/e2eMinified/AndroidManifest.xml"
+test ! -e "$min_app/androidApp/src/debug"
+test "$(cat "$COMMAND_LOG")" = 'gradlew :androidApp:assembleE2eMinified --stacktrace'
+# mapping.txt が無い (R8 が動いていない) なら門を落とす
+rm -rf "$min_app/androidApp"
+: > "$COMMAND_LOG"
+if (cd "$fixture"; FAKE_NO_MAPPING=true E2E_MINIFIED=true bash scripts/ci.sh emulator-build "$min_app") > "$fixture/output" 2>&1; then expected_failure; fi
+grep -q 'R8 did not run' "$fixture/output"
 mkdir -p "$fixture/results"
 printf 'fixture-only\n' > "$fixture/app.apk"
 export SCENARIOS='unlocked race locked locked_screen_on'

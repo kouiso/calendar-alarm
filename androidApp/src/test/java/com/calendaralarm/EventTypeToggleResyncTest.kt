@@ -147,6 +147,20 @@ class EventTypeToggleResyncTest {
     }
 
     @Test
+    fun `時刻のある予定は題に語を含むだけでは3種類にならず既定でも予約される(題全体の一致だけで判定する)`() = runBlocking {
+        for (title in listOf("出社して面談", "有休申請の締切", "Microsoft Office 研修", "オフィス周辺ランチ")) {
+            OneEventProvider.title = title
+            repository.resync("ring $title")
+            assertEquals(title, 1, pendingIds().size)
+            settings.toggleEventType(EventType.EVENT)
+            repository.resync("event off $title")
+            assertEquals("$title は予定として扱われ、予定をOFFにすると外れる", emptySet<String>(), pendingIds())
+            settings.toggleEventType(EventType.EVENT)
+            repository.resync("event on $title")
+        }
+    }
+
+    @Test
     fun `種類をONにして再同期すると予約され、OFFに戻して再同期すると予約済みのものが取り消される(現在の挙動を固定)`() = runBlocking {
         for ((type, title) in threeTypes) {
             OneEventProvider.title = title

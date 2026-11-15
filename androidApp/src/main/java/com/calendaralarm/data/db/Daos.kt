@@ -12,6 +12,10 @@ interface ScheduledInstanceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(items: List<ScheduledInstanceEntity>)
 
+    /** 復元後の初期化用 (#269)。予約の行は端末と時刻に結びつく。 */
+    @Query("DELETE FROM scheduled_instances")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM scheduled_instances WHERE state = 'PENDING'")
     suspend fun pending(): List<ScheduledInstanceEntity>
 
@@ -133,6 +137,10 @@ interface EventOverrideDao {
 
     @Query("DELETE FROM event_overrides WHERE instanceKey = :key")
     suspend fun delete(key: String)
+
+    /** 復元後の初期化用 (#269)。予定ごとの指定は端末の予定 ID に結びつくので、別端末へは持ち越さない。 */
+    @Query("DELETE FROM event_overrides")
+    suspend fun deleteAll()
 }
 
 @Dao
