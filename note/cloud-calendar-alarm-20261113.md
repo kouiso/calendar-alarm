@@ -1,5 +1,5 @@
-STATE DONE-FOR-NOW 2026-11-15T10:01:46Z | personal-account lane | every open PR settled under the owner's rule; no new task started; new work in this period goes to Horsemanager first
-HANDOFF 2026-11-15T10:01:46Z (DONE-FOR-NOW after RESUME; no member alive; every branch pushed, worktrees clean)
+STATE PAUSED 2026-11-15T10:12:09Z | personal-account lane | PAUSE (allowance guard of the managing session) after DONE-FOR-NOW; do not resume until RESUME; HANDOFF below (DONE-FOR-NOW block) is current
+HANDOFF 2026-11-15T10:01:46Z, confirmed current at 2026-11-15T10:12:09Z on PAUSE (DONE-FOR-NOW after RESUME; no member alive; every branch pushed, worktrees clean)
 - Done in RESUME: #373 merged cea7184 (GATE https://github.com/kouiso/calendar-alarm/pull/373#issuecomment-6892626225; Refs #367, stays open). #188 base merge f4f63de + review must 2 fixed in 033d15f (spec: fonts and iOS scope now 案・持ち主の判断待ち; §7.5 line numbers at 322-324 recomputed, setAutoSnoozeMax write site added); PR body updated. #191 base merge 4cd2b80 (conflicts SettingsScreen.kt + strings.xml, both sides kept).
 - Done earlier today (2026-11-15): #413 #414 #412 #396 #397 #363 #365 #419 #420 merged; issues #415-#418 posted.
 - Open PRs and the one thing each waits for:
