@@ -1,0 +1,18 @@
+hosted check rollup, head b6364b6140a8a352d00190ed07c4f4df9e74ce72, read at 2026-11-15T05:41:34Z
+  build success 05:29:11Z-05:33:40Z (scripts/ci.sh all: shared jvmTest + androidApp unit tests + lint)
+  ios-build success 05:29:19Z-05:32:33Z
+  verify (fix) success 05:29:19Z-05:36:45Z (emulator stop E2E)
+  verify (fix-minified) success 05:29:19Z-05:40:42Z
+  verify (control-3d106817) success 05:29:19Z-05:35:42Z
+  i18n-check success
+  plan success
+  CodeRabbit neutral
+  => 7 success / 0 fail / 0 cancelled / 0 pending, 1 neutral
+
+# head b6364b6140a8a352d00190ed07c4f4df9e74ce72 in /tmp/rv396 at 2026-11-15T05:38:52Z
+$ node scripts/hardcoded-ja/check.mjs
+OK: 日本語の文字列リテラルは増えていません (合計 309 個)
+exit=0
+$ node scripts/sync-ai-rule.mjs --check
+AI rule files already in sync
+exit=0
