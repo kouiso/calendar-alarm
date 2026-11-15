@@ -1,0 +1,11 @@
+REVIEW | reviewer: general-purpose subagent, Opus 5.5 medium | authored no commit on this PR | head c3e7a5ad0ff0795e801f4ed5bf4f2eb781ed050d | axes: pass line, design, scope, tests, body vs diff, evidence | verdict PASS | must 0 want 0 nit 3
+- [nit] doc/spec/kmp-replacement.md:286 — 前回の nit はまだ当てはまる。「いつでも何回でも押せる」は回数の面では正しいが、ボタンが出るかは別の条件で決まる（`RingingOverlay.kt:237` の `snoozePresets.isNotEmpty()` など）。「回数の上限では止まらない」に絞ると誤読が無い
+- [nit] doc/spec/kmp-replacement.md:287 — 「`autoSnoozeMax` を参照するのは `AlarmService.kt:392` だけ」は字面どおりだと誤り。`SettingsRepository.kt:114,186,295` と `SettingsScreen.kt:1399-1400` も参照している。PR 本文では限定が付いているが、文書側には無い。「上限の判定に使うのは 392 だけ」とすれば正しい
+- [nit] PR 本文「確かめたこと」 — 392 以外の参照の列挙から `SettingsRepository.kt:295`（`setAutoSnoozeMax` の保存と丸め）と `SettingsScreen.kt:1400`（onClick）が抜けている。どちらも判定ではないので結論は変わらない
+- 前回の must: 解決した。本文は `Refs #145` で終わる（#143 への言及は squash の注記だけ）。「残り」は #145 の話に直っており、#145 の受け入れ条件（鳴動画面の −／＋、エミュレータ・実機での回数上限到達の確認）と対応している。squash の注記も正確で、コミット c3e7a5a の本文は実際に `Refs #143` になっている。ただし注記は約束にすぎないので、マージする人が squash の本文を `Refs #145` にする必要がある
+- pass line: must は 0 件。文書の変更はコードと合っている
+- design: 「手動も回数に数える、上限を見るのは自動だけ」はコードと一致する。`AlarmRepository.kt:530-543` の onSnoozed は TERMINAL_STATES だけを見て snoozeRow を呼ぶ。`AlarmService.kt:392` は `snoozeSeq < autoSnoozeMax`。§7.5 の例 2（手動 1 回なら自動は 2 回）とも矛盾しない
+- scope: ドキュメント 1 ファイル、+2/-1。#145 の §7.5 の範囲に収まっている
+- tests: 挙動を変えない文書変更なので、テストは要らない
+- body vs diff: 「何をしたか」「確かめたこと」は diff と合っている。本文の 3d251e4 は merge-base で、origin/master 910d669 でも行番号 530・392・114・186・1399 は同じ。「+2/-1、1 ファイル」は PR の数値と一致する。#389 のレビューとのつながりは確かめていない
+- evidence: 前回の LOCAL-CHECK（head は同じ c3e7a5a、hardcoded-ja と sync-ai-rule --check がどちらも pass）がそのまま有効。head が変わっていないので、取り直していない
