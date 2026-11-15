@@ -1,7 +1,7 @@
-STATE PAUSED 2026-11-14T14:18Z (manager: weekly allowance reserved for client work) | merged 16 since 12:20Z (+#393); open PR 13; open issues ~174 (#401-#410 added)
+STATE RUNNING 2026-11-15T01:20Z | night lane (cloud) resumed from handoff PR #411 | open PR 14 (3 notes/handoff, 1 Mac-owned #189) | counts pending cycle 2 snapshot
 mission: それぞれのプロジェクトに書いてあるプランに書いてある作業をやること。どのプロジェクトもまず既存のPRを本質的に対処することを作業を優先してください。そうしないと溜まってばっかりなので
-model claude-opus-5-5 (lead, medium) | advisor present (fable) | github via gh api (REST; GraphQL blocked, so the Project board's Iteration cannot be read) | push via git | png ok (Playwright/Chromium)
-goal: owner RESUME 2026-11-14 18:45 JST (AI rows landed, passed reviews merged, own PRs landed or closed, rest OWNER/DEVICE) | DONE-WAITING satisfies it: yes
+model fable (lead, night order 2026-11-15) ; manager+reviewers fable, implementers opus, mechanical sonnet ; max 1 subagent alive | advisor unknown | github via connector (MCP; no gh in this container) | push via git | png ok (Playwright/Chromium, to be re-confirmed at first evidence)
+goal: lane until DONE or DONE-WAITING, or PAUSE | DONE-WAITING satisfies it: yes
 repo rules read: AGENTS.md, doc/test-spec.md 検証の証跡「鳴動・UI系の修正は実際に鳴らして止めた動画/スクショを PR に添付する」 (stricter than G4 for screen PRs: real-device evidence), .github/scrum-board.yml (project 10), unresolved review threads 0 before merge
 DEPLOY | merge to master -> nothing (CI builds a debug APK as a 14-day artifact only) | evidence .github/workflows/all_check.yml:50-55 (upload-artifact); fad.yml:1-3 is workflow_dispatch only (tester distribution, never on merge); ios-device-sync.yml:8-30,248 is a daily cron that may dispatch fad.yml (iOS) to testers from master = staging, independent of merges
 ---
@@ -328,3 +328,8 @@ for main session: (1) please send this week's and next week's Iteration items of
 ## 新しい不具合の候補（issue にはしていない）
 
 - 設定画面の各行が、保存の後に自分で再同期を呼んでいる（#231 の根）。保存する層から再同期を呼ぶ形に寄せた後、画面側の呼び出しを外す片付けは、#188 と #191 が入った後の別の PR にする提案。
+
+START 2026-11-15T01:20Z | night order (統括, owner 「いややってくれ」) | lead Fable, one subagent alive at a time | handoff read: PR #411 body+comments, doc/handoff/handoff-20261114-cloud.md, this file | next step from handoff: drain queue/ writes (#398 REVIEW -> LOCAL-CHECK -> GATE -> merge), then fresh reviews #396 #397 #399 #400, then #365/#373/#363, #191/#188 (DEVICE for landing), then open PRs for pushed branches docs/design-copy-78c1, docs/spec-manual-snooze-count, test/375-infra-error-order
+worktree 2026-11-15T01:20Z | /workspace/calendar-alarm claude/calendar-alarm-cloud-messaging-llwve4 clean (= master 3d251e4, nothing unpushed) | /workspace/notes chore/cloud-notes-calendar-alarm (this file)
+DECIDED 2026-11-15T01:20Z | the previous manager's PASS LINE, POLICY and DECIDED lines in this file stay in force; a Fable manager is spawned only when a JUDGE item or the audit needs it (night order 4: one subagent alive) | reason cost per landed PR | revert spawn the manager for scene (a) again
+for main session (2026-11-15): (1) first message carried no plan rows (LEDGER TSV); working from the open PRs and the handoff. (2) Project 10 Iteration still unreadable from the cloud (GraphQL blocked). (3) two notes branches exist: this one (cloud, PR #358) and notes/calendar-alarm (Mac lane, PR #388); the cloud lane writes only here.
