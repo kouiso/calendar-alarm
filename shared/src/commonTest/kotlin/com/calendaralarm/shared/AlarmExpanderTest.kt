@@ -21,6 +21,7 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 private val TZ = TimeZone.of("Asia/Tokyo")
@@ -493,6 +494,32 @@ class AlarmExpanderTest {
             inviteFilter = InviteFilter(declined = false),
         )
         assertTrue(out.isEmpty())
+    }
+
+    @Test
+    fun `既定の招待フィルタは承諾と状態不明だけを鳴らし、選んだ状態は鳴らす`() {
+        // #155 の受入条件: 承諾／未定／辞退で鳴り方が変わること。状態が読めない予定 (null) は鳴らす側に倒す
+        fun rings(status: InviteStatus?, filter: InviteFilter): Boolean {
+            val ev = event("e1", start = ldt("2026-10-05T10:00:00")).copy(inviteStatus = status)
+            return AlarmExpander.expandEvents(
+                listOf(ev),
+                calendarRules = mapOf("c1" to AlarmRule()),
+                overrides = emptyMap(), disabledCalendarIds = emptySet(),
+                now = now, horizon = horizon, zone = TZ,
+                inviteFilter = filter,
+            ).isNotEmpty()
+        }
+        val default = InviteFilter()
+        assertTrue(rings(InviteStatus.ACCEPTED, default), "承諾は既定で鳴る")
+        assertFalse(rings(InviteStatus.TENTATIVE, default), "仮承諾は既定で鳴らない")
+        assertFalse(rings(InviteStatus.NEEDS_ACTION, default), "未回答は既定で鳴らない")
+        assertFalse(rings(InviteStatus.DECLINED, default), "辞退は既定で鳴らない")
+        assertTrue(rings(null, default), "招待状態が読めない予定は鳴る")
+        // 設定で選んだ状態は鳴り、外した状態は鳴らない
+        val tentativeToo = InviteFilter(accepted = true, tentative = true)
+        assertTrue(rings(InviteStatus.TENTATIVE, tentativeToo))
+        assertFalse(rings(InviteStatus.NEEDS_ACTION, tentativeToo))
+        assertFalse(rings(InviteStatus.ACCEPTED, InviteFilter(accepted = false)), "承諾を外せば承諾も鳴らない")
     }
 
     @Test
