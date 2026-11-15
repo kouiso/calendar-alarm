@@ -47,7 +47,7 @@ export const ALLOWLIST = [
     // 予定タイプの判定 (EventType 推定)。hit("誕生日", ...) の引数は予定タイトルとの照合キーワードで、
     // 画面に出す文言ではない。このファイルでは hit( の直接引数だけを数えない。
     pattern: /^shared\/src\/commonMain\/kotlin\/com\/calendaralarm\/shared\/model\/Models\.kt$/,
-    callees: ["hit"],
+    callees: ["hit", "wholeTitle"],
   },
 ];
 
