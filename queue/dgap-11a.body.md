@@ -4,7 +4,7 @@
 
 - 板: `design/project/p146.dc.html` 列3「続けて読めないファイルだった」（Android）。「アラーム音: 標準 / 選ぶ」の面の**下**に、`<div class="banner ng">` が1つ。文言は「音声への継続アクセスを取得できませんでした。端末に保存したファイルを選び直してください。」で、ボタンは無い。
   - `.banner`（`design/asset/41384cd4ff5e02c5cffc251dcfb23a2b.css` 85-86行）: 角 16、余白 8/10/8/14、最小の高さ 56、文字 13px・行の高さ 1.5。`.ng` は背景 `--ngs`・文字 `--ng`（84行）。
-- Android: `SettingsScreen.kt:1291-1298`。同じ文言を、音の設定の行の中に `bodySmall` の文字（色は `colorScheme.error`、ダークで `#FFB4AB`）で出し、左に 32dp の余白を付けている。面も背景も無い。文言は板と同じ。
+- Android: `SettingsScreen.kt:1303-1310`（行番号は 2026-11-15 の master 2115757）。同じ文言を、音の設定の行の中に `bodySmall` の文字（色は `colorScheme.error`、ダークで `#FFB4AB`）で出し、左に 32dp の余白を付けている。面も背景も無い。文言は板と同じ。
 
 ## 直し方
 
