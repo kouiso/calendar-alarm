@@ -11,7 +11,7 @@ class RingStatusTest {
     fun `許可が足りない時はそれを最優先で1行に出し、見逃しのバナーも同時に出す`() {
         val s = RingStatus.summarize(missingPermissions = 2, recentMissed = 1, hasNextAlarm = true)
         assertEquals(RingStatus.Kind.MISSING_PERMISSION, s.kind)
-        assertEquals("許可が2つ足りません。このままだと鳴らないことがあります", s.line)
+        assertEquals(2, s.missingPermissions)
         assertTrue(s.showPermissionBanner)
         assertTrue(s.showMissedBanner)
     }
@@ -20,7 +20,7 @@ class RingStatusTest {
     fun `許可がそろっていて見逃しがある時は見逃しを出す`() {
         val s = RingStatus.summarize(0, 3, true)
         assertEquals(RingStatus.Kind.MISSED_RECENTLY, s.kind)
-        assertEquals("直近24時間に鳴らせなかったアラームが3件あります", s.line)
+        assertEquals(3, s.recentMissed)
         assertFalse(s.showPermissionBanner)
     }
 
@@ -28,11 +28,24 @@ class RingStatusTest {
     fun `許可がそろっていてもアラームの音量が0なら準備OKとは出さない`() {
         val s = RingStatus.summarize(0, 0, true, alarmMuted = true)
         assertEquals(RingStatus.Kind.ALARM_MUTED, s.kind)
-        assertEquals("アラームの音量が0です。鳴っても音が出ません", s.line)
         // 許可が足りない方を先に出す (許可が無いと音量に関係なく鳴らない)
         assertEquals(RingStatus.Kind.MISSING_PERMISSION, RingStatus.summarize(1, 0, true, alarmMuted = true).kind)
         // 音量0は見逃しより先に出す (直さない限りこの先も音が出ない)
         assertEquals(RingStatus.Kind.ALARM_MUTED, RingStatus.summarize(0, 2, true, alarmMuted = true).kind)
+    }
+
+    @Test
+    fun `すべてミュート中なら一括ミュートの1行を出す`() {
+        val s = RingStatus.summarize(0, 0, true, allMuted = true)
+        assertEquals(RingStatus.Kind.ALL_MUTED, s.kind)
+        // 許可が足りない方を先に出す (許可が無いとミュートを外しても鳴らない)
+        assertEquals(RingStatus.Kind.MISSING_PERMISSION, RingStatus.summarize(1, 0, true, allMuted = true).kind)
+        // 音量0・見逃し・予約なしより先に出す (設定を戻さない限り鳴らない)
+        assertEquals(RingStatus.Kind.ALL_MUTED, RingStatus.summarize(0, 0, true, alarmMuted = true, allMuted = true).kind)
+        assertEquals(RingStatus.Kind.ALL_MUTED, RingStatus.summarize(0, 2, true, allMuted = true).kind)
+        assertEquals(RingStatus.Kind.ALL_MUTED, RingStatus.summarize(0, 0, false, allMuted = true).kind)
+        // ミュートでなければ従来どおり
+        assertEquals(RingStatus.Kind.READY, RingStatus.summarize(0, 0, true, allMuted = false).kind)
     }
 
     @Test

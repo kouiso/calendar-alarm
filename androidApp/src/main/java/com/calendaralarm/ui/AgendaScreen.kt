@@ -151,6 +151,7 @@ fun AgendaScreen(
         recentMissed = recentMissed,
         hasNextAlarm = nextAlarm != null,
         alarmMuted = alarmMuted,
+        allMuted = settings?.muteAll == true,
     )
 
     Column(Modifier.fillMaxSize()) {
@@ -164,7 +165,7 @@ fun AgendaScreen(
         // 次のアラーム欄は小さくし、その下に鳴動の状態を1行出す (#51 PR2)
         // 「メイン画面に次の予定を出す」OFF でも鳴動の状態の1行は残す (#151)
         NextAlarmBanner(
-            nextAlarm?.title, nextAlarm?.triggerAtMillis, ringStatus.line,
+            nextAlarm?.title, nextAlarm?.triggerAtMillis, ringStatusLine(ringStatus),
             showEvent = settings?.showNextEvent != false,
         )
         if (ringStatus.showPermissionBanner) {

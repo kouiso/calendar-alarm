@@ -123,6 +123,18 @@
     <string name="repeat_monthly_day">Monthly on day %1$d</string>
     <string name="repeat_once">Once</string>
     <string name="repeat_weekly_days">Weekly %1$s</string>
+    <string name="ring_status_alarm_muted">Alarm volume is 0. Alarms will ring without sound</string>
+    <string name="ring_status_all_muted">All alarms are muted. Notifications and timers still arrive</string>
+    <plurals name="ring_status_missed_recently">
+        <item quantity="one">%1$d alarm could not ring in the last 24 hours</item>
+        <item quantity="other">%1$d alarms could not ring in the last 24 hours</item>
+    </plurals>
+    <plurals name="ring_status_missing_permission">
+        <item quantity="one">%1$d permission is missing. Alarms may not ring</item>
+        <item quantity="other">%1$d permissions are missing. Alarms may not ring</item>
+    </plurals>
+    <string name="ring_status_no_alarm">No alarms scheduled</string>
+    <string name="ring_status_ready">Ready to ring</string>
     <string name="rule_template_breaking_news">Breaking news</string>
     <string name="rule_template_delivery">Delivery notices</string>
     <string name="rule_template_flight">Flight and gate changes</string>
