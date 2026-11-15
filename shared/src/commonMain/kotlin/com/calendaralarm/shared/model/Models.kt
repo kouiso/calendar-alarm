@@ -62,7 +62,7 @@ data class InviteFilter(
 /**
  * イベント種別 (元アプリのイベントタイプメニュー仕様)。
  * 誕生日/不在/勤務場所/タスクはタイトル文字列で分類し、残りは通常予定。
- * 終日は題に語を含めば、時刻のある予定は題全体が語と一致した時だけ分類する (#306)。
+ * 終日は題に語を含めば、時刻のある予定は題全体が語と一致した時だけ分類する (#306。iOS は #307 まで部分一致。TitleMatchRule を参照)。
  * (Googleカレンダーの誕生日はタイトルに「誕生日」または"birthday"を含む前提)
  */
 @Serializable
@@ -111,16 +111,33 @@ internal fun normalizeTitleForMatch(title: String): String {
 }
 
 /**
- * タイトル文字からイベント種別を分類する。判定順 = 先勝ち (「誕生日」最優先)。
- * 終日の予定 ([allDay]=true) は題に語を含めば分類する。時刻のある予定は題全体が語と一致する時だけ分類する (#306)。
- * オフィス・自宅・在宅は勤務場所として、終日でも時刻付きでも題全体の一致だけで判定する。
+ * 題から種類を推定する時の規則 (#306)。
+ * - [WHOLE_TITLE_FOR_TIMED]: 時刻のある予定は題全体の一致だけで分類する。Android の予約と予定一覧が使う。
+ * - [LEGACY_SUBSTRING]: #306 より前の規則 (終日も時刻付きも題に語を含めば分類。オフィス・自宅・在宅の語は無い)。
+ *   iOS の予定一覧が使う Swift の写し (`Models.swift` の classifyEventType) が #307 までこの規則なので、
+ *   iOS の予約が通る SharedBridge.expand もこちらを使い、iOS を #306 の前と同じに保つ (#201 判断B「iOS は #307 まで別のまま」)。
  */
-fun classifyEventType(title: String, allDay: Boolean): EventType {
+enum class TitleMatchRule { WHOLE_TITLE_FOR_TIMED, LEGACY_SUBSTRING }
+
+/**
+ * タイトル文字からイベント種別を分類する。判定順 = 先勝ち (「誕生日」最優先)。
+ * [rule] が [TitleMatchRule.WHOLE_TITLE_FOR_TIMED] の時: 終日の予定 ([allDay]=true) は題に語を含めば分類する。
+ * 時刻のある予定は題全体が語と一致する時だけ分類する (#306)。
+ * オフィス・自宅・在宅は勤務場所として、終日でも時刻付きでも題全体の一致だけで判定する。
+ * [TitleMatchRule.LEGACY_SUBSTRING] の時は、終日かどうかに関係なく #306 より前と同じ部分一致だけで判定する。
+ */
+fun classifyEventType(
+    title: String,
+    allDay: Boolean,
+    rule: TitleMatchRule = TitleMatchRule.WHOLE_TITLE_FOR_TIMED,
+): EventType {
+    val legacy = rule == TitleMatchRule.LEGACY_SUBSTRING
     val t = title.lowercase()
     val whole = normalizeTitleForMatch(title)
     fun hit(vararg needles: String) =
-        if (allDay) needles.any { t.contains(it) } else needles.any { whole == it }
-    fun wholeTitle(vararg needles: String) = needles.any { whole == it }
+        if (allDay || legacy) needles.any { t.contains(it) } else needles.any { whole == it }
+    // オフィス・自宅・在宅は #306 で足した語。今までの規則には無いので LEGACY_SUBSTRING では見ない
+    fun wholeTitle(vararg needles: String) = !legacy && needles.any { whole == it }
     return when {
         hit("誕生日", "バースデー", "birthday") -> EventType.BIRTHDAY
         hit("不在", "休暇", "休み", "有休", "欠勤", "absence", "absent", "away", "out of office") -> EventType.ABSENCE
@@ -146,10 +163,13 @@ fun googleEventTypeToEventType(googleType: String?): EventType? = when (googleTy
 /**
  * イベントの実種別。Google Calendar API の eventType が取れていればそれを正本、
  * 取れないイベントはタイトル文字列判定へフォールバックする
- * (終日は部分一致、時刻のある予定は題全体の一致。classifyEventType を参照)。
+ * (題の規則は [rule]。既定は終日は部分一致、時刻のある予定は題全体の一致。classifyEventType を参照)。
  */
-fun resolveEventType(event: CalendarEvent): EventType =
-    googleEventTypeToEventType(event.googleEventType) ?: classifyEventType(event.title, event.allDay)
+fun resolveEventType(
+    event: CalendarEvent,
+    rule: TitleMatchRule = TitleMatchRule.WHOLE_TITLE_FOR_TIMED,
+): EventType =
+    googleEventTypeToEventType(event.googleEventType) ?: classifyEventType(event.title, event.allDay, rule)
 
 /**
  * 予定の種類ごとと「予定なし」の、鳴らす・鳴らさない (#79)。false のものは鳴らさない。
@@ -176,9 +196,9 @@ data class EventTypeFilter(
         EventType.EVENT -> event
     }
 
-    /** 種類と予定あり／なしの両方で判定する。判定の順番は 種類 → 予定あり／なし。 */
-    fun allows(event: CalendarEvent): Boolean =
-        allows(resolveEventType(event)) && (event.availability != Availability.FREE || free)
+    /** 種類と予定あり／なしの両方で判定する。判定の順番は 種類 → 予定あり／なし。題の規則は [rule] (resolveEventType を参照)。 */
+    fun allows(event: CalendarEvent, rule: TitleMatchRule = TitleMatchRule.WHOLE_TITLE_FOR_TIMED): Boolean =
+        allows(resolveEventType(event, rule)) && (event.availability != Availability.FREE || free)
 }
 
 /**
