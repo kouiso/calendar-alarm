@@ -22,6 +22,7 @@ import com.calendaralarm.shared.weather.WeatherApi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -34,6 +35,13 @@ class AppContainer(val app: Application) {
     // 「鳴動の終端化・タップ監査の書き込み」が途中で消えるため、
     // アプリ寿命で生きるスコープとして公開する
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * 復元直後の削除 (#269) が済むまで resync を待たせる門。[repository] を作る時に渡す。
+     * Application.onCreate の途中で置くと、それより前に始まった resync (前のプロセスから残った SyncWorker など) が素通りする。
+     * 開けるのは [startRestoreReset] だけ
+     */
+    internal val restoreGate = CompletableDeferred<Unit>()
 
     val db: AppDatabase by lazy {
         Room.databaseBuilder(app, AppDatabase::class.java, "calendar-alarm.db")
@@ -87,7 +95,13 @@ class AppContainer(val app: Application) {
                     com.calendaralarm.engine.MissedNotifier.postMissed(app, n)
                 }
             },
+            restoreGate = restoreGate,
         )
+    }
+
+    /** 復元の印があれば行を捨てて再同期し、[restoreGate] を開ける (#269)。Application.onCreate から1回だけ呼ぶ */
+    fun startRestoreReset(): Job = RestoreReset.launchAtStart(appScope, app, db, restoreGate) {
+        repository.resync("restored from backup")
     }
 }
 
@@ -101,25 +115,9 @@ class CalendarAlarmApp : Application() {
         // 予約に効く既定の変更を、アプリが生きている間ずっと再同期へつなぐ (#231)。
         // 画面のスコープで呼ぶと、保存の直後に画面を閉じた時に再同期が消える
         container.repository.watchScheduleDefaults(container.appScope)
-        // バックアップから復元された直後なら、端末と時刻に結びつく行を捨てて再同期する (#269)
-        // 起動時の resync が復元直後の古い指定を読んで書き戻さないよう、削除が済むまで resync を待たせる
-        val restoreGate = CompletableDeferred<Unit>()
-        container.repository.holdResyncUntil(restoreGate)
-        container.appScope.launch {
-            try {
-                runCatching {
-                    RestoreReset.runIfRestored(
-                        this@CalendarAlarmApp,
-                        container.db,
-                        onCleared = { restoreGate.complete(Unit) },
-                    ) {
-                        container.repository.resync("restored from backup")
-                    }
-                }
-            } finally {
-                restoreGate.complete(Unit)
-            }
-        }
+        // バックアップから復元された直後なら、端末と時刻に結びつく行を捨てて再同期する (#269)。
+        // 削除が済むまで resync を待たせる門は、リポジトリを作る時に置いてある
+        container.startRestoreReset()
         scheduleHealthCheck()
         ensureCalendarObserver()
         // 冪等なので毎回走らせてよい。書込み失敗で起動ごと落とさない

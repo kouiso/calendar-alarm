@@ -7,7 +7,13 @@ import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.db.AppDatabase
 import com.calendaralarm.data.db.EventOverrideEntity
 import com.calendaralarm.data.db.ScheduledInstanceEntity
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -32,6 +38,10 @@ class RestoreResetTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
+        // アプリ本体の起動 (onCreate) が走らせる後始末が印を見終わるまで待つ。
+        // 待たないと、この試験が置いた印をアプリ本体の後始末が先に消費しうる
+        val app = ApplicationProvider.getApplicationContext<CalendarAlarmApp>()
+        runBlocking { withTimeout(10_000) { app.container.restoreGate.await() } }
         RestoreMarker.consume(context)
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
     }
@@ -135,5 +145,28 @@ class RestoreResetTest {
         order.clear()
         runBlocking { RestoreReset.runIfRestored(context, db, onCleared = { order += "cleared" }) { order += "resync" } }
         assertEquals(listOf("cleared"), order)
+    }
+
+    @Test
+    fun launchAtStart_opensGateBeforeResync_andSwallowsResetFailure() = runBlocking {
+        seed()
+        RestoreMarker.mark(context)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val gate = CompletableDeferred<Unit>()
+            var seenAtResync: Pair<Boolean, Pair<Int, Int>>? = null
+            RestoreReset.launchAtStart(scope, context, db, gate) { seenAtResync = gate.isCompleted to counts() }.join()
+            assertEquals("resync の時には門が開き、2 表は空", true to (0 to 0), seenAtResync)
+
+            // 後始末が失敗しても門は開き、例外で起動ごと落とさない
+            RestoreMarker.mark(context)
+            val failingGate = CompletableDeferred<Unit>()
+            val job = RestoreReset.launchAtStart(scope, context, db, failingGate) { throw IllegalStateException("boom") }
+            job.join()
+            assertTrue(failingGate.isCompleted)
+            assertFalse("例外を外へ投げない", job.isCancelled)
+        } finally {
+            scope.cancel()
+        }
     }
 }

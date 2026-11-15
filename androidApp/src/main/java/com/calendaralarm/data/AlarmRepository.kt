@@ -26,6 +26,7 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -72,6 +73,11 @@ class AlarmRepository(
     private val onScheduleChanged: (suspend () -> Unit)? = null,
     /** 期限切れが MISSED 化された件数の通知 (missed 通知用)。 */
     private val onMissed: (suspend (Int) -> Unit)? = null,
+    /**
+     * 復元直後の削除 (#269) が済むまで [resync] を待たせる門。
+     * 作る時に渡すので、Application.onCreate より先に始まった resync (前のプロセスから残った SyncWorker など) も待つ
+     */
+    internal val restoreGate: Deferred<Unit>? = null,
 ) {
     // 自動スヌーズ・手動スヌーズ・停止の状態遷移を一つずつ通す (#145)
     private val ringTransitionLock = Mutex()
@@ -926,11 +932,6 @@ class AlarmRepository(
     }
 
     /** 試験用の差込口: 再同期が全行を読んだ直後に呼ぶ (#232 の競合の再現) */
-    @Volatile private var restoreGate: kotlinx.coroutines.Deferred<Unit>? = null
-
-    /** 復元直後の削除 (#269) が済むまで [resync] を待たせる。起動時に1回だけ置く */
-    fun holdResyncUntil(gate: kotlinx.coroutines.Deferred<Unit>) { restoreGate = gate }
-
     @Volatile internal var afterResyncReadForTest: (suspend () -> Unit)? = null
 
     private suspend fun applyPlan(

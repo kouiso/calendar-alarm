@@ -5,8 +5,19 @@ import android.app.backup.BackupDataInput
 import android.app.backup.BackupDataOutput
 import android.content.Context
 import android.os.ParcelFileDescriptor
+import android.util.Log
+import androidx.room.withTransaction
 import com.calendaralarm.data.db.AppDatabase
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
+
+private const val TAG = "RestoreReset"
 
 /**
  * バックアップから復元された事実の印 (#269)。
@@ -29,7 +40,9 @@ object RestoreMarker {
     fun isPending(context: Context): Boolean = file(context).exists()
 
     fun consume(context: Context) {
-        file(context).delete()
+        val f = file(context)
+        // 消せないまま黙ると、毎回の起動で 2 表を消し続ける。せめて記録に残す
+        if (!f.delete() && f.exists()) Log.w(TAG, "復元の印を消せない: ${f.path}")
     }
 }
 
@@ -49,14 +62,41 @@ object RestoreReset {
         // resync 自身の完了まで待たせると、ここから呼ぶ resync が自分を待って固まる
         try {
             if (!RestoreMarker.isPending(context)) return false
-            db.scheduledInstances().deleteAll()
-            db.eventOverrides().deleteAll()
+            // 2 表を 1 つのトランザクションで消し、片方だけ消えた途中の状態を他から見せない
+            withContext(Dispatchers.IO) {
+                db.withTransaction {
+                    db.scheduledInstances().deleteAll()
+                    db.eventOverrides().deleteAll()
+                }
+            }
             RestoreMarker.consume(context)
         } finally {
             onCleared()
         }
         resync()
         return true
+    }
+
+    /**
+     * 起動時に [runIfRestored] を [scope] で走らせ、削除が済んだら [gate] を開ける。
+     * 失敗しても取り消されても [gate] は必ず開ける。開かないと以後の resync が全部止まる
+     */
+    fun launchAtStart(
+        scope: CoroutineScope,
+        context: Context,
+        db: AppDatabase,
+        gate: CompletableDeferred<Unit>,
+        resync: suspend () -> Unit,
+    ): Job = scope.launch {
+        try {
+            runIfRestored(context = context, db = db, onCleared = { gate.complete(Unit) }, resync = resync)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "復元の後始末に失敗", e)
+        } finally {
+            gate.complete(Unit)
+        }
     }
 }
 
@@ -75,6 +115,7 @@ open class RestoreMarkerAgent : BackupAgent() {
 
     public override fun onRestoreFinished() {
         super.onRestoreFinished()
-        runCatching { RestoreMarker.mark(this) }
+        // 置けないと復元されなかった扱いになり、古い行と指定が残る。黙らずに記録に残す
+        runCatching { RestoreMarker.mark(this) }.onFailure { Log.w(TAG, "復元の印を置けない", it) }
     }
 }
