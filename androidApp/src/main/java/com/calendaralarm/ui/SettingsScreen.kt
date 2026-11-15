@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -102,6 +103,7 @@ import com.calendaralarm.shared.logic.WeekCalendar
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventType
+import com.calendaralarm.shared.model.InviteFilter
 import com.calendaralarm.shared.model.InviteStatus
 import com.calendaralarm.shared.model.TitleCodeSettings
 import com.calendaralarm.ui.theme.AppPalette
@@ -169,7 +171,7 @@ fun SettingsScreen(
             ) {
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
                     // 通知タイミング
-                    IconSettingRow(Icons.Default.Notifications) {
+                    IconChipRow(Icons.Default.Notifications) {
                         listOf(0, 5, 10, 15).forEach { m ->
                             FilterChip(
                                 selected = (prefs?.defaultMinutesBefore ?: 0) == m,
@@ -489,6 +491,28 @@ internal fun IconSettingRow(icon: ImageVector, content: @Composable () -> Unit) 
         )
         Spacer(Modifier.width(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) { content() }
+    }
+}
+
+/**
+ * [IconSettingRow] のチップ用。入りきらない時は次の行へ折り返す (#204)。
+ * 1 行の Row だと、狭い画面や大きい文字で右端のチップが幅 0 に潰れて押せなかった。
+ * 見出しとスイッチの行 (Spacer の weight で右へ寄せる行) には使わない
+ */
+@Composable
+internal fun IconChipRow(icon: ImageVector, content: @Composable FlowRowScope.() -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        FlowRow(Modifier.weight(1f), itemVerticalAlignment = Alignment.CenterVertically) { content() }
     }
 }
 
@@ -942,20 +966,8 @@ private fun EventRulesCard(
                 TextButton(onClick = { showCodes = true }) { Text("編集") }
             }
             // 招待予定フィルタ
-            IconSettingRow(Icons.Default.FilterList) {
-                listOf(
-                    InviteStatus.ACCEPTED to "出席",
-                    InviteStatus.TENTATIVE to "未定",
-                    InviteStatus.NEEDS_ACTION to "未回答",
-                    InviteStatus.DECLINED to "辞退",
-                ).forEach { (s, label) ->
-                    FilterChip(
-                        selected = prefs.inviteFilter.allows(s),
-                        onClick = { scope.launch { settings.toggleInviteStatus(s); repository.resync("settings") } },
-                        label = { Text(label, maxLines = 1) },
-                        modifier = Modifier.padding(end = 4.dp),
-                    )
-                }
+            InviteFilterRow(prefs.inviteFilter) { s ->
+                scope.launch { settings.toggleInviteStatus(s); repository.resync("settings") }
             }
             // 鳴らす予定の種類と「予定なし」を一か所でまとめて切り替える (#79)
             EventTypeRingSwitches(
@@ -1297,7 +1309,7 @@ private fun RingingCard(
                 )
             }
             // スヌーズプリセット (鳴動画面の +N分 ボタンに出る一覧)
-            IconSettingRow(Icons.Default.Snooze) {
+            IconChipRow(Icons.Default.Snooze) {
                 listOf(1, 5, 10, 15, 20, 30, 45, 60, 90).forEach { m ->
                     val on = m in p.snoozePresets
                     FilterChip(
@@ -1656,6 +1668,26 @@ private fun RingTimesCard(appMinutesBefore: Int, useCalendarReminders: Boolean) 
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+        }
+    }
+}
+
+/** 招待予定のどの返事を鳴らすか。4 枚のチップ (出席・未定・未回答・辞退) を並べる */
+@Composable
+internal fun InviteFilterRow(filter: InviteFilter, onToggle: (InviteStatus) -> Unit) {
+    IconChipRow(Icons.Default.FilterList) {
+        listOf(
+            InviteStatus.ACCEPTED to "出席",
+            InviteStatus.TENTATIVE to "未定",
+            InviteStatus.NEEDS_ACTION to "未回答",
+            InviteStatus.DECLINED to "辞退",
+        ).forEach { (s, label) ->
+            FilterChip(
+                selected = filter.allows(s),
+                onClick = { onToggle(s) },
+                label = { Text(label, maxLines = 1) },
+                modifier = Modifier.padding(end = 4.dp),
+            )
         }
     }
 }
