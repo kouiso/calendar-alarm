@@ -42,8 +42,17 @@ case "$mode" in
   emulator-build)
     app_dir="$(from_caller "${2:?An isolated app checkout is required}")"
     app_dir="$(cd "$app_dir" && pwd)"
-    bash "$root/scripts/emulator/inject_harness.sh" "$app_dir"
-    (cd "$app_dir"; ./gradlew :androidApp:assembleDebug --stacktrace)
+    # なぜ: E2E_MINIFIED=true の時だけ、release と同じ R8 (難読化あり) の e2eMinified variant で停止 E2E を回す (#220)。
+    # debug variant は R8 が debug モードで動き名前が変わらないため使わない。未設定は従来どおり debug
+    variant=debug
+    gradle_task=assembleDebug
+    if [ "${E2E_MINIFIED:-}" = true ]; then variant=e2eMinified; gradle_task=assembleE2eMinified; fi
+    bash "$root/scripts/emulator/inject_harness.sh" "$app_dir" "$variant"
+    (cd "$app_dir"; ./gradlew ":androidApp:$gradle_task" --stacktrace)
+    # なぜ: 受け渡しの切れで minify なしのまま緑になり門が素通りになるのを防ぐ。mapping が無ければ R8 は動いていない
+    if [ "$variant" = e2eMinified ]; then
+      test -s "$app_dir/androidApp/build/outputs/mapping/e2eMinified/mapping.txt" || { echo 'R8 did not run: mapping.txt is missing for e2eMinified' >&2; exit 1; }
+    fi
     ;;
   emulator-run)
     validate_scenarios

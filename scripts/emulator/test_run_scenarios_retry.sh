@@ -64,4 +64,29 @@ check "初回から採れる値はそのまま" "1 1 1" "1 1 1" 1
 if state_capture_failed "err err err"; then echo "ok   state_capture_failed err"; else echo "FAIL state_capture_failed err" >&2; fail=1; fi
 if state_capture_failed "0 1 1"; then echo "FAIL state_capture_failed 0 1 1" >&2; fail=1; else echo "ok   state_capture_failed 0 1 1"; fi
 
+# 呼び出し側 (run_scenarios.sh の 2 か所) の並び: stop_state_retry → state_capture_failed →
+# FAIL INFRA_ERROR → probes_ringing。採取失敗を probes_ringing より先に INFRA_ERROR にしないと、
+# 採れなかっただけの回が PROBE_PRECONDITION (鳴っていない) に化ける。行番号は grep で拾うので、行が動いても追従する
+lines_of() { grep -nE "$1" "$SRC" | cut -d: -f1; }
+mapfile -t L_RETRY < <(lines_of 'st=\$\(STATE_KEEP="[^"]*" stop_state_retry\)')
+mapfile -t L_CAPFAIL < <(lines_of '^[[:space:]]*if state_capture_failed "\$st"; then')
+mapfile -t L_INFRA < <(lines_of 'record "\$name" FAIL INFRA_ERROR "could not capture pre-stop')
+mapfile -t L_PROBES < <(lines_of '^[[:space:]]*if ! probes_ringing "\$a" "\$s" "\$n"; then')
+sites=${#L_RETRY[@]}
+if [ "$sites" -ne 2 ] || [ "${#L_CAPFAIL[@]}" -ne "$sites" ] || [ "${#L_INFRA[@]}" -ne "$sites" ] || [ "${#L_PROBES[@]}" -ne "$sites" ]; then
+  echo "FAIL 呼び出し側の数が揃わない: retry=${#L_RETRY[@]} capfail=${#L_CAPFAIL[@]} infra=${#L_INFRA[@]} probes=${#L_PROBES[@]} (want 各 2)" >&2
+  fail=1
+else
+  for i in $(seq 0 $((sites - 1))); do
+    r=${L_RETRY[$i]} c=${L_CAPFAIL[$i]} f=${L_INFRA[$i]} p=${L_PROBES[$i]}
+    next=${L_RETRY[$((i + 1))]:-999999}
+    if [ "$r" -lt "$c" ] && [ "$c" -lt "$f" ] && [ "$f" -lt "$p" ] && [ "$p" -lt "$next" ]; then
+      echo "ok   呼び出し側 $((i + 1)) の順序 (L$r retry < L$c state_capture_failed < L$f INFRA_ERROR < L$p probes_ringing)"
+    else
+      echo "FAIL 呼び出し側 $((i + 1)) の順序: retry=L$r capfail=L$c infra=L$f probes=L$p (want 昇順、次の呼び出し L$next より前)" >&2
+      fail=1
+    fi
+  done
+fi
+
 exit "$fail"
