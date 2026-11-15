@@ -368,3 +368,4 @@ START 2026-11-15T05:03:50Z | order 統括 [personal] 2026-11-15 14:20 JST | lead
 worktree 2026-11-15T05:03:50Z | /home/user/calendar-alarm claude/calendar-alarm-cloud-messaging-382lje (fresh container, nothing unpushed) | /home/user/notes chore/cloud-notes-calendar-alarm (this file)
 BLOCKER 2026-11-15T05:03:50Z | dl.google.com still refused (CONNECT 403) on this account's environment: no local Gradle; G3 stays per DECIDED 01:18Z (hosted rollup on the exact head)
 for main session (2026-11-15T05:03:50Z): (5) RESOLVED: design page VqUeceTJYaL9Z3U2JyLnNm opens from this account (version 1794658749-78c1 = repo copy design/project/). (4) still open: allow dl.google.com in this environment.
+CYCLE 3 T=2026-11-15T05:04:48Z | PRs 14 (work 8: #413 #412 #414 #396 #397 #365 #363 #373; DEVICE #188 #191; Mac #189; never-merge #358 #388 #411) | issues: cycle-1 sort kept (issue-sort-cycle-1.tsv), refreshed after PRs | ledger rows 0 received
