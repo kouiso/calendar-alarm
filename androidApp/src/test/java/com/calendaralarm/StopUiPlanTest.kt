@@ -75,7 +75,7 @@ class StopUiPlanTest {
         val nm = context.getSystemService(android.app.NotificationManager::class.java)
         // 止められていなければ使える
         com.calendaralarm.engine.AlarmService.ensureChannels(context)
-        assertTrue(StopUiPermissions.notificationsUsable(context))
+        assertTrue(StopUiPermissions.notificationsUsable(context, vibrate = true, ignoreDnd = true))
         // アプリ全体の通知は ON のまま、鳴動用チャンネルだけ「なし」にされた状態
         // (作成済みのチャンネルは重要度を下げられないので、消してから作る)
         nm.deleteNotificationChannel(com.calendaralarm.engine.AlarmService.CHANNEL_ID)
@@ -85,7 +85,7 @@ class StopUiPlanTest {
                 android.app.NotificationManager.IMPORTANCE_NONE,
             ),
         )
-        assertFalse(StopUiPermissions.notificationsUsable(context))
+        assertFalse(StopUiPermissions.notificationsUsable(context, vibrate = true, ignoreDnd = true))
     }
 
     @Test
@@ -101,8 +101,8 @@ class StopUiPlanTest {
                 android.app.NotificationManager.IMPORTANCE_NONE,
             ),
         )
-        assertTrue(StopUiPermissions.notificationsUsable(context, vibrate = true))
-        assertFalse(StopUiPermissions.notificationsUsable(context, vibrate = false))
+        assertTrue(StopUiPermissions.notificationsUsable(context, vibrate = true, ignoreDnd = true))
+        assertFalse(StopUiPermissions.notificationsUsable(context, vibrate = false, ignoreDnd = true))
     }
 
     @Test
@@ -116,6 +116,24 @@ class StopUiPlanTest {
                 android.app.NotificationManager.IMPORTANCE_DEFAULT,
             ),
         )
-        assertFalse(StopUiPermissions.notificationsUsable(context, vibrate = true))
+        assertFalse(StopUiPermissions.notificationsUsable(context, vibrate = true, ignoreDnd = true))
+    }
+
+    @Test
+    fun `おやすみモードを尊重して鳴らす時は尊重側のチャンネルが止められていたら通知は使えない扱い`() {
+        // #149 と #153 を合わせた時の取り違え: 鳴動は alarm_vib_dnd に出すのに、判定が alarm_vib を見ていた
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val nm = context.getSystemService(android.app.NotificationManager::class.java)
+        com.calendaralarm.engine.AlarmService.ensureChannels(context)
+        nm.deleteNotificationChannel(com.calendaralarm.engine.AlarmService.CHANNEL_ID_VIB_DND)
+        nm.createNotificationChannel(
+            android.app.NotificationChannel(
+                com.calendaralarm.engine.AlarmService.CHANNEL_ID_VIB_DND, "アラーム（おやすみモード尊重）",
+                android.app.NotificationManager.IMPORTANCE_NONE,
+            ),
+        )
+        assertFalse(StopUiPermissions.notificationsUsable(context, vibrate = true, ignoreDnd = false))
+        // 無視 ON なら尊重側は使わないので影響しない
+        assertTrue(StopUiPermissions.notificationsUsable(context, vibrate = true, ignoreDnd = true))
     }
 }
