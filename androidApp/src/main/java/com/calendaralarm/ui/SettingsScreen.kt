@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -74,6 +75,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -89,6 +91,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
@@ -96,6 +99,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -257,6 +262,15 @@ fun SettingsScreen(
             }
         }
 
+        // ---- 外観: 大きいボタン (盤 p154 の 4 列目どおり、独立したカードで先頭) ----
+        // 盤の「文字の大きさ」「鳴動画面の背景」の行は仕様に無い項目なので置かない。
+        // 在る行 (大きいボタン → テーマ・背景画像) の並びだけを盤に合わせる
+        item { Spacer(Modifier.height(12.dp)) }
+        item {
+            prefs?.let { p ->
+                LargeButtonsCard(p.largeButtons) { scope.launch { settings.setLargeButtons(it) } }
+            }
+        }
         // ---- 外観: テーマ10種 + カスタム背景 ----
         item { Spacer(Modifier.height(12.dp)) }
         item {
@@ -1795,9 +1809,58 @@ internal fun IgnoreDndRow(
     }
 }
 
+/**
+ * 大ボタンモード (競合の Large Button Mode, #154)。鳴動画面をスヌーズも停止も大きいボタンに変える。
+ * 盤 p154 の 4 列目 `card ls` (角丸20・左右16・上下4) の独立したカード
+ */
+@Composable
+internal fun LargeButtonsCard(checked: Boolean, onChange: (Boolean) -> Unit) {
+    Card(
+        Modifier.fillMaxWidth().testTag(LARGE_BUTTONS_CARD_TAG),
+        shape = RoundedCornerShape(20.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            LargeButtonsRow(checked, onChange)
+        }
+    }
+}
+
 internal const val IGNORE_DND_ICON_TAG = "ignore_dnd_icon"
 internal const val IGNORE_DND_OPEN_PERMISSION_TAG = "ignore_dnd_open_permission"
 internal const val IGNORE_DND_PREVIEW_TAG = "ignore_dnd_preview"
+
+internal const val LARGE_BUTTONS_CARD_TAG = "large-buttons-card"
+
+/**
+ * 「鳴動画面を大きいボタンにする」の行 (#154)。行全体を切り替えの対象にして、読み上げでは見出しとスイッチの状態を 1 つとして読む
+ * (スイッチだけが別の部品だと、何のスイッチか読み上げられない)
+ */
+@Composable
+internal fun LargeButtonsRow(checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            stringResource(R.string.settings_large_stop_button),
+            // 盤の見出し .t (15px・太さ500・主の文字色)
+            style = MaterialTheme.typography.bodyMedium,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        // 切り替えは行が受ける。スイッチは状態を見せるだけ。
+        // onCheckedChange が null だとスイッチは最小の押せる大きさ (48dp) を取らず行が低くなるので、明示して元の高さを保つ
+        Switch(checked = checked, onCheckedChange = null, modifier = Modifier.minimumInteractiveComponentSize())
+    }
+}
 
 /** 招待予定のどの返事を鳴らすか。4 枚のチップ (出席・未定・未回答・辞退) を並べる */
 @Composable

@@ -14,6 +14,7 @@ import com.calendaralarm.engine.AlarmReceiver
 import com.calendaralarm.engine.AlarmService
 import com.calendaralarm.engine.RingingOverlay
 import com.calendaralarm.engine.RingingSlideSpec
+import com.calendaralarm.engine.LARGE_STOP_TAG
 import com.calendaralarm.shared.logic.SlideToStopRule
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -91,6 +92,20 @@ class RingingOverlaySlideStopTest {
     private fun dismissBroadcasts(): List<Intent> {
         shadowOf(Looper.getMainLooper()).idle()
         return shadowOf(app).broadcastIntents.filter { it.action == AlarmService.ACTION_DISMISS }
+    }
+
+    @Test
+    fun `大ボタンはスライダーを置き換えて同じ鳴動を停止する`() {
+        val largeRoot = RingingOverlay.buildView(app, ID, "Large", 10, emptyList(), largeButtons = true)
+        val sliders = ArrayList<View>()
+        largeRoot.findViewsWithText(sliders, SLIDER, View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION)
+        assertTrue(sliders.isEmpty())
+        val button = largeRoot.findViewWithTag<View>(LARGE_STOP_TAG)
+        assertEquals(RingingSlideSpec.LARGE_BUTTON_HEIGHT_DP, button.layoutParams.height)
+        assertTrue(button.performClick())
+        val intent = dismissBroadcasts().single()
+        assertEquals(ID, intent.getStringExtra(AlarmService.EXTRA_INSTANCE_ID))
+        assertEquals(AlarmReceiver::class.java.name, intent.component?.className)
     }
 
     private fun touch(action: Int, x: Float) {

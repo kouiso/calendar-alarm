@@ -186,6 +186,7 @@
     <string name="settings_ignore_dnd_policy_missing">使うには「おやすみモードの例外」の許可が要ります。</string>
     <string name="settings_ignore_dnd_open_permission">許可を開く</string>
     <string name="settings_ignore_dnd_title">おやすみモード中も鳴らす</string>
+    <string name="settings_large_stop_button">鳴動画面を大きいボタンにする</string>
     <string name="share_import_ai_unavailable">このビルドでは AI の読み取りを使えません。日時を入れて追加してください</string>
     <string name="share_import_cancel">やめる</string>
     <string name="share_import_no_event">本文から予定を見つけられませんでした。日時を入れて追加してください</string>

@@ -191,6 +191,7 @@
     <string name="settings_ignore_dnd_policy_missing">This needs the “Do Not Disturb exception” permission.</string>
     <string name="settings_ignore_dnd_open_permission">Open permission</string>
     <string name="settings_ignore_dnd_title">Ring during Do Not Disturb</string>
+    <string name="settings_large_stop_button">Large buttons on the ringing screen</string>
     <string name="share_import_ai_unavailable">AI reading is not available in this build. Enter the date and time to add it.</string>
     <string name="share_import_cancel">Cancel</string>
     <string name="share_import_no_event">No event was found in the text. Enter the date and time to add it.</string>
