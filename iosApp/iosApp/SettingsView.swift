@@ -812,9 +812,17 @@ final class SoundPreviewPlayer: ObservableObject {
     /// 同じ音をもう一度押したら止める。別の音なら前の音を止めてから鳴らす
     func toggle(_ name: String) {
         if playing == name { stop(); return }
-        stop()
+        halt()
+        // 既定の soloAmbient は消音スイッチに従い無音になる (アラーム本体は消音でも鳴るので、試し聞きも鳴らす)。
+        // 他のアプリの音楽は止めずに下げ、stop で戻す
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .default, options: [.duckOthers])
+        try? session.setActive(true)
         guard let url = Bundle.main.url(forResource: name, withExtension: nil),
-              let p = try? AVAudioPlayer(contentsOf: url), p.play() else { return }
+              let p = try? AVAudioPlayer(contentsOf: url), p.play() else {
+            deactivate()
+            return
+        }
         player = p
         playing = name
         let seconds = p.duration
@@ -826,9 +834,22 @@ final class SoundPreviewPlayer: ObservableObject {
     }
 
     func stop() {
+        let wasPlaying = player != nil
+        halt()
+        // 鳴らしていない時 (画面を離れただけ等) はセッションに触らない
+        if wasPlaying { deactivate() }
+    }
+
+    /// セッションは手放さずに止める。別の音へ替える時に、下げた音楽を一瞬戻さないため
+    private func halt() {
         player?.stop()
         player = nil
         playing = nil
+    }
+
+    /// 下げた他のアプリの音を戻す
+    private func deactivate() {
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }
 
