@@ -1,0 +1,27 @@
+# なぜ: #393 で CI の再現性のために lint の GradleDependency / AndroidGradlePluginVersion /
+#       NewerVersionAvailable を切ったので、依存や AGP が古くなっても repo の中で知らせる物が無くなった (#401)。
+#       Dependabot の version updates は public repo で無料の範囲。週1回、古い版を PR で知らせる。
+version: 2
+updates:
+  # Gradle: gradle/libs.versions.toml (version catalog) と wrapper を見る
+  - package-ecosystem: gradle
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # なぜ: 依存ごとに PR を分けると開いた PR が溜まる。1回の知らせを1本にまとめる
+    groups:
+      gradle-all:
+        patterns: ["*"]
+    commit-message:
+      prefix: "build(deps)"
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions-all:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci(deps)"

@@ -11,12 +11,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHasNoClickAction
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.assert
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.SettingsRepository
@@ -51,7 +55,9 @@ class TroubleshootingFlagTest {
         activity.setContent {
             MaterialTheme { TroubleshootingScreen(SettingsRepository(app), onBack = {}) }
         }
-        compose.waitUntil(5_000) {
+        // 行は設定の読み込み (DataStore) の後に出る。JVM の最初のテストは描画の準備だけで数秒かかり、
+        // 混んだ CI では 5 秒を超えて時間切れになったことがある (#188 の CI)。待つ条件は変えず、上限だけ広げる
+        compose.waitUntil(20_000) {
             compose.onAllNodesWithTag(rowTag).fetchSemanticsNodes().isNotEmpty()
         }
     }
@@ -99,5 +105,32 @@ class TroubleshootingFlagTest {
         val started: Intent = shadowOf(app).nextStartedActivity
         assertEquals(Settings.ACTION_APP_NOTIFICATION_SETTINGS, started.action)
         assertEquals(app.packageName, started.getStringExtra(Settings.EXTRA_APP_PACKAGE))
+    }
+
+    @Test
+    fun userChosenDndOffDuringDndIsInfoAndNotClickable() {
+        // 「おやすみモード中も鳴らす」を自分で OFF にした人がおやすみモード中に開いた時。開く先が無い参考の行は、
+        // 押せる要素にしない (押しても何も起きない行を作らない)
+        val settings = SettingsRepository(app)
+        kotlinx.coroutines.runBlocking { settings.setIgnoreDnd(false) }
+        val nm = app.getSystemService(NotificationManager::class.java)
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALARMS)
+        try {
+            // 一覧は見えている行しか作らない。下の方の行は、先頭の行が出てからそこまで動かして確かめる
+            show("troubleshoot_calendar")
+            compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("troubleshoot_dnd"))
+
+            // 押せない行は子の読み上げをまとめないので、状態の印は子の要素として確かめる
+            compose.onNodeWithTag("troubleshoot_dnd")
+                .assertHasNoClickAction()
+                .assert(hasAnyDescendant(hasContentDescription("参考")))
+            assertEquals(
+                1,
+                compose.onAllNodesWithText("おやすみモード中なので鳴らさず、通知だけ残します").fetchSemanticsNodes().size,
+            )
+        } finally {
+            nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+            kotlinx.coroutines.runBlocking { settings.setIgnoreDnd(true) }
+        }
     }
 }
