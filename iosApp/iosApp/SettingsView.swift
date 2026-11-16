@@ -759,7 +759,9 @@ struct AlarmSoundView: View {
     private func row(file: String?, name: String, selected: Bool, previewable: Bool) -> some View {
         HStack(spacing: 12) {
             Button {
-                if !selected { choose(file) }
+                // 表示の selected ではなく保存した値と比べる。ファイルの無い音を保存したまま「iPhone の標準」に
+                // 見えている時も、押せば保存した値を標準にそろえ、後でファイルが戻っても前の音に戻らないようにする
+                if store.state.alarmSoundFile != file { choose(file) }
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: selected ? "largecircle.fill.circle" : "circle")
