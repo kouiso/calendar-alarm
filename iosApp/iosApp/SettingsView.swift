@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 import PhotosUI
 import UniformTypeIdentifiers
 
@@ -19,8 +20,6 @@ struct SettingsView: View {
     @State private var showCodes = false
     @State private var photoItem: PhotosPickerItem? = nil
     @State private var weatherLocDraft = ""
-    @State private var showSoundPicker = false
-    @State private var soundError: String? = nil
     @State private var showExtraReminderSheet = false
 
     private let actionOptions: [(EventAction, String)] =
@@ -96,54 +95,23 @@ struct SettingsView: View {
                                     set: { store.setMuteAll($0); resync("mute all") }
                                 )).labelsHidden()
                             }
-                            // アラーム音 (#101)。AlarmKit で指定できるのは音だけ
-                            IconRow("music.note") {
-                                VStack(alignment: .leading, spacing: 2) {
+                            // アラーム音 (#101)。AlarmKit で指定できるのは音だけ。
+                            // 選ぶのは別の画面 (デザイン p147 の列2, #147)。ここは今の音の名前とその入口だけ
+                            NavigationLink {
+                                AlarmSoundView()
+                            } label: {
+                                IconRow("music.note") {
                                     Text("アラーム音: \(store.state.alarmSoundLabel ?? String(localized: "iPhone の標準"))")
                                         .font(NightTheme.font(13)).foregroundStyle(.secondary)
                                         .lineLimit(1)
-                                    if let soundError {
-                                        Text(soundError).font(NightTheme.font(11)).foregroundStyle(.orange)
-                                    }
-                                }
-                                Spacer()
-                                Button("選ぶ") { showSoundPicker = true }
-                                    .font(NightTheme.font(13)).foregroundStyle(NightTheme.indigo)
-                                if store.state.alarmSoundFile != nil {
-                                    Button("標準に戻す") { changeSound(file: nil, label: nil) }
-                                        .font(NightTheme.font(13)).foregroundStyle(.secondary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
                                 }
                             }
-                            // 「選ぶ」で取り込める音の説明。長い音は AlarmSoundLibrary.maxSeconds で切る (#147)
-                            Text("使える形式は mp3・m4a・wav・aiff・caf などです。長い音は先頭の約30秒だけ鳴ります。")
-                                .font(NightTheme.font(11)).foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            // 同梱プリセット (#147)。AlarmKit の AlertSound.named は
-                            // アプリが置いた .caf しか読めないので、選択肢は同梱音で用意する
-                            Chips(
-                                items: ["__default__"] + AlarmSoundLibrary.bundledPresets,
-                                current: store.state.alarmSoundFile ?? "__default__",
-                            ) { sel in
-                                let change = Self.soundChange(forChip: sel)
-                                changeSound(file: change.file, label: change.label)
-                            } label: { Self.soundPresetLabel($0) }
                             // AlarmKit が受け付けない項目は、出来ないと画面に書く (Android にはある設定)
                             Text("音量・だんだん大きくする・バイブは、iPhone の「サウンドと触覚」の設定に従います。iPhone のアラーム機能では、アプリから変えられるのは音だけです。")
                                 .font(NightTheme.font(11)).foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                    .fileImporter(isPresented: $showSoundPicker, allowedContentTypes: [.audio]) { result in
-                        switch result {
-                        case .success(let url):
-                            do {
-                                let name = try AlarmSoundLibrary.importSound(from: url)
-                                changeSound(file: name, label: url.deletingPathExtension().lastPathComponent)
-                            } catch {
-                                soundError = String(localized: "この音声は使えませんでした: \(error.localizedDescription)")
-                            }
-                        case .failure(let error):
-                            soundError = String(localized: "音声を開けませんでした: \(error.localizedDescription)")
                         }
                     }
 
@@ -724,14 +692,7 @@ struct SettingsView: View {
 
     private func resync(_ reason: String) { Task { await engine.resync(reason: reason) } }
 
-    /// 既定の音を変え、入っている予約を新しい音で入れ直す (AlarmKit は予約時に音が決まる)
-    private func changeSound(file: String?, label: String?) {
-        soundError = nil
-        store.setAlarmSound(file: file, label: label)
-        Task { await engine.rescheduleForSoundChange() }
-    }
-
-    /// 札を押した時に changeSound へ渡す音のファイル名と表示名 (#147)。「標準」は両方 nil
+    /// 一覧で選んだ時に changeSound へ渡す音のファイル名と表示名 (#147)。「iPhone の標準」は両方 nil
     static func soundChange(forChip sel: String) -> (file: String?, label: String?) {
         sel == "__default__" ? (nil, nil) : (sel, soundPresetLabel(sel))
     }
@@ -740,12 +701,148 @@ struct SettingsView: View {
     /// その場合はアラーム音行の alarmSoundLabel が表示を担う
     static func soundPresetLabel(_ file: String) -> String {
         switch file {
-        case "__default__": return String(localized: "標準")
+        case "__default__": return String(localized: "iPhone の標準")
         case "preset_bell.caf": return String(localized: "ベル")
         case "preset_soft.caf": return String(localized: "ゆっくり")
         case "preset_beep.caf": return String(localized: "きっぱり")
         default: return file
         }
+    }
+}
+
+/// アラーム音の画面 (#147, デザイン p147 の列2)。「iPhone の標準」→ 同梱の音の順のラジオの一覧と、
+/// その下の「ファイルから選ぶ」(取り込み, #101)。同梱の音は「聞く」で、選ぶ前に音を確かめられる
+struct AlarmSoundView: View {
+    @EnvironmentObject var engine: Engine
+    @EnvironmentObject var store: Store
+    @StateObject private var preview = SoundPreviewPlayer()
+    @State private var showSoundPicker = false
+    @State private var soundError: String? = nil
+
+    var body: some View {
+        let current = store.state.alarmSoundFile
+        List {
+            Section {
+                row(file: nil, name: SettingsView.soundPresetLabel("__default__"), selected: current == nil, previewable: false)
+                ForEach(AlarmSoundLibrary.bundledPresets, id: \.self) { name in
+                    row(file: name, name: SettingsView.soundPresetLabel(name), selected: current == name, previewable: true)
+                }
+                // 取り込んだ音は選んでいる間だけ並べる。選び直すと Engine が使われなくなった音を消すため
+                if let current, !AlarmSoundLibrary.bundledPresets.contains(current) {
+                    row(file: current, name: store.state.alarmSoundLabel ?? current, selected: true, previewable: false)
+                }
+            }
+            Section {
+                Button { showSoundPicker = true } label: {
+                    Text("ファイルから選ぶ")
+                        .font(NightTheme.font(15, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                }
+            } footer: {
+                // 取り込める音の説明。長い音は AlarmSoundLibrary.maxSeconds で切る
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("使える形式は mp3・m4a・wav・aiff・caf などです。長い音は先頭の約30秒だけ鳴ります。")
+                    if let soundError {
+                        Text(soundError).foregroundStyle(.orange)
+                    }
+                }
+            }
+        }
+        .navigationTitle("アラーム音")
+        .navigationBarTitleDisplayMode(.inline)
+        .fileImporter(isPresented: $showSoundPicker, allowedContentTypes: [.audio]) { result in
+            switch result {
+            case .success(let url):
+                do {
+                    let name = try AlarmSoundLibrary.importSound(from: url)
+                    changeSound(file: name, label: url.deletingPathExtension().lastPathComponent)
+                } catch {
+                    soundError = String(localized: "この音声は使えませんでした: \(error.localizedDescription)")
+                }
+            case .failure(let error):
+                soundError = String(localized: "音声を開けませんでした: \(error.localizedDescription)")
+            }
+        }
+        .onDisappear { preview.stop() }
+        // 本物のアラームが鳴り出したら試し聞きを止める。鳴動の音と重ねない
+        .onChange(of: engine.alertingIds.isEmpty) { _, idle in
+            if !idle { preview.stop() }
+        }
+    }
+
+    /// 1 行: ラジオ + 名前 (押すと選ぶ)。同梱の音だけ右に「聞く」
+    private func row(file: String?, name: String, selected: Bool, previewable: Bool) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                if !selected { choose(file) }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                        .font(.system(size: 20))
+                        .foregroundStyle(selected ? NightTheme.indigo : .secondary)
+                    Text(name).font(NightTheme.font(15)).foregroundStyle(.primary).lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            // 行の中にボタンが 2 つあるので、List が行全体を 1 つのボタンにしないよう borderless にする
+            .buttonStyle(.borderless)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            if previewable, let file {
+                let on = preview.playing == file
+                Button { preview.toggle(file) } label: {
+                    Label(on ? "止める" : "聞く", systemImage: on ? "stop.fill" : "play.fill")
+                        .font(NightTheme.font(13, weight: .medium))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(NightTheme.surfaceVariant, in: Capsule())
+                }
+                .buttonStyle(.borderless)
+                // 鳴動中は試し聞きを出さない (本物のアラームの音と重なる)
+                .disabled(!engine.alertingIds.isEmpty)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func choose(_ file: String?) {
+        let change = SettingsView.soundChange(forChip: file ?? "__default__")
+        changeSound(file: change.file, label: change.label)
+    }
+
+    /// 既定の音を変え、入っている予約を新しい音で入れ直す (AlarmKit は予約時に音が決まる)
+    private func changeSound(file: String?, label: String?) {
+        soundError = nil
+        store.setAlarmSound(file: file, label: label)
+        Task { await engine.rescheduleForSoundChange() }
+    }
+}
+
+/// 「聞く」で同梱の .caf を鳴らす。予約とは関係なく、アラーム音の画面の中だけで鳴る
+@MainActor
+final class SoundPreviewPlayer: ObservableObject {
+    @Published private(set) var playing: String? = nil
+    private var player: AVAudioPlayer? = nil
+
+    /// 同じ音をもう一度押したら止める。別の音なら前の音を止めてから鳴らす
+    func toggle(_ name: String) {
+        if playing == name { stop(); return }
+        stop()
+        guard let url = Bundle.main.url(forResource: name, withExtension: nil),
+              let p = try? AVAudioPlayer(contentsOf: url), p.play() else { return }
+        player = p
+        playing = name
+        let seconds = p.duration
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64((seconds + 0.2) * 1_000_000_000))
+            // 鳴り終わった後に「止める」のまま残さない。別の音へ替わっていたら触らない
+            if let self, self.player === p { self.stop() }
+        }
+    }
+
+    func stop() {
+        player?.stop()
+        player = nil
+        playing = nil
     }
 }
 

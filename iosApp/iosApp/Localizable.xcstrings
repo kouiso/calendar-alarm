@@ -390,6 +390,16 @@
         }
       }
     },
+    "アラーム音": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alarm sound"
+          }
+        }
+      }
+    },
     "アラーム音: %@": {
       "localizations": {
         "en": {
@@ -520,22 +530,22 @@
         }
       }
     },
+    "ファイルから選ぶ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose from Files"
+          }
+        }
+      }
+    },
     "プリセットを追加": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Add preset"
-          }
-        }
-      }
-    },
-    "使える形式は mp3・m4a・wav・aiff・caf などです。長い音は先頭の約30秒だけ鳴ります。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Usable formats: mp3, m4a, wav, aiff, caf and more. Long sounds play only the first 30 seconds or so."
           }
         }
       }
@@ -676,6 +686,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Skip dates"
+          }
+        }
+      }
+    },
+    "使える形式は mp3・m4a・wav・aiff・caf などです。長い音は先頭の約30秒だけ鳴ります。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usable formats: mp3, m4a, wav, aiff, caf and more. Long sounds play only the first 30 seconds or so."
           }
         }
       }
@@ -850,32 +870,22 @@
         }
       }
     },
-    "標準": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Default"
-          }
-        }
-      }
-    },
-    "標準に戻す": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reset to default"
-          }
-        }
-      }
-    },
     "次 %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Next %@"
+          }
+        }
+      }
+    },
+    "止める": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
           }
         }
       }
@@ -916,6 +926,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "End (empty = 1 hour)"
+          }
+        }
+      }
+    },
+    "聞く": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listen"
           }
         }
       }
@@ -1016,16 +1036,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Applies to"
-          }
-        }
-      }
-    },
-    "選ぶ": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose"
           }
         }
       }
