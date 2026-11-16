@@ -63,6 +63,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.engine.AlarmService
+import com.calendaralarm.engine.dndAllowsAlarms
+import com.calendaralarm.engine.readInterruptionFilter
+import com.calendaralarm.engine.readPolicyAllowsAlarms
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -87,7 +90,7 @@ data class TroubleshootItem(
  */
 object TroubleshootChecks {
 
-    fun collect(context: Context, vibrate: Boolean): List<TroubleshootItem> {
+    fun collect(context: Context, vibrate: Boolean, ignoreDnd: Boolean = true): List<TroubleshootItem> {
         val pkg = context.packageName
         val pkgUri = Uri.parse("package:$pkg")
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -102,7 +105,7 @@ object TroubleshootChecks {
 
         // 鳴動に使うチャンネル (バイブ設定で切替) を検査する。未作成なら作ってから見る
         AlarmService.ensureChannels(context)
-        val channelId = if (vibrate) AlarmService.CHANNEL_ID else AlarmService.CHANNEL_ID_NOVIB
+        val channelId = AlarmService.ringChannelId(vibrate, ignoreDnd)
         val channel = nm?.getNotificationChannel(channelId)
         val channelOk = channel != null &&
             channel.importance >= NotificationManager.IMPORTANCE_HIGH &&
@@ -126,26 +129,13 @@ object TroubleshootChecks {
             else -> CheckState.NG
         }
 
-        // おやすみモード: 鳴動音は USAGE_ALARM。OFF なら素通り、優先モードは「アラーム」許可が要る、
-        // アラームも含めて全て遮断 (NONE) だと鳴らない
-        val dndFilter = runCatching { nm?.currentInterruptionFilter }.getOrNull()
-        val dndOk = runCatching {
-            when (dndFilter) {
-                null, NotificationManager.INTERRUPTION_FILTER_ALL,
-                NotificationManager.INTERRUPTION_FILTER_UNKNOWN -> true
-                NotificationManager.INTERRUPTION_FILTER_ALARMS -> true
-                NotificationManager.INTERRUPTION_FILTER_PRIORITY ->
-                    // 自動ルールで発動した優先モードはユーザーの既定ポリシーとは
-                    // 別物が適用されるため、実効中の consolidated ポリシーを見る (API 30+)
-                    (((if (Build.VERSION.SDK_INT >= 30) {
-                        nm?.consolidatedNotificationPolicy
-                    } else {
-                        nm?.notificationPolicy
-                    })?.priorityCategories ?: 0) and
-                        NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS) != 0
-                else -> false
-            }
-        }.getOrDefault(true)
+        // おやすみモード (#149、盤 p149): 「おやすみモード中も鳴らす」が ON なら (許可の有無に関わらず)、
+        // 鳴動音は USAGE_ALARM なので OS がアラームを通すかで OK/NG。利用者が OFF にしている間は、
+        // おやすみモード中は鳴らさず通知だけ残す。判定は鳴動側と同じ AlarmService.silencedByDnd
+        val policyGranted = com.calendaralarm.engine.readPolicyAccessGranted(context)
+        val dndFilter = readInterruptionFilter(context)
+        val dndOk = dndAllowsAlarms(dndFilter, readPolicyAllowsAlarms(context))
+        val blockedByApp = AlarmService.silencedByDnd(ignoreDnd, dndFilter)
         // 全遮断 (NONE) の時は優先モード設定では効かないため、総合のおやすみモード設定へ分岐する。
         // ACTION_ZEN_MODE_SETTINGS は API 30 で deprecated になり新しい compileSdk の stub には
         // 残っていないため、同等の action 文字列を直接使う (無い端末は openSafely がアプリ詳細へ逃がす)
@@ -204,11 +194,45 @@ object TroubleshootChecks {
                 context.getString(R.string.trouble_fsi_desc),
                 Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkgUri),
             ),
+            // 利用者が OFF にしている間は本人が選んだ動きなので、おやすみモード中でも「要対応」にはしない (参考)。
+            // 直す先は OS の設定ではなくアプリの設定のスイッチなので、開く先は付けない
             TroubleshootItem(
-                "dnd", s(dndOk),
-                context.getString(if (dndOk) R.string.trouble_dnd_ok else R.string.trouble_dnd_ng),
-                context.getString(R.string.trouble_dnd_desc),
-                dndFix,
+                "dnd",
+                when {
+                    blockedByApp -> CheckState.INFO
+                    !ignoreDnd -> CheckState.OK
+                    else -> s(dndOk)
+                },
+                context.getString(
+                    when {
+                        blockedByApp -> R.string.trouble_dnd_blocked
+                        !ignoreDnd -> R.string.trouble_dnd_off
+                        dndOk -> R.string.trouble_dnd_ok
+                        else -> R.string.trouble_dnd_ng
+                    },
+                ),
+                context.getString(if (!ignoreDnd) R.string.trouble_dnd_blocked_desc else R.string.trouble_dnd_desc),
+                if (!ignoreDnd) null else dndFix,
+            ),
+            // #149: 「おやすみモード中も鳴らす」ON の時だけ意味を持つ。
+            // 通知ポリシーへのアクセス未許可だとチャンネルの bypassDnd が OS に無視される。
+            // 許可が無くても OS がアラームを通す設定なら鳴るので、未許可は「要対応」ではなく「参考」にする
+            TroubleshootItem(
+                "dnd_policy",
+                when {
+                    !ignoreDnd -> CheckState.NA
+                    policyGranted -> CheckState.OK
+                    else -> CheckState.INFO
+                },
+                context.getString(
+                    when {
+                        !ignoreDnd -> R.string.trouble_dnd_policy_na
+                        policyGranted -> R.string.trouble_dnd_policy_ok
+                        else -> R.string.trouble_dnd_policy_ng
+                    },
+                ),
+                context.getString(R.string.trouble_dnd_policy_desc),
+                Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS),
             ),
         )
     }
@@ -225,8 +249,12 @@ fun TroubleshootingScreen(settings: SettingsRepository, onBack: () -> Unit) {
     var items by remember { mutableStateOf<List<TroubleshootItem>>(emptyList()) }
     var tick by remember { mutableStateOf(0) }
     LaunchedEffect(tick) {
-        val vibrate = runCatching { settings.flow.first().vibrateWhileRinging }.getOrDefault(true)
-        items = TroubleshootChecks.collect(context, vibrate)
+        val st = runCatching { settings.flow.first() }.getOrNull()
+        items = TroubleshootChecks.collect(
+            context,
+            vibrate = st?.vibrateWhileRinging ?: true,
+            ignoreDnd = st?.ignoreDnd ?: true,
+        )
     }
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
@@ -288,7 +316,7 @@ private fun ForceFsiRow(settings: SettingsRepository) {
     }
 }
 
-private fun Context.openSafely(intent: Intent?) {
+internal fun Context.openSafely(intent: Intent?) {
     if (intent == null) return
     val i = Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     // 端末によっては個別の設定画面が無い。アプリ情報へ逃がして必ずどこかへ飛ばす
@@ -312,7 +340,8 @@ private fun TroubleshootRow(item: TroubleshootItem, onFix: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .testTag("troubleshoot_${item.key}")
-            .then(if (ng || info) Modifier.clickable(onClick = onFix) else Modifier)
+            // 開く先が無い行 (本人が選んだ動きを知らせるだけの参考) は押せる要素にしない。押しても何も起きない行を作らない
+            .then(if ((ng || info) && item.fix != null) Modifier.clickable(onClick = onFix) else Modifier)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
