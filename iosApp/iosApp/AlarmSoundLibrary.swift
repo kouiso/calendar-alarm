@@ -23,29 +23,45 @@ enum AlarmSoundLibrary {
     ]
 
     /// バンドルのプリセットを Library/Sounds へ置く (冪等)。Store が状態を読む前に呼ぶ。
+    /// 大きさがバンドルの物と違うファイルは置き直す。コピーの途中で落ちた書きかけや、
+    /// 同じ名前のまま中身を替えた更新の前の版を、次の起動で直すため。
     /// 置けなかった音は「音の名前: 理由」で返す。その音は既定音で鳴るので、Store が記録に残す
     @discardableResult
     static func installBundledPresets() -> [String] {
+        let fm = FileManager.default
         do {
-            try FileManager.default.createDirectory(at: soundsDirectory, withIntermediateDirectories: true)
+            try fm.createDirectory(at: soundsDirectory, withIntermediateDirectories: true)
         } catch {
             return bundledPresets.map { "\($0): \(error.localizedDescription)" }
         }
         var failures: [String] = []
         for name in bundledPresets {
             let dest = soundsDirectory.appendingPathComponent(name)
-            if FileManager.default.fileExists(atPath: dest.path) { continue }
             guard let src = Bundle.main.url(forResource: name, withExtension: nil) else {
-                failures.append("\(name): not in app bundle")
+                // 前に置いた物が残っていれば、それで鳴るので失敗にしない
+                if !fm.fileExists(atPath: dest.path) { failures.append("\(name): not in app bundle") }
                 continue
             }
+            if fileSize(dest) == fileSize(src) { continue }
+            // 一時ファイルへ書き切ってから置き換える。途中で落ちても Library/Sounds に書きかけを残さない
+            let tmp = fm.temporaryDirectory.appendingPathComponent("preset-\(UUID().uuidString).caf")
             do {
-                try FileManager.default.copyItem(at: src, to: dest)
+                try fm.copyItem(at: src, to: tmp)
+                if fm.fileExists(atPath: dest.path) {
+                    _ = try fm.replaceItemAt(dest, withItemAt: tmp)
+                } else {
+                    try fm.moveItem(at: tmp, to: dest)
+                }
             } catch {
+                try? fm.removeItem(at: tmp)
                 failures.append("\(name): \(error.localizedDescription)")
             }
         }
         return failures
+    }
+
+    private static func fileSize(_ url: URL) -> Int? {
+        (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
     }
 
     /// Library/Sounds に置けている同梱の音。置けていない音は選んでも既定音で鳴るので、一覧に出さない

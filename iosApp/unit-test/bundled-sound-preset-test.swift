@@ -13,7 +13,9 @@ final class BundledSoundPresetCopyTests: XCTestCase {
     }
 
     override func tearDown() {
-        // アプリは起動時に必ず置くので、試験の後も置いた状態に戻す
+        // アプリは起動時に必ず置くので、試験の後も置いた状態に戻す。
+        // 大きさだけ同じ偽物を試験が置くことがあるので、一度消してから置き直す
+        for name in AlarmSoundLibrary.bundledPresets { try? FileManager.default.removeItem(at: url(name)) }
         AlarmSoundLibrary.installBundledPresets()
     }
 
@@ -41,14 +43,27 @@ final class BundledSoundPresetCopyTests: XCTestCase {
         }
     }
 
-    /// すでにあるファイルは上書きしない (予約が読んでいる最中の音を差し替えない)
-    func testInstallKeepsExistingFile() throws {
+    /// 大きさが同梱の物と違うファイル (書きかけ・前の版) は、同梱の中身で置き直す
+    func testInstallReplacesFileWhoseSizeDiffers() throws {
         let name = try XCTUnwrap(AlarmSoundLibrary.bundledPresets.first)
         try FileManager.default.createDirectory(at: AlarmSoundLibrary.soundsDirectory, withIntermediateDirectories: true)
-        let marker = Data("existing".utf8)
-        try marker.write(to: url(name))
+        try Data("truncated".utf8).write(to: url(name))
+        XCTAssertEqual(AlarmSoundLibrary.installBundledPresets(), [])
+        let src = try XCTUnwrap(Bundle.main.url(forResource: name, withExtension: nil))
+        XCTAssertEqual(try Data(contentsOf: url(name)), try Data(contentsOf: src))
+        XCTAssertTrue(AlarmSoundLibrary.installedPresets.contains(name))
+    }
+
+    /// 大きさが同じファイルは置き直さない。起動のたびに書き直さず、比べるのは大きさだけ
+    func testInstallKeepsFileOfSameSize() throws {
+        let name = try XCTUnwrap(AlarmSoundLibrary.bundledPresets.first)
+        let src = try XCTUnwrap(Bundle.main.url(forResource: name, withExtension: nil))
+        let size = try Data(contentsOf: src).count
+        try FileManager.default.createDirectory(at: AlarmSoundLibrary.soundsDirectory, withIntermediateDirectories: true)
+        let sameSize = Data(repeating: 0, count: size)
+        try sameSize.write(to: url(name))
         AlarmSoundLibrary.installBundledPresets()
-        XCTAssertEqual(try Data(contentsOf: url(name)), marker)
+        XCTAssertEqual(try Data(contentsOf: url(name)), sameSize)
     }
 
     /// Library/Sounds に無い同梱の音は一覧に出さず、選んであっても既定音 (nil) として扱う。
