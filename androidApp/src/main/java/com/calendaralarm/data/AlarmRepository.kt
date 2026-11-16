@@ -254,7 +254,8 @@ class AlarmRepository(
     /**
      * Reminders.MINUTES=-1 (MINUTES_DEFAULT) は「システム既定」。実値は端末依存で取得できないため、
      * 設定画面で変えられる既定分数 defaultMinutesBefore に解決する (代替値を隠さない)。
-     * 予約 (resync) と一覧のスイッチが別々に解決すると、鳴るのに「鳴らない」と出るずれが起きるので、両方ここを通す
+     * 一覧 (upcomingEvents) の「予定側通知あり」判定用。予約 (resync) 側は生値のまま展開へ渡し、
+     * 明示の通知と基点を分けるため AlarmExpander 内で defaultReminderMinutes に解決する (#382)
      */
     private fun CalendarEvent.withResolvedDefaultReminders(appSettings: SettingsRepository.Settings): CalendarEvent =
         copy(calendarReminderMinutes = calendarReminderMinutes.map { if (it < 0) appSettings.defaultMinutesBefore else it })
@@ -815,10 +816,13 @@ class AlarmRepository(
                 // 開始から長く伸びても liveEventKeys が親を見失わず、スヌーズ子が
                 // 無言キャンセルされない。in-window 外の予定は展開側で弾かれる。
                 val events = enrichWithGoogleTypes(
+                    // MINUTES_DEFAULT (-1) はここでは解決しない。終日の明示通知 (>0) は
+                    // 現地0時基点、0分と既定値は鳴動時刻基点と基点が違うため、生値を見ないと
+                    // 展開側が区別できない (#382)。一覧表示側は upcomingEvents で別途解決する
                     calendarReader.events(
                         (now - 14.days).toEpochMilliseconds(),
                         fetchUntil.toEpochMilliseconds(),
-                    ).map { it.withResolvedDefaultReminders(appSettings) },
+                    ),
                     appSettings,
                     (now - 14.days).toEpochMilliseconds(),
                     fetchUntil.toEpochMilliseconds(),
@@ -855,6 +859,8 @@ class AlarmRepository(
                     inviteFilter = appSettings.inviteFilter,
                     eventTypeFilter = appSettings.eventTypeFilter,
                     importEventReminders = appSettings.importEventReminders,
+                    // 上で生値を通した MINUTES_DEFAULT (-1) を展開側で既定分数に解決する (#382)
+                    defaultReminderMinutes = appSettings.defaultMinutesBefore,
                     muteAll = appSettings.muteAll,
                     commonExtraOffsets = appSettings.extraReminderOffsets,
                 )
@@ -899,9 +905,11 @@ class AlarmRepository(
                                         standalones.any { it.id == aid && it.enabled }
                                     } == true
                             root.startsWith("ev:") ->
-                                // カレンダー読み取り失敗時は平の EVENT 予約と同じく保守側に倒す
+                                // カレンダー読み取り失敗時は平の EVENT 予約と同じく保守側に倒す。
+                                // id の末尾は ":b<分>" (開始基点) か ":d<分>" (終日の現地0時基点, #382)
+                                // なので、最後の区切りを外せば予定のキーに戻る
                                 keepPendingEvents || root in desiredIds ||
-                                    root.removePrefix("ev:").substringBeforeLast(":b") in liveEventKeys
+                                    root.removePrefix("ev:").substringBeforeLast(":") in liveEventKeys
                             else -> keepPendingEvents && inst.kind == AlarmKind.EVENT
                         }
                     }

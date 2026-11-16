@@ -103,6 +103,9 @@ object SharedBridge {
             inviteFilter = req.inviteFilter,
             eventTypeFilter = req.eventTypeFilter,
             importEventReminders = req.importEventReminders,
+            // MINUTES_DEFAULT (-1) の解決値。EventKit の relativeOffset は負値を出さないので
+            // 実質は Android 専用だが、同じ既定値を渡しておく (#382)
+            defaultReminderMinutes = req.defaultMinutesBefore,
             muteAll = req.muteAll,
             commonExtraOffsets = req.commonExtraOffsets,
             // iOS の予定一覧 (Swift の写し Models.swift の classifyEventType) は #307 まで #306 より前の部分一致なので、

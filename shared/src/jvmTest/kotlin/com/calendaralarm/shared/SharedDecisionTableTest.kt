@@ -62,6 +62,8 @@ class SharedDecisionTableTest {
             val event = CalendarEvent(
                 id = "e", calendarId = "c1", title = "会議",
                 startMillis = start, endMillis = start + 3_600_000, allDay = ev["allDay"]!!.jsonPrimitive.boolean,
+                // 予定側 (カレンダーに入っている通知) の分数。終日の通知の基点 (#382) を表に書くために使う
+                calendarReminderMinutes = ev["reminders"]?.jsonArray?.map { it.jsonPrimitive.int } ?: emptyList(),
             )
             val ruleJson = row["rule"]!!.jsonObject
             val rule = AlarmRule(
@@ -86,6 +88,9 @@ class SharedDecisionTableTest {
                 now = Instant.parse(row.str("now")),
                 horizon = Instant.parse(row.str("horizon")),
                 zone = TimeZone.of("Asia/Tokyo"),
+                importEventReminders = row["importEventReminders"]?.jsonPrimitive?.boolean ?: false,
+                // MINUTES_DEFAULT (-1) の解決値。表に書かない行は 0 に解決する (#382)
+                defaultReminderMinutes = row["defaultReminderMinutes"]?.jsonPrimitive?.int ?: 0,
             ).map { Triple(it.triggerAtMillis, it.minutesBefore, it.delivery.name) }
             val expected = row["expected"]!!.jsonArray.map {
                 val o = it.jsonObject

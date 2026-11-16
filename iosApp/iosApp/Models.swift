@@ -541,32 +541,51 @@ func notificationDeliveryAhead(_ ev: CalendarEventDTO, _ rule: AlarmRuleDTO, _ o
                                muteAll: Bool = false, nowMillis: Int64) -> Bool {
     let notify = EventAction.notify.rawValue
     var startMillis = ev.startMillis
+    // 終日の予定側通知の基点 (#382)。Google は終日の通知を「その日の現地 0 時の何分前」で持つ
+    var dayStartMillis = ev.startMillis
     if ev.allDay {
         var utc = Calendar(identifier: .gregorian)
         utc.timeZone = TimeZone(identifier: "UTC") ?? utc.timeZone
         let day = utc.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: TimeInterval(ev.startMillis) / 1000))
-        var local = DateComponents()
-        local.year = day.year; local.month = day.month; local.day = day.day
-        local.hour = rule.allDayMinutes / 60; local.minute = rule.allDayMinutes % 60
         // 端末の暦が和暦などでも、取り出した西暦の年月日をそのまま端末のタイムゾーンの日時にする (shared は西暦で組む)
         var gregorian = Calendar(identifier: .gregorian)
         gregorian.timeZone = TimeZone.current
+        var dayStart = DateComponents()
+        dayStart.year = day.year; dayStart.month = day.month; dayStart.day = day.day
+        dayStart.hour = 0; dayStart.minute = 0
+        if let d = gregorian.date(from: dayStart) {
+            dayStartMillis = Int64(d.timeIntervalSince1970 * 1000)
+        }
+        var local = DateComponents()
+        local.year = day.year; local.month = day.month; local.day = day.day
+        local.hour = rule.allDayMinutes / 60; local.minute = rule.allDayMinutes % 60
         if let d = gregorian.date(from: local) {
             startMillis = Int64(d.timeIntervalSince1970 * 1000)
         }
     }
-    func ahead(_ minutes: Int) -> Bool { startMillis - Int64(minutes) * 60_000 > nowMillis }
     let startMinutes = ov?.minutesBefore ?? rule.minutesBefore
-    if actions.start == notify && ahead(startMinutes) { return true }
+    let startTrigger = startMillis - Int64(startMinutes) * 60_000
+    if actions.start == notify && startTrigger > nowMillis { return true }
     guard actions.reminder == notify else { return false }
     // shared `AlarmExpander` は開始の予約を先に作り、同じ時刻のリマインダーは重複として作らない。
     // 開始がミュートの時は何も作らないので、その時刻のリマインダーは残る
     // すべてミュート中のアラームの開始も、展開は時刻を記録する前に外すので、その時刻のリマインダーは残る
     let startTriggerTaken = actions.start != EventAction.mute.rawValue
         && !(muteAll && actions.start == EventAction.alarm.rawValue)
-    let offsets = (ov?.extraOffsets ?? rule.extraOffsets)
-        + (importReminders ? ev.calendarReminderMinutes.filter { $0 >= 0 } : [])
-    return offsets.contains { ahead($0) && !(startTriggerTaken && $0 == startMinutes) }
+    // アプリ側の追加リマインダーは鳴動時刻 (allDayMinutes) 基点。
+    // 取り込んだ予定側通知で 0 分より大きいものは現地 0 時基点 (#382)。0 分は鳴動時刻にまとまる
+    let appOffsets = (ov?.extraOffsets ?? rule.extraOffsets).map { (startMillis, $0) }
+    let imported = importReminders
+        // EventKit は relativeOffset の開始前だけを正の分数にするので負値は来ない。
+        // Android の MINUTES_DEFAULT (-1) は展開側で既定分数に解決する (ここでは来ない)
+        ? ev.calendarReminderMinutes.filter { $0 >= 0 }
+            .map { (ev.allDay && $0 > 0 ? dayStartMillis : startMillis, $0) }
+        : [(Int64, Int)]()
+    // 開始との重複は分数ではなく鳴動時刻で見る (shared の seenTriggers と同じ)
+    return (appOffsets + imported).contains { (anchor, m) in
+        let trigger = anchor - Int64(m) * 60_000
+        return trigger > nowMillis && !(startTriggerTaken && trigger == startTrigger)
+    }
 }
 
 /// 全イベント共通の追加リマインダーをカレンダーの既定に併合したルール (#143)。

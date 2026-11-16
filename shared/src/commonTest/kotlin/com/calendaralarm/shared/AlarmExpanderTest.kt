@@ -542,19 +542,22 @@ class AlarmExpanderTest {
     }
 
     @Test
-    fun `負のリマインダー値は取り込まない`() {
-        // CalendarContract の METHOD_DEFAULT 行などで MINUTES=-1 が来ると
-        // そのままでは開始「後」に鳴るゴミ予約になるため >=0 のみ採用。
+    fun `MINUTES_DEFAULT(-1)は既定分数に解決して取り込む`() {
+        // CalendarContract の METHOD_DEFAULT 行は MINUTES=-1。#382 で明示の通知と基点を
+        // 分けるため、解決は展開側で行う (生値が来る)。既定分数に置き換わって鳴動時刻基点
         val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
-            .copy(calendarReminderMinutes = listOf(-1, 10))
+            .copy(calendarReminderMinutes = listOf(-1, 45))
         val out = AlarmExpander.expandEvents(
             listOf(ev),
             calendarRules = mapOf("c1" to AlarmRule(minutesBefore = 0)),
             overrides = emptyMap(), disabledCalendarIds = emptySet(),
             now = now, horizon = horizon, zone = TZ,
             importEventReminders = true,
+            defaultReminderMinutes = 20,
         )
-        assertEquals(listOf(0, 10), out.map { it.minutesBefore })
+        // -1 は既定の 20 分に解決されて追加される (生値で整列するので -1→20 が先)
+        assertEquals(listOf(0, 20, 45), out.map { it.minutesBefore })
+        assertEquals(ldt("2026-10-05T09:40:00").toEpochMilliseconds(), out.single { it.minutesBefore == 20 }.triggerAtMillis)
     }
 
     @Test
@@ -569,6 +572,73 @@ class AlarmExpanderTest {
             importEventReminders = false,
         )
         assertEquals(1, out.size)
+    }
+
+    @Test
+    fun `終日の予定側通知は鳴動時刻ではなく現地0時から数える`() {
+        // #382: Google は終日の通知を「その日の現地0時の何分前」で持つ (540分前 = 前日15時)。
+        // 鳴動時刻 (既定9:00) から引くと当日 0:00 に鳴ってしまうバグがあった
+        val utcStart = Instant.parse("2026-10-08T00:00:00Z").toEpochMilliseconds()
+        val ev = allDayEvent("ad1", utcStart).copy(calendarReminderMinutes = listOf(540))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev), mapOf("c1" to AlarmRule()),
+            emptyMap(), emptySet(), now, horizon, zone = TZ,
+            importEventReminders = true,
+        )
+        // 開始 (9:00) と通知 (前日15:00 = 現地0時の540分前) の2件。0:00 には鳴らない
+        assertEquals(2, out.size)
+        assertEquals(ldt("2026-10-08T09:00:00").toEpochMilliseconds(), out.single { it.minutesBefore == 0 }.triggerAtMillis)
+        val reminder = out.single { it.minutesBefore == 540 }
+        assertEquals(ldt("2026-10-07T15:00:00").toEpochMilliseconds(), reminder.triggerAtMillis)
+        // 基点が違うので id の印は ":b" ではなく ":d" (同じ分数の別時刻予約と衝突しない)
+        assertEquals("ev:c1:ad1:${utcStart}:d540", reminder.id)
+    }
+
+    @Test
+    fun `終日の0分通知は鳴動時刻にまとまる`() {
+        // 0 分は「開始時」。0 時基点に倒すと真夜中の鳴動を新たに作るため鳴動時刻にまとめる (#382)
+        val utcStart = Instant.parse("2026-10-08T00:00:00Z").toEpochMilliseconds()
+        val ev = allDayEvent("ad1", utcStart).copy(calendarReminderMinutes = listOf(0))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev), mapOf("c1" to AlarmRule()),
+            emptyMap(), emptySet(), now, horizon, zone = TZ,
+            importEventReminders = true,
+        )
+        assertEquals(listOf(ldt("2026-10-08T09:00:00").toEpochMilliseconds()), out.map { it.triggerAtMillis })
+    }
+
+    @Test
+    fun `終日の既定の通知(-1)は鳴動時刻にまとまる`() {
+        // #382 の判断: MINUTES_DEFAULT は「システム既定」で明示ではないため、
+        // 解決後も鳴動時刻基点にする。0 時基点に倒すと既定 10 分の通知が前日 23:50 に
+        // 鳴り、直すことで真夜中の鳴動を新たに作ってしまう
+        val utcStart = Instant.parse("2026-10-08T00:00:00Z").toEpochMilliseconds()
+        val ev = allDayEvent("ad1", utcStart).copy(calendarReminderMinutes = listOf(-1))
+        val out = AlarmExpander.expandEvents(
+            listOf(ev), mapOf("c1" to AlarmRule()),
+            emptyMap(), emptySet(), now, horizon, zone = TZ,
+            importEventReminders = true,
+            defaultReminderMinutes = 10,
+        )
+        // 開始 (9:00) と、解決された 10 分前 = 鳴動時刻基点の 8:50 (id は ":b")
+        assertEquals(2, out.size)
+        assertEquals(ldt("2026-10-08T09:00:00").toEpochMilliseconds(), out.single { it.minutesBefore == 0 }.triggerAtMillis)
+        val resolved = out.single { it.minutesBefore == 10 }
+        assertEquals(ldt("2026-10-08T08:50:00").toEpochMilliseconds(), resolved.triggerAtMillis)
+        assertEquals("ev:c1:ad1:${utcStart}:b10", resolved.id)
+    }
+
+    @Test
+    fun `終日でアプリ側の追加リマインダーは今までどおり鳴動時刻から数える`() {
+        // アプリが持つ「何分前」(カレンダー既定・共通・個別) は終日の鳴動時刻から引く仕様 (§7.4)。
+        // 0 時基点に変えるのは Google 形式の予定側通知だけ (#382)
+        val utcStart = Instant.parse("2026-10-08T00:00:00Z").toEpochMilliseconds()
+        val ev = allDayEvent("ad1", utcStart)
+        val out = AlarmExpander.expandEvents(
+            listOf(ev), mapOf("c1" to AlarmRule(extraOffsets = listOf(60))),
+            emptyMap(), emptySet(), now, horizon, zone = TZ,
+        )
+        assertEquals(ldt("2026-10-08T08:00:00").toEpochMilliseconds(), out.single { it.minutesBefore == 60 }.triggerAtMillis)
     }
 
     @Test
