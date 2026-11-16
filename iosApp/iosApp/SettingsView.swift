@@ -101,7 +101,8 @@ struct SettingsView: View {
                                 AlarmSoundView()
                             } label: {
                                 IconRow("music.note") {
-                                    Text("アラーム音: \(store.state.alarmSoundLabel ?? String(localized: "iPhone の標準"))")
+                                    // ファイルが無い音は既定音で鳴るので、保存した名前ではなく「iPhone の標準」と出す
+                                    Text("アラーム音: \((AlarmSoundLibrary.effectiveSound(store.state.alarmSoundFile) == nil ? nil : store.state.alarmSoundLabel) ?? String(localized: "iPhone の標準"))")
                                         .font(NightTheme.font(13)).foregroundStyle(.secondary)
                                         .lineLimit(1)
                                     Spacer()
@@ -720,11 +721,12 @@ struct AlarmSoundView: View {
     @State private var soundError: String? = nil
 
     var body: some View {
-        let current = store.state.alarmSoundFile
+        // ファイルが無い音は既定音で鳴るので、選んであっても「iPhone の標準」を選んだ形で見せる
+        let current = AlarmSoundLibrary.effectiveSound(store.state.alarmSoundFile)
         List {
             Section {
                 row(file: nil, name: SettingsView.soundPresetLabel("__default__"), selected: current == nil, previewable: false)
-                ForEach(AlarmSoundLibrary.bundledPresets, id: \.self) { name in
+                ForEach(AlarmSoundLibrary.installedPresets, id: \.self) { name in
                     row(file: name, name: SettingsView.soundPresetLabel(name), selected: current == name, previewable: true)
                 }
                 // 取り込んだ音は選んでいる間だけ並べる。選び直すと Engine が使われなくなった音を消すため

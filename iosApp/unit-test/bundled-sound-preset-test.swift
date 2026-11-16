@@ -19,7 +19,8 @@ final class BundledSoundPresetCopyTests: XCTestCase {
 
     /// 3 つとも Library/Sounds に置かれ、中身は同梱の .caf と同じ
     func testInstallCopiesEveryPresetFromBundle() throws {
-        AlarmSoundLibrary.installBundledPresets()
+        XCTAssertEqual(AlarmSoundLibrary.installBundledPresets(), [], "置けなかった音を返した")
+        XCTAssertEqual(AlarmSoundLibrary.installedPresets, AlarmSoundLibrary.bundledPresets)
         for name in AlarmSoundLibrary.bundledPresets {
             XCTAssertTrue(AlarmSoundLibrary.exists(name), "\(name) が Library/Sounds に無い")
             let src = try XCTUnwrap(Bundle.main.url(forResource: name, withExtension: nil), "\(name) が同梱されていない")
@@ -48,6 +49,20 @@ final class BundledSoundPresetCopyTests: XCTestCase {
         try marker.write(to: url(name))
         AlarmSoundLibrary.installBundledPresets()
         XCTAssertEqual(try Data(contentsOf: url(name)), marker)
+    }
+
+    /// Library/Sounds に無い同梱の音は一覧に出さず、選んであっても既定音 (nil) として扱う。
+    /// 予約も soundName で既定音に落ちるので、画面と実際に鳴る音を揃える
+    func testMissingPresetIsHiddenAndTreatedAsDefault() throws {
+        AlarmSoundLibrary.installBundledPresets()
+        let missing = try XCTUnwrap(AlarmSoundLibrary.bundledPresets.first)
+        let present = try XCTUnwrap(AlarmSoundLibrary.bundledPresets.last)
+        try FileManager.default.removeItem(at: url(missing))
+        XCTAssertFalse(AlarmSoundLibrary.installedPresets.contains(missing))
+        XCTAssertTrue(AlarmSoundLibrary.installedPresets.contains(present))
+        XCTAssertNil(AlarmSoundLibrary.effectiveSound(missing))
+        XCTAssertEqual(AlarmSoundLibrary.effectiveSound(present), present)
+        XCTAssertNil(AlarmSoundLibrary.effectiveSound(nil))
     }
 
     /// 取り込み音の掃除 (removeAll) で、同梱の音は消えない

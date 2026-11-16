@@ -22,15 +22,40 @@ enum AlarmSoundLibrary {
         "preset_beep.caf",
     ]
 
-    /// バンドルのプリセットを Library/Sounds へ置く (冪等)。Store が状態を読む前に呼ぶ
-    static func installBundledPresets() {
-        try? FileManager.default.createDirectory(at: soundsDirectory, withIntermediateDirectories: true)
+    /// バンドルのプリセットを Library/Sounds へ置く (冪等)。Store が状態を読む前に呼ぶ。
+    /// 置けなかった音は「音の名前: 理由」で返す。その音は既定音で鳴るので、Store が記録に残す
+    @discardableResult
+    static func installBundledPresets() -> [String] {
+        do {
+            try FileManager.default.createDirectory(at: soundsDirectory, withIntermediateDirectories: true)
+        } catch {
+            return bundledPresets.map { "\($0): \(error.localizedDescription)" }
+        }
+        var failures: [String] = []
         for name in bundledPresets {
             let dest = soundsDirectory.appendingPathComponent(name)
             if FileManager.default.fileExists(atPath: dest.path) { continue }
-            guard let src = Bundle.main.url(forResource: name, withExtension: nil) else { continue }
-            try? FileManager.default.copyItem(at: src, to: dest)
+            guard let src = Bundle.main.url(forResource: name, withExtension: nil) else {
+                failures.append("\(name): not in app bundle")
+                continue
+            }
+            do {
+                try FileManager.default.copyItem(at: src, to: dest)
+            } catch {
+                failures.append("\(name): \(error.localizedDescription)")
+            }
         }
+        return failures
+    }
+
+    /// Library/Sounds に置けている同梱の音。置けていない音は選んでも既定音で鳴るので、一覧に出さない
+    static var installedPresets: [String] { bundledPresets.filter { exists($0) } }
+
+    /// 実際に鳴る音のファイル名。ファイルが無ければ予約は既定音に落ちる (soundName と同じ) ので nil を返し、
+    /// 画面でも「iPhone の標準」として見せる
+    static func effectiveSound(_ file: String?) -> String? {
+        guard let file, exists(file) else { return nil }
+        return file
     }
 
     /// 今の既定の音 (ファイル名)。Store が読み込みと変更の時に入れる。

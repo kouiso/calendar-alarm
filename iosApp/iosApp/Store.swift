@@ -97,7 +97,7 @@ final class Store: ObservableObject {
         loadedAt = Date()
         // 同梱プリセット (#147) を Library/Sounds へ先に置く。選択肢の表示と
         // AlertSound.named の参照が、音の有無を Library/Sounds で見るため
-        AlarmSoundLibrary.installBundledPresets()
+        let presetFailures = AlarmSoundLibrary.installBundledPresets()
         if let data = try? Data(contentsOf: self.fileURL),
            let loaded = try? JSONDecoder().decode(Persisted.self, from: data) {
             state = loaded
@@ -108,6 +108,11 @@ final class Store: ObservableObject {
                raw["openRouterApiKey"] != nil || raw["openRouterModel"] != nil {
                 save()
             }
+        }
+        // 置けなかった同梱の音は一覧に出さず、選んであれば既定音で鳴る。
+        // 何も残さないと「ベルのはずが標準の音で鳴った」の原因を追えないので、読み込んだ記録の後ろへ足す
+        for failure in presetFailures {
+            audit("SOUND_ERR", "preset \(failure)")
         }
     }
 
