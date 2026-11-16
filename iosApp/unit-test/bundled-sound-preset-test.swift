@@ -81,6 +81,23 @@ final class BundledSoundPresetCopyTests: XCTestCase {
         XCTAssertNil(AlarmSoundLibrary.effectiveSound(nil))
     }
 
+    /// 大きさが同梱の物と違うまま残った音 (置き直しに失敗した書きかけ) は、ファイルがあっても一覧に出さず、
+    /// 選んであっても既定音として扱う。予約も既定音に落とす
+    func testPresetOfWrongSizeIsHiddenAndTreatedAsDefault() throws {
+        AlarmSoundLibrary.installBundledPresets()
+        let broken = try XCTUnwrap(AlarmSoundLibrary.bundledPresets.first)
+        try Data("truncated".utf8).write(to: url(broken))
+        XCTAssertTrue(AlarmSoundLibrary.exists(broken))
+        XCTAssertFalse(AlarmSoundLibrary.usable(broken))
+        XCTAssertFalse(AlarmSoundLibrary.installedPresets.contains(broken))
+        XCTAssertNil(AlarmSoundLibrary.effectiveSound(broken))
+        let previous = AlarmSoundLibrary.currentDefault
+        defer { AlarmSoundLibrary.currentDefault = previous }
+        AlarmSoundLibrary.currentDefault = broken
+        let inst = AlarmInstanceDTO(id: "t", triggerAtMillis: 0, title: "t", kind: "TIMER")
+        XCTAssertNil(AlarmSoundLibrary.soundName(for: inst))
+    }
+
     /// 取り込み音の掃除 (removeAll) は取り込み音を消し、同梱の音は消さない。
     /// 消すのは試験で置いた 1 つだけ。ホストのアプリに取り込んである本物の音は keep に入れて残す
     func testCleanupOfImportedSoundsKeepsPresets() throws {
