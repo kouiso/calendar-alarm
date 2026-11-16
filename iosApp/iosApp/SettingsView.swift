@@ -101,8 +101,7 @@ struct SettingsView: View {
                                 AlarmSoundView()
                             } label: {
                                 IconRow("music.note") {
-                                    // ファイルが無い音は既定音で鳴るので、保存した名前ではなく「iPhone の標準」と出す
-                                    Text("アラーム音: \((AlarmSoundLibrary.effectiveSound(store.state.alarmSoundFile) == nil ? nil : store.state.alarmSoundLabel) ?? String(localized: "iPhone の標準"))")
+                                    Text("アラーム音: \(AlarmSoundLibrary.displayName(file: store.state.alarmSoundFile, label: store.state.alarmSoundLabel))")
                                         .font(NightTheme.font(13)).foregroundStyle(.secondary)
                                         .lineLimit(1)
                                     Spacer()
@@ -692,23 +691,6 @@ struct SettingsView: View {
     }
 
     private func resync(_ reason: String) { Task { await engine.resync(reason: reason) } }
-
-    /// 一覧で選んだ時に changeSound へ渡す音のファイル名と表示名 (#147)。「iPhone の標準」は両方 nil
-    static func soundChange(forChip sel: String) -> (file: String?, label: String?) {
-        sel == "__default__" ? (nil, nil) : (sel, soundPresetLabel(sel))
-    }
-
-    /// プリセット音の表示名 (#147)。取り込み音はファイル名が UUID なので対象外、
-    /// その場合はアラーム音行の alarmSoundLabel が表示を担う
-    static func soundPresetLabel(_ file: String) -> String {
-        switch file {
-        case "__default__": return String(localized: "iPhone の標準")
-        case "preset_bell.caf": return String(localized: "ベル")
-        case "preset_soft.caf": return String(localized: "ゆっくり")
-        case "preset_beep.caf": return String(localized: "きっぱり")
-        default: return file
-        }
-    }
 }
 
 /// アラーム音の画面 (#147, デザイン p147 の列2)。「iPhone の標準」→ 同梱の音の順のラジオの一覧と、
@@ -725,13 +707,14 @@ struct AlarmSoundView: View {
         let current = AlarmSoundLibrary.effectiveSound(store.state.alarmSoundFile)
         List {
             Section {
-                row(file: nil, name: SettingsView.soundPresetLabel("__default__"), selected: current == nil, previewable: false)
+                row(file: nil, name: AlarmSoundLibrary.displayName(file: nil, label: nil), selected: current == nil, previewable: false)
                 ForEach(AlarmSoundLibrary.installedPresets, id: \.self) { name in
-                    row(file: name, name: SettingsView.soundPresetLabel(name), selected: current == name, previewable: true)
+                    row(file: name, name: AlarmSoundLibrary.presetLabel(name) ?? name, selected: current == name, previewable: true)
                 }
                 // 取り込んだ音は選んでいる間だけ並べる。選び直すと Engine が使われなくなった音を消すため
                 if let current, !AlarmSoundLibrary.bundledPresets.contains(current) {
-                    row(file: current, name: store.state.alarmSoundLabel ?? current, selected: true, previewable: false)
+                    row(file: current, name: AlarmSoundLibrary.displayName(file: current, label: store.state.alarmSoundLabel),
+                        selected: true, previewable: false)
                 }
             }
             Section {
@@ -806,16 +789,15 @@ struct AlarmSoundView: View {
         .padding(.vertical, 4)
     }
 
+    /// 一覧から選ぶのは iPhone の標準 (nil) か同梱の音。同梱の音は名前を保存しない (displayName が表示のたびに引く)
     private func choose(_ file: String?) {
-        let change = SettingsView.soundChange(forChip: file ?? "__default__")
-        changeSound(file: change.file, label: change.label)
+        changeSound(file: file, label: nil)
     }
 
     /// 既定の音を変え、入っている予約を新しい音で入れ直す (AlarmKit は予約時に音が決まる)
     private func changeSound(file: String?, label: String?) {
         soundError = nil
-        store.setAlarmSound(file: file, label: label)
-        Task { await engine.rescheduleForSoundChange() }
+        Task { await engine.changeDefaultSound(file: file, label: label) }
     }
 }
 

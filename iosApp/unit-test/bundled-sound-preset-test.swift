@@ -1,7 +1,8 @@
 import XCTest
 @testable import iosApp
 
-/// 同梱の音 (#147) の Library/Sounds へのコピーと、設定の札を押した時の入れ直しを確かめる。音は鳴らさない
+/// 同梱の音 (#147) の Library/Sounds へのコピーと表示名、一覧で選んだ時の入れ直しを確かめる。音は鳴らさない。
+/// このクラスは MainActor に縛られない AlarmSoundLibrary だけを呼ぶので、@MainActor を付けない
 final class BundledSoundPresetCopyTests: XCTestCase {
     private func url(_ name: String) -> URL {
         AlarmSoundLibrary.soundsDirectory.appendingPathComponent(name)
@@ -80,30 +81,48 @@ final class BundledSoundPresetCopyTests: XCTestCase {
         XCTAssertNil(AlarmSoundLibrary.effectiveSound(nil))
     }
 
-    /// 取り込み音の掃除 (removeAll) で、同梱の音は消えない
-    func testCleanupOfImportedSoundsKeepsPresets() {
+    /// 取り込み音の掃除 (removeAll) は取り込み音を消し、同梱の音は消さない。
+    /// 消すのは試験で置いた 1 つだけ。ホストのアプリに取り込んである本物の音は keep に入れて残す
+    func testCleanupOfImportedSoundsKeepsPresets() throws {
         AlarmSoundLibrary.installBundledPresets()
-        AlarmSoundLibrary.removeAll(except: [])
+        let imported = "\(AlarmSoundLibrary.prefix)test-\(UUID().uuidString.lowercased()).caf"
+        defer { AlarmSoundLibrary.remove(imported) }
+        try Data("imported".utf8).write(to: url(imported))
+        XCTAssertTrue(AlarmSoundLibrary.exists(imported))
+        let hostSounds = Set(try FileManager.default.contentsOfDirectory(atPath: AlarmSoundLibrary.soundsDirectory.path)
+            .filter { $0.hasPrefix(AlarmSoundLibrary.prefix) && $0 != imported })
+        AlarmSoundLibrary.removeAll(except: hostSounds)
+        XCTAssertFalse(AlarmSoundLibrary.exists(imported), "取り込み音が掃除で消えていない")
         for name in AlarmSoundLibrary.bundledPresets {
             XCTAssertTrue(AlarmSoundLibrary.exists(name), "\(name) が掃除で消えた")
         }
+        for name in hostSounds {
+            XCTAssertTrue(AlarmSoundLibrary.exists(name), "\(name) (ホストの取り込み音) が消えた")
+        }
     }
 
-    /// 札と表示名: 標準は nil、プリセットはそのファイル名と日本語の名前
-    func testChipMapsToFileAndLabel() {
-        let standard = SettingsView.soundChange(forChip: "__default__")
-        XCTAssertNil(standard.file)
-        XCTAssertNil(standard.label)
+    /// 名前は表示のたびに引く。同梱の音は保存した名前 (選んだ時の言語) より今の言語の名前を出す。
+    /// 標準とファイルの無い音は「iPhone の標準」、取り込み音は保存した名前
+    func testDisplayNameIsResolvedAtDisplayTime() throws {
+        AlarmSoundLibrary.installBundledPresets()
+        let standard = String(localized: "iPhone の標準")
+        XCTAssertEqual(AlarmSoundLibrary.displayName(file: nil, label: nil), standard)
         for name in AlarmSoundLibrary.bundledPresets {
-            let change = SettingsView.soundChange(forChip: name)
-            XCTAssertEqual(change.file, name)
-            XCTAssertEqual(change.label, SettingsView.soundPresetLabel(name))
-            XCTAssertNotEqual(change.label, name, "\(name) に表示名が無い")
+            let label = try XCTUnwrap(AlarmSoundLibrary.presetLabel(name), "\(name) に表示名が無い")
+            XCTAssertNotEqual(label, name)
+            XCTAssertEqual(AlarmSoundLibrary.displayName(file: name, label: nil), label)
+            XCTAssertEqual(AlarmSoundLibrary.displayName(file: name, label: "name saved in another language"), label)
         }
+        let imported = "\(AlarmSoundLibrary.prefix)test-\(UUID().uuidString.lowercased()).caf"
+        defer { AlarmSoundLibrary.remove(imported) }
+        XCTAssertNil(AlarmSoundLibrary.presetLabel(imported))
+        XCTAssertEqual(AlarmSoundLibrary.displayName(file: imported, label: "My tone"), standard, "ファイルの無い音を標準と出していない")
+        try Data("imported".utf8).write(to: url(imported))
+        XCTAssertEqual(AlarmSoundLibrary.displayName(file: imported, label: "My tone"), "My tone")
     }
 }
 
-/// 札を押す → 保存した音の変更 → 入れ直し、の通し (設定の changeSound と同じ呼び出し)
+/// 一覧で選ぶ → 保存した音の変更 → 入れ直し、の通し (アラーム音の画面と同じ Engine.changeDefaultSound を通す)
 @MainActor
 final class BundledSoundPresetRebookTests: XCTestCase {
     private var engine: Engine!
@@ -130,11 +149,9 @@ final class BundledSoundPresetRebookTests: XCTestCase {
         AlarmSoundLibrary.currentDefault = nil
     }
 
-    /// SettingsView.changeSound と同じ手順 (保存 → 入れ直し)
-    private func tap(chip: String) async {
-        let change = SettingsView.soundChange(forChip: chip)
-        engine.store.setAlarmSound(file: change.file, label: change.label)
-        await engine.rescheduleForSoundChange()
+    /// アラーム音の画面で 1 行を選んだ時と同じ呼び出し。nil は「iPhone の標準」。同梱の音は名前を保存しない
+    private func choose(_ file: String?) async {
+        await engine.changeDefaultSound(file: file, label: nil)
     }
 
     private func bookAlarm() async throws -> String {
@@ -148,17 +165,18 @@ final class BundledSoundPresetRebookTests: XCTestCase {
         return rec.instance.id
     }
 
-    /// プリセットの札を押すと、入っている予約がその音で入れ直される。標準に戻すと既定音で入れ直される
-    func testChipTapRebooksReservationWithPresetThenDefault() async throws {
+    /// 同梱の音を選ぶと、入っている予約がその音で入れ直される。「iPhone の標準」を選ぶと既定音で入れ直される
+    func testChoosingPresetRebooksReservationThenDefault() async throws {
         let id = try await bookAlarm()
         for name in AlarmSoundLibrary.bundledPresets {
-            await tap(chip: name)
+            await choose(name)
             XCTAssertEqual(engine.store.state.alarmSoundFile, name)
+            XCTAssertNil(engine.store.state.alarmSoundLabel, "同梱の音の名前を保存した")
             XCTAssertEqual(fake.booked[id]?.sound, name, "\(name) で入れ直していない")
             XCTAssertEqual(engine.store.state.scheduled[id]?.soundFile, name)
             XCTAssertEqual(engine.store.state.scheduled[id]?.state, .pending)
         }
-        await tap(chip: "__default__")
+        await choose(nil)
         XCTAssertNil(engine.store.state.alarmSoundFile)
         XCTAssertNil(fake.booked[id]?.sound, "標準に戻したのに前の音のまま")
         XCTAssertNil(engine.store.state.scheduled[id]?.soundFile)

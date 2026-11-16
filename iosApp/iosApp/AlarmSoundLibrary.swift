@@ -67,6 +67,24 @@ enum AlarmSoundLibrary {
     /// Library/Sounds に置けている同梱の音。置けていない音は選んでも既定音で鳴るので、一覧に出さない
     static var installedPresets: [String] { bundledPresets.filter { exists($0) } }
 
+    /// 同梱の音の表示名。同梱の音でなければ nil。
+    /// 名前は保存せず表示のたびに引く。保存すると、端末の言語を変えた後も選んだ時の言語の名前が残る
+    static func presetLabel(_ file: String) -> String? {
+        switch file {
+        case "preset_bell.caf": return String(localized: "ベル")
+        case "preset_soft.caf": return String(localized: "ゆっくり")
+        case "preset_beep.caf": return String(localized: "きっぱり")
+        default: return nil
+        }
+    }
+
+    /// 設定の行とアラーム音の画面に出す、今の音の名前。ファイルが無い音は既定音で鳴るので「iPhone の標準」。
+    /// 同梱の音は保存した名前より presetLabel を優先し、取り込み音は取り込んだファイルの名前 (label) を出す
+    static func displayName(file: String?, label: String?) -> String {
+        guard let file = effectiveSound(file) else { return String(localized: "iPhone の標準") }
+        return presetLabel(file) ?? label ?? file
+    }
+
     /// 実際に鳴る音のファイル名。ファイルが無ければ予約は既定音に落ちる (soundName と同じ) ので nil を返し、
     /// 画面でも「iPhone の標準」として見せる
     static func effectiveSound(_ file: String?) -> String? {
