@@ -18,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.annotation.VisibleForTesting
+import com.calendaralarm.R
 import com.calendaralarm.shared.logic.SlideToStopRule
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -65,8 +66,9 @@ object RingingOverlay {
         title: String,
         snoozeMinutes: Int,
         // 既定値を持たせない: 省略してもコンパイルが通ると、呼び出し側の渡し忘れで
-        // オーバーレイだけチップと見出しが静かに消える (鳴動画面とのズレ)
+        // オーバーレイだけチップと見出し・大ボタンが静かに消える (鳴動画面とのズレ)
         snoozePresets: List<Int>,
+        largeButtons: Boolean,
         stillValid: () -> Boolean = { true },
     ) {
         if (!canShow(context)) return
@@ -80,7 +82,7 @@ object RingingOverlay {
                 audit(app, "OVERLAY_FAIL", "$instanceId: WindowManager取得不可")
                 return@post
             }
-            val view = buildView(app, instanceId, title, snoozeMinutes, snoozePresets)
+            val view = buildView(app, instanceId, title, snoozeMinutes, snoozePresets, largeButtons)
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -146,6 +148,7 @@ object RingingOverlay {
         title: String,
         snoozeMinutes: Int,
         snoozePresets: List<Int>,
+        largeButtons: Boolean = false,
     ): View {
         val accent = Color.parseColor("#BDBDFF")
         val fg = Color.parseColor("#F4F5F8")
@@ -154,12 +157,15 @@ object RingingOverlay {
 
         fun pill(text: String, bg: Int, fgColor: Int): TextView = TextView(context).apply {
             this.text = text
-            textSize = 22f
+            // 大きいボタンモード (#154) は盤 p154 の .bb (24px・太さ600・角丸32)
+            textSize = if (largeButtons) RingingSlideSpec.LARGE_BUTTON_TEXT_SP.toFloat() else 22f
             setTextColor(fgColor)
             gravity = Gravity.CENTER
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTypeface(if (largeButtons) semiBold(typeface) else boldOf(typeface))
             background = GradientDrawable().apply {
-                cornerRadius = dp(RingingSlideSpec.TRACK_CORNER_DP).toFloat()
+                cornerRadius = dp(
+                    if (largeButtons) RingingSlideSpec.LARGE_BUTTON_CORNER_DP else RingingSlideSpec.TRACK_CORNER_DP,
+                ).toFloat()
                 setColor(bg)
             }
         }
@@ -181,7 +187,8 @@ object RingingOverlay {
 
         top.addView(TextView(context).apply {
             text = SimpleDateFormat("H:mm", Locale.getDefault()).format(Date())
-            textSize = 96f
+            // 大きいボタンモードは文字盤を小さくする盤 (dial.sm) に合わせ、時刻も 66 にする
+            textSize = if (largeButtons) RingingSlideSpec.LARGE_DIAL_TIME_SP.toFloat() else 96f
             setTextColor(fg)
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(
@@ -190,7 +197,8 @@ object RingingOverlay {
 
         top.addView(TextView(context).apply {
             text = title.ifBlank { "アラーム" }
-            textSize = 30f
+            tag = TITLE_TAG
+            textSize = if (largeButtons) RingingSlideSpec.LARGE_TITLE_SP.toFloat() else 30f
             setTextColor(fg)
             gravity = Gravity.CENTER
             maxLines = 2
@@ -213,6 +221,7 @@ object RingingOverlay {
         ))
 
         val snooze = pill("スヌーズ ${snoozeMinutes}分", Color.parseColor("#14FFFFFF"), fg)
+        snooze.tag = SNOOZE_BUTTON_TAG
         snooze.setOnClickListener {
             // 停止ボタンと同じく押下の事実を先に残す。スヌーズが効かなかった時に
             // タップ未到達 (ログ無し) とサービス側の失敗 (TAP だけある) を切り分けるため
@@ -228,13 +237,15 @@ object RingingOverlay {
             }
         }
         root.addView(snooze, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(RingingSlideSpec.SNOOZE_HEIGHT_DP),
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(if (largeButtons) RingingSlideSpec.LARGE_BUTTON_HEIGHT_DP else RingingSlideSpec.SNOOZE_HEIGHT_DP),
         ))
 
         // 別分数スヌーズは開閉式: 鳴動画面 (RingingActivity) と同じく
         // 「スヌーズ時間を選ぶ ▾」を押した時だけプリセットチップを出す。
         // サービスへの ACTION_SNOOZE は EXTRA_SNOOZE_MINUTES で分数を渡す。
-        if (snoozePresets.isNotEmpty()) {
+        // 大きいボタンモード (#154) では盤 p154 の 2 列目どおり出さない
+        if (snoozePresets.isNotEmpty() && !largeButtons) {
             // プリセットが多くても横スクロールで分数を読めるようにする (1行詰め込みで潰れない)
             val chipRow = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -273,6 +284,7 @@ object RingingOverlay {
                 ).apply { marginStart = dp(4); marginEnd = dp(4) })
             }
             val toggle = TextView(context).apply {
+                tag = SNOOZE_CHOOSE_TAG
                 text = "スヌーズ時間を選ぶ ▾"
                 textSize = 14f
                 setTextColor(sub)
@@ -296,9 +308,27 @@ object RingingOverlay {
 
         // 停止はスライド式: 誤タップで止まらないよう左端の丸を右へ80%ドラッグ。
         // TalkBack はこのトラックへのダブルタップ (performClick) で停止できる。
-        root.addView(buildSlideToStop(context, instanceId, accent, fg),
+        val stop = if (largeButtons) {
+            android.widget.Button(context).apply {
+                text = context.getString(R.string.common_stop)
+                textSize = RingingSlideSpec.LARGE_BUTTON_TEXT_SP.toFloat()
+                tag = LARGE_STOP_TAG
+                isAllCaps = false
+                setTextColor(Color.parseColor("#26247A"))
+                setTypeface(semiBold(typeface))
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(RingingSlideSpec.LARGE_BUTTON_CORNER_DP).toFloat()
+                    setColor(accent)
+                }
+                setOnClickListener { dismiss(context, instanceId) }
+            }
+        } else {
+            buildSlideToStop(context, instanceId, accent, fg)
+        }
+        root.addView(stop,
             LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(RingingSlideSpec.TRACK_HEIGHT_DP),
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(if (largeButtons) RingingSlideSpec.LARGE_BUTTON_HEIGHT_DP else RingingSlideSpec.TRACK_HEIGHT_DP),
             ).apply { topMargin = dp(12) })
 
         root.addView(TextView(context).apply {
@@ -309,9 +339,30 @@ object RingingOverlay {
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = dp(10) })
+        ).apply { topMargin = dp(if (largeButtons) RingingSlideSpec.LARGE_BUTTON_GAP_DP else 10) })
 
         return root
+    }
+
+    private fun boldOf(base: android.graphics.Typeface?): android.graphics.Typeface =
+        android.graphics.Typeface.create(base, android.graphics.Typeface.BOLD)
+
+    /** 盤の太さ 600。API 28 未満は太さ指定が無いので通常の太字で代える */
+    private fun semiBold(base: android.graphics.Typeface?): android.graphics.Typeface =
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            android.graphics.Typeface.create(base, 600, false)
+        } else {
+            boldOf(base)
+        }
+
+    private fun dismiss(context: Context, instanceId: String) {
+        audit(context.applicationContext, "STOP_TAP", "オーバーレイ: $instanceId")
+        context.sendBroadcast(
+            Intent(context, AlarmReceiver::class.java).apply {
+                action = AlarmService.ACTION_DISMISS
+                putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
+            },
+        )
     }
 
     /**
@@ -330,16 +381,6 @@ object RingingOverlay {
         val dp = { v: Int -> (v * context.resources.displayMetrics.density).toInt() }
         val thumbSize = dp(RingingSlideSpec.THUMB_DP)
         val pad = dp(RingingSlideSpec.PAD_DP)
-
-        fun dismiss() {
-            audit(context.applicationContext, "STOP_TAP", "オーバーレイ: $instanceId")
-            context.sendBroadcast(
-                Intent(context, AlarmReceiver::class.java).apply {
-                    action = AlarmService.ACTION_DISMISS
-                    putExtra(AlarmService.EXTRA_INSTANCE_ID, instanceId)
-                },
-            )
-        }
 
         val slider = FrameLayout(context).apply {
             contentDescription = "スライドして停止"
@@ -406,7 +447,7 @@ object RingingOverlay {
                     grabbed = false
                     if (SlideToStopRule.shouldStop((ev.x - downX) / travel)) {
                         thumb.translationX = travel
-                        dismiss()
+                        dismiss(context, instanceId)
                     } else {
                         thumb.animate().translationX(0f).setDuration(120).start()
                         label.animate().alpha(1f).setDuration(120).start()
@@ -426,7 +467,7 @@ object RingingOverlay {
         }
         // TalkBack ダブルタップ (performClick) で停止。通常タップは OnTouch が
         // 消費するのでここには来ず、スナップバックだけになる。
-        slider.setOnClickListener { dismiss() }
+        slider.setOnClickListener { dismiss(context, instanceId) }
         return slider
     }
 }
