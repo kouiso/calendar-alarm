@@ -52,12 +52,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
+import com.calendaralarm.R
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.sync.SyncWorker
 import com.calendaralarm.shared.logic.WeekCalendar
@@ -602,11 +604,13 @@ internal fun EventRow(
         if (onToggle == null) {
             Icon(
                 icon,
-                contentDescription = when {
-                    item.muted -> "鳴らさない"
-                    item.startAction == EventAction.ALARM -> "アラーム"
-                    else -> "通知のみ"
-                },
+                contentDescription = stringResource(
+                    when {
+                        item.muted -> R.string.action_mute
+                        item.startAction == EventAction.ALARM -> R.string.action_alarm
+                        else -> R.string.action_notify
+                    },
+                ),
                 tint = iconTint,
             )
         }

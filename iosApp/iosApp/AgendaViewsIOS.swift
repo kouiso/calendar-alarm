@@ -321,7 +321,8 @@ struct DayTimelineViewIOS: View {
 /// (Android の `shared/.../logic/WeekCalendar.kt` と同じ規則)。
 enum WeekDisplay {
     static let defaultFirstWeekday = 7
-    private static let jaShort = [1: "月", 2: "火", 3: "水", 4: "木", 5: "金", 6: "土", 7: "日"]
+    // 曜日は月表示のタブ「月」と同じ字になるので、AlarmsView.weekdayShort と同じ専用鍵で訳を引く
+    private static let enName = [1: "MONDAY", 2: "TUESDAY", 3: "WEDNESDAY", 4: "THURSDAY", 5: "FRIDAY", 6: "SATURDAY", 7: "SUNDAY"]
 
     static func normalize(_ v: Int) -> Int { (1...7).contains(v) ? v : defaultFirstWeekday }
 
@@ -331,7 +332,9 @@ enum WeekDisplay {
         return (0..<7).map { (start - 1 + $0) % 7 + 1 }
     }
 
-    static func label(_ iso: Int) -> String { jaShort[iso] ?? "" }
+    static func label(_ iso: Int) -> String {
+        NSLocalizedString("weekday-short-\(enName[iso] ?? "MONDAY")", comment: "曜日の短い名前")
+    }
 
     /// Foundation の weekday (1=日 … 7=土) を ISO の番号へ
     static func iso(fromCalendarWeekday w: Int) -> Int { w == 1 ? 7 : w - 1 }

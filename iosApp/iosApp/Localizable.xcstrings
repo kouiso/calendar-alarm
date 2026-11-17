@@ -2,6 +2,26 @@
   "sourceLanguage": "ja",
   "version": "1.0",
   "strings": {
+    "%@ · %@ · 終日は%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %@ · All-day: %@"
+          }
+        }
+      }
+    },
+    "%lld:00": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld:00"
+          }
+        }
+      }
+    },
     "%lldヶ月ごと": {
       "localizations": {
         "en": {
@@ -40,6 +60,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld-minute preset"
+          }
+        }
+      }
+    },
+    "%lld分前": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld min before"
           }
         }
       }
@@ -98,12 +128,32 @@
         }
       }
     },
+    "10分前": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10 min before"
+          }
+        }
+      }
+    },
     "10秒後に鳴らしてみる": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Ring in 10 seconds"
+          }
+        }
+      }
+    },
+    "15分前": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "15 min before"
           }
         }
       }
@@ -124,6 +174,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Once"
+          }
+        }
+      }
+    },
+    "1時間前": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 hour before"
+          }
+        }
+      }
+    },
+    "30分前": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 min before"
+          }
+        }
+      }
+    },
+    "5分前": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "5 min before"
           }
         }
       }
@@ -246,6 +326,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wed"
+          }
+        }
+      }
+    },
+    "「○分前」の通知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reminder notification"
           }
         }
       }
@@ -600,6 +690,16 @@
         }
       }
     },
+    "予定の開始": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Event start"
+          }
+        }
+      }
+    },
     "予定を抽出中…": {
       "localizations": {
         "en": {
@@ -666,6 +766,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stop"
+          }
+        }
+      }
+    },
+    "出席": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Going"
           }
         }
       }
@@ -750,6 +860,26 @@
         }
       }
     },
+    "既定": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default"
+          }
+        }
+      }
+    },
+    "既定（%@）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default (%@)"
+          }
+        }
+      }
+    },
     "日ごと": {
       "localizations": {
         "en": {
@@ -796,6 +926,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Months"
+          }
+        }
+      }
+    },
+    "未回答": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No reply"
+          }
+        }
+      }
+    },
+    "未定": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maybe"
           }
         }
       }
@@ -910,6 +1060,16 @@
         }
       }
     },
+    "辞退": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Declined"
+          }
+        }
+      }
+    },
     "追加": {
       "localizations": {
         "en": {
@@ -926,6 +1086,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Notifications"
+          }
+        }
+      }
+    },
+    "通知のみ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notify only"
           }
         }
       }
@@ -956,6 +1126,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Weeks"
+          }
+        }
+      }
+    },
+    "週の始まり": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First day of week"
           }
         }
       }
@@ -1020,6 +1200,16 @@
         }
       }
     },
+    "開始時": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "At start"
+          }
+        }
+      }
+    },
     "音声を開けませんでした: %@": {
       "localizations": {
         "en": {
@@ -1036,6 +1226,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Volume, gradual volume increase and vibration follow your iPhone’s Sounds & Haptics settings. With the iPhone’s alarm feature, the app can only change the sound."
+          }
+        }
+      }
+    },
+    "鳴らさない": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Don't ring"
           }
         }
       }
