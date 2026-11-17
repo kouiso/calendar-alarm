@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
@@ -303,11 +305,18 @@ private fun Context.openSafely(intent: Intent?) {
 }
 
 @Composable
-private fun TroubleshootRow(item: TroubleshootItem, onFix: () -> Unit) {
+internal fun TroubleshootRow(item: TroubleshootItem, onFix: () -> Unit) {
     val ng = item.state == CheckState.NG
     val info = item.state == CheckState.INFO
     val na = item.state == CheckState.NA
     val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    // 状態は印の色と形だけに頼らず、言葉の札でも出す (#228: 色の見分けが付きにくい人のため)
+    val (stateRes, stateColor) = when (item.state) {
+        CheckState.OK -> R.string.trouble_state_ok to MaterialTheme.colorScheme.primary
+        CheckState.NG -> R.string.trouble_state_ng to MaterialTheme.colorScheme.error
+        CheckState.NA -> R.string.trouble_state_na to dim
+        CheckState.INFO -> R.string.trouble_state_info to MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Row(
         Modifier
             .fillMaxWidth()
@@ -317,7 +326,7 @@ private fun TroubleshootRow(item: TroubleshootItem, onFix: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         when (item.state) {
-            CheckState.OK -> Icon(Icons.Default.CheckCircle, "OK", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+            CheckState.OK -> Icon(Icons.Default.CheckCircle, stringResource(R.string.trouble_state_ok), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
             CheckState.NG -> Icon(Icons.Default.Error, stringResource(R.string.trouble_state_ng), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(24.dp))
             CheckState.NA -> Icon(Icons.Outlined.Circle, stringResource(R.string.trouble_state_na), tint = dim, modifier = Modifier.size(24.dp))
             CheckState.INFO -> Icon(Icons.Default.Info, stringResource(R.string.trouble_state_info), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
@@ -330,11 +339,32 @@ private fun TroubleshootRow(item: TroubleshootItem, onFix: () -> Unit) {
                 fontWeight = FontWeight.Medium,
                 color = if (na) dim else MaterialTheme.colorScheme.onSurface,
             )
+            Row(Modifier.padding(top = 2.dp)) {
+                Text(
+                    stringResource(stateRes),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = stateColor,
+                    modifier = Modifier
+                        .background(stateColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
             Text(
                 if (na) stringResource(R.string.trouble_not_needed) else item.description,
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (na) dim else MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            // 直せる行は「設定を開く」と書く。右の印だけでは行き先が分からないため (#228)
+            if ((ng || info) && item.fix != null) {
+                Text(
+                    stringResource(R.string.common_open_settings),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
         if ((ng || info) && item.fix != null) {
             Spacer(Modifier.width(12.dp))
