@@ -20,7 +20,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.assert
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.SettingsRepository
+import com.calendaralarm.ui.TroubleshootChecks
 import com.calendaralarm.ui.TroubleshootingScreen
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
@@ -47,11 +50,17 @@ class TroubleshootingFlagTest {
     private val app: Application = ApplicationProvider.getApplicationContext()
 
     private fun show(rowTag: String) {
+        // 初回の DataStore 生成と検査パス (AlarmService 等) のクラス読み込みは重い。
+        // 表示待ちの壁時計 (waitUntil) の内側で初回コストが走ると CI の共有ランナーで
+        // 5s を超え得るため、計測前に先に温めておく
+        runBlocking { SettingsRepository(app).flow.first() }
+        TroubleshootChecks.collect(app, vibrate = true)
+
         val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         activity.setContent {
             MaterialTheme { TroubleshootingScreen(SettingsRepository(app), onBack = {}) }
         }
-        compose.waitUntil(5_000) {
+        compose.waitUntil(15_000) {
             compose.onAllNodesWithTag(rowTag).fetchSemanticsNodes().isNotEmpty()
         }
     }
