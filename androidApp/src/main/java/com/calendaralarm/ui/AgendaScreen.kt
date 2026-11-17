@@ -558,17 +558,38 @@ internal fun EventRow(
                 },
                 maxLines = 1,
             )
-            Text(
-                listOfNotNull(
-                    item.calendarName,
-                    ev.location.takeIf { it.isNotBlank() },
-                ).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
+            // 「○分前」の札は予定名の下の段 (カレンダー名の前) に置く (#227)。
+            // 右端に並べると予定名が途中で切れるため
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!item.muted && item.minutesBefore > 0) {
+                    Box(
+                        Modifier.background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                        ).padding(horizontal = 8.dp, vertical = 3.dp),
+                    ) {
+                        Text(
+                            "${item.minutesBefore}分前" +
+                                if (item.effectiveExtraOffsets.isNotEmpty()) " +${item.effectiveExtraOffsets.size}" else "",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(
+                    listOfNotNull(
+                        item.calendarName,
+                        ev.location.takeIf { it.isNotBlank() },
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
-        // 鳴動状態アイコン (アラーム/通知のみ/ミュートの3状態)
+        // 鳴動状態アイコン (アラーム/通知のみ/鳴らさないの3状態)
         val (icon, iconTint) = when {
             item.startAction == EventAction.MUTE && item.reminderAction == EventAction.MUTE ->
                 Icons.Default.NotificationsOff to
@@ -582,29 +603,12 @@ internal fun EventRow(
             Icon(
                 icon,
                 contentDescription = when {
-                    item.muted -> "鳴動OFF"
+                    item.muted -> "鳴らさない"
                     item.startAction == EventAction.ALARM -> "アラーム"
                     else -> "通知のみ"
                 },
                 tint = iconTint,
             )
-        }
-        if (!item.muted && item.minutesBefore > 0) {
-            Spacer(Modifier.width(6.dp))
-            // 「N分前」は accent-soft の小チップ
-            Box(
-                Modifier.background(
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-                ).padding(horizontal = 8.dp, vertical = 3.dp),
-            ) {
-                Text(
-                    "${item.minutesBefore}分前" +
-                        if (item.effectiveExtraOffsets.isNotEmpty()) " +${item.effectiveExtraOffsets.size}" else "",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
         }
         if (onToggle != null) {
             Spacer(Modifier.width(6.dp))
