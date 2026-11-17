@@ -11,7 +11,8 @@ struct EventDetailSheet: View {
     let weather: [WeatherService.Forecast]?
     let weatherAt: Date?
 
-    private let timingOptions = [("開始時", 0), ("5分前", 5), ("10分前", 10), ("15分前", 15), ("30分前", 30), ("1時間前", 60)]
+    // LocalizedStringKey にして、Text が Localizable.xcstrings の英訳を引けるようにする
+    private let timingOptions: [(LocalizedStringKey, Int)] = [("開始時", 0), ("5分前", 5), ("10分前", 10), ("15分前", 15), ("30分前", 30), ("1時間前", 60)]
     private let extraOptions = [5, 10, 15, 30, 60]
 
     private var ev: CalendarEventDTO { display.event }
@@ -77,7 +78,7 @@ struct EventDetailSheet: View {
             Image(systemName: action == .mute ? "bell.slash" : "bell.fill")
                 .foregroundStyle(action == .mute ? .secondary : NightTheme.indigo)
             Spacer()
-            ForEach([(EventAction.alarm, "アラーム"), (.notify, "通知のみ"), (.mute, "鳴らさない")], id: \.0) { a, label in
+            ForEach([(EventAction.alarm, LocalizedStringKey("アラーム")), (.notify, LocalizedStringKey("通知のみ")), (.mute, LocalizedStringKey("鳴らさない"))], id: \.0) { a, label in
                 Button {
                     store.setOverride(
                         instanceKey: ev.instanceKey, action: a,

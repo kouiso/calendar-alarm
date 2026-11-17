@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="action_alarm">Alarm</string>
-    <string name="action_mute">Silent</string>
+    <string name="action_mute">Don\'t ring</string>
     <string name="action_notify">Notify only</string>
     <string name="agenda_all_day">All day</string>
     <string name="agenda_no_events">No events</string>

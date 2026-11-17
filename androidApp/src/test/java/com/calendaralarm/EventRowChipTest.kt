@@ -87,7 +87,7 @@ class EventRowChipTest {
         )
         // 札はカレンダー名の前 (同じ段の左) に置く
         assertTrue("札はカレンダー名と同じ段", abs(chip.top - cal.top) < cal.height)
-        assertTrue("札はカレンダー名より左", chip.right <= cal.left + cal.width)
+        assertTrue("札はカレンダー名より左", chip.right <= cal.left)
     }
 
     @Test

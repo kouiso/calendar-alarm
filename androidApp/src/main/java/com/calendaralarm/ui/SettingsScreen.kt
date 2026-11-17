@@ -947,7 +947,7 @@ private fun EventRulesCard(
         ),
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-            // 既定アクション (開始時 / 通知分)
+            // 既定アクション (予定の開始 / 「○分前」の通知)
             IconSettingRow(Icons.Default.Alarm) {
                 actionLabels.forEach { (a, label) ->
                     FilterChip(

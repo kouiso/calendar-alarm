@@ -23,8 +23,9 @@ struct SettingsView: View {
     @State private var soundError: String? = nil
     @State private var showExtraReminderSheet = false
 
-    // 鳴らし方の3択と終日を鳴らさない選択の言葉は、予定の詳細と Android でそろえる (#224)
-    private let actionOptions: [(EventAction, String)] =
+    // 鳴らし方の3択と終日を鳴らさない選択の言葉は、予定の詳細と Android でそろえる (#224)。
+    // LocalizedStringKey にして、Text が Localizable.xcstrings の英訳を引けるようにする
+    private let actionOptions: [(EventAction, LocalizedStringKey)] =
         [(.alarm, "アラーム"), (.notify, "通知のみ"), (.mute, "鳴らさない")]
 
     private let minutesOptions = [0, 5, 10, 15, 30]
@@ -214,7 +215,7 @@ struct SettingsView: View {
                                         .font(NightTheme.font(12)).foregroundStyle(.secondary)
                                     Chips(items: WeekDisplay.order(1), current: store.state.firstWeekday) { iso in
                                         store.setFirstWeekday(iso)
-                                    } label: { WeekDisplay.label($0) }
+                                    } label: { LocalizedStringKey(WeekDisplay.label($0)) }
                                     // 見た目のプレビュー (決定5): 月表示の曜日の並び
                                     HStack(spacing: 0) {
                                         ForEach(WeekDisplay.order(store.state.firstWeekday), id: \.self) { iso in
@@ -266,7 +267,7 @@ struct SettingsView: View {
                                     store.setDefaultStartAction(a); resync("default action")
                                 } label: { a in actionOptions.first { $0.0 == a }?.1 ?? "" }
                             }
-                            // 通知分の既定アクション
+                            // 「○分前」の通知の既定アクション
                             IconRow("bell.fill") {
                                 Chips(items: actionOptions.map(\.0),
                                       current: EventAction(rawValue: store.state.defaultReminderAction) ?? .alarm) { a in
@@ -657,7 +658,12 @@ struct SettingsView: View {
                     Circle().fill(Color(argb: cal.color)).frame(width: 10, height: 10)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(cal.name).font(NightTheme.font(14, weight: .medium)).lineLimit(1)
-                        Text("\(cal.accountName) · \(rule.minutesBefore == 0 ? "開始時" : "\(rule.minutesBefore)分前") · 終日は\(rule.allDayMinutes < 0 ? "鳴らさない" : "\(rule.allDayMinutes / 60):00")")
+                        // 差し込む言葉は String(localized:) で先に訳す (そのまま差し込むと翻訳が効かない)
+                        let minutesLabel = rule.minutesBefore == 0
+                            ? String(localized: "開始時") : String(localized: "\(rule.minutesBefore)分前")
+                        let allDayLabel = rule.allDayMinutes < 0
+                            ? String(localized: "鳴らさない") : String(localized: "\(rule.allDayMinutes / 60):00")
+                        Text("\(cal.accountName) · \(minutesLabel) · 終日は\(allDayLabel)")
                             .font(NightTheme.font(11)).foregroundStyle(.tertiary)
                     }
                     Spacer()
@@ -677,7 +683,7 @@ struct SettingsView: View {
                               current: store.isCalendarMinutesChosen(cal.id) ? rule.minutesBefore : -1) { m in
                             store.setCalendarMinutes(cal.id, m < 0 ? nil : m); resync("cal pref")
                         } label: { m in
-                            m < 0 ? "既定（\(inherited == 0 ? "開始時" : "\(inherited)分前")）"
+                            m < 0 ? "既定（\(inherited == 0 ? String(localized: "開始時") : String(localized: "\(inherited)分前"))）"
                                 : (m == 0 ? "開始時" : "\(m)分前")
                         }
                     }
@@ -689,20 +695,27 @@ struct SettingsView: View {
                             m < 0 ? "鳴らさない" : "\(m / 60):00"
                         }
                     }
-                    // 開始時 / 通知分のアクション (Android と同じ3択)
+                    // 予定の開始 / 「○分前」の通知それぞれのアクション (Android と同じ3択)。
+                    // 何の設定か分かるよう、Android のカレンダー行と同じく見出しを字で出す (#224)
                     IconRow("alarm.fill") {
-                        Chips(items: actionOptions.map(\.0),
-                              current: EventAction(rawValue: rule.startAction) ?? .alarm) { a in
-                            var r = rule; r.startAction = a.rawValue
-                            store.setCalendarRule(cal.id, r); resync("cal pref")
-                        } label: { a in actionOptions.first { $0.0 == a }?.1 ?? "" }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("予定の開始").font(NightTheme.font(12)).foregroundStyle(.secondary)
+                            Chips(items: actionOptions.map(\.0),
+                                  current: EventAction(rawValue: rule.startAction) ?? .alarm) { a in
+                                var r = rule; r.startAction = a.rawValue
+                                store.setCalendarRule(cal.id, r); resync("cal pref")
+                            } label: { a in actionOptions.first { $0.0 == a }?.1 ?? "" }
+                        }
                     }
                     IconRow("bell.badge.fill") {
-                        Chips(items: actionOptions.map(\.0),
-                              current: EventAction(rawValue: rule.reminderAction) ?? .alarm) { a in
-                            var r = rule; r.reminderAction = a.rawValue
-                            store.setCalendarRule(cal.id, r); resync("cal pref")
-                        } label: { a in actionOptions.first { $0.0 == a }?.1 ?? "" }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("「○分前」の通知").font(NightTheme.font(12)).foregroundStyle(.secondary)
+                            Chips(items: actionOptions.map(\.0),
+                                  current: EventAction(rawValue: rule.reminderAction) ?? .alarm) { a in
+                                var r = rule; r.reminderAction = a.rawValue
+                                store.setCalendarRule(cal.id, r); resync("cal pref")
+                            } label: { a in actionOptions.first { $0.0 == a }?.1 ?? "" }
+                        }
                     }
                 }
                 .padding(.bottom, 10)
@@ -787,7 +800,8 @@ struct Chips<T: Hashable>: View {
     let items: [T]
     let current: T
     let onSelect: (T) -> Void
-    let label: (T) -> String
+    // LocalizedStringKey で返すと Text がカタログの訳を引く。String だとリテラル表示になる
+    let label: (T) -> LocalizedStringKey
     var body: some View {
         HStack(spacing: 6) {
             ForEach(items, id: \.self) { item in
@@ -809,7 +823,7 @@ struct MultiChips<T: Hashable>: View {
     let items: [T]
     let isOn: (T) -> Bool
     let onToggle: (T) -> Void
-    let label: (T) -> String
+    let label: (T) -> LocalizedStringKey
     var body: some View {
         HStack(spacing: 6) {
             ForEach(items, id: \.self) { item in
