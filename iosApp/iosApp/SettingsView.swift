@@ -23,12 +23,13 @@ struct SettingsView: View {
     @State private var soundError: String? = nil
     @State private var showExtraReminderSheet = false
 
+    // 鳴らし方の3択と終日を鳴らさない選択の言葉は、予定の詳細と Android でそろえる (#224)
     private let actionOptions: [(EventAction, String)] =
-        [(.alarm, "アラーム"), (.notify, "通知"), (.mute, "OFF")]
+        [(.alarm, "アラーム"), (.notify, "通知のみ"), (.mute, "鳴らさない")]
 
     private let minutesOptions = [0, 5, 10, 15, 30]
     private let snoozeOptions = [5, 10, 15]
-    private let allDayOptions: [(String, Int)] = [("OFF", -1), ("8:00", 480), ("9:00", 540), ("12:00", 720)]
+    private let allDayOptions: [(String, Int)] = [("鳴らさない", -1), ("8:00", 480), ("9:00", 540), ("12:00", 720)]
 
     var body: some View {
         NavigationStack {
@@ -656,7 +657,7 @@ struct SettingsView: View {
                     Circle().fill(Color(argb: cal.color)).frame(width: 10, height: 10)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(cal.name).font(NightTheme.font(14, weight: .medium)).lineLimit(1)
-                        Text("\(cal.accountName) · \(rule.minutesBefore == 0 ? "開始時" : "\(rule.minutesBefore)分前") · 終日\(rule.allDayMinutes < 0 ? "OFF" : "\(rule.allDayMinutes / 60):00")")
+                        Text("\(cal.accountName) · \(rule.minutesBefore == 0 ? "開始時" : "\(rule.minutesBefore)分前") · 終日は\(rule.allDayMinutes < 0 ? "鳴らさない" : "\(rule.allDayMinutes / 60):00")")
                             .font(NightTheme.font(11)).foregroundStyle(.tertiary)
                     }
                     Spacer()
@@ -685,7 +686,7 @@ struct SettingsView: View {
                             var r = rule; r.allDayMinutes = m
                             store.setCalendarRule(cal.id, r); resync("cal pref")
                         } label: { m in
-                            m < 0 ? "OFF" : "\(m / 60):00"
+                            m < 0 ? "鳴らさない" : "\(m / 60):00"
                         }
                     }
                     // 開始時 / 通知分のアクション (Android と同じ3択)

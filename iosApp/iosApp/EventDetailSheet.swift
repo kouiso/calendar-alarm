@@ -77,7 +77,7 @@ struct EventDetailSheet: View {
             Image(systemName: action == .mute ? "bell.slash" : "bell.fill")
                 .foregroundStyle(action == .mute ? .secondary : NightTheme.indigo)
             Spacer()
-            ForEach([(EventAction.alarm, "アラーム"), (.notify, "通知"), (.mute, "OFF")], id: \.0) { a, label in
+            ForEach([(EventAction.alarm, "アラーム"), (.notify, "通知のみ"), (.mute, "鳴らさない")], id: \.0) { a, label in
                 Button {
                     store.setOverride(
                         instanceKey: ev.instanceKey, action: a,
