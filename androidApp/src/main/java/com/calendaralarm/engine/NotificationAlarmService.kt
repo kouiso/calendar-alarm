@@ -102,26 +102,27 @@ class NotificationAlarmService : NotificationListenerService() {
         }
     }
 
-    /** 曜日・時間帯・パッケージ・本文の全条件を評価。 */
-    private fun NotificationRuleSpec.matches(pkg: String, body: String): Boolean {
-        if (!packageName.isNullOrBlank() && packageName != pkg) return false
-        val cal = Calendar.getInstance()
-        if (daysOfWeek.isNotEmpty()) {
-            // Calendar: SUNDAY=1..SATURDAY=7 → モデルの 1=月..7=日 に合わせる
-            val dow = when (cal.get(Calendar.DAY_OF_WEEK)) {
-                Calendar.SUNDAY -> 7
-                else -> cal.get(Calendar.DAY_OF_WEEK) - 1
-            }
-            if (dow !in daysOfWeek) return false
+}
+
+/** 曜日・時間帯・パッケージ・本文の全条件を評価。internal は「保存したルールが判定に使われる」単体テストのため (#226)。 */
+internal fun NotificationRuleSpec.matches(pkg: String, body: String): Boolean {
+    if (!packageName.isNullOrBlank() && packageName != pkg) return false
+    val cal = Calendar.getInstance()
+    if (daysOfWeek.isNotEmpty()) {
+        // Calendar: SUNDAY=1..SATURDAY=7 → モデルの 1=月..7=日 に合わせる
+        val dow = when (cal.get(Calendar.DAY_OF_WEEK)) {
+            Calendar.SUNDAY -> 7
+            else -> cal.get(Calendar.DAY_OF_WEEK) - 1
         }
-        val start = startMinuteOfDay
-        val end = endMinuteOfDay
-        if (start != null && end != null && start != end) {
-            val now = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
-            val inWindow = if (start <= end) now in start until end
-                else now >= start || now < end // 深夜跨ぎ (例 22:00-6:00)
-            if (!inWindow) return false
-        }
-        return matchesText(body)
+        if (dow !in daysOfWeek) return false
     }
+    val start = startMinuteOfDay
+    val end = endMinuteOfDay
+    if (start != null && end != null && start != end) {
+        val now = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+        val inWindow = if (start <= end) now in start until end
+            else now >= start || now < end // 深夜跨ぎ (例 22:00-6:00)
+        if (!inWindow) return false
+    }
+    return matchesText(body)
 }
