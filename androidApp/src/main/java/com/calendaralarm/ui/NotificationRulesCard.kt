@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -68,6 +69,8 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
     /** 編集中のルールの一覧上の位置。null (追加時) は保存で末尾に足し、index ありは同じ位置を上書きする */
     var editIndex by remember { mutableStateOf<Int?>(null) }
     var aiText by remember { mutableStateOf<String?>(null) }
+    // 連続する AI 生成を区別する番号。古い結果が開き直したダイアログを上書きしないため (#424)
+    var aiRequestId by remember { mutableIntStateOf(0) }
 
     Card(
         Modifier.fillMaxWidth(),
@@ -220,6 +223,7 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                     enabled = !working && text.isNotBlank(),
                     onClick = {
                         working = true
+                        val myRequest = ++aiRequestId
                         scope.launch {
                             val api = AiConfig.api()
                             if (api == null) {
@@ -230,8 +234,8 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                             val spec = NotificationRuleGenerator(api).generate(text)
                             working = false
                             if (spec == null) genError = failedMessage
-                            // 閉じた後に届いた結果で開いている編集を上書きしない
-                            else if (aiText != null) { editIndex = null; editDraft = spec; aiText = null }
+                            // 閉じた後・新しい生成の後に届いた結果で開いている編集を上書きしない
+                            else if (aiText != null && aiRequestId == myRequest) { editIndex = null; editDraft = spec; aiText = null }
                         }
                     },
                 ) { Text(stringResource(if (working) R.string.rules_ai_working else R.string.rules_ai_run)) }
