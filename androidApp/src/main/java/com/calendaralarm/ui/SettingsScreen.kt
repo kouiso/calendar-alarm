@@ -182,7 +182,7 @@ fun SettingsScreen(
                             FilterChip(
                                 selected = (prefs?.defaultMinutesBefore ?: 0) == m,
                                 onClick = { scope.launch { settings.setDefaultMinutesBefore(m) } },
-                                label = { Text(if (m == 0) "開始時" else "${m}分", maxLines = 1) },
+                                label = { Text(if (m == 0) "開始時" else "${m}分前", maxLines = 1) },
                                 modifier = Modifier.padding(end = 4.dp),
                             )
                         }
@@ -791,6 +791,13 @@ private fun CalendarRow(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val enabled = pref?.enabled ?: true
+    // 鳴らし方の3択の言葉は予定の詳細と両 OS でそろえる (#224)
+    val actionLabels = listOf(
+        EventAction.ALARM to stringResource(R.string.action_alarm),
+        EventAction.NOTIFY to stringResource(R.string.action_notify),
+        EventAction.MUTE to stringResource(R.string.action_mute),
+    )
+    val muteLabel = stringResource(R.string.action_mute)
     // 保存するのはこのカレンダーで選んだ値だけ (null = 既定に従う)。表示は既定で埋めた値を出す。
     // 埋めた値を保存すると、スイッチを触っただけでアカウントの既定が効かなくなる (#74)
     val chosenMinutes = pref?.minutesBefore
@@ -816,9 +823,9 @@ private fun CalendarRow(
                         append(cal.accountName)
                         if (enabled) {
                             append("  ·  ")
-                            append(if (minutes == 0) "開始時" else "${minutes}分")
-                            append(" · 終日")
-                            append(if (allDay < 0) "OFF" else "%d:%02d".format(allDay / 60, allDay % 60))
+                            append(if (minutes == 0) "開始時" else "${minutes}分前")
+                            append(" · 終日は")
+                            append(if (allDay < 0) muteLabel else "%d:%02d".format(allDay / 60, allDay % 60))
                         }
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -844,7 +851,7 @@ private fun CalendarRow(
                         selected = chosenMinutes == null,
                         onClick = { onChange(true, null, null, null, null) },
                         label = {
-                            Text("既定（${if (defaultMinutes == 0) "開始時" else "${defaultMinutes}分"}）", maxLines = 1)
+                            Text("既定（${if (defaultMinutes == 0) "開始時" else "${defaultMinutes}分前"}）", maxLines = 1)
                         },
                         modifier = Modifier.padding(end = 4.dp),
                     )
@@ -852,19 +859,19 @@ private fun CalendarRow(
                         FilterChip(
                             selected = chosenMinutes == m,
                             onClick = { onChange(true, m, null, null, null) },
-                            label = { Text(if (m == 0) "開始時" else "${m}分", maxLines = 1) },
+                            label = { Text(if (m == 0) "開始時" else "${m}分前", maxLines = 1) },
                             modifier = Modifier.padding(end = 4.dp),
                         )
                     }
                 }
-                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(Modifier.padding(top = 4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "終日",
+                        stringResource(R.string.agenda_all_day),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(end = 8.dp),
                     )
-                    listOf(-1 to "OFF", 480 to "8:00", 540 to "9:00", 720 to "12:00").forEach { (v, label) ->
+                    listOf(-1 to muteLabel, 480 to "8:00", 540 to "9:00", 720 to "12:00").forEach { (v, label) ->
                         FilterChip(
                             selected = allDay == v,
                             onClick = { onChange(true, chosenMinutes, v, null, null) },
@@ -873,19 +880,15 @@ private fun CalendarRow(
                         )
                     }
                 }
-                // 開始時 / リマインダーそれぞれの既定アクション
-                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                // 開始時 / リマインダーそれぞれの既定アクション。見出しは役割が分かる名前にする (#224)
+                FlowRow(Modifier.padding(top = 4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "開始",
+                        stringResource(R.string.action_label_start),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(end = 8.dp),
                     )
-                    listOf(
-                        EventAction.ALARM to "アラーム",
-                        EventAction.NOTIFY to "通知",
-                        EventAction.MUTE to "OFF",
-                    ).forEach { (a, label) ->
+                    actionLabels.forEach { (a, label) ->
                         FilterChip(
                             selected = startAction == a,
                             onClick = { onChange(true, chosenMinutes, null, a, null) },
@@ -894,18 +897,14 @@ private fun CalendarRow(
                         )
                     }
                 }
-                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(Modifier.padding(top = 4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "通知分",
+                        stringResource(R.string.action_label_reminder),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(end = 8.dp),
                     )
-                    listOf(
-                        EventAction.ALARM to "アラーム",
-                        EventAction.NOTIFY to "通知",
-                        EventAction.MUTE to "OFF",
-                    ).forEach { (a, label) ->
+                    actionLabels.forEach { (a, label) ->
                         FilterChip(
                             selected = reminderAction == a,
                             onClick = { onChange(true, chosenMinutes, null, null, a) },
@@ -934,6 +933,12 @@ private fun EventRulesCard(
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
     var showCodes by remember { mutableStateOf(false) }
+    // 鳴らし方の3択の言葉は予定の詳細と両 OS でそろえる (#224)
+    val actionLabels = listOf(
+        EventAction.ALARM to stringResource(R.string.action_alarm),
+        EventAction.NOTIFY to stringResource(R.string.action_notify),
+        EventAction.MUTE to stringResource(R.string.action_mute),
+    )
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -942,13 +947,15 @@ private fun EventRulesCard(
         ),
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-            // 既定アクション (開始時 / 通知分)
-            IconSettingRow(Icons.Default.Alarm) {
-                listOf(
-                    EventAction.ALARM to "アラーム",
-                    EventAction.NOTIFY to "通知",
-                    EventAction.MUTE to "OFF",
-                ).forEach { (a, label) ->
+            // 既定アクション (予定の開始 / 「○分前」の通知)。どちらの行か分かる見出しを先頭に置く (#224)
+            IconChipRow(Icons.Default.Alarm) {
+                Text(
+                    stringResource(R.string.action_label_start),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+                actionLabels.forEach { (a, label) ->
                     FilterChip(
                         selected = prefs.defaultStartAction == a,
                         onClick = { scope.launch { settings.setDefaultStartAction(a); repository.resync("settings") } },
@@ -957,12 +964,14 @@ private fun EventRulesCard(
                     )
                 }
             }
-            IconSettingRow(Icons.Default.Notifications) {
-                listOf(
-                    EventAction.ALARM to "アラーム",
-                    EventAction.NOTIFY to "通知",
-                    EventAction.MUTE to "OFF",
-                ).forEach { (a, label) ->
+            IconChipRow(Icons.Default.Notifications) {
+                Text(
+                    stringResource(R.string.action_label_reminder),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+                actionLabels.forEach { (a, label) ->
                     FilterChip(
                         selected = prefs.defaultReminderAction == a,
                         onClick = { scope.launch { settings.setDefaultReminderAction(a); repository.resync("settings") } },

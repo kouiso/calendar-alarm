@@ -2,6 +2,7 @@ package com.calendaralarm.ui
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -31,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,7 +66,11 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
         .getEnabledListenerPackages(context).contains(context.packageName)
 
     var editDraft by remember { mutableStateOf<NotificationRuleSpec?>(null) }
+    /** 編集中のルールの一覧上の位置。null (追加時) は保存で末尾に足し、index ありは同じ位置を上書きする */
+    var editIndex by remember { mutableStateOf<Int?>(null) }
     var aiText by remember { mutableStateOf<String?>(null) }
+    // 連続する AI 生成を区別する番号。古い結果が開き直したダイアログを上書きしないため (#424)
+    var aiRequestId by remember { mutableIntStateOf(0) }
 
     Card(
         Modifier.fillMaxWidth(),
@@ -96,9 +102,14 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                 }) { Text(stringResource(R.string.rules_grant_access)) }
             }
 
-            // ルール一覧
-            prefs.notificationRules.forEach { rule ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // ルール一覧。行を押すと中身が入った状態でダイアログが開き、上書き・削除できる (#226)
+            prefs.notificationRules.forEachIndexed { index, rule ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { editIndex = index; editDraft = rule },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Column(Modifier.weight(1f)) {
                         Text(rule.name, style = MaterialTheme.typography.bodyMedium)
                         Text(
@@ -124,7 +135,7 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
 
             // 追加ボタン群
             Row(Modifier.fillMaxWidth()) {
-                TextButton(onClick = { editDraft = NotificationRuleSpec(name = "") }) {
+                TextButton(onClick = { editIndex = null; editDraft = NotificationRuleSpec(name = "") }) {
                     Text(stringResource(R.string.rules_add))
                 }
                 if (AiConfig.available) {
@@ -148,16 +159,36 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
         }
     }
 
-    // 手動/AI生成で埋めた下書きを編集する共通ダイアログ
+    // 手動/AI生成で埋めた下書きを編集する共通ダイアログ。
+    // 既存ルールの編集 (editIndex あり) は「保存」で同じ位置を上書きし、「削除」もここに置く
     editDraft?.let { draft ->
+        val index = editIndex
         RuleEditDialog(
             initial = draft,
-            onDismiss = { editDraft = null },
+            onDismiss = { editDraft = null; editIndex = null },
             onSave = { rule ->
                 scope.launch {
-                    settings.setNotificationRules(prefs.notificationRules + rule)
+                    settings.setNotificationRules(
+                        if (index == null) {
+                            prefs.notificationRules + rule
+                        } else {
+                            prefs.notificationRules.mapIndexed { i, r -> if (i == index) rule else r }
+                        },
+                    )
                 }
                 editDraft = null
+                editIndex = null
+            },
+            onDelete = index?.let { i ->
+                {
+                    scope.launch {
+                        settings.setNotificationRules(
+                            prefs.notificationRules.filterIndexed { j, _ -> j != i },
+                        )
+                    }
+                    editDraft = null
+                    editIndex = null
+                }
             },
         )
     }
@@ -192,6 +223,7 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                     enabled = !working && text.isNotBlank(),
                     onClick = {
                         working = true
+                        val myRequest = ++aiRequestId
                         scope.launch {
                             val api = AiConfig.api()
                             if (api == null) {
@@ -202,7 +234,8 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                             val spec = NotificationRuleGenerator(api).generate(text)
                             working = false
                             if (spec == null) genError = failedMessage
-                            else { editDraft = spec; aiText = null }
+                            // 閉じた後・新しい生成の後に届いた結果で開いている編集を上書きしない
+                            else if (aiText != null && aiRequestId == myRequest) { editIndex = null; editDraft = spec; aiText = null }
                         }
                     },
                 ) { Text(stringResource(if (working) R.string.rules_ai_working else R.string.rules_ai_run)) }
@@ -212,13 +245,18 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
     }
 }
 
-/** ルールの手動編集ダイアログ。キーワードはカンマ区切り、曜日はチップ。 */
+/**
+ * ルールの手動編集ダイアログ。キーワードはカンマ区切り、曜日はチップ。
+ * onDelete を渡すと既存ルールの編集扱いになり、ボタンは「削除・戻る・保存」(#226)。
+ * null なら新規追加で「戻る・追加」。
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RuleEditDialog(
     initial: NotificationRuleSpec,
     onDismiss: () -> Unit,
     onSave: (NotificationRuleSpec) -> Unit,
+    onDelete: (() -> Unit)? = null,
 ) {
     var name by remember { mutableStateOf(initial.name) }
     var pkg by remember { mutableStateOf(initial.packageName.orEmpty()) }
@@ -315,8 +353,20 @@ private fun RuleEditDialog(
                         ),
                     )
                 },
-            ) { Text(stringResource(R.string.common_add)) }
+            ) { Text(stringResource(if (onDelete == null) R.string.common_add else R.string.common_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_back)) } },
+        dismissButton = {
+            Row {
+                onDelete?.let { delete ->
+                    TextButton(onClick = delete) {
+                        Text(
+                            stringResource(R.string.common_delete),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_back)) }
+            }
+        },
     )
 }

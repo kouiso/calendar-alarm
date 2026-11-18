@@ -2,6 +2,11 @@
 <resources>
     <string name="app_name" translatable="false">Calendar Alarm</string>
     <!-- 文言の元は日本語。英語は values-en (#105)。%1$s などは差し込む値 -->
+    <string name="action_label_reminder">「○分前」の通知</string>
+    <string name="action_label_start">予定の開始</string>
+    <string name="action_alarm">アラーム</string>
+    <string name="action_mute">鳴らさない</string>
+    <string name="action_notify">通知のみ</string>
     <string name="agenda_all_day">終日</string>
     <string name="agenda_no_events">予定なし</string>
     <string name="agenda_now_label">今 %1$s</string>
@@ -240,6 +245,7 @@
     <string name="trouble_state_info">参考</string>
     <string name="trouble_state_na">対象外</string>
     <string name="trouble_state_ng">要対応</string>
+    <string name="trouble_state_ok">OK</string>
     <string name="trouble_title">トラブルシューティング</string>
     <string name="unit_minutes_short">分</string>
     <string name="unit_minutes_value">%1$d分</string>

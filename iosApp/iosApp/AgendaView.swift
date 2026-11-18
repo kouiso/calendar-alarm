@@ -468,11 +468,22 @@ struct EventRow: View {
                     .font(NightTheme.font(15))
                     .lineLimit(1)
                     .foregroundStyle(ev.muted ? .secondary : .primary)
-                if !ev.event.location.isEmpty || !ev.calendarName.isEmpty {
-                    Text([ev.calendarName, ev.event.location].filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(NightTheme.font(12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                // 「○分前」の札は予定名の下の段 (カレンダー名の前) に置く (#227)。
+                // 右端に並べると予定名が途中で切れるため (Android の EventRow と同じ並び)
+                HStack(spacing: 6) {
+                    if !ev.muted && ev.effectiveMinutes > 0 {
+                        Text("\(ev.effectiveMinutes)分前")
+                            .font(NightTheme.font(11))
+                            .foregroundStyle(accent)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    if !ev.event.location.isEmpty || !ev.calendarName.isEmpty {
+                        Text([ev.calendarName, ev.event.location].filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(NightTheme.font(12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             }
             Spacer()
@@ -483,13 +494,6 @@ struct EventRow: View {
             } else {
                 if onToggle == nil {
                     Image(systemName: "bell.fill").foregroundStyle(accent).font(.system(size: 14))
-                }
-                if ev.effectiveMinutes > 0 {
-                    Text("\(ev.effectiveMinutes)分前")
-                        .font(NightTheme.font(11))
-                        .foregroundStyle(accent)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
                 }
             }
             if let onToggle {

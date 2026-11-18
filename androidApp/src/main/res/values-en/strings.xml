@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="action_label_reminder">Reminder</string>
+    <string name="action_label_start">Event start</string>
+    <string name="action_alarm">Alarm</string>
+    <string name="action_mute">Don\'t ring</string>
+    <string name="action_notify">Notify only</string>
     <string name="agenda_all_day">All day</string>
     <string name="agenda_no_events">No events</string>
     <string name="agenda_now_label">Now %1$s</string>
@@ -245,6 +250,7 @@
     <string name="trouble_state_info">Info</string>
     <string name="trouble_state_na">Not applicable</string>
     <string name="trouble_state_ng">Needs action</string>
+    <string name="trouble_state_ok">OK</string>
     <string name="trouble_title">Troubleshooting</string>
     <string name="unit_minutes_short">min</string>
     <string name="unit_minutes_value">%1$d min</string>
