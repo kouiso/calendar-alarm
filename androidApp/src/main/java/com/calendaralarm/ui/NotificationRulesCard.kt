@@ -230,7 +230,8 @@ fun NotificationRulesCard(settings: SettingsRepository, prefs: SettingsRepositor
                             val spec = NotificationRuleGenerator(api).generate(text)
                             working = false
                             if (spec == null) genError = failedMessage
-                            else { editIndex = null; editDraft = spec; aiText = null }
+                            // 閉じた後に届いた結果で開いている編集を上書きしない
+                            else if (aiText != null) { editIndex = null; editDraft = spec; aiText = null }
                         }
                     },
                 ) { Text(stringResource(if (working) R.string.rules_ai_working else R.string.rules_ai_run)) }

@@ -864,7 +864,7 @@ private fun CalendarRow(
                         )
                     }
                 }
-                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(Modifier.padding(top = 4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "終日",
                         style = MaterialTheme.typography.labelMedium,
@@ -881,7 +881,7 @@ private fun CalendarRow(
                     }
                 }
                 // 開始時 / リマインダーそれぞれの既定アクション。見出しは役割が分かる名前にする (#224)
-                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(Modifier.padding(top = 4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "予定の開始",
                         style = MaterialTheme.typography.labelMedium,
@@ -897,7 +897,7 @@ private fun CalendarRow(
                         )
                     }
                 }
-                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(Modifier.padding(top = 4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "「○分前」の通知",
                         style = MaterialTheme.typography.labelMedium,
@@ -947,8 +947,14 @@ private fun EventRulesCard(
         ),
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-            // 既定アクション (予定の開始 / 「○分前」の通知)
-            IconSettingRow(Icons.Default.Alarm) {
+            // 既定アクション (予定の開始 / 「○分前」の通知)。どちらの行か分かる見出しを先頭に置く (#224)
+            IconChipRow(Icons.Default.Alarm) {
+                Text(
+                    "予定の開始",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
                 actionLabels.forEach { (a, label) ->
                     FilterChip(
                         selected = prefs.defaultStartAction == a,
@@ -958,7 +964,13 @@ private fun EventRulesCard(
                     )
                 }
             }
-            IconSettingRow(Icons.Default.Notifications) {
+            IconChipRow(Icons.Default.Notifications) {
+                Text(
+                    "「○分前」の通知",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
                 actionLabels.forEach { (a, label) ->
                     FilterChip(
                         selected = prefs.defaultReminderAction == a,
