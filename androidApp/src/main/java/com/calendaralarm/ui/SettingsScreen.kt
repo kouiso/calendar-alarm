@@ -866,7 +866,7 @@ private fun CalendarRow(
                 }
                 FlowRow(Modifier.padding(top = 4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "終日",
+                        stringResource(R.string.agenda_all_day),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(end = 8.dp),
@@ -883,7 +883,7 @@ private fun CalendarRow(
                 // 開始時 / リマインダーそれぞれの既定アクション。見出しは役割が分かる名前にする (#224)
                 FlowRow(Modifier.padding(top = 4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "予定の開始",
+                        stringResource(R.string.action_label_start),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(end = 8.dp),
@@ -899,7 +899,7 @@ private fun CalendarRow(
                 }
                 FlowRow(Modifier.padding(top = 4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "「○分前」の通知",
+                        stringResource(R.string.action_label_reminder),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(end = 8.dp),
@@ -950,7 +950,7 @@ private fun EventRulesCard(
             // 既定アクション (予定の開始 / 「○分前」の通知)。どちらの行か分かる見出しを先頭に置く (#224)
             IconChipRow(Icons.Default.Alarm) {
                 Text(
-                    "予定の開始",
+                    stringResource(R.string.action_label_start),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(end = 8.dp),
@@ -966,7 +966,7 @@ private fun EventRulesCard(
             }
             IconChipRow(Icons.Default.Notifications) {
                 Text(
-                    "「○分前」の通知",
+                    stringResource(R.string.action_label_reminder),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(end = 8.dp),

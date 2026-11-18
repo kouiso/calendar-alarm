@@ -4,7 +4,7 @@
   "androidApp/src/main/java/com/calendaralarm/engine/RingingActivity.kt": 13,
   "androidApp/src/main/java/com/calendaralarm/engine/RingingOverlay.kt": 8,
   "androidApp/src/main/java/com/calendaralarm/ui/AgendaScreen.kt": 55,
-  "androidApp/src/main/java/com/calendaralarm/ui/SettingsScreen.kt": 147,
+  "androidApp/src/main/java/com/calendaralarm/ui/SettingsScreen.kt": 144,
   "androidApp/src/main/java/com/calendaralarm/ui/TimerScreen.kt": 1,
   "shared/src/commonMain/kotlin/com/calendaralarm/shared/ai/MailEventExtractor.kt": 2,
   "shared/src/commonMain/kotlin/com/calendaralarm/shared/ai/NotificationRuleGenerator.kt": 1,
