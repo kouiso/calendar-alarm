@@ -40,3 +40,8 @@
 - audit: SCHEDULE→FIRE→WARN(オーバーレイ未許可,FSI=可)→STOP_TAP(画面)→DISMISS を 2 連続で記録
 - 行86: POWER キーで画面消去・ロック後に鳴動 → 起きると RingingActivity 前面 → 左端ハンドルのスライドで停止 → RingingActivity 終了・鳴動通知消失
 - 鳴動画面構成: 大きい時刻・「スヌーズ 10分」大ボタン・「スライドして停止」スライダー（行20 外観分。TalkBack/360x740/オーバーレイ許可時の停止画面は未検証）
+
+## 行90 再起動テスト（audit_log 抜粋）
+- `RESYNC reason=boot:android.intent.action.BOOT_COMPLETED` — 再起動直後にアプリが再同期
+- `FIRE ev:6:1907:1795075567016:b0` — 「検証-再起動テスト」予定（dtstart 17:06:07）に定刻発火
+- `WARN ... オーバーレイ未許可 (FSI=可): ロック解除中は通知シェードからのみ停止可能` — ロック解除後画面ONのため鳴動画面は自動全面化せず、通知の「停止」で停止を確認
