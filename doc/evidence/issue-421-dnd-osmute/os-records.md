@@ -34,3 +34,9 @@
 - `issue421-19-trouble-silent.annotated.png` — サイレント中の検査画面（要対応行）
 - `issue421-19-trouble-priority.annotated.png` — 優先モード・アラーム除外時の検査画面（要対応行）
 - `issue421-19-os-alarms-off.annotated.png` — OS 設定で「アラーム」を外した画面
+
+## 行20/86 追加分（同日 16:14-16:16 実施）
+- おやすみモード中も鳴らす=ON + オーナー自動ルール（休日/仕事, alarms=allow）で FIRE 確認
+- audit: SCHEDULE→FIRE→WARN(オーバーレイ未許可,FSI=可)→STOP_TAP(画面)→DISMISS を 2 連続で記録
+- 行86: POWER キーで画面消去・ロック後に鳴動 → 起きると RingingActivity 前面 → 左端ハンドルのスライドで停止 → RingingActivity 終了・鳴動通知消失
+- 鳴動画面構成: 大きい時刻・「スヌーズ 10分」大ボタン・「スライドして停止」スライダー（行20 外観分。TalkBack/360x740/オーバーレイ許可時の停止画面は未検証）
