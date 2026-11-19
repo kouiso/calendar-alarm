@@ -63,6 +63,11 @@ object AlarmExpander {
         eventTypeFilter: EventTypeFilter = EventTypeFilter(),
         /** true のときイベントがカレンダーに持つリマインダーも鳴動対象にする。 */
         importEventReminders: Boolean = false,
+        /** 予定側リマインダーの負値 (CalendarContract の MINUTES_DEFAULT=-1) を
+         *  解決する既定の分数 (グローバル設定の「N分前」)。#382 で、既定の通知を
+         *  終日の鳴動時刻基点にまとめるために、生値を見て基点を分ける必要があるため
+         *  解決を展開側へ寄せた。iOS の EventKit は負値を返さないので実質 Android 用。 */
+        defaultReminderMinutes: Int = 0,
         /** 元アプリの「一括ミュート」: ALARM 鳴動を全て抑止する。
          *  NOTIFY (通知のみ) は鳴動ではないので残す。 */
         muteAll: Boolean = false,
@@ -83,10 +88,14 @@ object AlarmExpander {
             if (!passesEventFilters(event, override, inviteFilter, eventTypeFilter, titleMatchRule)) continue
             // 終日イベントは startMillis が UTC 0時。深夜に鳴らさないため
             // イベント日のローカル allDayMinutes (既定9:00) に倒す。負数なら鳴らさない。
+            // allDayDayStart: その日のローカル 0 時。終日の予定側リマインダーの基点にだけ使う (#382)
+            var allDayDayStart: Instant? = null
             val eventStart = if (event.allDay) {
                 if (allDaySuppressed(event, rule)) continue
                 val day = Instant.fromEpochMilliseconds(event.startMillis)
                     .toLocalDateTime(TimeZone.UTC).date
+                allDayDayStart = LocalDateTime(day.year, day.month, day.dayOfMonth, 0, 0)
+                    .toInstant(zone)
                 LocalDateTime(
                     day.year, day.month, day.dayOfMonth,
                     rule.allDayMinutes / 60, rule.allDayMinutes % 60,
@@ -101,14 +110,14 @@ object AlarmExpander {
             val title = event.title.ifBlank { "(タイトルなし)" }
             // triggerAt 重複を避けるため時刻単位で集約 (開始オフセットを優先)
             val seenTriggers = mutableSetOf<Long>()
-            fun emit(minutes: Int, action: EventAction) {
+            fun emit(minutes: Int, action: EventAction, anchor: Instant = startMillis, mark: String = "b") {
                 if (action == EventAction.MUTE) return
                 if (muteAll && action == EventAction.ALARM) return
-                val triggerAt = startMillis - minutes.minutes
+                val triggerAt = anchor - minutes.minutes
                 if (!inWindow(triggerAt, now, horizon)) return
                 if (!seenTriggers.add(triggerAt.toEpochMilliseconds())) return
                 result += AlarmInstance(
-                    id = "ev:${event.instanceKey}:b$minutes",
+                    id = "ev:${event.instanceKey}:$mark$minutes",
                     triggerAtMillis = triggerAt.toEpochMilliseconds(),
                     title = title,
                     kind = AlarmKind.EVENT,
@@ -121,11 +130,22 @@ object AlarmExpander {
             emit(minutesBefore, startAction)
             extras.sorted().forEach { emit(it, reminderAction) }
             // カレンダー側リマインダーの取り込み (アプリ追加分と同じ trigger は重複除外)
-            // 負値は「開始N分後」を意味してしまうため防御的に除外する
-            // (Android の MINUTES_DEFAULT=-1 は AlarmRepository 側で既定分数に解決済み)。
             if (importEventReminders) {
-                event.calendarReminderMinutes.filter { it >= 0 }.sorted()
-                    .forEach { emit(it, reminderAction) }
+                event.calendarReminderMinutes.sorted().forEach { raw ->
+                    // 負値 (CalendarContract の MINUTES_DEFAULT=-1) はここで既定分数に解決する。
+                    // #382 で明示の通知と基点を分けるため、解決前の生値を見る必要がある
+                    val m = if (raw < 0) defaultReminderMinutes else raw
+                    // 解決後も負なら「開始N分後」を意味してしまうので防御的に捨てる
+                    if (m < 0) return@forEach
+                    // 終日の予定側通知で 0 分より大きい明示のものは、Google が「その日の現地 0 時の
+                    // 何分前」で持つため現地 0 時から数える (#382)。鳴動時刻 (allDayMinutes)
+                    // から引くと、540 分前 (前日15時) の通知が当日 0:00 に鳴ってしまう。
+                    // 0 分と既定値は「開始時・システム既定」なので鳴動時刻にまとめる
+                    // (0 時基点に倒すと真夜中の鳴動を新たに作る)。基点が違うので id の印も
+                    // ":b" とは別にする (同じ分数で別時刻の予約が id 衝突して消えるのを防ぐ)
+                    if (allDayDayStart != null && raw > 0) emit(m, reminderAction, allDayDayStart!!, "d")
+                    else emit(m, reminderAction)
+                }
             }
         }
         return result

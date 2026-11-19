@@ -57,6 +57,39 @@
       "expected": []
     },
     {
+      "name": "終日: 予定側の通知(540分前=前日15時)は現地0時から数える。0:00には鳴らない (#382)",
+      "event": {"start": "2026-10-08T00:00:00Z", "allDay": true, "reminders": [540]},
+      "rule": {"minutesBefore": 0, "allDayMinutes": 540},
+      "importEventReminders": true,
+      "now": "2026-10-05T00:00:00Z", "horizon": "2026-10-09T00:00:00Z",
+      "expected": [
+        {"trigger": "2026-10-08T00:00:00Z", "minutesBefore": 0, "delivery": "ALARM"},
+        {"trigger": "2026-10-07T06:00:00Z", "minutesBefore": 540, "delivery": "ALARM"}
+      ]
+    },
+    {
+      "name": "終日: 0分の予定側通知は開始時=鳴動時刻にまとまる (#382)",
+      "event": {"start": "2026-10-08T00:00:00Z", "allDay": true, "reminders": [0]},
+      "rule": {"minutesBefore": 0, "allDayMinutes": 540},
+      "importEventReminders": true,
+      "now": "2026-10-05T00:00:00Z", "horizon": "2026-10-09T00:00:00Z",
+      "expected": [
+        {"trigger": "2026-10-08T00:00:00Z", "minutesBefore": 0, "delivery": "ALARM"}
+      ]
+    },
+    {
+      "name": "終日: 既定の通知(MINUTES_DEFAULT=-1)は既定分数に解決し、鳴動時刻にまとまる (#382)",
+      "event": {"start": "2026-10-08T00:00:00Z", "allDay": true, "reminders": [-1]},
+      "rule": {"minutesBefore": 0, "allDayMinutes": 540},
+      "importEventReminders": true,
+      "defaultReminderMinutes": 10,
+      "now": "2026-10-05T00:00:00Z", "horizon": "2026-10-09T00:00:00Z",
+      "expected": [
+        {"trigger": "2026-10-08T00:00:00Z", "minutesBefore": 0, "delivery": "ALARM"},
+        {"trigger": "2026-10-07T23:50:00Z", "minutesBefore": 10, "delivery": "ALARM"}
+      ]
+    },
+    {
       "name": "猶予の内側(59分前に過ぎた鳴動)は残す",
       "event": {"start": "2026-10-05T01:00:00Z", "allDay": false},
       "rule": {"minutesBefore": 0},

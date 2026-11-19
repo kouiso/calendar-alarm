@@ -179,8 +179,8 @@ class CalendarContractReader(private val context: Context) {
     /**
      * Reminders テーブルから基底イベントID群の通知分数を取得する。
      * MINUTES=-1 (MINUTES_DEFAULT) は「システム既定」を意味し、実値は端末に
-     * 依存するためここでは解決せず -1 のまま返す (Repository 側でユーザー設定の
-     * 既定分数に置き換える)。METHOD が DEFAULT/ALERT 以外 (EMAIL/SMS) の行は
+     * 依存するためここでは解決せず -1 のまま返す (展開側でユーザー設定の既定分数に
+     * 置き換える。明示の通知と基点が違うので生値が要る, #382)。METHOD が DEFAULT/ALERT 以外 (EMAIL/SMS) の行は
      * 端末が通知を処理しないため取り込まない。-1 以外の負値は未定義として捨てる。
      */
     private suspend fun eventReminders(eventIds: Set<Long>): Map<Long, List<Int>> =

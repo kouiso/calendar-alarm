@@ -137,12 +137,13 @@ class EventTypeDefaultsExpansionTest {
     }
 
     @Test
-    fun `現在の挙動を固定_終日の予定に取り込んだ540分前のリマインダーは当日0時に鳴る`() {
-        // #382: 終日の予定のカレンダー側リマインダーは「その日の0時から何分前」だが、今は9時の基準から引くので
-        // 540分前は当日の0時になる。#382 で直すとこの期待値は変わる (この試験が反転する箇所)
+    fun `終日の予定に取り込んだ540分前のリマインダーは0時ではなく前日15時に鳴る`() {
+        // #382: 終日の予定のカレンダー側リマインダーは「その日の現地0時から何分前」。
+        // 以前は 9 時の基準から引いたため 540 分前が当日 0:00 に鳴っていた (利用者の「毎回0時に鳴る」)。
+        // 現地0時から数えると 540 分前は前日の 15:00 になる
         val e = allDay("a", "default", 2026, 11, 6, reminders = listOf(540))
         val triggers = expand(listOf(e), reminders = true).map { it.triggerAtMillis }.toSet()
-        assertEquals(setOf(local(2026, 11, 6, 0, 0), local(2026, 11, 6, 9, 0)), triggers)
+        assertEquals(setOf(local(2026, 11, 5, 15, 0), local(2026, 11, 6, 9, 0)), triggers)
     }
 
     private fun titled(id: String, title: String, allDay: Boolean) = CalendarEvent(

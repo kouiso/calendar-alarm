@@ -32,6 +32,25 @@ check("reminder-only notify ahead", notificationDeliveryAhead(timed, rx, nil, ac
 check("alarm only never counts", notificationDeliveryAhead(timed, rx, nil, actions: (a, nil), importReminders: false, nowMillis: iso("2026-10-22T09:00:00Z")), false)
 check("imported calendar reminder 60 counts", notificationDeliveryAhead(ev("2026-10-22T10:00:00Z", allDay: false).withReminders([60]), rule, nil, actions: (a, n), importReminders: true, nowMillis: iso("2026-10-22T08:30:00Z")), true)
 extension CalendarEventDTO { func withReminders(_ m: [Int]) -> CalendarEventDTO { var c = self; c.calendarReminderMinutes = m; return c } }
+// #382: 終日の予定側通知 (>0分) は現地0時基点。540分前=前日15時で、当日0時ではない
+// JST: 通知は 10/21 15:00 (UTC 06:00)。LA: 10/21 15:00 PDT (UTC 22:00)。その後では先ではない
+if tz == "America/Los_Angeles" {
+    check("LA all-day reminder 540 fired at day-before 15:00", notificationDeliveryAhead(allDay.withReminders([540]), rule, nil, actions: (a, n), importReminders: true, nowMillis: iso("2026-10-21T21:00:00Z")), true)
+    check("LA all-day reminder 540 already passed by evening", notificationDeliveryAhead(allDay.withReminders([540]), rule, nil, actions: (a, n), importReminders: true, nowMillis: iso("2026-10-22T00:00:00Z")), false)
+} else {
+    check("JST all-day reminder 540 fired at day-before 15:00", notificationDeliveryAhead(allDay.withReminders([540]), rule, nil, actions: (a, n), importReminders: true, nowMillis: iso("2026-10-21T05:00:00Z")), true)
+    check("JST all-day reminder 540 already passed by evening", notificationDeliveryAhead(allDay.withReminders([540]), rule, nil, actions: (a, n), importReminders: true, nowMillis: iso("2026-10-21T08:00:00Z")), false)
+}
+// 0 分の終日通知は鳴動時刻 (9:00) にまとまる。開始がミュートなら席を取らないので通知が残る:
+// 9 時前では先、9 時を過ぎれば過ぎ (0 時基点に倒すと真夜中に鳴る)
+let mute = EventAction.mute.rawValue
+if tz == "America/Los_Angeles" {
+    check("LA all-day 0-min reminder merges into ring time", notificationDeliveryAhead(allDay.withReminders([0]), rule, nil, actions: (mute, n), importReminders: true, nowMillis: iso("2026-10-22T15:00:00Z")), true)
+    check("LA all-day 0-min reminder passed after ring time", notificationDeliveryAhead(allDay.withReminders([0]), rule, nil, actions: (mute, n), importReminders: true, nowMillis: iso("2026-10-22T17:00:00Z")), false)
+} else {
+    check("JST all-day 0-min reminder merges into ring time", notificationDeliveryAhead(allDay.withReminders([0]), rule, nil, actions: (mute, n), importReminders: true, nowMillis: iso("2026-10-21T23:00:00Z")), true)
+    check("JST all-day 0-min reminder passed after ring time", notificationDeliveryAhead(allDay.withReminders([0]), rule, nil, actions: (mute, n), importReminders: true, nowMillis: iso("2026-10-22T01:00:00Z")), false)
+}
 
 // 開始(アラーム)と同じ分のリマインダー(通知)は重複で作られない。違う分なら通知が残る
 var rdup = rule; rdup.minutesBefore = 10; rdup.extraOffsets = [10]

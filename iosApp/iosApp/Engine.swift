@@ -348,7 +348,9 @@ final class Engine: ObservableObject {
                     return s.standaloneAlarms.contains { $0.id == aid && $0.enabled }
                 }
                 if root.hasPrefix("ev:") {
-                    let key = root.dropFirst(3).components(separatedBy: ":b").first ?? ""
+                    // id の末尾は ":b<分>" (開始基点) か ":d<分>" (終日の現地0時基点, #382)。
+                    // 最後の区切りを外せば予定のキーに戻る
+                    let key = root.dropFirst(3).components(separatedBy: ":").dropLast().joined(separator: ":")
                     return !calendarsOk || desiredIds.contains(root) || liveEventKeys.contains(key)
                 }
                 return !calendarsOk && inst.kind == "EVENT"
