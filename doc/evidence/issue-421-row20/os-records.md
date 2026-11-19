@@ -14,3 +14,7 @@
   - `284|FIRE` → `285|WARN|オーバーレイ未許可(FSI=可)` → `286|STOP_TAP(画面)` → `287|DISMISS`（20:17:08-39, TalkBack ON・overlay default）
 - 復旧: TalkBack OFF・density 420 に戻し・SYSTEM_ALERT_WINDOW=default・大ボタン OFF
 - 備考: TalkBack の「新しくなりました」チュートリアル・通知許可ダイアログを通過して検証。スヌーズ再鳴は行89で検証済み
+
+## 追記（360dp×3ボタンナビ）
+- `cmd overlay` で navbar.threebutton を有効化 + density 480 → 360dp幅・ナビバー有りで文字可読（issue421-20-360-navbar）
+- 復旧: gestural overlay 再有効・density 420
