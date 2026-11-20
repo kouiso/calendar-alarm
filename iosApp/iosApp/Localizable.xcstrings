@@ -350,6 +350,16 @@
         }
       }
     },
+    "きっぱり": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharp"
+          }
+        }
+      }
+    },
     "このアラームを削除する?": {
       "localizations": {
         "en": {
@@ -420,6 +430,16 @@
         }
       }
     },
+    "ゆっくり": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gentle"
+          }
+        }
+      }
+    },
     "アラーム": {
       "localizations": {
         "en": {
@@ -456,6 +476,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Edit alarm"
+          }
+        }
+      }
+    },
+    "アラーム音": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alarm sound"
           }
         }
       }
@@ -590,12 +620,32 @@
         }
       }
     },
+    "ファイルから選ぶ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose from Files"
+          }
+        }
+      }
+    },
     "プリセットを追加": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Add preset"
+          }
+        }
+      }
+    },
+    "ベル": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bell"
           }
         }
       }
@@ -736,6 +786,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Skip dates"
+          }
+        }
+      }
+    },
+    "使える形式は mp3・m4a・wav・aiff・caf などです。長い音は先頭の約30秒だけ鳴ります。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usable formats: mp3, m4a, wav, aiff, caf and more. Long sounds play only the first 30 seconds or so."
           }
         }
       }
@@ -960,22 +1020,22 @@
         }
       }
     },
-    "標準に戻す": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reset to default"
-          }
-        }
-      }
-    },
     "次 %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Next %@"
+          }
+        }
+      }
+    },
+    "止める": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
           }
         }
       }
@@ -1016,6 +1076,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "End (empty = 1 hour)"
+          }
+        }
+      }
+    },
+    "聞く": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listen"
           }
         }
       }
@@ -1146,16 +1216,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Applies to"
-          }
-        }
-      }
-    },
-    "選ぶ": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose"
           }
         }
       }

@@ -13,6 +13,95 @@ enum AlarmSoundLibrary {
     /// 取り込んだ音のファイル名の頭。Library/Sounds の他のファイルと区別する
     static let prefix = "alarm-custom-"
 
+    /// アプリ同梱のプリセット音 (#147)。bundle の Sounds/ に置き、
+    /// AlertSound.named が読めるよう初回に Library/Sounds へコピーする。
+    /// custom- 接頭辞ではないので removeAll(except:) の対象外＝消えない
+    static let bundledPresets: [String] = [
+        "preset_bell.caf",
+        "preset_soft.caf",
+        "preset_beep.caf",
+    ]
+
+    /// バンドルのプリセットを Library/Sounds へ置く (冪等)。Store が状態を読む前に呼ぶ。
+    /// 大きさがバンドルの物と違うファイルは置き直す。コピーの途中で落ちた書きかけや、
+    /// 同じ名前のまま中身を替えた更新の前の版を、次の起動で直すため。
+    /// 大きさが同じなら直らないので、同梱の音の中身を替える時はファイル名も変える。
+    /// 置けなかった音は「音の名前: 理由」で返す。その音は既定音で鳴るので、Store が記録に残す
+    @discardableResult
+    static func installBundledPresets() -> [String] {
+        let fm = FileManager.default
+        do {
+            try fm.createDirectory(at: soundsDirectory, withIntermediateDirectories: true)
+        } catch {
+            return bundledPresets.map { "\($0): \(error.localizedDescription)" }
+        }
+        var failures: [String] = []
+        for name in bundledPresets {
+            let dest = soundsDirectory.appendingPathComponent(name)
+            guard let src = Bundle.main.url(forResource: name, withExtension: nil) else {
+                // 前に置いた物が残っていれば、それで鳴るので失敗にしない
+                if !fm.fileExists(atPath: dest.path) { failures.append("\(name): not in app bundle") }
+                continue
+            }
+            if fileSize(dest) == fileSize(src) { continue }
+            // 一時ファイルへ書き切ってから置き換える。途中で落ちても Library/Sounds に書きかけを残さない
+            let tmp = fm.temporaryDirectory.appendingPathComponent("preset-\(UUID().uuidString).caf")
+            do {
+                try fm.copyItem(at: src, to: tmp)
+                if fm.fileExists(atPath: dest.path) {
+                    _ = try fm.replaceItemAt(dest, withItemAt: tmp)
+                } else {
+                    try fm.moveItem(at: tmp, to: dest)
+                }
+            } catch {
+                try? fm.removeItem(at: tmp)
+                failures.append("\(name): \(error.localizedDescription)")
+            }
+        }
+        return failures
+    }
+
+    private static func fileSize(_ url: URL) -> Int? {
+        (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+    }
+
+    /// Library/Sounds に置けている同梱の音。置けていない音は選んでも既定音で鳴るので、一覧に出さない
+    static var installedPresets: [String] { bundledPresets.filter { usable($0) } }
+
+    /// その音で鳴らせるか。同梱の音は大きさがバンドルの物と同じ時だけ。
+    /// 置き直しに失敗した書きかけ (ディスクが一杯の時など) が残っていると、ファイルはあっても正しく鳴らないため
+    static func usable(_ name: String) -> Bool {
+        guard exists(name) else { return false }
+        guard bundledPresets.contains(name),
+              let src = Bundle.main.url(forResource: name, withExtension: nil) else { return true }
+        return fileSize(soundsDirectory.appendingPathComponent(name)) == fileSize(src)
+    }
+
+    /// 同梱の音の表示名。同梱の音でなければ nil。
+    /// 名前は保存せず表示のたびに引く。保存すると、端末の言語を変えた後も選んだ時の言語の名前が残る
+    static func presetLabel(_ file: String) -> String? {
+        switch file {
+        case "preset_bell.caf": return String(localized: "ベル")
+        case "preset_soft.caf": return String(localized: "ゆっくり")
+        case "preset_beep.caf": return String(localized: "きっぱり")
+        default: return nil
+        }
+    }
+
+    /// 設定の行とアラーム音の画面に出す、今の音の名前。ファイルが無い音は既定音で鳴るので「iPhone の標準」。
+    /// 同梱の音は保存した名前より presetLabel を優先し、取り込み音は取り込んだファイルの名前 (label) を出す
+    static func displayName(file: String?, label: String?) -> String {
+        guard let file = effectiveSound(file) else { return String(localized: "iPhone の標準") }
+        return presetLabel(file) ?? label ?? file
+    }
+
+    /// 実際に鳴る音のファイル名。ファイルが無ければ予約は既定音に落ちる (soundName と同じ) ので nil を返し、
+    /// 画面でも「iPhone の標準」として見せる
+    static func effectiveSound(_ file: String?) -> String? {
+        guard let file, usable(file) else { return nil }
+        return file
+    }
+
     /// 今の既定の音 (ファイル名)。Store が読み込みと変更の時に入れる。
     /// 予約側 (AlarmKit/通知) は Store を持たないので、ここを見る
     static var currentDefault: String?
@@ -30,7 +119,7 @@ enum AlarmSoundLibrary {
     /// Android 形式の content:// などはファイル名として存在しないので既定音に落ちる
     static func soundName(for inst: AlarmInstanceDTO) -> String? {
         for candidate in [inst.soundUri, currentDefault] {
-            if let name = candidate, !name.isEmpty, !name.contains("/"), exists(name) { return name }
+            if let name = candidate, !name.isEmpty, !name.contains("/"), usable(name) { return name }
         }
         return nil
     }

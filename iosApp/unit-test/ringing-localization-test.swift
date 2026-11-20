@@ -28,13 +28,22 @@ final class RingingLocalizationTests: XCTestCase {
     }
 }
 
-/// 設定画面のアラーム音の行 (#101) の文言が英語でも出ること。ここが日本語のままだと、英語の端末だけ音の設定が読めない
+/// 設定画面のアラーム音の行 (#101) とアラーム音の画面 (#147) の文言が英語でも出ること。
+/// ここが日本語のままだと、英語の端末だけ音の設定が読めない
 final class SettingsSoundLocalizationTests: XCTestCase {
     func testSoundRowHasEnglish() throws {
         XCTAssertEqual(String(format: try english("アラーム音: %@"), "My tone"), "Alarm sound: My tone")
         XCTAssertEqual(try english("iPhone の標準"), "iPhone default")
-        XCTAssertEqual(try english("選ぶ"), "Choose")
-        XCTAssertEqual(try english("標準に戻す"), "Reset to default")
+    }
+
+    func testSoundScreenHasEnglish() throws {
+        XCTAssertEqual(try english("アラーム音"), "Alarm sound")
+        XCTAssertEqual(try english("聞く"), "Listen")
+        XCTAssertEqual(try english("止める"), "Stop")
+        XCTAssertEqual(try english("ファイルから選ぶ"), "Choose from Files")
+        for name in ["ベル", "ゆっくり", "きっぱり"] {
+            XCTAssertNotEqual(try english(name), "__missing__", "\(name) に英語の訳が無い")
+        }
     }
 
     func testAlarmKitLimitNoteHasEnglish() throws {

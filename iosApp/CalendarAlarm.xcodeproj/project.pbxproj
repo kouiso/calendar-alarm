@@ -36,6 +36,7 @@
 		70C15B080DE1D75F672A4741 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C59894E1200D6FB530B33BED /* Theme.swift */; };
 		7121EA4333EF57BBD17EF851 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3906726812F9FD3E5895AD2A /* DiagnosticsView.swift */; };
 		78335F051083F14CA2C916EE /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7384BC516B1FE4FB2F672E67 /* WeatherService.swift */; };
+		788880047F8040D8752FA52B /* preset_soft.caf in Resources */ = {isa = PBXBuildFile; fileRef = E7C5D66F21408C5AD19326EF /* preset_soft.caf */; };
 		83DF4A4775FDA2DFD643DF85 /* MailShareExt.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 90ED19FA826B4A1503E171A1 /* MailShareExt.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		84CB7D0E16454D83E7DD74BE /* SharedKitBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5CB9C72F79CDC56058DD028 /* SharedKitBridge.swift */; };
 		86B15B16E50DEF7BDFC0FC23 /* alarm-sound-import-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22FA71EC8E0871C65511A60 /* alarm-sound-import-test.swift */; };
@@ -43,10 +44,12 @@
 		8BC62EA88163A9C19DEA60E3 /* ringing-localization-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = AECCA8E3197BA59E900D5152 /* ringing-localization-test.swift */; };
 		8DA98EC782D9732A40A26D31 /* outfit_regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9B5EFAB358775E656E932A66 /* outfit_regular.ttf */; };
 		8F780525F00F3096C5364349 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE03925928578DE0F3DE47BB /* ShareViewController.swift */; };
+		94273BBCFE59C817C0255177 /* preset_beep.caf in Resources */ = {isa = PBXBuildFile; fileRef = BB616EF89213098FB6D00332 /* preset_beep.caf */; };
 		95C5226BC1A6DFEDB19A8904 /* invite-default-migration-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5278F07C10319A652C3E40B6 /* invite-default-migration-test.swift */; };
 		966320DEE11E9E181F326ACE /* engine-snooze-minutes-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AC8EE707421AED144DFAD38 /* engine-snooze-minutes-test.swift */; };
 		9C344CBDC2CF3887BCBC5775 /* weather-forecast-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B43BAA08286BC866F901A9 /* weather-forecast-test.swift */; };
 		A18B776969A5B61C602C3D89 /* outfit_semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C694CCA1128C6527CB1476DC /* outfit_semibold.ttf */; };
+		A311D5B040AD840D15A4F059 /* bundled-sound-preset-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25524C4E94C0B016A662710 /* bundled-sound-preset-test.swift */; };
 		A6D274A92BA0F9A706CB3085 /* CalendarAlarmWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD581386A891F7FC538C69A5 /* CalendarAlarmWidget.swift */; };
 		A793851C3CD7E4B1FDBE5794 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F8642EDA4CA9194F126132 /* Store.swift */; };
 		AAFC4648F481E8E284EC4F80 /* outfit_light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8DD3A0F17E4F13654090ABE8 /* outfit_light.ttf */; };
@@ -58,6 +61,7 @@
 		C81DC1220A1AA99DF92EE408 /* TimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */; };
 		C85633A926A38048ACF31244 /* WeatherBackdropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E77D9C74BAD6E368F79E4264 /* WeatherBackdropView.swift */; };
 		D00DDF3835BD77953502752A /* CalendarAlarmApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1664780F463A19E9DA0C56BA /* CalendarAlarmApp.swift */; };
+		D2F71B9D368217654F47B9C9 /* preset_bell.caf in Resources */ = {isa = PBXBuildFile; fileRef = 2DD6E79FBFC46CEDCF7F7BF7 /* preset_bell.caf */; };
 		D5FE40480C851F233EFBA4B6 /* plex_sans_jp_light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 93E52D4230819F38EC3DE33A /* plex_sans_jp_light.ttf */; };
 		E710C0FCC3752DD55B30D5BC /* engine-off-app-stop-test.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3DB907D283B90CDEE0E5F06 /* engine-off-app-stop-test.swift */; };
 		FD5F5F9529EEDE44FE18F446 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4B1C1CFBE436D31467257B /* Models.swift */; };
@@ -108,6 +112,7 @@
 		1AC8EE707421AED144DFAD38 /* engine-snooze-minutes-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "engine-snooze-minutes-test.swift"; sourceTree = "<group>"; };
 		218C782FC3E24320A8442DC3 /* CalendarAlarmWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = CalendarAlarmWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		24F9472624F7ECEBFD26FF3E /* Engine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Engine.swift; sourceTree = "<group>"; };
+		2DD6E79FBFC46CEDCF7F7BF7 /* preset_bell.caf */ = {isa = PBXFileReference; path = preset_bell.caf; sourceTree = "<group>"; };
 		2EEE1565D963DCF58E797F77 /* OffAppStopPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffAppStopPlan.swift; sourceTree = "<group>"; };
 		2F0A11DC2B493DF079DC6BD6 /* CalendarAlarmWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CalendarAlarmWidget.entitlements; sourceTree = "<group>"; };
 		3906726812F9FD3E5895AD2A /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
@@ -136,8 +141,10 @@
 		A22FA71EC8E0871C65511A60 /* alarm-sound-import-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "alarm-sound-import-test.swift"; sourceTree = "<group>"; };
 		A7F9E4A9E5713FBCAE6C31A3 /* TimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerView.swift; sourceTree = "<group>"; };
 		AECCA8E3197BA59E900D5152 /* ringing-localization-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ringing-localization-test.swift"; sourceTree = "<group>"; };
+		B25524C4E94C0B016A662710 /* bundled-sound-preset-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "bundled-sound-preset-test.swift"; sourceTree = "<group>"; };
 		B399458D4913DD152149CADA /* MailImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailImportView.swift; sourceTree = "<group>"; };
 		BAB229DAF4F036F5841F17AE /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		BB616EF89213098FB6D00332 /* preset_beep.caf */ = {isa = PBXFileReference; path = preset_beep.caf; sourceTree = "<group>"; };
 		C3DB907D283B90CDEE0E5F06 /* engine-off-app-stop-test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "engine-off-app-stop-test.swift"; sourceTree = "<group>"; };
 		C59894E1200D6FB530B33BED /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		C694CCA1128C6527CB1476DC /* outfit_semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = outfit_semibold.ttf; sourceTree = "<group>"; };
@@ -154,6 +161,7 @@
 		E42B1C06A0E446C3B4F2DCD4 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		E4F003771A83A79DB1D7C14D /* AlarmsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmsView.swift; sourceTree = "<group>"; };
 		E77D9C74BAD6E368F79E4264 /* WeatherBackdropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherBackdropView.swift; sourceTree = "<group>"; };
+		E7C5D66F21408C5AD19326EF /* preset_soft.caf */ = {isa = PBXFileReference; path = preset_soft.caf; sourceTree = "<group>"; };
 		EBC7C20D6CC306ED12728299 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
 		EE03925928578DE0F3DE47BB /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		F45C2D331E41E02B34FBDBF3 /* plex_sans_jp_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = plex_sans_jp_medium.ttf; sourceTree = "<group>"; };
@@ -194,6 +202,7 @@
 			isa = PBXGroup;
 			children = (
 				A22FA71EC8E0871C65511A60 /* alarm-sound-import-test.swift */,
+				B25524C4E94C0B016A662710 /* bundled-sound-preset-test.swift */,
 				9DC0168732CA8F32750FBF0A /* diagnosis-test.swift */,
 				C3DB907D283B90CDEE0E5F06 /* engine-off-app-stop-test.swift */,
 				1AC8EE707421AED144DFAD38 /* engine-snooze-minutes-test.swift */,
@@ -206,6 +215,16 @@
 				D9B43BAA08286BC866F901A9 /* weather-forecast-test.swift */,
 			);
 			path = "unit-test";
+			sourceTree = "<group>";
+		};
+		A2A0A4A00B7138F7D4229B86 /* Sounds */ = {
+			isa = PBXGroup;
+			children = (
+				BB616EF89213098FB6D00332 /* preset_beep.caf */,
+				2DD6E79FBFC46CEDCF7F7BF7 /* preset_bell.caf */,
+				E7C5D66F21408C5AD19326EF /* preset_soft.caf */,
+			);
+			path = Sounds;
 			sourceTree = "<group>";
 		};
 		BE0919C17107C5FCF3FF9118 = {
@@ -251,6 +270,7 @@
 				E77D9C74BAD6E368F79E4264 /* WeatherBackdropView.swift */,
 				7384BC516B1FE4FB2F672E67 /* WeatherService.swift */,
 				292CEE1BCE2BA19DFEAD3CBA /* Fonts */,
+				A2A0A4A00B7138F7D4229B86 /* Sounds */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
@@ -419,6 +439,9 @@
 				2DF8005728D2E0319C73F77B /* plex_sans_jp_medium.ttf in Resources */,
 				0EDE4CE8267312F25F224805 /* plex_sans_jp_regular.ttf in Resources */,
 				40D1C13EB37C422D85A661DF /* plex_sans_jp_semibold.ttf in Resources */,
+				94273BBCFE59C817C0255177 /* preset_beep.caf in Resources */,
+				D2F71B9D368217654F47B9C9 /* preset_bell.caf in Resources */,
+				788880047F8040D8752FA52B /* preset_soft.caf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -493,6 +516,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				86B15B16E50DEF7BDFC0FC23 /* alarm-sound-import-test.swift in Sources */,
+				A311D5B040AD840D15A4F059 /* bundled-sound-preset-test.swift in Sources */,
 				2C48431DBDA0DF45F9D75583 /* diagnosis-test.swift in Sources */,
 				E710C0FCC3752DD55B30D5BC /* engine-off-app-stop-test.swift in Sources */,
 				966320DEE11E9E181F326ACE /* engine-snooze-minutes-test.swift in Sources */,

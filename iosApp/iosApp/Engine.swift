@@ -761,6 +761,13 @@ final class Engine: ObservableObject {
         await runExclusively { await self.rescheduleForSoundChangeNow() }
     }
 
+    /// 既定の音を変え、入っている予約を新しい音で入れ直す (#147)。file が nil なら iPhone の標準。
+    /// アラーム音の画面と試験が同じ手順を通るよう、保存と入れ直しをここにまとめる
+    func changeDefaultSound(file: String?, label: String?) async {
+        store.setAlarmSound(file: file, label: label)
+        await rescheduleForSoundChange()
+    }
+
     private func rescheduleForSoundChangeNow() async {
         let ids = store.state.scheduled.values
             .filter { needsSoundChange($0) }
