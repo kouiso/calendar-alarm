@@ -52,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -814,12 +815,12 @@ internal fun eventDate(ev: CalendarEvent): LocalDate {
 
 /** 予定詳細の小さい天気カード: アイコン40 + 気温34 + 天気・降水 + 「地点・HH:mm の予報」 */
 @Composable
-private fun EventWeatherCard(f: DailyForecast, location: String, forecastAtMillis: Long) {
+internal fun EventWeatherCard(f: DailyForecast, location: String, forecastAtMillis: Long) {
     Card(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth().testTag("event-weather-card"),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ),
     ) {
         Row(
