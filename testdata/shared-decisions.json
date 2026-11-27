@@ -277,6 +277,16 @@
       "name": "arm は鳴動時刻の早い順",
       "input": {"nowMillis": 1800000000000, "rowsAtRead": [], "rowsNow": [], "expanded": [{"id": "ev:1:3:1800010800000:b0", "triggerAtMillis": 1800010800000, "title": "t", "kind": "EVENT"}, {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, {"id": "ev:1:2:1800007200000:b0", "triggerAtMillis": 1800007200000, "title": "t", "kind": "EVENT"}]},
       "expected": {"cancel": [], "arm": ["ev:1:1:1800003600000:b0", "ev:1:2:1800007200000:b0", "ev:1:3:1800010800000:b0"], "changedIds": ["ev:1:3:1800010800000:b0", "ev:1:1:1800003600000:b0", "ev:1:2:1800007200000:b0"], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "前の形の止めた行は同じ時刻の新しい id を蘇らせない",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "sa:3:2026-10-05", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 3}, "state": "DISMISSED"}], "rowsNow": [{"instance": {"id": "sa:3:2026-10-05", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 3}, "state": "DISMISSED"}], "expanded": [{"id": "sa:3:2026-10-05:0600", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 3}]},
+      "expected": {"cancel": [], "arm": [], "changedIds": [], "fireNow": [], "skip": [], "suppressed": ["sa:3:2026-10-05:0600"]}
+    },
+    {
+      "name": "前の形の止めた行は違う時刻の新しい id を止めない",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "sa:3:2026-10-05", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 3}, "state": "DISMISSED"}], "rowsNow": [{"instance": {"id": "sa:3:2026-10-05", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 3}, "state": "DISMISSED"}], "expanded": [{"id": "sa:3:2026-10-05:2100", "triggerAtMillis": 1800052200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 3}]},
+      "expected": {"cancel": [], "arm": ["sa:3:2026-10-05:2100"], "changedIds": ["sa:3:2026-10-05:2100"], "fireNow": [], "skip": [], "suppressed": []}
     }
   ]
 }
