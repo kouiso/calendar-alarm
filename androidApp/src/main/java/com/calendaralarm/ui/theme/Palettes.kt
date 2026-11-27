@@ -233,6 +233,12 @@ enum class AppPalette(
     companion object {
         /** 設定に保存された ID → パレット。未知 ID/未設定は既定 (琥珀) に落とす。 */
         fun byId(id: String?): AppPalette = entries.firstOrNull { it.id == id } ?: AMBER
+
+        /**
+         * 鳴動画面と重ねて出す停止画面のテーマ色 (常にダーク)。
+         * CalendarAlarmTheme と同じ選び方 ("default" は未設定扱いで琥珀) なので、同じ設定なら2つの画面の色が一致する。
+         */
+        fun forRinging(themeId: String?): AccentColors = byId(themeId?.takeIf { it != "default" }).dark
     }
 }
 

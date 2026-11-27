@@ -57,6 +57,7 @@
     <string name="common_save">保存</string>
     <string name="common_start">開始</string>
     <string name="common_stop">停止</string>
+    <string name="date_pattern_month_day_weekday" translatable="false">M月d日 (E)</string>
     <string name="event_channel">予定の通知</string>
     <string name="event_channel_desc">通知のみアクションで配信される予定通知</string>
     <plurals name="event_minutes_before">
@@ -142,6 +143,10 @@
     <string name="repeat_monthly_day">毎月%1$d日</string>
     <string name="repeat_once">1回のみ</string>
     <string name="repeat_weekly_days">毎週 %1$s</string>
+    <plurals name="ring_starts_in_minutes">
+        <item quantity="other">%1$d分後に開始</item>
+    </plurals>
+    <string name="ring_starts_soon">まもなく開始</string>
     <string name="ring_status_alarm_muted">アラームの音量が0です。鳴っても音が出ません</string>
     <string name="ring_status_all_muted">すべてのアラームをミュート中です。通知とタイマーは届きます</string>
     <plurals name="ring_status_missed_recently">

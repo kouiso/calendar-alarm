@@ -68,6 +68,6 @@ class RingingOverlayLargeLayoutTest {
         val root = build(large = false)
         assertEquals(RingingSlideSpec.SNOOZE_HEIGHT_DP, root.findViewWithTag<View>(SNOOZE_BUTTON_TAG).layoutParams.height)
         assertNotNull(root.findViewWithTag<View>(SNOOZE_CHOOSE_TAG))
-        assertEquals(30f, (root.findViewWithTag<View>(TITLE_TAG) as TextView).textSize, 0.01f)
+        assertEquals(32f, (root.findViewWithTag<View>(TITLE_TAG) as TextView).textSize, 0.01f)
     }
 }

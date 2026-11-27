@@ -2,12 +2,16 @@ package com.calendaralarm.engine
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.text.TextUtils
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -18,11 +22,18 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.annotation.VisibleForTesting
+import androidx.compose.ui.graphics.toArgb
+import androidx.core.content.res.ResourcesCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.widget.TextViewCompat
 import com.calendaralarm.R
 import com.calendaralarm.shared.logic.SlideToStopRule
+import com.calendaralarm.ui.theme.AppPalette
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
@@ -69,6 +80,10 @@ object RingingOverlay {
         // オーバーレイだけチップと見出し・大ボタンが静かに消える (鳴動画面とのズレ)
         snoozePresets: List<Int>,
         largeButtons: Boolean,
+        // 同じ理由で既定値を持たせない: 渡し忘れると色と時刻が鳴動画面と静かにズレる (#336)
+        triggerAtMillis: Long,
+        eventStartMillis: Long?,
+        themeId: String,
         stillValid: () -> Boolean = { true },
     ) {
         if (!canShow(context)) return
@@ -82,7 +97,12 @@ object RingingOverlay {
                 audit(app, "OVERLAY_FAIL", "$instanceId: WindowManager取得不可")
                 return@post
             }
-            val view = buildView(app, instanceId, title, snoozeMinutes, snoozePresets, largeButtons)
+            val view = buildView(
+                app, instanceId, title, snoozeMinutes, snoozePresets, largeButtons,
+                triggerAtMillis = triggerAtMillis,
+                eventStartMillis = eventStartMillis,
+                themeId = themeId,
+            )
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -140,7 +160,8 @@ object RingingOverlay {
         }
     }
 
-    // 停止スライダーの操作契約を単体テストで固定するため、WindowManager を通さずに組めるようにする
+    // 停止スライダーの操作契約を単体テストで固定するため、WindowManager を通さずに組めるようにする。
+    // 寸法と色は鳴動画面 (RingingActivity) と同じ RingingSlideSpec / AppPalette.forRinging から引く (#336)
     @VisibleForTesting
     internal fun buildView(
         context: Context,
@@ -149,19 +170,26 @@ object RingingOverlay {
         snoozeMinutes: Int,
         snoozePresets: List<Int>,
         largeButtons: Boolean = false,
+        triggerAtMillis: Long = System.currentTimeMillis(),
+        eventStartMillis: Long? = null,
+        themeId: String = "default",
+        nowMillis: () -> Long = System::currentTimeMillis,
     ): View {
-        val accent = Color.parseColor("#BDBDFF")
-        val fg = Color.parseColor("#F4F5F8")
-        val sub = Color.parseColor("#B7BECB")
+        val palette = AppPalette.forRinging(themeId)
+        val accent = palette.primary.toArgb()
+        val onAccent = palette.onPrimary.toArgb()
+        val fg = RingingSlideSpec.TEXT_ARGB
+        val buttonFg = RingingSlideSpec.BUTTON_TEXT_ARGB
+        val sub = RingingSlideSpec.SUB_TEXT_ARGB
         val dp = { v: Int -> (v * context.resources.displayMetrics.density).toInt() }
 
         fun pill(text: String, bg: Int, fgColor: Int): TextView = TextView(context).apply {
             this.text = text
             // 大きいボタンモード (#154) は盤 p154 の .bb (24px・太さ600・角丸32)
-            textSize = if (largeButtons) RingingSlideSpec.LARGE_BUTTON_TEXT_SP.toFloat() else 22f
+            textSize = (if (largeButtons) RingingSlideSpec.LARGE_BUTTON_TEXT_SP else RingingSlideSpec.SNOOZE_TEXT_SP).toFloat()
             setTextColor(fgColor)
             gravity = Gravity.CENTER
-            setTypeface(if (largeButtons) semiBold(typeface) else boldOf(typeface))
+            setTypeface(semiBold(typeface))
             background = GradientDrawable().apply {
                 cornerRadius = dp(
                     if (largeButtons) RingingSlideSpec.LARGE_BUTTON_CORNER_DP else RingingSlideSpec.TRACK_CORNER_DP,
@@ -170,14 +198,24 @@ object RingingOverlay {
             }
         }
 
+        val padH = dp(RingingSlideSpec.SCREEN_PAD_H_DP)
+        val padV = dp(RingingSlideSpec.SCREEN_PAD_V_DP)
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setBackgroundColor(Color.parseColor("#F20A0C11"))
-            val pad = dp(24)
-            setPadding(pad, dp(48), pad, dp(40))
+            // 鳴動画面と同じ不透明の背景: 透けると別のアプリの画面が見えて同じに見えない
+            setBackgroundColor(RingingSlideSpec.BACKGROUND_ARGB)
+            setPadding(padH, padV, padH, padV)
+            // 鳴動画面は WindowInsets.safeDrawing で端を避けている。同じく、システムバーと画面の切り欠きの幅を足す
+            ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
+                val bars = insets.getInsets(
+                    WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+                )
+                v.setPadding(padH + bars.left, padV + bars.top, padH + bars.right, padV + bars.bottom)
+                insets
+            }
         }
-        // 時刻・タイトルは ScrollView (fillViewport) 内に配置し、低い画面や
+        // 日付〜題は ScrollView (fillViewport) 内に配置し、低い画面や
         // プリセット展開時に溢れてもスクロールで到達できるようにする。
         // 下部の操作群は root 直下で固定。
         val top = LinearLayout(context).apply {
@@ -185,31 +223,92 @@ object RingingOverlay {
             gravity = Gravity.CENTER_HORIZONTAL
         }
 
+        // 日付の札
         top.addView(TextView(context).apply {
-            text = SimpleDateFormat("H:mm", Locale.getDefault()).format(Date())
-            // 大きいボタンモードは文字盤を小さくする盤 (dial.sm) に合わせ、時刻も 66 にする
-            textSize = if (largeButtons) RingingSlideSpec.LARGE_DIAL_TIME_SP.toFloat() else 96f
+            text = SimpleDateFormat(context.getString(R.string.date_pattern_month_day_weekday), Locale.JAPAN)
+                .format(Date(triggerAtMillis))
+            tag = RING_DATE_TAG
+            textSize = RingingSlideSpec.DATE_TEXT_SP.toFloat()
+            setTextColor(sub)
+            gravity = Gravity.CENTER
+            setPadding(dp(RingingSlideSpec.DATE_PAD_H_DP), 0, dp(RingingSlideSpec.DATE_PAD_H_DP), 0)
+            background = GradientDrawable().apply {
+                cornerRadius = dp(RingingSlideSpec.DATE_CORNER_DP).toFloat()
+                setColor(RingingSlideSpec.DATE_FILL_ARGB)
+                setStroke(dp(1), RingingSlideSpec.DATE_STROKE_ARGB)
+            }
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, dp(RingingSlideSpec.DATE_HEIGHT_DP),
+        ))
+
+        // 二重の輪と時刻。大きさは入れ物 (RingDialArea) が枠の高さと幅から決める
+        val timeView = TextView(context).apply {
+            text = SimpleDateFormat(RingingSlideSpec.TIME_PATTERN, Locale.getDefault()).format(Date(triggerAtMillis))
+            tag = RING_TIME_TAG
             setTextColor(fg)
             gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 2.2f,
-        ).apply { gravity = Gravity.CENTER })
+            maxLines = 1
+            includeFontPadding = false
+            // 書体が読めなくても停止には関わらないので、端末の既定の書体で出す
+            runCatching { ResourcesCompat.getFont(context, R.font.outfit_extralight) }.getOrNull()
+                ?.let { setTypeface(it) }
+        }
+        val dialFrame = FrameLayout(context).apply {
+            addView(RingDialView(context, accent, RingingSlideSpec.dialInnerRatio(largeButtons)).apply {
+                tag = RING_DIAL_TAG
+            }, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT,
+            ))
+            addView(timeView, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT,
+            ))
+        }
+        val dialGap = View(context)
+        val area = RingDialArea(context, largeButtons, dialFrame, dialGap, timeView)
+        // 大きさは RingDialArea.onMeasure が決める
+        area.addView(dialFrame, LinearLayout.LayoutParams(0, 0))
+        area.addView(dialGap, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0))
 
-        top.addView(TextView(context).apply {
+        area.addView(TextView(context).apply {
+            text = startsInText(context, eventStartMillis, nowMillis())
+            tag = RING_STARTS_IN_TAG
+            textSize = RingingSlideSpec.STARTS_IN_TEXT_SP.toFloat()
+            setTextColor(accent)
+            setTypeface(semiBold(typeface))
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, dp(RingingSlideSpec.STARTS_IN_HEIGHT_DP),
+        ))
+        area.addView(View(context), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(RingingSlideSpec.STARTS_IN_TO_TITLE_DP),
+        ))
+
+        area.addView(TextView(context).apply {
             text = title.ifBlank { "アラーム" }
             tag = TITLE_TAG
-            textSize = if (largeButtons) RingingSlideSpec.LARGE_TITLE_SP.toFloat() else 30f
+            textSize = (if (largeButtons) RingingSlideSpec.LARGE_TITLE_SP else RingingSlideSpec.TITLE_SP).toFloat()
             setTextColor(fg)
+            setTypeface(semiBold(typeface))
             gravity = Gravity.CENTER
             maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+            includeFontPadding = false
+            // 行の高さは鳴動画面の lineHeight (sp) と同じ
+            TextViewCompat.setLineHeight(
+                this,
+                TypedValue.applyDimension(
+                    TypedValue.COMPLEX_UNIT_SP,
+                    if (largeButtons) RingingSlideSpec.LARGE_TITLE_LINE_SP else RingingSlideSpec.TITLE_LINE_SP.toFloat(),
+                    context.resources.displayMetrics,
+                ).roundToInt(),
+            )
         }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT,
         ))
 
-        val spacer = View(context)
-        top.addView(spacer, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 3f,
+        top.addView(area, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f,
         ))
 
         val scroll = ScrollView(context).apply {
@@ -220,7 +319,7 @@ object RingingOverlay {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f,
         ))
 
-        val snooze = pill("スヌーズ ${snoozeMinutes}分", Color.parseColor("#14FFFFFF"), fg)
+        val snooze = pill("スヌーズ ${snoozeMinutes}分", RingingSlideSpec.BUTTON_FILL_ARGB, buttonFg)
         snooze.tag = SNOOZE_BUTTON_TAG
         snooze.setOnClickListener {
             // 停止ボタンと同じく押下の事実を先に残す。スヌーズが効かなかった時に
@@ -271,11 +370,11 @@ object RingingOverlay {
                 val chip = TextView(context).apply {
                     text = "+${m}分"
                     textSize = 14f
-                    setTextColor(fg)
+                    setTextColor(buttonFg)
                     gravity = Gravity.CENTER
                     background = GradientDrawable().apply {
                         cornerRadius = dp(14).toFloat()
-                        setColor(Color.parseColor("#14FFFFFF"))
+                        setColor(RingingSlideSpec.BUTTON_FILL_ARGB)
                     }
                     setOnClickListener { sendSnooze(m) }
                 }
@@ -286,20 +385,20 @@ object RingingOverlay {
             val toggle = TextView(context).apply {
                 tag = SNOOZE_CHOOSE_TAG
                 text = "スヌーズ時間を選ぶ ▾"
-                textSize = 14f
+                textSize = RingingSlideSpec.SNOOZE_CHOOSE_TEXT_SP.toFloat()
                 setTextColor(sub)
                 gravity = Gravity.CENTER
-                setPadding(0, dp(8), 0, dp(8))
                 setOnClickListener {
                     val open = chipScroll.visibility != View.VISIBLE
                     chipScroll.visibility = if (open) View.VISIBLE else View.GONE
                     text = if (open) "スヌーズ時間を選ぶ ▴" else "スヌーズ時間を選ぶ ▾"
                 }
             }
+            // 高さは鳴動画面と同じ固定値 (文字の行の高さに任せると位置がズレる)
             root.addView(toggle, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = dp(4) })
+                dp(RingingSlideSpec.SNOOZE_CHOOSE_HEIGHT_DP),
+            ))
             root.addView(chipScroll, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -314,7 +413,7 @@ object RingingOverlay {
                 textSize = RingingSlideSpec.LARGE_BUTTON_TEXT_SP.toFloat()
                 tag = LARGE_STOP_TAG
                 isAllCaps = false
-                setTextColor(Color.parseColor("#26247A"))
+                setTextColor(onAccent)
                 setTypeface(semiBold(typeface))
                 background = GradientDrawable().apply {
                     cornerRadius = dp(RingingSlideSpec.LARGE_BUTTON_CORNER_DP).toFloat()
@@ -323,23 +422,26 @@ object RingingOverlay {
                 setOnClickListener { dismiss(context, instanceId) }
             }
         } else {
-            buildSlideToStop(context, instanceId, accent, fg)
+            buildSlideToStop(context, instanceId, accent, onAccent, buttonFg)
         }
         root.addView(stop,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 dp(if (largeButtons) RingingSlideSpec.LARGE_BUTTON_HEIGHT_DP else RingingSlideSpec.TRACK_HEIGHT_DP),
-            ).apply { topMargin = dp(12) })
+            ).apply { topMargin = dp(RingingSlideSpec.STOP_GAP_DP) })
 
+        // 最後の子のままにする (RingingOverlayLargeLayoutTest が最後の子の上の余白を見る)
         root.addView(TextView(context).apply {
             text = "Calendar Alarm"
-            textSize = 12f
-            setTextColor(sub)
+            textSize = RingingSlideSpec.FOOT_TEXT_SP.toFloat()
+            setTextColor(RingingSlideSpec.FOOT_TEXT_ARGB)
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = dp(if (largeButtons) RingingSlideSpec.LARGE_BUTTON_GAP_DP else 10) })
+            dp(RingingSlideSpec.FOOT_HEIGHT_DP),
+        ).apply {
+            topMargin = dp(if (largeButtons) RingingSlideSpec.LARGE_BUTTON_GAP_DP else RingingSlideSpec.FOOT_GAP_DP)
+        })
 
         return root
     }
@@ -376,6 +478,7 @@ object RingingOverlay {
         context: Context,
         instanceId: String,
         accent: Int,
+        onAccent: Int,
         fg: Int,
     ): View {
         val dp = { v: Int -> (v * context.resources.displayMetrics.density).toInt() }
@@ -384,17 +487,24 @@ object RingingOverlay {
 
         val slider = FrameLayout(context).apply {
             contentDescription = "スライドして停止"
+            tag = SLIDE_TRACK_TAG
             background = GradientDrawable().apply {
                 cornerRadius = dp(RingingSlideSpec.TRACK_CORNER_DP).toFloat()
-                setColor(Color.parseColor("#14FFFFFF"))
+                setColor(RingingSlideSpec.BUTTON_FILL_ARGB)
                 // アクセントの35%枠: RingingActivity のスライダーと同じ視認性
-                setStroke(dp(1), Color.argb(89, Color.red(accent), Color.green(accent), Color.blue(accent)))
+                setStroke(
+                    dp(1),
+                    Color.argb(
+                        (RingingSlideSpec.TRACK_STROKE_ALPHA * 255).roundToInt(),
+                        Color.red(accent), Color.green(accent), Color.blue(accent),
+                    ),
+                )
             }
         }
 
         val label = TextView(context).apply {
             text = "スライドして停止 ›"
-            textSize = 20f
+            textSize = RingingSlideSpec.SLIDE_LABEL_SP.toFloat()
             setTextColor(fg)
             gravity = Gravity.CENTER
         }
@@ -405,6 +515,7 @@ object RingingOverlay {
 
         // 丸の中は停止の■ (デザイン正本: 矢印ではなく停止アイコン)
         val thumb = FrameLayout(context).apply {
+            tag = SLIDE_THUMB_TAG
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(accent)
@@ -412,7 +523,7 @@ object RingingOverlay {
         }
         thumb.addView(View(context).apply {
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#26247A"))
+                setColor(onAccent)
                 cornerRadius = dp(3).toFloat()
             }
         }, FrameLayout.LayoutParams(dp(RingingSlideSpec.STOP_ICON_DP), dp(RingingSlideSpec.STOP_ICON_DP)).apply {
@@ -469,5 +580,86 @@ object RingingOverlay {
         // 消費するのでここには来ず、スナップバックだけになる。
         slider.setOnClickListener { dismiss(context, instanceId) }
         return slider
+    }
+}
+
+/**
+ * 鳴動画面と同じ「○分後に開始」「まもなく開始」。四捨五入も同じ ((残り + 30秒) / 1分)。
+ * 開始時刻が無い (通知由来・タイマー等) か、開始を過ぎていれば「まもなく開始」。
+ */
+internal fun startsInText(context: Context, eventStartMillis: Long?, nowMillis: Long): String {
+    val remain = eventStartMillis?.minus(nowMillis)
+    return if (remain != null && remain > 0) {
+        val minutes = ((remain + 30_000) / 60_000).toInt()
+        context.resources.getQuantityString(R.plurals.ring_starts_in_minutes, minutes, minutes)
+    } else {
+        context.getString(R.string.ring_starts_soon)
+    }
+}
+
+/**
+ * 二重の輪を描く View。大きさは親の枠いっぱい (外の輪)。内の輪は外の [innerRatio] 倍の直径。
+ * 値は鳴動画面 (Compose の border) と同じ RingingSlideSpec から引く。
+ */
+private class RingDialView(
+    context: Context,
+    private val color: Int,
+    private val innerRatio: Float,
+) : View(context) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+
+    private fun withAlpha(alpha: Float): Int =
+        Color.argb((alpha * 255).roundToInt(), Color.red(color), Color.green(color), Color.blue(color))
+
+    override fun onDraw(canvas: Canvas) {
+        val density = resources.displayMetrics.density
+        val size = minOf(width, height).toFloat()
+        val cx = width / 2f
+        val cy = height / 2f
+        // 線は円の内側に収める (Compose の border と同じ)
+        val outerStroke = RingingSlideSpec.DIAL_OUTER_STROKE_DP * density
+        paint.strokeWidth = outerStroke
+        paint.color = withAlpha(RingingSlideSpec.DIAL_OUTER_ALPHA)
+        canvas.drawCircle(cx, cy, (size - outerStroke) / 2f, paint)
+        val innerStroke = RingingSlideSpec.DIAL_INNER_STROKE_DP * density
+        paint.strokeWidth = innerStroke
+        paint.color = withAlpha(RingingSlideSpec.DIAL_INNER_ALPHA)
+        canvas.drawCircle(cx, cy, (size * innerRatio - innerStroke) / 2f, paint)
+    }
+}
+
+/**
+ * 輪・「○分後に開始」・題を入れる枠。自分の高さと幅 (dp) から輪の大きさを決めて、
+ * 子の大きさと時刻の文字の大きさに反映してから測る。式は鳴動画面と同じ RingingSlideSpec.dialScale / dialOuterDp。
+ * 中は縦に中央寄せで、入りきらない分は clipChildren で切る (上の段の ScrollView がスクロールする)。
+ */
+private class RingDialArea(
+    context: Context,
+    private val largeButtons: Boolean,
+    private val dialFrame: View,
+    private val dialGap: View,
+    private val timeView: TextView,
+) : LinearLayout(context) {
+    init {
+        orientation = VERTICAL
+        gravity = Gravity.CENTER
+        clipChildren = true
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val density = resources.displayMetrics.density
+        val areaHeightDp = MeasureSpec.getSize(heightMeasureSpec) / density
+        val areaWidthDp = MeasureSpec.getSize(widthMeasureSpec) / density
+        val scale = RingingSlideSpec.dialScale(areaHeightDp, largeButtons)
+        val outerPx = (RingingSlideSpec.dialOuterDp(areaHeightDp, areaWidthDp, largeButtons) * density).roundToInt()
+        // LayoutParams の値を直に書き換える (測る最中に requestLayout を呼ばない)
+        (dialFrame.layoutParams as LinearLayout.LayoutParams).apply { width = outerPx; height = outerPx }
+        (dialGap.layoutParams as LinearLayout.LayoutParams).height =
+            (RingingSlideSpec.DIAL_TO_STARTS_IN_DP * scale * density).roundToInt()
+        val timeRatio = RingingSlideSpec.dialTimeRatio(largeButtons)
+        timeView.setTextSize(TypedValue.COMPLEX_UNIT_PX, outerPx * timeRatio)
+        // View の字の間は文字の大きさに対する割合。Compose の「外の輪 × -4/290」と同じ長さにする
+        timeView.letterSpacing = RingingSlideSpec.DIAL_TIME_LETTER_SPACING_PER_DIAL / timeRatio
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 }
