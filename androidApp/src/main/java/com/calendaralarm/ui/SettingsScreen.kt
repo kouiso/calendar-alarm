@@ -14,6 +14,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -86,6 +87,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -1455,6 +1457,59 @@ private fun RingingCard(
     }
 }
 
+/** テーマの丸のテスト用タグの接頭辞。末尾にパレット ID が付く。 */
+internal const val THEME_SWATCH_TAG_PREFIX = "theme_swatch_"
+
+/** 丸を塗る色。テーマを当てる側 (CalendarAlarmTheme) と同じく、今の外観がダークならダーク用の primary を使う。 */
+internal fun swatchColor(palette: AppPalette, dark: Boolean): Color =
+    if (dark) palette.dark.primary else palette.light.primary
+
+/**
+ * テーマ10種の丸の列。印は AppPalette.byId(themeId) で決める (テーマを当てる側と同じ関数なので、
+ * "default" や知らない ID は琥珀に印が付く)。保存値は書き換えない。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ThemeSwatchRow(
+    themeId: String,
+    onSelect: (AppPalette) -> Unit,
+    dark: Boolean = isSystemInDarkTheme(),
+) {
+    val current = AppPalette.byId(themeId)
+    FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), maxItemsInEachRow = 5) {
+        AppPalette.entries.forEach { palette ->
+            val selected = palette == current
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .selectable(selected = selected, role = Role.RadioButton, onClick = { onSelect(palette) })
+                    .padding(6.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(38.dp)
+                        .testTag(THEME_SWATCH_TAG_PREFIX + palette.id)
+                        .background(color = swatchColor(palette, dark), shape = CircleShape),
+                ) {
+                    if (selected) {
+                        Icon(
+                            Icons.Default.VerifiedUser,
+                            contentDescription = "選択中",
+                            tint = Color.White,
+                            modifier = Modifier.align(Alignment.Center).size(16.dp),
+                        )
+                    }
+                }
+                Text(
+                    palette.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
 /** テーマ10種 + カスタム背景画像。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1492,48 +1547,11 @@ private fun AppearanceCard(
         ),
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-            // テーマスウォッチ (10種): 各パレットの primary を丸で表示
-            FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), maxItemsInEachRow = 5) {
-                AppPalette.entries.forEach { palette ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .clickable { scope.launch { settings.setThemeId(palette.id) } }
-                            .padding(6.dp),
-                    ) {
-                        Box(
-                            Modifier
-                                .size(38.dp)
-                                .background(
-                                    color = palette.light.primary,
-                                    shape = CircleShape,
-                                )
-                                .then(
-                                    if (p.themeId == palette.id || (p.themeId == "default" && palette == AppPalette.INDIGO)) {
-                                        Modifier.background(
-                                            Color.Transparent,
-                                            CircleShape,
-                                        )
-                                    } else Modifier,
-                                ),
-                        ) {
-                            if (p.themeId == palette.id || (p.themeId == "default" && palette == AppPalette.INDIGO)) {
-                                Icon(
-                                    Icons.Default.VerifiedUser,
-                                    contentDescription = "選択中",
-                                    tint = Color.White,
-                                    modifier = Modifier.align(Alignment.Center).size(16.dp),
-                                )
-                            }
-                        }
-                        Text(
-                            palette.label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
+            // テーマスウォッチ (10種): 各パレットの primary を今の外観 (ライト/ダーク) の色で丸表示
+            ThemeSwatchRow(
+                themeId = p.themeId,
+                onSelect = { scope.launch { settings.setThemeId(it.id) } },
+            )
             ThemePreview()
             // カスタム背景
             Row(
