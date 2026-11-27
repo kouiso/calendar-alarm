@@ -92,6 +92,10 @@ class DiagnosticShareTest {
         db.auditLog().insert(
             AuditLogEntity(atMillis = 1_500L, action = "ALARM_OFF", detail = "単発アラーム消費で停止: 朝活 (id=3)"),
         )
+        // title を持たない記録の本文にだけ書かれた題は、予約 (PENDING) の題 (knownTitles) でだけ伏せられる
+        db.auditLog().insert(
+            AuditLogEntity(atMillis = 1_600L, action = "ERROR", detail = "歯医者 failed"),
+        )
         db.scheduledInstances().upsert(
             listOf(
                 ScheduledInstanceEntity(
@@ -108,5 +112,6 @@ class DiagnosticShareTest {
         assertFalse(text.contains("歯医者"))
         assertTrue(text.contains("titles: hidden"))
         assertTrue(text.contains("| [title] (id=3)"))
+        assertTrue(text.contains("| [title] failed"))
     }
 }

@@ -256,7 +256,7 @@ fun TroubleshootingScreen(repository: AlarmRepository, settings: SettingsReposit
         },
     ) { padding ->
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
+            Modifier.fillMaxSize().padding(padding).testTag("troubleshoot_list"),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(items, key = { it.key }) { item -> TroubleshootRow(item) { context.openSafely(item.fix) } }

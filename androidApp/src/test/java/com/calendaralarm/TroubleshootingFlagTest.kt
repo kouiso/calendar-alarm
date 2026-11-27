@@ -11,12 +11,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHasNoClickAction
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.assert
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -24,6 +29,7 @@ import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.calendar.CalendarContractReader
 import com.calendaralarm.data.db.AppDatabase
+import com.calendaralarm.data.db.AuditLogEntity
 import com.calendaralarm.engine.AlarmScheduler
 import com.calendaralarm.ui.TroubleshootChecks
 import com.calendaralarm.ui.TroubleshootingScreen
@@ -31,6 +37,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
@@ -55,6 +62,12 @@ class TroubleshootingFlagTest {
     val compose = createEmptyComposeRule()
 
     private val app: Application = ApplicationProvider.getApplicationContext()
+    private var db: AppDatabase? = null
+
+    @After
+    fun tearDown() {
+        db?.close()
+    }
 
     private fun show(rowTag: String) {
         // 初回の DataStore 生成と検査パス (AlarmService 等) のクラス読み込みは重い。
@@ -64,6 +77,7 @@ class TroubleshootingFlagTest {
         TroubleshootChecks.collect(app, vibrate = true)
 
         val db = Room.inMemoryDatabaseBuilder(app, AppDatabase::class.java).build()
+        this.db = db
         val repository = AlarmRepository(
             db = db,
             scheduler = AlarmScheduler(app),
@@ -124,5 +138,50 @@ class TroubleshootingFlagTest {
         val started: Intent = shadowOf(app).nextStartedActivity
         assertEquals(Settings.ACTION_APP_NOTIFICATION_SETTINGS, started.action)
         assertEquals(app.packageName, started.getStringExtra(Settings.EXTRA_APP_PACKAGE))
+    }
+
+    /** #286 記録を共有: 行をタップ → 全文 (題は伏せる) が出る → 共有で選ぶ画面が開く / キャンセルで閉じる。 */
+    @Test
+    fun shareLogRowOpensDialogWithMaskedBodyAndShareStartsChooser() {
+        show("troubleshoot_calendar")
+        runBlocking {
+            db!!.auditLog().insert(
+                AuditLogEntity(atMillis = 1_000L, action = "ERROR", detail = "歯医者朝活 failed", title = "歯医者朝活"),
+            )
+        }
+
+        compose.onNodeWithTag("troubleshoot_list").performScrollToNode(hasTestTag("share_log_row"))
+        compose.onNodeWithTag("share_log_row").performClick()
+        compose.waitUntil(15_000) {
+            compose.onAllNodesWithTag("share_log_body").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        compose.onNodeWithTag("share_log_body").assertTextContains("titles: hidden", substring = true)
+        compose.onNodeWithTag("share_log_body").assert(hasText("歯医者朝活", substring = true).not())
+        compose.onNodeWithTag("share_log_body").assertTextContains("[title]", substring = true)
+
+        compose.onNodeWithText(app.getString(R.string.share_log_send)).performClick()
+        compose.waitForIdle()
+
+        val started: Intent = shadowOf(app).nextStartedActivity
+        assertEquals(Intent.ACTION_CHOOSER, started.action)
+        assertEquals(0, compose.onAllNodesWithTag("share_log_body").fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun shareLogDialogCancelClosesWithoutSharing() {
+        show("troubleshoot_calendar")
+
+        compose.onNodeWithTag("troubleshoot_list").performScrollToNode(hasTestTag("share_log_row"))
+        compose.onNodeWithTag("share_log_row").performClick()
+        compose.waitUntil(15_000) {
+            compose.onAllNodesWithTag("share_log_body").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        compose.onNodeWithText(app.getString(R.string.common_cancel)).performClick()
+        compose.waitForIdle()
+
+        assertEquals(0, compose.onAllNodesWithTag("share_log_body").fetchSemanticsNodes().size)
+        assertNull(shadowOf(app).nextStartedActivity)
     }
 }

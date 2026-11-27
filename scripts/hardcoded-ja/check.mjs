@@ -49,6 +49,11 @@ export const ALLOWLIST = [
     pattern: /^shared\/src\/commonMain\/kotlin\/com\/calendaralarm\/shared\/model\/Models\.kt$/,
     callees: ["hit", "wholeTitle"],
   },
+  {
+    // 診断レポート (#286)。TITLE_DETAIL_TAIL の `通知` は iOS が記録に書く決まった書式との照合用で、
+    // 画面に出す文言ではない。
+    pattern: /^shared\/src\/commonMain\/kotlin\/com\/calendaralarm\/shared\/logic\/DiagnosticReport\.kt$/,
+  },
 ];
 
 // 診断ログ用の呼び出しの直接引数は数えない。設定の「鳴動ログ」には detail がそのまま出るが、
