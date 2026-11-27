@@ -41,7 +41,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * 設定で「何分前」「スヌーズ」の既定を変えたら、resync を呼ばなくても予約済みのアラームが新しい分数になる (#231 #254)。
+ * 予約に効く設定 (ScheduleSettings の12欄) を変えたら、resync を呼ばなくても予約済みのアラームが作り直される (#231 #254 #255)。
+ * 予約に効かない設定は再同期しない。
  * 画面と同じく SettingsRepository の setter だけを呼ぶ。
  */
 @RunWith(RobolectricTestRunner::class)
@@ -262,6 +263,10 @@ class ScheduleDefaultsResyncTest {
         startWatcher()
 
         runBlocking { settings.setShowWeekNumbers(true) }
+        // 週番号が flow に流れるまで待ち、まとめて1回に見えないようにする
+        runBlocking { settings.flow.first { it.showWeekNumbers } }
+        Thread.sleep(500)
+        assertEquals("週番号の変更では再同期しないこと", 0, runBlocking { settingsResyncCount() })
         runBlocking { settings.setMuteAll(true) }
 
         assertTrue("予約が取り消されること", waitUntil(5_000) { pending().isEmpty() })
