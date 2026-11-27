@@ -468,7 +468,7 @@ class EngineTest {
     }
 
     /** 予定一覧の理由の試験用: 終日を鳴らさないカレンダー1、鳴らさないカレンダー2の予定の行を差し込む */
-    private fun seedReasonRows(): Long {
+    private suspend fun seedReasonRows(): Long {
         val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
         val allDayStart = (Clock.System.now().toEpochMilliseconds() / 86_400_000L + 1) * 86_400_000L
         fun row(eventId: Long, calId: Long, begin: Long, allDay: Boolean) = mapOf(
@@ -515,7 +515,7 @@ class EngineTest {
         db.eventOverrides().upsert(EventOverrideEntity("1:4:${start + 3_600_000L}", action = "MUTE", minutesBefore = null))
         val items = repositoryWithCalendar.upcomingEvents()
         assertEquals(4, items.size)
-        items.forEach { assertEquals(it.muted, it.silenceReason != null, "予定${it.event.id}") }
+        items.forEach { assertEquals("予定${it.event.id}", it.muted, it.silenceReason != null) }
         assertEquals(SilenceReason.EVENT_OFF, items.first { it.event.id == "4" }.silenceReason)
     }
 
