@@ -71,6 +71,13 @@ class AlarmRowMutedTest {
     }
 
     @Test
+    fun mutedEnabledRowWithNextShowsMutedLabelInsteadOfNext() {
+        show(enabled = true, withNext = true, allMuted = true)
+        assertEquals(1, compose.onAllNodesWithText("ミュート中").fetchSemanticsNodes().size)
+        assertEquals(0, compose.onAllNodesWithText("次 7:00").fetchSemanticsNodes().size)
+    }
+
+    @Test
     fun unmutedRowShowsNextAndNoMutedLabel() {
         show(enabled = true, withNext = true, allMuted = false)
         assertEquals(0, compose.onAllNodesWithText("ミュート中").fetchSemanticsNodes().size)

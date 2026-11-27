@@ -342,7 +342,7 @@ fun SettingsScreen(
         item { Spacer(Modifier.height(12.dp)) }
         item {
             prefs?.let { p ->
-                RingingCard(p, settings, repository, scope)
+                RingingCard(p, settings, scope)
             }
         }
 
@@ -1259,7 +1259,6 @@ private fun AuditRow(log: AuditLogEntity) {
 private fun RingingCard(
     p: SettingsRepository.Settings,
     settings: SettingsRepository,
-    repository: AlarmRepository,
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
     val context = LocalContext.current
