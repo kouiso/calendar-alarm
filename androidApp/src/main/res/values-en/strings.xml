@@ -145,6 +145,11 @@
     <string name="repeat_monthly_day">Monthly on day %1$d</string>
     <string name="repeat_once">Once</string>
     <string name="repeat_weekly_days">Weekly %1$s</string>
+    <plurals name="ring_starts_in_minutes">
+        <item quantity="one">Starts in %1$d minute</item>
+        <item quantity="other">Starts in %1$d minutes</item>
+    </plurals>
+    <string name="ring_starts_soon">Starting soon</string>
     <string name="ring_status_alarm_muted">Alarm volume is 0. Alarms will ring without sound</string>
     <string name="ring_status_all_muted">All alarms are muted. Notifications and timers still arrive</string>
     <plurals name="ring_status_missed_recently">
