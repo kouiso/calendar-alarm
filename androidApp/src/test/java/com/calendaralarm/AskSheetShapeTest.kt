@@ -78,7 +78,7 @@ class AskSheetShapeTest {
     @Test
     fun 印の輪とボタンとあとでの大きさ() {
         show()
-        compose.onNodeWithTag(ASK_ICON_TAG).assertWidthIsEqualTo(78.dp).assertHeightIsEqualTo(78.dp)
+        compose.onNodeWithTag(ASK_ICON_TAG).assertWidthIsEqualTo(81.dp).assertHeightIsEqualTo(81.dp)
         compose.onNodeWithTag(ASK_CTA_TAG).assertHeightIsEqualTo(52.dp)
         compose.onNodeWithTag(ASK_LATER_TAG).assertHeightIsAtLeast(44.dp)
     }

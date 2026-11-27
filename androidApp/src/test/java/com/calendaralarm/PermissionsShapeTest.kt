@@ -1,6 +1,7 @@
 package com.calendaralarm
 
 import android.app.Application
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -30,6 +31,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -46,12 +48,13 @@ class PermissionsShapeTest {
 
     private val app: Application = ApplicationProvider.getApplicationContext()
 
-    private fun show(state: Map<AppPermission, Boolean>, onBack: () -> Unit = {}) {
+    private fun show(state: Map<AppPermission, Boolean>, onBack: () -> Unit = {}): ComponentActivity {
         val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         activity.setContent {
             CalendarAlarmTheme(darkTheme = true) { PermissionsScreen(onBack = onBack, probe = { state }) }
         }
         compose.waitForIdle()
+        return activity
     }
 
     private fun all(on: Boolean) = AppPermission.entries.associateWith { on }
@@ -95,5 +98,14 @@ class PermissionsShapeTest {
         compose.onNodeWithTag(permRowTag(AppPermission.CALENDAR))
             .assertHasClickAction()
             .assert(hasContentDescription(description))
+    }
+
+    @Test
+    fun 許可済みの行を押すと端末の設定を開く() {
+        val activity = show(all(true))
+        compose.onNodeWithTag(permRowTag(AppPermission.CALENDAR)).performClick()
+        // カレンダーは個別の設定画面を持たないので、アプリ詳細の設定へ倒れる
+        val started = shadowOf(activity).nextStartedActivity
+        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, started.action)
     }
 }

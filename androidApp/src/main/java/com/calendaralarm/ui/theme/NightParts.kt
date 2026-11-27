@@ -206,7 +206,7 @@ fun NightLinkButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
     }
 }
 
-/** .ico: 60 の丸に 1dp の ringColor、外に 80 の丸 (濃さ .5)。印 28。外の余白 9 (全体 78) */
+/** .ico: 60 の丸に 1dp の ringColor、外に 80 の丸 (濃さ .5)。印 28。外の余白 10.5 (外の丸の線が外へ 0.5 出るので、親に切られないよう全体 81) */
 @Composable
 fun NightIconRings(
     icon: ImageVector,
@@ -216,7 +216,7 @@ fun NightIconRings(
 ) {
     Box(
         modifier
-            .padding(9.dp)
+            .padding(10.5.dp)
             .size(60.dp)
             .drawBehind {
                 drawCircle(
