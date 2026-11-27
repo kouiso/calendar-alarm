@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.data.AlarmRepository
+import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
 import com.calendaralarm.ui.theme.OutfitFontFamily
@@ -59,11 +60,16 @@ import java.util.Locale
 @Composable
 fun AlarmsScreen(
     repository: AlarmRepository,
+    settings: SettingsRepository,
     onEdit: (Long) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val alarms by repository.standaloneAlarmsFlow().collectAsState(initial = emptyList())
     val pending by repository.pendingFlow().collectAsState(initial = emptyList())
+    // 全ミュートの状態 (#272)。設定を読み終える前 (null) は帯を出さず、行も鳴る見た目で描く
+    val settingsFlow = remember { settings.flow }
+    val prefs by settingsFlow.collectAsState(initial = null)
+    val allMuted = prefs?.muteAll == true
 
     Scaffold { padding ->
         Column(Modifier.padding(padding)) {
@@ -88,6 +94,10 @@ fun AlarmsScreen(
                         )
                     }
                 }
+            }
+            // 全ミュート中は解除できる帯を出す。解除後の再同期は設定の見張りが行う (#255)
+            if (allMuted) {
+                MuteAllBanner(onUnmute = { scope.launch { settings.setMuteAll(false) } })
             }
             // 次に鳴るアラームのバナー (accent-soft)
             pending.firstOrNull { it.standaloneAlarmId != null }?.let { next ->
@@ -154,6 +164,7 @@ fun AlarmsScreen(
                     AlarmRow(
                         alarm = alarm,
                         nextInstance = pending.firstOrNull { it.standaloneAlarmId == alarm.id },
+                        allMuted = allMuted,
                         onToggle = { on ->
                             scope.launch {
                                 repository.upsertStandaloneAlarm(alarm.copy(enabled = on))
@@ -170,13 +181,16 @@ fun AlarmsScreen(
 }
 
 @Composable
-private fun AlarmRow(
+internal fun AlarmRow(
     alarm: StandaloneAlarm,
     nextInstance: com.calendaralarm.shared.model.AlarmInstance?,
+    allMuted: Boolean,
     onToggle: (Boolean) -> Unit,
     onDelete: () -> Unit,
     onClick: () -> Unit,
 ) {
+    // 全ミュート中は有効でも鳴らないので、無効の行と同じ見た目にする (#272)
+    val ringing = alarm.enabled && !allMuted
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
         onClick = onClick,
@@ -194,9 +208,9 @@ private fun AlarmRow(
                     "%d:%02d".format(alarm.hour, alarm.minute),
                     fontSize = 44.sp,
                     fontFamily = OutfitFontFamily,
-                    fontWeight = if (alarm.enabled) FontWeight.Light else FontWeight.ExtraLight,
+                    fontWeight = if (ringing) FontWeight.Light else FontWeight.ExtraLight,
                     letterSpacing = (-1).sp,
-                    color = if (alarm.enabled) {
+                    color = if (ringing) {
                         MaterialTheme.colorScheme.onSurface
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
@@ -206,7 +220,7 @@ private fun AlarmRow(
                     repeatLabel(alarm),
                     style = MaterialTheme.typography.bodySmall,
                     // Night UI: 有効時は繰り返しラベルをアクセント色に
-                    color = if (alarm.enabled) {
+                    color = if (ringing) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
@@ -234,7 +248,13 @@ private fun AlarmRow(
                         }
                         Spacer(Modifier.padding(start = 8.dp))
                     }
-                    nextInstance?.let {
+                    if (alarm.enabled && allMuted) {
+                        Text(
+                            stringResource(R.string.alarms_row_muted),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        )
+                    } else nextInstance?.let {
                         Text(
                             stringResource(
                                 R.string.alarms_next_short,

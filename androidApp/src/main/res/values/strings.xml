@@ -280,4 +280,7 @@
     <string name="weekday_short_wednesday">水</string>
     <string name="widget_next_alarm">次のアラーム</string>
     <string name="widget_none">予約なし</string>
+    <string name="mute_all_banner">すべてのアラームをミュート中です</string>
+    <string name="mute_all_banner_unmute">解除</string>
+    <string name="alarms_row_muted">ミュート中</string>
 </resources>

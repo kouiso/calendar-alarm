@@ -361,6 +361,7 @@ private fun MainScaffold(
             composable("alarms") {
                 AlarmsScreen(
                     repository = repository,
+                    settings = settings,
                     onEdit = { id -> nav.navigate("alarm_edit?id=$id") },
                 )
             }
