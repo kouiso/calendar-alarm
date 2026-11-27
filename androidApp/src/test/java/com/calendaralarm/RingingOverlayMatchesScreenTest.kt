@@ -47,6 +47,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.util.Calendar
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * 重ねて出す停止画面 (View の RingingOverlay) が、鳴動画面 (Compose の RingingActivity) と
@@ -111,10 +112,11 @@ class RingingOverlayMatchesScreenTest {
     }
 
     /**
-     * 鳴動画面が受け取っている inset (システムバーと画面の切り欠き)。
-     * 重ねて出す側は窓に付かず inset が届かないので、同じ値を試験から流して、本番と同じ受け取りの道で足させる。
+     * Robolectric が窓の root に載せている inset (システムバーと画面の切り欠き)。診断の表示だけに使う。
+     * Compose が実際に受け取った inset とは別の道 (ViewRootImpl の状態) なので、環境によって食い違う。
+     * 比べる前提には使わず、食い違いは notes に残すだけにする (食い違い自体は 2 つの画面の差ではない)。
      */
-    private fun screenInsets(): Insets {
+    private fun reportedInsets(): Insets {
         var result = Insets.NONE
         scenario?.onActivity { activity ->
             val w = ViewCompat.getRootWindowInsets(activity.window.decorView)
@@ -177,6 +179,7 @@ class RingingOverlayMatchesScreenTest {
     // 比べた値は全部ここに貯め、最後に「どの部品が何 dp ずれたか」と全部の位置を 1 つのメッセージで出す
     private val diffs = mutableListOf<String>()
     private val trace = mutableListOf<String>()
+    private val notes = mutableListOf<String>()
 
     private fun assertSame(name: String, expected: Float, actual: Float) {
         if (abs(expected - actual) > TOL) {
@@ -222,24 +225,35 @@ class RingingOverlayMatchesScreenTest {
     private fun assertNoDiffs() {
         assertTrue(
             "鳴動画面と重ねて出す停止画面の位置がずれている (${diffs.size} 件):\n" +
-                diffs.joinToString("\n") + "\n--- 比べた部品の位置 ---\n" + trace.joinToString("\n"),
+                diffs.joinToString("\n") + "\n--- 環境 ---\n" + notes.joinToString("\n") +
+                "\n--- 比べた部品の位置 ---\n" + trace.joinToString("\n"),
             diffs.isEmpty(),
         )
     }
 
-    /** 鳴動画面の大きさと、日付が「上の余白 + 上の inset」ちょうどに来ること。返すのは重ねて出す側へ流す inset。 */
-    private fun assertRootSize(): Insets {
+    /**
+     * 鳴動画面の大きさを確かめ、鳴動画面が実際に避けている端の幅 (inset) を位置から読み取って返す。
+     * 返す値は重ねて出す側へ同じく流す。窓の inset は ViewRootImpl の状態と Compose が受け取る値が別の道で、
+     * Robolectric では食い違いうるので、「鳴動画面が実際に受け取った値」を前提にする。
+     * 上は日付の上端 - 上の余白、左右はスヌーズの左右端 - 横の余白、下は停止の下端から下の文字と余白を引いた残り。
+     */
+    private fun assertRootSize(stopTag: String, footGapDp: Int): Insets {
         val size = compose.onRoot().fetchSemanticsNode().size
         assertEquals("鳴動画面の幅", WIDTH, size.width)
         assertEquals("鳴動画面の高さ", HEIGHT, size.height)
-        // 鳴動画面は safeDrawing の分だけ内側に寄る。この環境の inset を重ねて出す側にも同じに流すので、
-        // 日付が (上の余白 + 上の inset) に来ていれば、2つの画面は同じ前提で比べられる
-        val insets = screenInsets()
-        assertSame(
-            "鳴動画面の日付の上 (上の余白 ${RingingSlideSpec.SCREEN_PAD_V_DP} + 上の inset ${insets.top})",
-            RingingSlideSpec.SCREEN_PAD_V_DP.toFloat() + insets.top,
-            screenBounds(RING_DATE_TAG).top,
-        )
+        val date = screenBounds(RING_DATE_TAG)
+        val snooze = screenBounds(SNOOZE_BUTTON_TAG)
+        val stop = screenBounds(stopTag)
+        val top = (date.top - RingingSlideSpec.SCREEN_PAD_V_DP).roundToInt()
+        val left = (snooze.left - RingingSlideSpec.SCREEN_PAD_H_DP).roundToInt()
+        val right = (WIDTH - snooze.right - RingingSlideSpec.SCREEN_PAD_H_DP).roundToInt()
+        val bottom = (
+            HEIGHT - RingingSlideSpec.SCREEN_PAD_V_DP - RingingSlideSpec.FOOT_HEIGHT_DP - footGapDp - stop.bottom
+            ).roundToInt()
+        val insets = Insets.of(left.coerceAtLeast(0), top.coerceAtLeast(0), right.coerceAtLeast(0), bottom.coerceAtLeast(0))
+        notes += "鳴動画面の大きさ: ${size.width}x${size.height}"
+        notes += "鳴動画面から読み取った inset (左,上,右,下): $insets (元の値 $left,$top,$right,$bottom)"
+        notes += "Robolectric が窓に載せている inset: ${reportedInsets()}"
         return insets
     }
 
@@ -247,7 +261,7 @@ class RingingOverlayMatchesScreenTest {
     fun `日付と輪と時刻と開始までとスヌーズと停止の位置と大きさが鳴動画面と合う`() {
         val now = System.currentTimeMillis()
         launchScreen("forest", large = false, triggerAt = now, eventStart = now + 15 * 60_000L)
-        val insets = assertRootSize()
+        val insets = assertRootSize(SLIDE_TRACK_TAG, RingingSlideSpec.FOOT_GAP_DP)
         val root = overlay(themeId = "forest", triggerAt = now, eventStart = now + 15 * 60_000L, insets = insets)
 
         assertTextBoxMatches(root, RING_DATE_TAG)
@@ -264,7 +278,7 @@ class RingingOverlayMatchesScreenTest {
     fun `大きいボタンでも輪とスヌーズと停止の位置が合う`() {
         val now = System.currentTimeMillis()
         launchScreen("forest", large = true, triggerAt = now, eventStart = now + 15 * 60_000L)
-        val insets = assertRootSize()
+        val insets = assertRootSize(LARGE_STOP_TAG, RingingSlideSpec.LARGE_BUTTON_GAP_DP)
         val root = overlay(
             themeId = "forest", large = true, triggerAt = now, eventStart = now + 15 * 60_000L, insets = insets,
         )
