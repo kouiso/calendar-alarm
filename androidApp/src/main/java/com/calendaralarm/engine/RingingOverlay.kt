@@ -274,7 +274,7 @@ object RingingOverlay {
             tag = RING_STARTS_IN_TAG
             textSize = RingingSlideSpec.STARTS_IN_TEXT_SP.toFloat()
             setTextColor(accent)
-            setTypeface(semiBold(typeface))
+            setTypeface(planSemiBold(context) ?: semiBold(typeface))
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, dp(RingingSlideSpec.STARTS_IN_HEIGHT_DP),
@@ -283,25 +283,24 @@ object RingingOverlay {
             LinearLayout.LayoutParams.MATCH_PARENT, dp(RingingSlideSpec.STARTS_IN_TO_TITLE_DP),
         ))
 
-        area.addView(TextView(context).apply {
+        val titleLineHeightPx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_SP,
+            if (largeButtons) RingingSlideSpec.LARGE_TITLE_LINE_SP else RingingSlideSpec.TITLE_LINE_SP.toFloat(),
+            context.resources.displayMetrics,
+        ).roundToInt()
+        area.addView(TitleTextView(context, titleLineHeightPx).apply {
             text = title.ifBlank { "アラーム" }
             tag = TITLE_TAG
             textSize = (if (largeButtons) RingingSlideSpec.LARGE_TITLE_SP else RingingSlideSpec.TITLE_SP).toFloat()
             setTextColor(fg)
-            setTypeface(semiBold(typeface))
+            // 鳴動画面は AppFontFamily (IBM Plex Sans JP) で描く。読めなければ端末の既定の書体のまま
+            setTypeface(planSemiBold(context) ?: semiBold(typeface))
             gravity = Gravity.CENTER
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
             includeFontPadding = false
-            // 行の高さは鳴動画面の lineHeight (sp) と同じ
-            TextViewCompat.setLineHeight(
-                this,
-                TypedValue.applyDimension(
-                    TypedValue.COMPLEX_UNIT_SP,
-                    if (largeButtons) RingingSlideSpec.LARGE_TITLE_LINE_SP else RingingSlideSpec.TITLE_LINE_SP.toFloat(),
-                    context.resources.displayMetrics,
-                ).roundToInt(),
-            )
+            // 行の高さは鳴動画面の lineHeight (sp) と同じ。View の高さは TitleTextView が行数 x 行の高さに固定する
+            TextViewCompat.setLineHeight(this, titleLineHeightPx)
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -456,6 +455,10 @@ object RingingOverlay {
         } else {
             boldOf(base)
         }
+
+    /** 鳴動画面の AppFontFamily (IBM Plex Sans JP SemiBold)。読めなければ null */
+    private fun planSemiBold(context: Context): android.graphics.Typeface? =
+        runCatching { ResourcesCompat.getFont(context, R.font.plex_sans_jp_semibold) }.getOrNull()
 
     private fun dismiss(context: Context, instanceId: String) {
         audit(context.applicationContext, "STOP_TAP", "オーバーレイ: $instanceId")
@@ -656,10 +659,28 @@ private class RingDialArea(
         (dialFrame.layoutParams as LinearLayout.LayoutParams).apply { width = outerPx; height = outerPx }
         (dialGap.layoutParams as LinearLayout.LayoutParams).height =
             (RingingSlideSpec.DIAL_TO_STARTS_IN_DP * scale * density).roundToInt()
-        val timeRatio = RingingSlideSpec.dialTimeRatio(largeButtons)
-        timeView.setTextSize(TypedValue.COMPLEX_UNIT_PX, outerPx * timeRatio)
-        // View の字の間は文字の大きさに対する割合。Compose の「外の輪 × -4/290」と同じ長さにする
-        timeView.letterSpacing = RingingSlideSpec.DIAL_TIME_LETTER_SPACING_PER_DIAL / timeRatio
+        // ScrollView(fillViewport) は先に高さ UNSPECIFIED (大きさ 0) で測ってから EXACTLY で測り直す。
+        // 0 の時に文字の大きさを変えると毎回の測りで大小が入れ替わり、再配置が止まらないので、高さが決まった時だけ変える
+        if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+            val timeRatio = RingingSlideSpec.dialTimeRatio(largeButtons)
+            val timePx = outerPx * timeRatio
+            if (timeView.textSize != timePx) timeView.setTextSize(TypedValue.COMPLEX_UNIT_PX, timePx)
+            // View の字の間は文字の大きさに対する割合。Compose の「外の輪 × -4/290」と同じ長さにする
+            val spacing = RingingSlideSpec.DIAL_TIME_LETTER_SPACING_PER_DIAL / timeRatio
+            if (timeView.letterSpacing != spacing) timeView.letterSpacing = spacing
+        }
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    }
+}
+
+/**
+ * 題の文字。高さを「行の高さ x 行数」に固定する。
+ * View は書体や端末で最後の行の余白の付き方が変わり、鳴動画面 (Compose) の高さとずれるため。
+ */
+private class TitleTextView(context: Context, private val lineHeightPx: Int) : TextView(context) {
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        val lines = lineCount.coerceIn(1, 2)
+        setMeasuredDimension(measuredWidth, lineHeightPx * lines + paddingTop + paddingBottom)
     }
 }

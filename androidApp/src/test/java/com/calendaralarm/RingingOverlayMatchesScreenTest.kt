@@ -97,7 +97,10 @@ class RingingOverlayMatchesScreenTest {
         scenario = ActivityScenario.launch(RingingActivity.intent(app, ID))
         compose.waitUntil(timeoutMillis = 5_000) {
             compose.onAllNodesWithText(TITLE).fetchSemanticsNodes().isNotEmpty() &&
-                compose.onAllNodesWithTag(RING_DATE_TAG, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+                compose.onAllNodesWithTag(RING_DATE_TAG, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() &&
+                // 大きいボタンの設定は DataStore から非同期に届くので、反映後にだけ出る目印まで待つ
+                compose.onAllNodesWithTag(if (large) LARGE_STOP_TAG else SLIDE_TRACK_TAG, useUnmergedTree = true)
+                    .fetchSemanticsNodes().isNotEmpty()
         }
         compose.waitForIdle()
     }
@@ -167,10 +170,21 @@ class RingingOverlayMatchesScreenTest {
         assertSame("$tag の下", s.bottom, v.bottom)
     }
 
+    /** 中心だけが合う (入れ物の大きさが違う時計の文字)。上下は文字の行の高さと入れ物で違うので比べない。 */
+    private fun assertCenterMatches(root: View, tag: String) {
+        val s = screenBounds(tag)
+        val v = viewBounds(root, tag)
+        assertSame("$tag の中心の横", (s.left + s.right) / 2f, (v.left + v.right) / 2f)
+        assertSame("$tag の中心の縦", (s.top + s.bottom) / 2f, (v.top + v.bottom) / 2f)
+    }
+
     private fun assertRootSize() {
         val size = compose.onRoot().fetchSemanticsNode().size
         assertEquals("鳴動画面の幅", WIDTH, size.width)
         assertEquals("鳴動画面の高さ", HEIGHT, size.height)
+        // 鳴動画面は safeDrawing の分だけ内側に寄る。重ねて出す側は窓に付かず inset が届かないので、
+        // この環境の inset が 0 (日付が上の余白ちょうどに来る) でないと、全部の位置がずれて比べられない
+        assertSame("鳴動画面の上の inset が 0", RingingSlideSpec.SCREEN_PAD_V_DP.toFloat(), screenBounds(RING_DATE_TAG).top)
     }
 
     @Test
@@ -182,7 +196,7 @@ class RingingOverlayMatchesScreenTest {
 
         assertTextBoxMatches(root, RING_DATE_TAG)
         assertBoxMatches(root, RING_DIAL_TAG)
-        assertTextBoxMatches(root, RING_TIME_TAG)
+        assertCenterMatches(root, RING_TIME_TAG)
         assertTextBoxMatches(root, RING_STARTS_IN_TAG)
         assertTextBoxMatches(root, TITLE_TAG)
         assertBoxMatches(root, SNOOZE_BUTTON_TAG)

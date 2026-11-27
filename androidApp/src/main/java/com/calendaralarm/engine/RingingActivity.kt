@@ -522,7 +522,8 @@ private fun RingingScreen(
                     )
                 }
             }
-            if (!largeButtons) {
+            // プリセットが空なら見出しも出さない: 重ねて出す停止画面 (View) と同じ条件で位置を合わせる
+            if (!largeButtons && snoozePresets.isNotEmpty()) {
                 // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開
                 var presetsOpen by remember { mutableStateOf(false) }
                 Surface(
