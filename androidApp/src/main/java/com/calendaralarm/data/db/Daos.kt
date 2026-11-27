@@ -122,6 +122,21 @@ interface CalendarPrefDao {
 
     @Query("SELECT * FROM calendar_prefs")
     suspend fun all(): List<CalendarPrefEntity>
+
+    /** 結び付けの書き直しの直前に読み直す (#268)。読んだ後に画面から変えられた行を上書きしないため */
+    @Query("SELECT * FROM calendar_prefs WHERE calendarKey = :key")
+    suspend fun byKey(key: String): CalendarPrefEntity?
+
+    @Query("DELETE FROM calendar_prefs WHERE calendarKey = :key")
+    suspend fun delete(key: String)
+
+    /** 復元後の初期化用 (#268)。行番号の控えは別の端末の物 */
+    @Query("UPDATE calendar_prefs SET calendarId = ''")
+    suspend fun clearCalendarIds()
+
+    /** 復元後の初期化用 (#268)。旧形式の行は別の端末では結び付けられない */
+    @Query("DELETE FROM calendar_prefs WHERE calendarKey LIKE 'id:%'")
+    suspend fun deleteLegacy()
 }
 
 @Dao
