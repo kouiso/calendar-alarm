@@ -48,6 +48,8 @@ import com.calendaralarm.ai.ShareImport
 import com.calendaralarm.ui.AgendaScreen
 import com.calendaralarm.ui.AlarmEditScreen
 import com.calendaralarm.ui.AlarmsScreen
+import com.calendaralarm.ui.NightTabBar
+import com.calendaralarm.ui.NightTabItem
 import com.calendaralarm.ui.SettingsScreen
 import com.calendaralarm.ui.TimerScreen
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
@@ -272,17 +274,11 @@ private fun AppBackground(imageUri: String?, content: @Composable () -> Unit) {
     }
 }
 
-private data class Tab(
-    val route: String,
-    @StringRes val labelRes: Int,
-    val icon: @Composable () -> Unit,
-)
-
 private val tabs = listOf(
-    Tab("agenda", R.string.tab_agenda, { Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.tab_agenda)) }),
-    Tab("alarms", R.string.tab_alarms, { Icon(Icons.Default.Alarm, contentDescription = stringResource(R.string.tab_alarms)) }),
-    Tab("timer", R.string.tab_timer, { Icon(Icons.Default.Timer, contentDescription = stringResource(R.string.tab_timer)) }),
-    Tab("settings", R.string.tab_settings, { Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.tab_settings)) }),
+    NightTabItem("agenda", R.string.tab_agenda, Icons.AutoMirrored.Filled.List),
+    NightTabItem("alarms", R.string.tab_alarms, Icons.Default.Alarm),
+    NightTabItem("timer", R.string.tab_timer, Icons.Default.Timer),
+    NightTabItem("settings", R.string.tab_settings, Icons.Default.Settings),
 )
 
 @Composable
@@ -297,52 +293,14 @@ private fun MainScaffold(
     Scaffold(
         bottomBar = {
             if (current != "alarm_edit") {
-                // Night UI: フローティングタブバー (inset16, h66, r26, 半透明+境界)
-                androidx.compose.material3.Surface(
-                    modifier = Modifier
-                        .padding(start = 16.dp, end = 16.dp, bottom = 26.dp)
-                        .height(66.dp)
-                        .fillMaxWidth(),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(26.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp, MaterialTheme.colorScheme.outlineVariant,
-                    ),
-                    shadowElevation = 8.dp,
-                ) {
-                    Row(
-                        Modifier.fillMaxSize(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        tabs.forEach { tab ->
-                            val sel = current == tab.route
-                            Column(
-                                Modifier.weight(1f).fillMaxSize()
-                                    .clickable {
-                                        nav.navigate(tab.route) {
-                                            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                            ) {
-                                tab.icon()
-                                Text(
-                                    stringResource(tab.labelRes),
-                                    fontSize = 11.sp,
-                                    fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (sel) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                )
-                            }
-                        }
+                // Night UI: 画面の下に付く帯 (板 .tab。高さ 72・上に hair の線)
+                NightTabBar(tabs, current, onSelect = { route ->
+                    nav.navigate(route) {
+                        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
                     }
-                }
+                })
             }
         },
     ) { padding ->
