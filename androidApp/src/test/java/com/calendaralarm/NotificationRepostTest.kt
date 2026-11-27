@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.AlarmRepository
+import com.calendaralarm.data.NotificationContentStore
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.calendar.CalendarContractReader
 import com.calendaralarm.data.db.AppDatabase
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -278,14 +280,43 @@ class NotificationRepostTest {
 
     @Test
     fun `2 落とした出し直しは印を書き換えない`() = runBlocking {
-        post("nf:u", title = "old", contentKey = "A")
-        db.scheduledInstances().setState("nf:u", AlarmState.DISMISSED.name)
+        // 保存した印が無い行。印が無ければ内容が違っても落とす
+        seed("nf:u", AlarmState.DISMISSED)
         seedDismissAudit("nf:u", now - 3 * minute)
-        post("nf:u", title = "second", contentKey = "A") // 同じ内容: 落とす
+        post("nf:u", title = "second", contentKey = "B") // 落とす
         assertEquals(AlarmState.DISMISSED.name, row("nf:u")!!.state)
-        post("nf:u", title = "third", contentKey = "B") // 保存した印は A のまま: 鳴らす
+        assertNull(NotificationContentStore(context).get("nf:u"))
+        // 落とした B を印として書いていたら、ここで C との違いで鳴ってしまう。書いていなければ印が無いので落とす
+        post("nf:u", title = "third", contentKey = "C")
         val r = row("nf:u")!!
-        assertEquals(AlarmState.PENDING.name, r.state)
-        assertEquals("third", r.title)
+        assertEquals(AlarmState.DISMISSED.name, r.state)
+        assertEquals("old", r.title)
+        assertNull(NotificationContentStore(context).get("nf:u"))
+        assertTrue(newContentLogs().isEmpty())
+        assertEquals(2, skipLogs().size)
+    }
+
+    @Test
+    fun `2 予約できなかった時は印も新しい内容の記録も残さない`() = runBlocking {
+        post("nf:w", title = "old", contentKey = "A")
+        db.scheduledInstances().setState("nf:w", AlarmState.DISMISSED.name)
+        seedDismissAudit("nf:w", now - 3 * minute)
+        // 予約が通らない (USE_EXACT_ALARM の取り下げ等) 状況
+        val denied = AlarmRepository(
+            db = db,
+            scheduler = object : AlarmScheduler(context) {
+                override fun schedule(instance: AlarmInstance) = false
+            },
+            calendarReader = CalendarContractReader(context),
+            settings = SettingsRepository(context),
+            hasCalendarPermission = { false },
+            appScope = CoroutineScope(Dispatchers.IO),
+        )
+        denied.nowMillis = { now }
+        denied.scheduleNotificationAlarm(inst("nf:w", "new"), "B")
+        // 印は前に鳴らした時の A のまま。B に書き換わらず、鳴らした事の記録も無い
+        assertEquals("A", NotificationContentStore(context).get("nf:w"))
+        assertTrue(newContentLogs().isEmpty())
+        assertEquals(1, db.auditLog().recentByActionsFlow(listOf("EXACT_DENIED"), 50).first().size)
     }
 }

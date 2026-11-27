@@ -12,8 +12,10 @@ import com.calendaralarm.shared.model.AlarmInstance
 /**
  * AlarmManager への予約/取消。PendingIntent の同一性は
  * data URI (alarm://<instanceId>) で決まるため、requestCode 衝突は起きない。
+ *
+ * 予約の失敗 (権限失効など) を試験で再現できるよう、[schedule] は open にしてある。
  */
-class AlarmScheduler(private val context: Context) {
+open class AlarmScheduler(private val context: Context) {
 
     private val alarmManager = context.getSystemService(AlarmManager::class.java)
 
@@ -21,7 +23,7 @@ class AlarmScheduler(private val context: Context) {
      * 予約。USE_EXACT_ALARM が取り下げられた等で SecurityException が来た時は
      * false を返す (呼び出し側が監査してスキップ判断する)。
      */
-    fun schedule(instance: AlarmInstance): Boolean {
+    open fun schedule(instance: AlarmInstance): Boolean {
         val alarmPi = fireIntent(instance.id)
         val showPi = PendingIntent.getActivity(
             context, 0,

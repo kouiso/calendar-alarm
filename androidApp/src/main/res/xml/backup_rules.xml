@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 30 以前の自動バックアップ (android:fullBackupContent)。
+     通知の内容の印 (#384) の保存ファイルだけを外す。除外を書くと残りは今までどおり全部バックアップされる -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="notification_alarm_content.xml" />
+</full-backup-content>

@@ -639,7 +639,7 @@ class AlarmRepository(
      *    保存した印が無い・印が同じ・[contentKey] が null の時は今までどおり鳴らさない
      * 3. それ以外: [scheduleAdhoc] と同じに鳴らす
      * 止めた時刻は DISMISS の記録の行から読む (プロセスが落ちても残る)。読めなければ鳴動時刻から数える。
-     * 落とした出し直しは窓を延ばさない (印も書き換えない)。印は予約できた時だけ書く。
+     * 落とした出し直しは窓を延ばさない (印も書き換えない)。印と `NF_NEW_CONTENT` の記録は予約できた時だけ書く。
      * 確かめと書き込みは [ringTransitionLock] の中で行う
      */
     suspend fun scheduleNotificationAlarm(instance: AlarmInstance, contentKey: String? = null) = withContext(Dispatchers.IO) {
@@ -650,6 +650,8 @@ class AlarmRepository(
                 return@withLock false
             }
             val dismissed = chain.filter { it.state == AlarmState.DISMISSED.name }
+            // 窓の中なのに内容が変わっていて鳴らす時だけ、止めてからの秒数を持つ (予約できた後に記録する)
+            var newContentElapsed: Long? = null
             if (dismissed.isNotEmpty()) {
                 val stoppedAt = db.auditLog().latestAtMillis("DISMISS", dismissed.map { it.id })
                     ?: dismissed.maxOf { it.triggerAtMillis }
@@ -658,12 +660,7 @@ class AlarmRepository(
                 if (elapsed in 0 until NOTIFICATION_REPOST_WINDOW_MS) {
                     val saved = notificationContents.get(instance.id)
                     if (contentKey != null && saved != null && saved != contentKey) {
-                        // 題と本文は記録に入れない (共有の対象になるため)
-                        audit(
-                            "NF_NEW_CONTENT",
-                            "${instance.id}: 止めて ${elapsed / 1000} 秒だが内容が変わったので鳴らす",
-                            dismissed.maxByOrNull { it.triggerAtMillis },
-                        )
+                        newContentElapsed = elapsed
                     } else {
                         audit(
                             "NF_REPOST_SKIP",
@@ -675,7 +672,17 @@ class AlarmRepository(
                 }
             }
             val scheduled = writeAdhoc(instance)
-            if (scheduled && contentKey != null) notificationContents.put(instance.id, contentKey, nowMillis())
+            if (scheduled) {
+                if (contentKey != null) notificationContents.put(instance.id, contentKey, nowMillis())
+                newContentElapsed?.let { elapsed ->
+                    // detail には題も本文も入れない。記録の title 列には、止めた行の題 (前に鳴らした時のもの) が入る
+                    audit(
+                        "NF_NEW_CONTENT",
+                        "${instance.id}: 止めて ${elapsed / 1000} 秒だが内容が変わったので鳴らす",
+                        dismissed.maxByOrNull { it.triggerAtMillis },
+                    )
+                }
+            }
             scheduled
         }
         if (changed) onScheduleChanged?.invoke()
