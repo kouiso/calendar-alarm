@@ -2,7 +2,6 @@ package com.calendaralarm.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.calendaralarm.R
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.shared.logic.WeekCalendar
+import com.calendaralarm.ui.theme.StatusColors
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.DayOfWeek
@@ -61,6 +61,14 @@ private val viewTz = TimeZone.currentSystemDefault()
 
 internal fun eventDateOf(item: AlarmRepository.AgendaItem): LocalDate =
     eventDate(item.event)
+
+/** 月表示の曜日の見出しの色。日曜は今の時刻の線と同じ赤、土曜は青、他は [other]。日付の数字には使わない (板は数字を色分けしない) */
+@Composable
+internal fun weekdayTint(day: DayOfWeek, other: Color): Color = when (day) {
+    DayOfWeek.SUNDAY -> StatusColors.nowLine
+    DayOfWeek.SATURDAY -> StatusColors.saturday
+    else -> other
+}
 
 /** 月表示: 7列グリッド + 日のイベントドット。日タップで focusDate が変わる。列は設定の週の開始曜日から並ぶ。 */
 @Composable
@@ -78,21 +86,15 @@ fun MonthView(
     val byDay = items.groupBy { eventDateOf(it) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {
-        // 曜日ヘッダ (日曜=赤, 土曜=青。Night UI スペック)
-        val sundayRed = if (isSystemInDarkTheme()) Color(0xFFFF8F8F) else Color(0xFFC62828)
-        val saturdayBlue = if (isSystemInDarkTheme()) Color(0xFF7D88FF) else Color(0xFF1F6FD1)
+        // 曜日ヘッダ (日曜=nowLine の赤, 土曜=板の --gg の青。日付の数字は色分けしない)
         Row {
             WeekCalendar.weekdayOrder(firstWeekday).forEach { day ->
                 Text(
                     day.jaShort(),
                     Modifier.weight(1f),
                     textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = when (day) {
-                        DayOfWeek.SUNDAY -> sundayRed
-                        DayOfWeek.SATURDAY -> saturdayBlue
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, fontWeight = FontWeight.Medium),
+                    color = weekdayTint(day, MaterialTheme.colorScheme.onSurfaceVariant),
                 )
             }
         }
@@ -133,16 +135,14 @@ fun MonthView(
                         ) {
                             Text(
                                 "${date.dayOfMonth}",
-                                fontSize = 17.sp,
+                                fontSize = 16.sp,
                                 fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
                                 fontWeight = if (date == today || date == focusDate) {
-                                    FontWeight.SemiBold
+                                    FontWeight.Medium
                                 } else FontWeight.Normal,
                                 color = when {
                                     date == today -> MaterialTheme.colorScheme.surface
-                                    !inMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                                    date.dayOfWeek == DayOfWeek.SUNDAY -> sundayRed
-                                    date.dayOfWeek == DayOfWeek.SATURDAY -> saturdayBlue
+                                    !inMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                                     else -> MaterialTheme.colorScheme.onSurface
                                 },
                             )
@@ -222,9 +222,9 @@ fun ThreeDayView(
                             RoundedCornerShape(12.dp),
                         ).padding(vertical = 4.dp),
                     textAlign = TextAlign.Center,
-                    fontSize = 22.sp,
+                    fontSize = 20.sp,
                     fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
-                    fontWeight = if (date == today) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 dayItems.forEach { item ->
@@ -233,7 +233,7 @@ fun ThreeDayView(
                     Column(
                         Modifier.fillMaxWidth().padding(bottom = 6.dp)
                             .background(
-                                Color(item.calendarColor).copy(alpha = 0.15f),
+                                Color(item.calendarColor).copy(alpha = 0.16f),
                                 RoundedCornerShape(12.dp),
                             )
                             .clickable { onSelectEvent(item) }
@@ -241,12 +241,14 @@ fun ThreeDayView(
                     ) {
                         Text(
                             if (allDay) stringResource(R.string.agenda_all_day) else hm(item.event.startMillis),
-                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Normal,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
                             item.event.title.ifBlank { stringResource(R.string.agenda_untitled) },
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -353,14 +355,16 @@ fun DayTimelineView(
                 ) {
                     Text(
                         item.event.title.ifBlank { stringResource(R.string.agenda_untitled) },
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
                         maxLines = if (durMin < 45) 1 else 3,
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (durMin >= 45) {
                         Text(
                             stringResource(R.string.agenda_time_range, hm(s), hm(e)),
-                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Normal,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }

@@ -22,4 +22,8 @@ object StatusColors {
     /** 時間軸の今の時刻の線 */
     val nowLine: Color
         @Composable get() = if (isSystemInDarkTheme()) Color(0xFFFF6B6B) else Color(0xFFD32F2F)
+
+    /** 月表示の土曜の曜日の見出し。板の --gg */
+    val saturday: Color
+        @Composable get() = if (isSystemInDarkTheme()) Color(0xFF8AB4F8) else Color(0xFF1A56C4)
 }
