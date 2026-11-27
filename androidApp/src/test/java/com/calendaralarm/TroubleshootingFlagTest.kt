@@ -18,10 +18,17 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.assert
+import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
+import com.calendaralarm.data.calendar.CalendarContractReader
+import com.calendaralarm.data.db.AppDatabase
+import com.calendaralarm.engine.AlarmScheduler
 import com.calendaralarm.ui.TroubleshootChecks
 import com.calendaralarm.ui.TroubleshootingScreen
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -56,9 +63,18 @@ class TroubleshootingFlagTest {
         runBlocking { SettingsRepository(app).flow.first() }
         TroubleshootChecks.collect(app, vibrate = true)
 
+        val db = Room.inMemoryDatabaseBuilder(app, AppDatabase::class.java).build()
+        val repository = AlarmRepository(
+            db = db,
+            scheduler = AlarmScheduler(app),
+            calendarReader = CalendarContractReader(app),
+            settings = SettingsRepository(app),
+            hasCalendarPermission = { false },
+            appScope = CoroutineScope(Dispatchers.IO),
+        )
         val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         activity.setContent {
-            MaterialTheme { TroubleshootingScreen(SettingsRepository(app), onBack = {}) }
+            MaterialTheme { TroubleshootingScreen(repository, SettingsRepository(app), onBack = {}) }
         }
         compose.waitUntil(15_000) {
             compose.onAllNodesWithTag(rowTag).fetchSemanticsNodes().isNotEmpty()
