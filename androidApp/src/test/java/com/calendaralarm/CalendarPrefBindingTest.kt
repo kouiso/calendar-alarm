@@ -117,4 +117,20 @@ class CalendarPrefBindingTest {
         assertEquals(1, result.rewrites.size)
         assertEquals("2", result.rewrites[0].row.calendarId)
     }
+
+    @Test
+    fun `新しい鍵が同じになる旧形式の行が 2 つあれば書き直さず、それぞれの設定が残る`() {
+        val rows = listOf(
+            CalendarPrefEntity("2", enabled = true, minutesBefore = null),
+            CalendarPrefEntity("4", enabled = false, minutesBefore = null),
+        )
+        val calendars = listOf(cal("2", displayName = "予定"), cal("4", displayName = "予定"))
+        val result = CalendarPrefBinding.bind(rows, calendars)
+        assertTrue(result.byCalendarId.getValue("2").enabled)
+        assertFalse(result.byCalendarId.getValue("4").enabled)
+        assertTrue(result.rewrites.isEmpty())
+        // 書き直さないので、次の再同期でも同じ結果になる
+        val again = CalendarPrefBinding.bind(rows, calendars)
+        assertFalse(again.byCalendarId.getValue("4").enabled)
+    }
 }

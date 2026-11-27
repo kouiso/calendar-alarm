@@ -77,14 +77,24 @@ object CalendarPrefBinding {
         }
 
         // 2 段目: 控えの行番号が同じで、まだ行を持たないカレンダーへ引き継ぎ、鍵を書き直す
-        for (r in rows) {
-            if (r.calendarKey in used || r.calendarId.isEmpty()) continue
-            val c = sorted.firstOrNull { it.id == r.calendarId } ?: continue
-            if (c.id in bound || !mayTakeOver(r, c)) continue
-            bound[c.id] = Bound(
-                row = r.copy(calendarKey = keyOf(c), accountType = c.accountType, accountName = c.accountName),
-                stored = r,
-            )
+        val candidates = rows.mapNotNull { r ->
+            if (r.calendarKey in used || r.calendarId.isEmpty()) return@mapNotNull null
+            val c = sorted.firstOrNull { it.id == r.calendarId } ?: return@mapNotNull null
+            if (c.id in bound || !mayTakeOver(r, c)) null else r to c
+        }
+        // 新しい鍵が同じになる行が複数ある時は、書き直すとどれかが孤児になり 1 段目で別の設定に上書きされる。
+        // どれも書き直さず、行番号のまま各カレンダーに付ける
+        val newKeyCount = candidates.groupingBy { keyOf(it.second) }.eachCount()
+        for ((r, c) in candidates) {
+            if (c.id in bound) continue
+            if ((newKeyCount[keyOf(c)] ?: 0) > 1) {
+                bound[c.id] = Bound(row = r, stored = r)
+            } else {
+                bound[c.id] = Bound(
+                    row = r.copy(calendarKey = keyOf(c), accountType = c.accountType, accountName = c.accountName),
+                    stored = r,
+                )
+            }
             used += r.calendarKey
         }
 
