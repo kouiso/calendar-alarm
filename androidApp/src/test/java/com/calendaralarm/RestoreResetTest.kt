@@ -5,6 +5,7 @@ import android.content.pm.ApplicationInfo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.db.AppDatabase
+import com.calendaralarm.data.db.CalendarPrefEntity
 import com.calendaralarm.data.db.EventOverrideEntity
 import com.calendaralarm.data.db.ScheduledInstanceEntity
 import kotlinx.coroutines.CompletableDeferred
@@ -88,6 +89,26 @@ class RestoreResetTest {
         assertEquals(0 to 0, counts())
         assertEquals(1, resyncs)
         assertFalse("印は消費され、次の起動では捨てない", RestoreMarker.isPending(context))
+    }
+
+    @Test
+    fun restore_clearsCalendarRowIdsAndDropsLegacyPrefs() {
+        runBlocking {
+            // 鍵つきの行 (端末をまたいで結び付く) と、旧形式の行 (別の端末では結び付けられない)
+            db.calendarPrefs().upsert(
+                CalendarPrefEntity("5", enabled = false, minutesBefore = null, calendarKey = "com.google\u001Fa@x\u001FS:work"),
+            )
+            db.calendarPrefs().upsert(CalendarPrefEntity("6", enabled = false, minutesBefore = null))
+        }
+        RestoreMarker.mark(context)
+
+        runBlocking { RestoreReset.runIfRestored(context, db) { } }
+
+        val rows = runBlocking { db.calendarPrefs().all() }
+        assertEquals(1, rows.size)
+        assertEquals("com.google\u001Fa@x\u001FS:work", rows[0].calendarKey)
+        assertEquals("行番号の控えは空になる", "", rows[0].calendarId)
+        assertFalse("旧形式の行は消える", rows.any { it.calendarKey.startsWith("id:") })
     }
 
     @Test

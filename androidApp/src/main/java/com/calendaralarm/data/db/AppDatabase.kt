@@ -101,6 +101,33 @@ internal val MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+/**
+ * v7 → v8: カレンダーごとの設定の主キーを、端末の行番号から端末をまたいで変わらない鍵に替える (#268)。
+ * 移行の SQL の中ではカレンダーを読めないので、今の行は旧形式の鍵 "id:<行番号>" で写す (行は消さない)。
+ * 旧形式の行は、次の再同期で同じ行番号のカレンダーに結び付けて正しい鍵に書き直す。
+ */
+internal val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS calendar_prefs_new (" +
+                "calendarId TEXT NOT NULL, enabled INTEGER NOT NULL, minutesBefore INTEGER, " +
+                "allDayMinutes INTEGER NOT NULL DEFAULT 540, extraOffsetsCsv TEXT NOT NULL DEFAULT '', " +
+                "startAction TEXT NOT NULL DEFAULT 'ALARM', reminderAction TEXT NOT NULL DEFAULT 'ALARM', " +
+                "calendarKey TEXT NOT NULL PRIMARY KEY, accountType TEXT NOT NULL DEFAULT '', " +
+                "accountName TEXT NOT NULL DEFAULT '')",
+        )
+        db.execSQL(
+            "INSERT INTO calendar_prefs_new " +
+                "(calendarId, enabled, minutesBefore, allDayMinutes, extraOffsetsCsv, startAction, reminderAction, " +
+                "calendarKey, accountType, accountName) " +
+                "SELECT calendarId, enabled, minutesBefore, allDayMinutes, extraOffsetsCsv, startAction, " +
+                "reminderAction, 'id:' || calendarId, '', '' FROM calendar_prefs",
+        )
+        db.execSQL("DROP TABLE calendar_prefs")
+        db.execSQL("ALTER TABLE calendar_prefs_new RENAME TO calendar_prefs")
+    }
+}
+
 @Database(
     entities = [
         ScheduledInstanceEntity::class,
@@ -109,13 +136,13 @@ internal val MIGRATION_6_7 = object : Migration(6, 7) {
         EventOverrideEntity::class,
         AuditLogEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     companion object {
         /** Room.databaseBuilder に渡すマイグレーション一覧。v5→v6 はアプリ既定の分数が要るので [Migration5To6] を別に足す */
-        val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_6_7)
+        val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_6_7, MIGRATION_7_8)
     }
     abstract fun scheduledInstances(): ScheduledInstanceDao
     abstract fun standaloneAlarms(): StandaloneAlarmDao

@@ -3,6 +3,7 @@ package com.calendaralarm.data
 import android.util.Log
 import java.util.concurrent.ConcurrentHashMap
 import com.calendaralarm.data.calendar.CalendarContractReader
+import com.calendaralarm.data.calendar.CalendarPrefBinding
 import com.calendaralarm.data.db.AppDatabase
 import com.calendaralarm.data.db.AuditLogEntity
 import com.calendaralarm.data.db.CalendarPrefEntity
@@ -275,7 +276,8 @@ class AlarmRepository(
         val now = Clock.System.now()
         val calendarList = calendarReader.calendars()
         val sources = calendarList.associateBy { it.id }
-        val prefs = db.calendarPrefs().all().associateBy { it.calendarId }
+        // 行番号が変わっても同じカレンダーの設定を引く (#268)。DB には書かない
+        val prefs = boundCalendarPrefs().byCalendarId
         val overrides = db.eventOverrides().all().associateBy { it.instanceKey }
         val appSettings = ScheduleSettings.of(settings.flow.first())
         // アカウント単位の設定 (#74): 使わないアカウントの予定は一覧に出さず、鳴らさない分は鳴らない表示にする
@@ -369,7 +371,44 @@ class AlarmRepository(
         }
     }
 
-    suspend fun calendarPrefsFlowList() = db.calendarPrefs().all()
+    /** 設定画面へ返す。控えの行番号を今の行番号に直した行 (#268) */
+    suspend fun calendarPrefsFlowList() = boundCalendarPrefs().byCalendarId.values.toList()
+
+    /** 設定の行を今の端末のカレンダーへ結び付ける (#268)。カレンダーを読めなければ空の一覧として扱う */
+    private suspend fun boundCalendarPrefs(): CalendarPrefBinding.Result {
+        val calendars = if (hasCalendarPermission()) calendarReader.calendarIdentities().orEmpty() else emptyList()
+        return CalendarPrefBinding.bind(db.calendarPrefs().all(), calendars)
+    }
+
+    /**
+     * 結び付けで変わった行を DB へ書く (#268)。書く直前に行を読み直し、読んだ後に画面から変えられた行は飛ばす
+     * (古い値で上書きすると利用者の変更が消える)。飛ばした行は setCalendarPref が続けて呼ぶ再同期で結び付け直る。
+     * 失敗は記録して次の再同期に任せる
+     */
+    private suspend fun applyPrefBinding(result: CalendarPrefBinding.Result) {
+        val rewrites = result.rewrites
+        if (rewrites.isEmpty()) return
+        try {
+            var rebound = 0
+            db.withTransaction {
+                for (b in rewrites) {
+                    val dao = db.calendarPrefs()
+                    if (dao.byKey(b.stored.calendarKey) != b.stored) continue
+                    if (b.stored.calendarKey != b.row.calendarKey) {
+                        if (dao.byKey(b.row.calendarKey) != null) continue
+                        dao.delete(b.stored.calendarKey)
+                    }
+                    dao.upsert(b.row)
+                    rebound++
+                }
+            }
+            audit("PREF_BIND", "rebound=$rebound")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            audit("ERROR", "カレンダーの設定の結び付けに失敗: ${e.javaClass.simpleName}")
+        }
+    }
 
     // ---- 鳴動イベント ----
 
@@ -797,7 +836,9 @@ class AlarmRepository(
         // 読み取り失敗時は空のまま (keepPendingEvents 経路で保護される)。
         var liveEventKeys = emptySet<String>()
         if (hasCalendarPermission()) {
-            val prefRows = db.calendarPrefs().all()
+            val prefBinding = boundCalendarPrefs()
+            afterPrefBindForTest?.invoke()
+            val prefRows = prefBinding.byCalendarId.values.toList()
             // 何分前を選んでいないカレンダー。アカウントの既定に従わせる (#74)
             val minutesFollowDefault = prefRows.filter { it.minutesBefore == null }.map { it.calendarId }.toSet()
             val prefs = prefRows.associate {
@@ -904,6 +945,7 @@ class AlarmRepository(
             }.getOrNull()
             if (expanded != null) {
                 pendingCarry?.let { applyOverrideCarry(overrideRows, it) }
+                applyPrefBinding(prefBinding)
                 // イベント由来インスタンスは固有のスヌーズ設定を持たないため
                 // 設定の既定を載せる
                 desired += expanded.map { it.copy(snoozeMinutes = snoozeDefault) }
@@ -943,6 +985,9 @@ class AlarmRepository(
 
     /** 試験用の差込口: 再同期が全行を読んだ直後に呼ぶ (#232 の競合の再現) */
     @Volatile internal var afterResyncReadForTest: (suspend () -> Unit)? = null
+
+    /** 試験用の差込口: resync で boundCalendarPrefs() を呼んだ直後に呼ぶ (#268)。afterResyncReadForTest と同じ書き方 */
+    @Volatile internal var afterPrefBindForTest: (suspend () -> Unit)? = null
 
     /**
      * [ScheduleReconciler] の決定を DB と AlarmManager へ適用する。
@@ -1097,19 +1142,37 @@ class AlarmRepository(
         startAction: EventAction? = null,
         reminderAction: EventAction? = null,
     ) {
-        val current = db.calendarPrefs().all().firstOrNull { it.calendarId == calendarId }
-        db.calendarPrefs().upsert(
-            CalendarPrefEntity(
-                calendarId = calendarId,
-                enabled = enabled,
-                minutesBefore = minutesBefore,
-                allDayMinutes = allDayMinutes ?: current?.allDayMinutes ?: 540,
-                extraOffsetsCsv = extraOffsets?.toCsv() ?: current?.extraOffsetsCsv ?: "",
-                startAction = startAction?.name ?: current?.startAction ?: EventAction.ALARM.name,
-                reminderAction = reminderAction?.name
-                    ?: current?.reminderAction ?: EventAction.ALARM.name,
-            ),
-        )
+        // 設定は端末をまたいで変わらない鍵で保存する (#268)
+        val binding = boundCalendarPrefs()
+        val bound = binding.bound[calendarId]
+        val current = bound?.row
+        val identity = if (hasCalendarPermission()) {
+            calendarReader.calendarIdentities()?.firstOrNull { it.id == calendarId }
+        } else {
+            null
+        }
+        val key = identity?.let(CalendarPrefBinding::keyOf)
+            ?: current?.calendarKey ?: CalendarPrefEntity.legacyKey(calendarId)
+        db.withTransaction {
+            if (bound != null && bound.stored.calendarKey != key) {
+                db.calendarPrefs().delete(bound.stored.calendarKey)
+            }
+            db.calendarPrefs().upsert(
+                CalendarPrefEntity(
+                    calendarId = calendarId,
+                    enabled = enabled,
+                    minutesBefore = minutesBefore,
+                    allDayMinutes = allDayMinutes ?: current?.allDayMinutes ?: 540,
+                    extraOffsetsCsv = extraOffsets?.toCsv() ?: current?.extraOffsetsCsv ?: "",
+                    startAction = startAction?.name ?: current?.startAction ?: EventAction.ALARM.name,
+                    reminderAction = reminderAction?.name
+                        ?: current?.reminderAction ?: EventAction.ALARM.name,
+                    calendarKey = key,
+                    accountType = identity?.accountType ?: current?.accountType ?: "",
+                    accountName = identity?.accountName ?: current?.accountName ?: "",
+                ),
+            )
+        }
         resync("calendar pref")
     }
 

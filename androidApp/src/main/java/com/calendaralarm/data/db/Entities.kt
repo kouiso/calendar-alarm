@@ -91,7 +91,8 @@ data class StandaloneAlarmEntity(
 /** カレンダー単位の鳴動ルール。 */
 @Entity(tableName = "calendar_prefs")
 data class CalendarPrefEntity(
-    @PrimaryKey val calendarId: String,
+    /** この端末で最後に結び付いたカレンダーの行番号 (Calendars._ID)。空文字 = まだ結び付いていない (#268) */
+    val calendarId: String,
     val enabled: Boolean,
     /** null = このカレンダーでは選んでいない。アカウントの既定、無ければアプリの既定に従う (#74) */
     val minutesBefore: Int?,
@@ -103,7 +104,16 @@ data class CalendarPrefEntity(
     val startAction: String = EventAction.ALARM.name,
     /** リマインダートリガのアクション (ALARM/NOTIFY/MUTE)。 */
     val reminderAction: String = EventAction.ALARM.name,
-)
+    /** 端末をまたいで変わらない鍵。既定は旧形式 "id:<行番号>" (#268) */
+    @PrimaryKey val calendarKey: String = legacyKey(calendarId),
+    val accountType: String = "",
+    val accountName: String = "",
+) {
+    companion object {
+        const val LEGACY_PREFIX = "id:"
+        fun legacyKey(calendarId: String): String = LEGACY_PREFIX + calendarId
+    }
+}
 
 /**
  * イベント個別のアクション・分数上書き。主キーは instanceKey (calendarId:eventId:startMillis)。
