@@ -283,7 +283,11 @@ class RingingOverlayMatchesScreenTest {
             themeId = "forest", large = true, triggerAt = now, eventStart = now + 15 * 60_000L, insets = insets,
         )
 
+        assertTextBoxMatches(root, RING_DATE_TAG)
         assertBoxMatches(root, RING_DIAL_TAG)
+        assertCenterMatches(root, RING_TIME_TAG)
+        assertTextBoxMatches(root, RING_STARTS_IN_TAG)
+        assertTextBoxMatches(root, TITLE_TAG)
         assertBoxMatches(root, SNOOZE_BUTTON_TAG)
         assertBoxMatches(root, LARGE_STOP_TAG)
         assertNoDiffs()
