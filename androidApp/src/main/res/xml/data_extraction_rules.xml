@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 31 以上のバックアップ・端末間移行 (android:dataExtractionRules)。
+     通知の内容の印 (#384) の保存ファイルだけを、クラウドと端末間の両方から外す。
+     除外だけを書くので、残りは今までどおり両方に含まれる -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="notification_alarm_content.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="notification_alarm_content.xml" />
+    </device-transfer>
+</data-extraction-rules>

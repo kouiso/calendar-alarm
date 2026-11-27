@@ -35,6 +35,8 @@
         android:allowBackup="true"
         android:backupAgent=".RestoreMarkerAgent"
         android:fullBackupOnly="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true"
         android:theme="@style/Theme.CalendarAlarm"
         tools:targetApi="35">

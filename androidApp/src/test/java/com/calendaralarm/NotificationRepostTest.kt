@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.AlarmRepository
+import com.calendaralarm.data.NotificationContentStore
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.data.calendar.CalendarContractReader
 import com.calendaralarm.data.db.AppDatabase
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -46,6 +48,8 @@ class NotificationRepostTest {
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
         runBlocking { context.settingsDataStore.edit { it.clear() } }
+        // Robolectric は同じプロセスで保存を持ち越すので、内容の印を空にする (#384)
+        context.getSharedPreferences("notification_alarm_content", Context.MODE_PRIVATE).edit().clear().commit()
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
         repository = AlarmRepository(
             db = db,
@@ -83,8 +87,10 @@ class NotificationRepostTest {
 
     private suspend fun skipLogs() = db.auditLog().recentByActionsFlow(listOf("NF_REPOST_SKIP"), 50).first()
 
-    private suspend fun post(id: String, title: String = "new") =
-        repository.scheduleNotificationAlarm(inst(id, title))
+    private suspend fun newContentLogs() = db.auditLog().recentByActionsFlow(listOf("NF_NEW_CONTENT"), 50).first()
+
+    private suspend fun post(id: String, title: String = "new", contentKey: String? = null) =
+        repository.scheduleNotificationAlarm(inst(id, title), contentKey)
 
     @Test
     fun `1 PENDING の行は何も書かず予約し直さない`() = runBlocking {
@@ -214,5 +220,103 @@ class NotificationRepostTest {
         post("nf:a")
         assertEquals(AlarmState.PENDING.name, row("nf:a")!!.state)
         assertEquals("new", row("nf:a")!!.title)
+    }
+
+    @Test
+    fun `2 止めて10分未満でも内容が変わっていれば鳴らす`() = runBlocking {
+        post("nf:q", title = "old", contentKey = "A")
+        db.scheduledInstances().setState("nf:q", AlarmState.DISMISSED.name)
+        seedDismissAudit("nf:q", now - 3 * minute)
+        post("nf:q", title = "new", contentKey = "B")
+        val r = row("nf:q")!!
+        assertEquals(AlarmState.PENDING.name, r.state)
+        assertEquals("new", r.title)
+        assertTrue(skipLogs().isEmpty())
+        assertEquals(1, newContentLogs().size)
+    }
+
+    @Test
+    fun `2 止めて10分未満で内容が同じなら鳴らさない`() = runBlocking {
+        post("nf:q", title = "old", contentKey = "A")
+        db.scheduledInstances().setState("nf:q", AlarmState.DISMISSED.name)
+        seedDismissAudit("nf:q", now - 3 * minute)
+        post("nf:q", title = "new", contentKey = "A")
+        val r = row("nf:q")!!
+        assertEquals(AlarmState.DISMISSED.name, r.state)
+        assertEquals("old", r.title)
+        assertEquals(1, skipLogs().size)
+        assertTrue(newContentLogs().isEmpty())
+    }
+
+    @Test
+    fun `2 印が保存されていない行は内容が違っても今までどおり落とす`() = runBlocking {
+        seed("nf:r", AlarmState.DISMISSED)
+        seedDismissAudit("nf:r", now - 3 * minute)
+        post("nf:r", contentKey = "B")
+        assertEquals(AlarmState.DISMISSED.name, row("nf:r")!!.state)
+        assertEquals("old", row("nf:r")!!.title)
+    }
+
+    @Test
+    fun `2 印を渡さない呼び出しは今までどおり落とす`() = runBlocking {
+        post("nf:s", title = "old", contentKey = "A")
+        db.scheduledInstances().setState("nf:s", AlarmState.DISMISSED.name)
+        seedDismissAudit("nf:s", now - 3 * minute)
+        post("nf:s")
+        assertEquals(AlarmState.DISMISSED.name, row("nf:s")!!.state)
+        assertEquals("old", row("nf:s")!!.title)
+    }
+
+    @Test
+    fun `1 鳴動中は内容が変わっても何も書かない`() = runBlocking {
+        post("nf:t", title = "old", contentKey = "A")
+        db.scheduledInstances().setState("nf:t", AlarmState.FIRED.name)
+        post("nf:t", title = "new", contentKey = "B")
+        val r = row("nf:t")!!
+        assertEquals(AlarmState.FIRED.name, r.state)
+        assertEquals("old", r.title)
+        assertTrue(newContentLogs().isEmpty())
+    }
+
+    @Test
+    fun `2 落とした出し直しは印を書き換えない`() = runBlocking {
+        // 保存した印が無い行。印が無ければ内容が違っても落とす
+        seed("nf:u", AlarmState.DISMISSED)
+        seedDismissAudit("nf:u", now - 3 * minute)
+        post("nf:u", title = "second", contentKey = "B") // 落とす
+        assertEquals(AlarmState.DISMISSED.name, row("nf:u")!!.state)
+        assertNull(NotificationContentStore(context).get("nf:u"))
+        // 落とした B を印として書いていたら、ここで C との違いで鳴ってしまう。書いていなければ印が無いので落とす
+        post("nf:u", title = "third", contentKey = "C")
+        val r = row("nf:u")!!
+        assertEquals(AlarmState.DISMISSED.name, r.state)
+        assertEquals("old", r.title)
+        assertNull(NotificationContentStore(context).get("nf:u"))
+        assertTrue(newContentLogs().isEmpty())
+        assertEquals(2, skipLogs().size)
+    }
+
+    @Test
+    fun `2 予約できなかった時は印も新しい内容の記録も残さない`() = runBlocking {
+        post("nf:w", title = "old", contentKey = "A")
+        db.scheduledInstances().setState("nf:w", AlarmState.DISMISSED.name)
+        seedDismissAudit("nf:w", now - 3 * minute)
+        // 予約が通らない (USE_EXACT_ALARM の取り下げ等) 状況
+        val denied = AlarmRepository(
+            db = db,
+            scheduler = object : AlarmScheduler(context) {
+                override fun schedule(instance: AlarmInstance) = false
+            },
+            calendarReader = CalendarContractReader(context),
+            settings = SettingsRepository(context),
+            hasCalendarPermission = { false },
+            appScope = CoroutineScope(Dispatchers.IO),
+        )
+        denied.nowMillis = { now }
+        denied.scheduleNotificationAlarm(inst("nf:w", "new"), "B")
+        // 印は前に鳴らした時の A のまま。B に書き換わらず、鳴らした事の記録も無い
+        assertEquals("A", NotificationContentStore(context).get("nf:w"))
+        assertTrue(newContentLogs().isEmpty())
+        assertEquals(1, db.auditLog().recentByActionsFlow(listOf("EXACT_DENIED"), 50).first().size)
     }
 }
