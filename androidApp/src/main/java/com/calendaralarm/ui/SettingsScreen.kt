@@ -300,7 +300,6 @@ fun SettingsScreen(
                             onChange = { next ->
                                 scope.launch {
                                     settings.setAccountSetting(account, next)
-                                    repository.resync("account setting")
                                 }
                             },
                         )
@@ -958,7 +957,7 @@ private fun EventRulesCard(
                 actionLabels.forEach { (a, label) ->
                     FilterChip(
                         selected = prefs.defaultStartAction == a,
-                        onClick = { scope.launch { settings.setDefaultStartAction(a); repository.resync("settings") } },
+                        onClick = { scope.launch { settings.setDefaultStartAction(a) } },
                         label = { Text(label, maxLines = 1) },
                         modifier = Modifier.padding(end = 4.dp),
                     )
@@ -974,7 +973,7 @@ private fun EventRulesCard(
                 actionLabels.forEach { (a, label) ->
                     FilterChip(
                         selected = prefs.defaultReminderAction == a,
-                        onClick = { scope.launch { settings.setDefaultReminderAction(a); repository.resync("settings") } },
+                        onClick = { scope.launch { settings.setDefaultReminderAction(a) } },
                         label = { Text(label, maxLines = 1) },
                         modifier = Modifier.padding(end = 4.dp),
                     )
@@ -993,15 +992,15 @@ private fun EventRulesCard(
             }
             // 招待予定フィルタ
             InviteFilterRow(prefs.inviteFilter) { s ->
-                scope.launch { settings.toggleInviteStatus(s); repository.resync("settings") }
+                scope.launch { settings.toggleInviteStatus(s) }
             }
             // 鳴らす予定の種類と「予定なし」を一か所でまとめて切り替える (#79)
             EventTypeRingSwitches(
                 filter = prefs.eventTypeFilter,
                 // Google 連携が無い時、種類は予定のタイトルから推定するしかない (OS のカレンダーに種類の列が無い)
                 guessedFromTitle = prefs.googleAccountEmails.isEmpty(),
-                onToggleType = { t -> scope.launch { settings.toggleEventType(t); repository.resync("settings") } },
-                onToggleFree = { v -> scope.launch { settings.setRingFree(v); repository.resync("settings") } },
+                onToggleType = { t -> scope.launch { settings.toggleEventType(t) } },
+                onToggleFree = { v -> scope.launch { settings.setRingFree(v) } },
             )
             // Googleカレンダー連携 (eventType を API の正本から取得)
             val googleLauncher = rememberLauncherForActivityResult(
@@ -1026,7 +1025,7 @@ private fun EventRulesCard(
                         modifier = Modifier.weight(1f),
                     )
                     TextButton(onClick = {
-                        scope.launch { settings.removeGoogleAccount(email); repository.resync("google-unlink") }
+                        scope.launch { settings.removeGoogleAccount(email) }
                     }) { Text("解除") }
                 }
             }
@@ -1060,7 +1059,7 @@ private fun EventRulesCard(
                 Switch(
                     checked = prefs.importEventReminders,
                     onCheckedChange = {
-                        scope.launch { settings.setImportEventReminders(it); repository.resync("settings") }
+                        scope.launch { settings.setImportEventReminders(it) }
                     },
                 )
             }
@@ -1085,7 +1084,6 @@ private fun EventRulesCard(
                                 onClick = {
                                     scope.launch {
                                         settings.setExtraReminderOffsets(prefs.extraReminderOffsets - minutes)
-                                        repository.resync("settings")
                                     }
                                 },
                                 label = { Text(reminderOffsetLabel(minutes)) },
@@ -1109,7 +1107,6 @@ private fun EventRulesCard(
                     onAdd = { minutes ->
                         scope.launch {
                             settings.setExtraReminderOffsets(prefs.extraReminderOffsets + minutes)
-                            repository.resync("settings")
                         }
                         showAddReminder = false
                     },
@@ -1121,7 +1118,7 @@ private fun EventRulesCard(
         TitleCodeDialog(
             initial = prefs.titleCodes,
             onDismiss = { showCodes = false },
-            onSave = { scope.launch { settings.setTitleCodes(it); repository.resync("settings") }; showCodes = false },
+            onSave = { scope.launch { settings.setTitleCodes(it) }; showCodes = false },
         )
     }
 }
@@ -1451,7 +1448,7 @@ private fun RingingCard(
                 Spacer(Modifier.weight(1f))
                 Switch(
                     checked = p.muteAll,
-                    onCheckedChange = { scope.launch { settings.setMuteAll(it); repository.resync("settings") } },
+                    onCheckedChange = { scope.launch { settings.setMuteAll(it) } },
                 )
             }
         }
