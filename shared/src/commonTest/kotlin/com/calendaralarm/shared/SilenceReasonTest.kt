@@ -154,6 +154,28 @@ class SilenceReasonTest {
     }
 
     @Test
+    fun `招待で外れ題の言葉にも当たる時は招待`() {
+        assertEquals(
+            SilenceReason.INVITE,
+            reason(
+                event = event.copy(title = "休み 会議", inviteStatus = InviteStatus.DECLINED),
+                codes = TitleCodeSettings(neverCodes = listOf("休み")),
+            ),
+        )
+    }
+
+    @Test
+    fun `開始が鳴らずリマインダーは通知でも時刻が無ければカレンダーの鳴らし方`() {
+        assertEquals(
+            SilenceReason.CALENDAR_ACTION_OFF,
+            reason(
+                rule = AlarmRule(startAction = EventAction.MUTE, reminderAction = EventAction.NOTIFY),
+                hasReminderTriggers = false,
+            ),
+        )
+    }
+
+    @Test
     fun `2つ当てはまる時は強い方`() {
         assertEquals(
             SilenceReason.CALENDAR_OFF,
