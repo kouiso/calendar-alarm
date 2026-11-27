@@ -51,13 +51,36 @@ object CalendarPrefBinding {
         val rewrites: List<Bound> get() = bound.values.filter { it.row != it.stored }
     }
 
+    /** 識別子の強さ。S (同期用の ID) > N (内部名) > D (表示名) */
+    private fun rank(kind: Char): Int = when (kind) {
+        'S' -> 2
+        'N' -> 1
+        else -> 0
+    }
+
     /** 控えの行番号のカレンダーへ、鍵を書き直して引き継いでよいか */
     private fun mayTakeOver(row: CalendarPrefEntity, c: CalendarIdentity): Boolean {
         val rowKind = kindOf(row.calendarKey) ?: return true // 旧形式の行
         if (row.accountType != c.accountType || row.accountName != c.accountName) return false
-        val newKind = kindOf(keyOf(c))
-        // 同期用の ID どうし・内部名どうしが違うなら別のカレンダー。表示名の変更と後からの同期用の ID だけ拾う
-        return !(rowKind == newKind && (rowKind == 'S' || rowKind == 'N'))
+        val newKind = kindOf(keyOf(c)) ?: return false
+        // 同じ種類の S・N どうしは鍵が違えば別のカレンダー。
+        // 識別子が弱くなる向き (S→N・S→D・N→D) も、行番号の使い回しと見分けが付かないので引き継がない。
+        // 表示名の変更 (D→D) と、後から強い識別子が付く向き (D→N・D→S・N→S) だけ拾う
+        if (rowKind == newKind) return rowKind == 'D'
+        return rank(newKind) > rank(rowKind)
+    }
+
+    /**
+     * [setCalendarPref] が保存に使う鍵。[calendarId] の鍵が今の別のカレンダーと同じ (重なる) 時は、
+     * 共有の鍵へ書くと次の結び付けで両方に効いてしまうので、今の行の鍵 (無ければ旧形式) のまま保存する。
+     * [calendars] が null (読めなかった) の時も同じ。重ならなければ端末をまたいで変わらない鍵に移す
+     */
+    fun saveKey(calendarId: String, calendars: List<CalendarIdentity>?, current: CalendarPrefEntity?): String {
+        val fallback = current?.calendarKey ?: CalendarPrefEntity.legacyKey(calendarId)
+        if (calendars == null) return fallback
+        val identity = calendars.firstOrNull { it.id == calendarId } ?: return fallback
+        val key = keyOf(identity)
+        return if (calendars.count { keyOf(it) == key } > 1) fallback else key
     }
 
     fun bind(rows: List<CalendarPrefEntity>, calendars: List<CalendarIdentity>): Result {
@@ -82,9 +105,9 @@ object CalendarPrefBinding {
             val c = sorted.firstOrNull { it.id == r.calendarId } ?: return@mapNotNull null
             if (c.id in bound || !mayTakeOver(r, c)) null else r to c
         }
-        // 新しい鍵が同じになる行が複数ある時は、書き直すとどれかが孤児になり 1 段目で別の設定に上書きされる。
-        // どれも書き直さず、行番号のまま各カレンダーに付ける
-        val newKeyCount = candidates.groupingBy { keyOf(it.second) }.eachCount()
+        // 新しい鍵を今のカレンダーが複数で共有する時は、書き直すと次の 1 段目で全部に同じ行が付いてしまう。
+        // 引き継ぎ候補の行が 1 件でも (他のカレンダーに行が無くても) 書き直さず、行番号のまま各カレンダーに付ける
+        val newKeyCount = sorted.groupingBy { keyOf(it) }.eachCount()
         for ((r, c) in candidates) {
             if (c.id in bound) continue
             if ((newKeyCount[keyOf(c)] ?: 0) > 1) {

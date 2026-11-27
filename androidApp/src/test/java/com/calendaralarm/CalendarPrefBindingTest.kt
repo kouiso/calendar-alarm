@@ -133,4 +133,65 @@ class CalendarPrefBindingTest {
         val again = CalendarPrefBinding.bind(rows, calendars)
         assertFalse(again.byCalendarId.getValue("4").enabled)
     }
+
+    @Test
+    fun `同期用の ID の設定は、内部名だけのカレンダーが同じ行番号を使い回しても引き継がない`() {
+        val result = CalendarPrefBinding.bind(
+            listOf(row(key("S", "work"), calendarId = "5", enabled = false)),
+            listOf(cal("5", name = "family")),
+        )
+        assertNull(result.byCalendarId["5"])
+        assertTrue(result.rewrites.isEmpty())
+    }
+
+    @Test
+    fun `同期用の ID・内部名の設定は、表示名だけのカレンダーへ引き継がない`() {
+        for (kind in listOf("S", "N")) {
+            val result = CalendarPrefBinding.bind(
+                listOf(row(key(kind, "work"), calendarId = "5", enabled = false)),
+                listOf(cal("5", displayName = "family")),
+            )
+            assertNull("$kind から D へは引き継がない", result.byCalendarId["5"])
+            assertTrue(result.rewrites.isEmpty())
+        }
+    }
+
+    @Test
+    fun `表示名や内部名の鍵の行は、後から同期用の ID が付いたカレンダーへ引き継ぐ`() {
+        val fromName = CalendarPrefBinding.bind(
+            listOf(row(key("N", "work"), calendarId = "5", enabled = false)),
+            listOf(cal("5", syncId = "work", name = "work")),
+        )
+        assertFalse(fromName.byCalendarId.getValue("5").enabled)
+        val fromDisplay = CalendarPrefBinding.bind(
+            listOf(row(key("D", "仕事"), calendarId = "5", enabled = false)),
+            listOf(cal("5", name = "work", displayName = "仕事")),
+        )
+        assertFalse(fromDisplay.byCalendarId.getValue("5").enabled)
+    }
+
+    @Test
+    fun `旧形式の行が 1 件だけでも、新しい鍵を共有するカレンダーがあれば書き直さない`() {
+        val rows = listOf(CalendarPrefEntity("2", enabled = false, minutesBefore = null))
+        val calendars = listOf(cal("2", displayName = "予定"), cal("4", displayName = "予定"))
+        val result = CalendarPrefBinding.bind(rows, calendars)
+        assertFalse(result.byCalendarId.getValue("2").enabled)
+        assertNull("行の無い 4 に設定が移らない", result.byCalendarId["4"])
+        assertTrue(result.rewrites.isEmpty())
+        // 次の結び付けでも 4 は鳴らす側のまま
+        assertNull(CalendarPrefBinding.bind(rows, calendars).byCalendarId["4"])
+    }
+
+    @Test
+    fun `saveKey は鍵が重ならなければ鍵へ移し、重なれば今の鍵のまま保存する`() {
+        val unique = listOf(cal("1", syncId = "a"), cal("2", syncId = "b"))
+        assertEquals(CalendarPrefBinding.keyOf(unique[0]), CalendarPrefBinding.saveKey("1", unique, null))
+
+        val dup = listOf(cal("2", displayName = "予定"), cal("4", displayName = "予定"))
+        assertEquals("id:2", CalendarPrefBinding.saveKey("2", dup, null))
+        val legacy = CalendarPrefEntity("2", enabled = true, minutesBefore = null)
+        assertEquals("id:2", CalendarPrefBinding.saveKey("2", dup, legacy))
+        // 読めなかった時は今の鍵のまま
+        assertEquals("id:2", CalendarPrefBinding.saveKey("2", null, legacy))
+    }
 }

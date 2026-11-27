@@ -7,6 +7,7 @@ import com.calendaralarm.R
 import com.calendaralarm.shared.model.Availability
 import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.CalendarSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -51,7 +52,7 @@ class CalendarContractReader(private val context: Context) {
 
     /**
      * 設定の鍵を作る列だけを読む (#268)。[calendars] とは別の問い合わせにして、列が無い端末でも
-     * カレンダー一覧の読み取りを巻き込まない。読めなければ (権限なし・列が無い端末) null。
+     * カレンダー一覧の読み取りを巻き込まない。読めなければ (権限なし・列が無い端末・提供元の失敗) null。
      */
     suspend fun calendarIdentities(): List<CalendarIdentity>? = withContext(Dispatchers.IO) {
         try {
@@ -80,9 +81,10 @@ class CalendarContractReader(private val context: Context) {
                 }
             }
             out.toList()
-        } catch (e: SecurityException) {
-            null
-        } catch (e: IllegalArgumentException) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 権限なし・列が無い端末のほか、提供元が落ちた時なども null。呼び出し側は「読めなかった」として扱う
             null
         }
     }

@@ -18,6 +18,7 @@ import com.calendaralarm.data.db.CalendarPrefEntity
 import com.calendaralarm.data.settingsDataStore
 import com.calendaralarm.engine.AlarmScheduler
 import com.calendaralarm.shared.model.AlarmState
+import com.calendaralarm.shared.model.StandaloneAlarm
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -55,6 +56,9 @@ class CalendarPrefRebindResyncTest {
         companion object {
             var eventStart = 0L
             var calendars: List<Cal> = emptyList()
+
+            /** true の間、鍵の材料の読み取り (ACCOUNT_TYPE を含む問い合わせ) だけ失敗させる */
+            var failIdentities = false
         }
         override fun onCreate() = true
         override fun query(
@@ -62,6 +66,9 @@ class CalendarPrefRebindResyncTest {
             selectionArgs: Array<out String>?, sortOrder: String?,
         ): Cursor {
             val path = uri.path.orEmpty()
+            if (failIdentities && projection?.contains(CalendarContract.Calendars.ACCOUNT_TYPE) == true) {
+                throw IllegalStateException("identity read failed")
+            }
             val rows: List<Map<String, Any?>> = when {
                 path.contains("instances") -> calendars.map {
                     mapOf(
@@ -121,6 +128,7 @@ class CalendarPrefRebindResyncTest {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
         settings = SettingsRepository(context)
         SwappableProvider.eventStart = start
+        SwappableProvider.failIdentities = false
         SwappableProvider.calendars = listOf(work1, family2)
         Robolectric.buildContentProvider(SwappableProvider::class.java).create(CalendarContract.AUTHORITY)
         repository = AlarmRepository(
@@ -210,5 +218,48 @@ class CalendarPrefRebindResyncTest {
 
         assertEquals(1, rows.size)
         assertEquals("2", rows[0].calendarId)
+    }
+
+    @Test
+    fun `鍵の材料を読めない再同期は、前回の予定の予約を残し、単発アラームは予約する`() = runBlocking {
+        repository.setCalendarPref("1", enabled = false, minutesBefore = null)
+        assertEquals(setOf("2"), pendingCalendarIds())
+
+        // 行番号が入れ替わり、新しいカレンダー 3 も増えた端末で、鍵の材料だけ読めない
+        SwappableProvider.calendars = swapped + Cal(3, "新規", "new")
+        SwappableProvider.failIdentities = true
+        repository.upsertStandaloneAlarm(StandaloneAlarm(enabled = true, hour = 7, minute = 0, label = "朝"))
+
+        assertEquals("控えの行番号で設定を引かず、予定の予約はそのまま", setOf("2"), pendingCalendarIds())
+        val standalone = db.scheduledInstances().all()
+            .filter { it.state == AlarmState.PENDING.name && it.id.startsWith("sa:") }
+        assertTrue("単発アラームは予約される", standalone.isNotEmpty())
+
+        SwappableProvider.failIdentities = false
+        repository.resync("identities readable again")
+        assertEquals("読めた後は鍵で引く: 鳴らさないのは「仕事」(行番号 2)", setOf("1", "3"), pendingCalendarIds())
+    }
+
+    @Test
+    fun `鍵の材料を読めなくても、予定の一覧と設定の保存は落ちない`() = runBlocking {
+        SwappableProvider.failIdentities = true
+
+        assertTrue(repository.upcomingEvents().isEmpty())
+        repository.setCalendarPref("1", enabled = false, minutesBefore = null)
+
+        val rows = db.calendarPrefs().all()
+        assertEquals(1, rows.size)
+        assertEquals("id:1", rows[0].calendarKey)
+    }
+
+    @Test
+    fun `鍵が同じ 2 つのカレンダーの片方だけ変えても、もう片方に効かない`() = runBlocking {
+        SwappableProvider.calendars = listOf(Cal(1, "予定", "dup"), Cal(2, "予定", "dup"))
+        repository.setCalendarPref("1", enabled = false, minutesBefore = null)
+
+        assertEquals("1 だけ鳴らさない", setOf("2"), pendingCalendarIds())
+        repository.resync("again")
+        assertEquals("次の再同期でも 2 は鳴る", setOf("2"), pendingCalendarIds())
+        assertEquals("共有の鍵へは移さない", "id:1", db.calendarPrefs().all().single().calendarKey)
     }
 }

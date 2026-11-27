@@ -291,7 +291,10 @@ class AlarmRepository(
         val calendarList = calendarReader.calendars()
         val sources = calendarList.associateBy { it.id }
         // 行番号が変わっても同じカレンダーの設定を引く (#268)。DB には書かない
-        val prefs = boundCalendarPrefs().byCalendarId
+        // 鍵の材料を読めなければ設定を正しく引けない (鳴らさない設定が別のカレンダーに付きうる) ので、一覧は出さない
+        val (prefBinding, identities) = readBoundCalendarPrefs()
+        if (identities == null) return@withContext emptyList()
+        val prefs = prefBinding.byCalendarId
         val overrides = db.eventOverrides().all().associateBy { it.instanceKey }
         val appSettings = ScheduleSettings.of(settings.flow.first())
         // アカウント単位の設定 (#74): 使わないアカウントの予定は一覧に出さず、鳴らさない分は鳴らない表示にする
@@ -857,7 +860,7 @@ class AlarmRepository(
         // 読み取り失敗時は空のまま (keepPendingEvents 経路で保護される)。
         var liveEventKeys = emptySet<String>()
         if (hasCalendarPermission()) {
-            val prefBinding = boundCalendarPrefs()
+            val (prefBinding, identities) = readBoundCalendarPrefs()
             afterPrefBindForTest?.invoke()
             val prefRows = prefBinding.byCalendarId.values.toList()
             // 何分前を選んでいないカレンダー。アカウントの既定に従わせる (#74)
@@ -892,6 +895,9 @@ class AlarmRepository(
                 reminderAction = appSettings.defaultReminderAction,
             )
             val expanded = runCatching {
+                // 鍵の材料 (アカウント・同期用の ID など) を読めない時は、控えの行番号で設定を引くと
+                // 行番号が入れ替わった端末で別のカレンダーに効いてしまう。カレンダー一覧の読み取り失敗と同じ扱いにする (#268)
+                check(identities != null) { "calendar identities unreadable" }
                 // カレンダー一覧の読み取り失敗は予定の読み取り失敗と同じ扱いにする (下の runCatching で前回の予約を維持)。
                 // 鳴らさないアカウントを無視して鳴らすことも、全部止めることもしない
                 val calendarList = calendarReader.calendars()
@@ -1007,7 +1013,7 @@ class AlarmRepository(
     /** 試験用の差込口: 再同期が全行を読んだ直後に呼ぶ (#232 の競合の再現) */
     @Volatile internal var afterResyncReadForTest: (suspend () -> Unit)? = null
 
-    /** 試験用の差込口: resync で boundCalendarPrefs() を呼んだ直後に呼ぶ (#268)。afterResyncReadForTest と同じ書き方 */
+    /** 試験用の差込口: resync で readBoundCalendarPrefs() を呼んだ直後に呼ぶ (#268)。afterResyncReadForTest と同じ書き方 */
     @Volatile internal var afterPrefBindForTest: (suspend () -> Unit)? = null
 
     /**
@@ -1168,8 +1174,8 @@ class AlarmRepository(
         val bound = binding.bound[calendarId]
         val current = bound?.row
         val identity = identities?.firstOrNull { it.id == calendarId }
-        val key = identity?.let(CalendarPrefBinding::keyOf)
-            ?: current?.calendarKey ?: CalendarPrefEntity.legacyKey(calendarId)
+        // 鍵が今の別のカレンダーと重なる時は共有の鍵へ移さず、今の鍵のまま保存する (片方の変更がもう片方に効かないように)
+        val key = CalendarPrefBinding.saveKey(calendarId, identities, current)
         db.withTransaction {
             if (bound != null && bound.stored.calendarKey != key) {
                 db.calendarPrefs().delete(bound.stored.calendarKey)
