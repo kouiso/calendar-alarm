@@ -468,7 +468,7 @@ class EngineTest {
     }
 
     /** 予定一覧の理由の試験用: 終日を鳴らさないカレンダー1、鳴らさないカレンダー2の予定の行を差し込む */
-    private suspend fun seedReasonRows(): Long {
+    private suspend fun seedReasonRows(declinedEventId: Long? = null): Long {
         val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
         val allDayStart = (Clock.System.now().toEpochMilliseconds() / 86_400_000L + 1) * 86_400_000L
         fun row(eventId: Long, calId: Long, begin: Long, allDay: Boolean) = mapOf(
@@ -481,7 +481,11 @@ class EngineTest {
             CalendarContract.Instances.END to begin + if (allDay) 86_400_000L else 3_600_000L,
             CalendarContract.Instances.ALL_DAY to if (allDay) 1 else 0,
             CalendarContract.Instances.SELF_ATTENDEE_STATUS to
-                CalendarContract.Attendees.ATTENDEE_STATUS_NONE,
+                if (eventId == declinedEventId) {
+                    CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED
+                } else {
+                    CalendarContract.Attendees.ATTENDEE_STATUS_NONE
+                },
             CalendarContract.Instances.ORGANIZER to null,
         )
         FakeCalendarProvider.instanceRows = listOf(
@@ -517,6 +521,29 @@ class EngineTest {
         assertEquals(4, items.size)
         items.forEach { assertEquals("予定${it.event.id}", it.muted, it.silenceReason != null) }
         assertEquals(SilenceReason.EVENT_OFF, items.first { it.event.id == "4" }.silenceReason)
+    }
+
+    @Test
+    fun `招待の返事で外れた予定とすべてミュートでも理由と鳴らない表示が一致する`() = runBlocking {
+        // 予定1は辞退済み: 招待の絞り込みで外れる
+        seedReasonRows(declinedEventId = 1L)
+        val items = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }
+        assertEquals(SilenceReason.INVITE, items.getValue("1").silenceReason)
+        items.values.forEach { assertEquals("予定${it.event.id}", it.muted, it.silenceReason != null) }
+
+        val settings = SettingsRepository(context)
+        settings.setMuteAll(true)
+        try {
+            val muted = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }
+            // 絞り込みで外れた予定は、すべてミュートでも理由は招待のまま
+            assertEquals(SilenceReason.INVITE, muted.getValue("1").silenceReason)
+            // 鳴る予定は、すべてミュート中はその理由になる
+            assertEquals(SilenceReason.MUTE_ALL, muted.getValue("4").silenceReason)
+            muted.values.forEach { assertEquals("予定${it.event.id}", it.muted, it.silenceReason != null) }
+        } finally {
+            // 設定は DataStore に残り他の試験へ漏れるので戻す
+            settings.setMuteAll(false)
+        }
     }
 
     @Test
