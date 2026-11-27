@@ -460,19 +460,22 @@ private fun RingingScreen(
                         )
                     }
                     Spacer(Modifier.height(RingingSlideSpec.STARTS_IN_TO_TITLE_DP.dp))
-                    // 題の高さは「行数 x 行の高さ」。重ねて出す停止画面 (View) はこの高さに固定している。
-                    // 文字の測りが 0 になる環境 (Robolectric の既定の描画) では lineHeight が効かず
-                    // 高さが 0 になり、中央寄せの輪の位置が View とずれるので、1 行分は下限として確保する
+                    // 題の高さは「行数 x 行の高さ」に固定する。重ねて出す停止画面 (View) はこの高さに固定している。
+                    // 文字の測りに任せると、書体や環境 (Robolectric の描画など) で行の高さが lineHeight と
+                    // ずれ (大きいボタンで 36 になった)、中央寄せの輪の位置が View とずれる。
+                    // 行数は描いた結果から引き、高さは lineHeight から決める
                     val titleLineHeightSp = if (largeButtons) {
                         RingingSlideSpec.LARGE_TITLE_LINE_SP
                     } else {
                         RingingSlideSpec.TITLE_LINE_SP.toFloat()
                     }
+                    var titleLines by remember { mutableStateOf(1) }
                     Text(
                         text = title,
                         modifier = Modifier
-                            .heightIn(min = with(density) { titleLineHeightSp.sp.toDp() })
+                            .height(with(density) { titleLineHeightSp.sp.toDp() } * titleLines)
                             .testTag(TITLE_TAG),
+                        onTextLayout = { titleLines = it.lineCount.coerceIn(1, 2) },
                         fontSize = if (largeButtons) RingingSlideSpec.LARGE_TITLE_SP.sp else RingingSlideSpec.TITLE_SP.sp,
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = titleLineHeightSp.sp,
