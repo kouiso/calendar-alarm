@@ -124,6 +124,12 @@ class AgendaDayHeaderAndEmptyTest {
         decor.draw(Canvas(bitmap))
         val px = bitmap.getPixel(b.left.toInt() + 1, b.top.toInt() + 1)
         assertNotEquals(scheme!!.primaryContainer.rgb(), rgb(px))
+        // 札の形や余白が変わっても検出できるよう、文字の左右の外側の画素も見る
+        val midY = ((b.top + b.bottom) / 2).toInt()
+        val leftX = (b.left.toInt() - 4).coerceAtLeast(0)
+        val rightX = (b.right.toInt() + 4).coerceAtMost(bitmap.width - 1)
+        assertNotEquals(scheme!!.primaryContainer.rgb(), rgb(bitmap.getPixel(leftX, midY)))
+        assertNotEquals(scheme!!.primaryContainer.rgb(), rgb(bitmap.getPixel(rightX, midY)))
     }
 
     @Test
