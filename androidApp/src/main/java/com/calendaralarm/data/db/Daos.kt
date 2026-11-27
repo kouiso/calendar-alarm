@@ -166,6 +166,10 @@ interface AuditLogDao {
     @Query("SELECT * FROM audit_log ORDER BY atMillis DESC LIMIT :limit")
     fun recentFlow(limit: Int): Flow<List<AuditLogEntity>>
 
+    /** 診断の共有用に、新しい順の記録を一度だけ読む (#286)。 */
+    @Query("SELECT * FROM audit_log ORDER BY atMillis DESC LIMIT :limit")
+    suspend fun recentList(limit: Int): List<AuditLogEntity>
+
     /** 種類で絞ってから件数を切る (再同期などの記録に押し出されて鳴動の記録が消えないように) */
     @Query("SELECT * FROM audit_log WHERE action IN (:actions) ORDER BY atMillis DESC LIMIT :limit")
     fun recentByActionsFlow(actions: List<String>, limit: Int): Flow<List<AuditLogEntity>>

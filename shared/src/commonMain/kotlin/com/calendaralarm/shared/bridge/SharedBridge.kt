@@ -2,6 +2,7 @@ package com.calendaralarm.shared.bridge
 
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.logic.AlarmPlanner
+import com.calendaralarm.shared.logic.DiagnosticReport
 import com.calendaralarm.shared.logic.ScheduleReconciler
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
@@ -181,5 +182,13 @@ object SharedBridge {
             ScheduleReconciler.Decision.serializer(),
             ScheduleReconciler.reconcile(json.decodeFromString(ScheduleReconciler.Input.serializer(), requestJson)),
         )
+    }.getOrDefault("")
+
+    /**
+     * 診断の記録の共有文字を作る (#286)。出力は平文なので JSON に包まず、そのまま返す。
+     * JSON の読み違いや例外は Swift へ渡ると落ちるため、[overdue] と同じく空文字で返す
+     */
+    fun diagnosticReport(requestJson: String): String = runCatching {
+        DiagnosticReport.build(json.decodeFromString(DiagnosticReport.Input.serializer(), requestJson))
     }.getOrDefault("")
 }

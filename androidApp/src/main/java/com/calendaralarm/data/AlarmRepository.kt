@@ -129,6 +129,14 @@ class AlarmRepository(
     fun pendingFlow(): Flow<List<AlarmInstance>> =
         db.scheduledInstances().pendingFlow().map { rows -> rows.map { it.toInstance() } }
 
+    /** 今 PENDING の予約を鳴動時刻の昇順で一度だけ読む (診断の共有用, #286)。 */
+    suspend fun pendingNow(): List<AlarmInstance> =
+        db.scheduledInstances().pending().map { it.toInstance() }.sortedBy { it.triggerAtMillis }
+
+    /** 鳴動ログを新しい順に一度だけ読む (診断の共有用, #286)。 */
+    suspend fun recentAuditLog(limit: Int): List<AuditLogEntity> =
+        db.auditLog().recentList(limit)
+
     /**
      * 鳴動画面用: インスタンスと状態を1行クエリで同時に監視する。
      * 状態は通知の「停止」放送など画面外経路の終端化を検知するのに使う。
@@ -153,6 +161,8 @@ class AlarmRepository(
      * 鳴動ログへ 1 行書く。書けなくても例外を外へ出さない。
      * 呼び出し元の多くは鳴動・停止の経路にある独立コルーチンで、そこで例外が漏れると
      * プロセスごと落ちて鳴動と停止を巻き込む (#46)。ログが欠けるより鳴動が止まる方が重い。
+     * detail に予定の題を書く種類を足したら、診断の共有で題を伏せるため
+     * DiagnosticReport.TITLE_IN_DETAIL にも足すこと (#286)。
      */
     suspend fun audit(action: String, detail: String, ring: ScheduledInstanceEntity? = null) {
         try {

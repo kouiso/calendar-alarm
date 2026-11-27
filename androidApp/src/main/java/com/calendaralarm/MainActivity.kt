@@ -352,7 +352,7 @@ private fun MainScaffold(
                 )
             }
             composable("troubleshoot") {
-                com.calendaralarm.ui.TroubleshootingScreen(settings, onBack = { nav.popBackStack() })
+                com.calendaralarm.ui.TroubleshootingScreen(repository, settings, onBack = { nav.popBackStack() })
             }
         }
     }

@@ -244,6 +244,12 @@
     <string name="trouble_exact_ok">Exact alarms allowed</string>
     <string name="trouble_force_fsi">Force full-screen notifications</string>
     <string name="trouble_force_fsi_desc">When on, the ringing screen always appears full screen. When off, only a heads-up notification is shown and opening it brings up the ringing screen. If notifications can\'t be shown, a full-screen stop screen still appears so you can stop the alarm.</string>
+    <string name="share_log_title">Share the log</string>
+    <string name="share_log_desc">Sends the ring log and device status as text. Event titles are hidden. Nothing goes to a server</string>
+    <string name="share_log_loading">Preparing…</string>
+    <string name="share_log_read_failed">Could not read the log</string>
+    <string name="share_log_send">Share</string>
+    <string name="share_log_subject">calendar-alarm diagnostic log</string>
     <string name="trouble_fsi_desc">Needed to show alarms full screen on the lock screen like a normal alarm clock.</string>
     <string name="trouble_fsi_ng">Full-screen alarms not allowed</string>
     <string name="trouble_fsi_ok">Full-screen alarms allowed</string>
