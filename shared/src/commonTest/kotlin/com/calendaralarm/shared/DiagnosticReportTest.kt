@@ -179,6 +179,18 @@ class DiagnosticReportTest {
     }
 
     @Test
+    fun `題が title や短い語でも置き換え済みの印を壊さない`() {
+        val text = DiagnosticReport.build(
+            input(
+                log = listOf(DiagnosticReport.LogEntry(at0705, "ERROR", "title it 歯医者 failed", title = "title")),
+                knownTitles = listOf("it", "歯医者"),
+            ),
+        )
+        assertTrue(text.endsWith("| [title] [title] [title] failed"), text)
+        assertFalse(text.contains("[t["))
+    }
+
+    @Test
     fun `空白だけの題では置き換えない`() {
         val text = DiagnosticReport.build(
             input(

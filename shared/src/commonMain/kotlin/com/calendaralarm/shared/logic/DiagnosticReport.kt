@@ -27,9 +27,9 @@ object DiagnosticReport {
         ),
     )
 
-    // 通知 は iOS の記録の書式。shared の文字列リテラルを増やさないため Unicode のエスケープで書く
+    // 通知 は iOS の記録の書式で画面の文言ではない (scripts/hardcoded-ja/check.mjs の ALLOWLIST に理由つきで登録済み)
     /** 題の後ろに付く決まった書式 (` @M/d HH:mm` と任意の ` via=…`、または ` (alerting)`・` (通知)`・` (id=数字)`)。 */
-    val TITLE_DETAIL_TAIL: Regex = Regex("""( @\d{1,2}/\d{1,2} \d{2}:\d{2}( via=\S+)?| \((alerting|\u901A\u77E5|id=\d+)\))$""")
+    val TITLE_DETAIL_TAIL: Regex = Regex("""( @\d{1,2}/\d{1,2} \d{2}:\d{2}( via=\S+)?| \((alerting|通知|id=\d+)\))$""")
 
     private val LINE_BREAK = Regex("""\r\n|\r|\n""")
 
@@ -102,7 +102,7 @@ object DiagnosticReport {
             val shown = if (e.action in inDetail) {
                 maskTitleDetail(detail)
             } else {
-                titles.fold(detail) { acc, t -> acc.replace(t, MASK) }
+                maskTitles(detail, titles)
             }
             sb.append(" | ").append(shown)
             lines += sb.toString()
@@ -113,6 +113,28 @@ object DiagnosticReport {
     /** 題を書く種類の detail を [MASK] と後ろの決まった書式だけにする。書式に合わなければ [MASK] だけ。 */
     internal fun maskTitleDetail(detail: String): String =
         MASK + (TITLE_DETAIL_TAIL.find(detail)?.value ?: "")
+
+    /**
+     * detail の中の題を元の文字列の上で一度に [MASK] へ置き換える。位置ごとに一番長い題を選び、重ならない。
+     * 順に replace すると、短い題が [MASK] の中身 (`title` など) や別の題を壊すため一度で行う。
+     * [titles] は長い順に並んでいること
+     */
+    internal fun maskTitles(detail: String, titles: List<String>): String {
+        if (titles.isEmpty()) return detail
+        val sb = StringBuilder()
+        var i = 0
+        while (i < detail.length) {
+            val hit = titles.firstOrNull { detail.startsWith(it, i) }
+            if (hit != null) {
+                sb.append(MASK)
+                i += hit.length
+            } else {
+                sb.append(detail[i])
+                i++
+            }
+        }
+        return sb.toString()
+    }
 
     private fun oneLine(s: String): String = s.replace(LINE_BREAK, " ")
 
