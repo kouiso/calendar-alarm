@@ -54,7 +54,7 @@ class CalendarContractReader(private val context: Context) {
      * カレンダー一覧の読み取りを巻き込まない。読めなければ (権限なし・列が無い端末) null。
      */
     suspend fun calendarIdentities(): List<CalendarIdentity>? = withContext(Dispatchers.IO) {
-        runCatching {
+        try {
             val projection = arrayOf(
                 CalendarContract.Calendars._ID,
                 CalendarContract.Calendars.ACCOUNT_TYPE,
@@ -80,7 +80,11 @@ class CalendarContractReader(private val context: Context) {
                 }
             }
             out.toList()
-        }.getOrNull()
+        } catch (e: SecurityException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
+        }
     }
 
     /** [beginMillis, endMillis) に重なるイベントを繰り返し展開込みで返す。 */

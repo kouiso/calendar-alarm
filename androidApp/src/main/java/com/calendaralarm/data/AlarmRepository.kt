@@ -3,6 +3,7 @@ package com.calendaralarm.data
 import android.util.Log
 import java.util.concurrent.ConcurrentHashMap
 import com.calendaralarm.data.calendar.CalendarContractReader
+import com.calendaralarm.data.calendar.CalendarIdentity
 import com.calendaralarm.data.calendar.CalendarPrefBinding
 import com.calendaralarm.data.db.AppDatabase
 import com.calendaralarm.data.db.AuditLogEntity
@@ -392,9 +393,12 @@ class AlarmRepository(
     suspend fun calendarPrefsFlowList() = boundCalendarPrefs().byCalendarId.values.toList()
 
     /** 設定の行を今の端末のカレンダーへ結び付ける (#268)。カレンダーを読めなければ空の一覧として扱う */
-    private suspend fun boundCalendarPrefs(): CalendarPrefBinding.Result {
-        val calendars = if (hasCalendarPermission()) calendarReader.calendarIdentities().orEmpty() else emptyList()
-        return CalendarPrefBinding.bind(db.calendarPrefs().all(), calendars)
+    private suspend fun boundCalendarPrefs(): CalendarPrefBinding.Result = readBoundCalendarPrefs().first
+
+    /** [boundCalendarPrefs] と、結び付けに使ったカレンダー一覧 (読めなければ null)。同じ読み取りを使い回すため */
+    private suspend fun readBoundCalendarPrefs(): Pair<CalendarPrefBinding.Result, List<CalendarIdentity>?> {
+        val identities = if (hasCalendarPermission()) calendarReader.calendarIdentities() else null
+        return CalendarPrefBinding.bind(db.calendarPrefs().all(), identities.orEmpty()) to identities
     }
 
     /**
@@ -1178,14 +1182,10 @@ class AlarmRepository(
         reminderAction: EventAction? = null,
     ) {
         // 設定は端末をまたいで変わらない鍵で保存する (#268)
-        val binding = boundCalendarPrefs()
+        val (binding, identities) = readBoundCalendarPrefs()
         val bound = binding.bound[calendarId]
         val current = bound?.row
-        val identity = if (hasCalendarPermission()) {
-            calendarReader.calendarIdentities()?.firstOrNull { it.id == calendarId }
-        } else {
-            null
-        }
+        val identity = identities?.firstOrNull { it.id == calendarId }
         val key = identity?.let(CalendarPrefBinding::keyOf)
             ?: current?.calendarKey ?: CalendarPrefEntity.legacyKey(calendarId)
         db.withTransaction {
