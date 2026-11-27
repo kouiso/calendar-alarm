@@ -2,6 +2,7 @@ package com.calendaralarm.shared.bridge
 
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.logic.AlarmPlanner
+import com.calendaralarm.shared.logic.ScheduleReconciler
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
@@ -149,4 +150,36 @@ object SharedBridge {
             PlanResult(p.toSchedule, p.toCancel, p.toFireNow),
         )
     }
+
+    // ---- reconcile ----
+
+    @Serializable
+    data class OverdueRequest(val rows: List<ScheduleReconciler.Row>, val nowMillis: Long)
+
+    @Serializable
+    data class OverdueResult(val ids: List<String>)
+
+    /**
+     * 鳴動時刻が猶予より前の PENDING の id を返す (ScheduleReconciler.overdueIds)。
+     * Kotlin の例外は @Throws が無いと Swift へ渡った所でアプリが落ちる (Kotlin/Native の決まり)。
+     * 読めない JSON などの失敗は例外を外へ出さず、空文字を返す (Swift 側は decode が nil になる)
+     */
+    fun overdue(requestJson: String): String = runCatching {
+        val req = json.decodeFromString(OverdueRequest.serializer(), requestJson)
+        json.encodeToString(
+            OverdueResult.serializer(),
+            OverdueResult(ScheduleReconciler.overdueIds(req.rows, req.nowMillis)),
+        )
+    }.getOrDefault("")
+
+    /**
+     * 入力は ScheduleReconciler.Input、出力は ScheduleReconciler.Decision の JSON。
+     * 失敗した時は [overdue] と同じく空文字を返す
+     */
+    fun reconcile(requestJson: String): String = runCatching {
+        json.encodeToString(
+            ScheduleReconciler.Decision.serializer(),
+            ScheduleReconciler.reconcile(json.decodeFromString(ScheduleReconciler.Input.serializer(), requestJson)),
+        )
+    }.getOrDefault("")
 }
