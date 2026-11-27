@@ -10,7 +10,6 @@ import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Smartphone
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,7 +46,6 @@ import kotlinx.datetime.Clock
  * 「まだオフのまま」で頼み直し、「あとで」を押されたらこの起動中はもう頼まない。
  * 断られた後は設定の「権限」画面 ([PermissionsScreen]) から全部許可・個別に直せる。
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PermissionAsker(repository: AlarmRepository, onGranted: (AppPermission) -> Unit = {}) {
     val context = LocalContext.current
