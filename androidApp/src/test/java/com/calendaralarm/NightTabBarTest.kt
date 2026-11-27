@@ -36,6 +36,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height as dpHeight
+import androidx.compose.ui.unit.width
 import com.calendaralarm.ui.NIGHT_TAB_BAR_TAG
 import com.calendaralarm.ui.NightTabBar
 import com.calendaralarm.ui.NightTabItem
@@ -85,13 +87,13 @@ class NightTabBarTest {
     fun 帯は高さ72で選択中の印の面は56x30() {
         showBar()
         val bar = compose.onNodeWithTag(NIGHT_TAB_BAR_TAG).getUnclippedBoundsInRoot()
-        assertEquals("帯の高さ (期待 72dp・実測 ${bar.height.value}dp)", 72f, bar.height.value, 0.01f)
+        assertEquals("帯の高さ (期待 72dp・実測 ${bar.dpHeight.value}dp)", 72f, bar.dpHeight.value, 0.01f)
         // タブ全体は selectable で意味を束ねる (mergeDescendants) ので、中の印の面の目印は束ねた木には出ない。
         // 束ねない木 (useUnmergedTree) で探す。これを付けないと「ノードが無い」で落ちる
         val indicator = compose.onNodeWithTag(nightTabIndicatorTag("alarms"), useUnmergedTree = true)
             .getUnclippedBoundsInRoot()
         assertEquals("印の面の幅 (期待 56dp・実測 ${indicator.width.value}dp)", 56f, indicator.width.value, 0.01f)
-        assertEquals("印の面の高さ (期待 30dp・実測 ${indicator.height.value}dp)", 30f, indicator.height.value, 0.01f)
+        assertEquals("印の面の高さ (期待 30dp・実測 ${indicator.dpHeight.value}dp)", 30f, indicator.dpHeight.value, 0.01f)
     }
 
     @Test

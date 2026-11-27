@@ -11,6 +11,8 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.height
+import androidx.compose.ui.unit.width
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
 import com.calendaralarm.ui.theme.NightIconRings
 import kotlinx.coroutines.test.StandardTestDispatcher
