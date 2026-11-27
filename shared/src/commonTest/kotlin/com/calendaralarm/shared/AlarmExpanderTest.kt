@@ -44,6 +44,23 @@ class AlarmExpanderTest {
     )
 
     @Test
+    fun `単発と繰り返しのアラームの id は日付と時刻を持つ`() {
+        // 7:05 は now (8:00) の猶予 60 分の中なので、今日の回が先頭に出る
+        val alarm = StandaloneAlarm(id = 7, hour = 7, minute = 5, daysOfWeek = DayOfWeek.entries.toSet())
+        val out = AlarmExpander.expandStandalone(alarm, now = now, days = 14, zone = TZ)
+        assertEquals("sa:7:2026-10-05:0705", out.first().id)
+    }
+
+    @Test
+    fun `時刻を変えると同じ日でも id が変わる`() {
+        val alarm = StandaloneAlarm(id = 7, hour = 7, minute = 5, daysOfWeek = DayOfWeek.entries.toSet())
+        val before = AlarmExpander.expandStandalone(alarm, now = now, days = 14, zone = TZ)
+        val after = AlarmExpander.expandStandalone(alarm.copy(hour = 21, minute = 0), now = now, days = 14, zone = TZ)
+        assertEquals("sa:7:2026-10-05:0705", before.first().id)
+        assertEquals("sa:7:2026-10-05:2100", after.first().id)
+    }
+
+    @Test
     fun `イベントが開始時刻ちょうどに展開される`() {
         val ev = event("e1", start = ldt("2026-10-05T10:00:00"))
         val out = AlarmExpander.expandEvents(
@@ -857,7 +874,7 @@ class RepeatModeTest {
             now = now, days = 14, zone = TZ,
         )
         assertEquals(1, out20.size)
-        assertTrue(out20[0].id.endsWith(":2026-10-20"))
+        assertTrue(out20[0].id.contains(":2026-10-20:"))
     }
 
     @Test
@@ -869,7 +886,7 @@ class RepeatModeTest {
             now = now, days = 14, zone = TZ,
         )
         assertEquals(1, out.size)
-        assertTrue(out[0].id.endsWith(":2026-11-01"))
+        assertTrue(out[0].id.contains(":2026-11-01:"))
     }
 
     @Test
@@ -880,7 +897,7 @@ class RepeatModeTest {
             now = now, days = 14, zone = TZ,
         )
         assertEquals(1, out.size)
-        assertTrue(out[0].id.endsWith(":2026-10-31"))
+        assertTrue(out[0].id.contains(":2026-10-31:"))
     }
 
     @Test
@@ -907,7 +924,7 @@ class RepeatModeTest {
             ),
             now = now, days = 7, zone = TZ,
         )
-        assertTrue(out.none { it.id.endsWith(":2026-10-06") })
+        assertTrue(out.none { it.id.contains(":2026-10-06:") })
     }
 
     @Test
@@ -919,7 +936,7 @@ class RepeatModeTest {
             alarm(mode = RepeatMode.MONTHLY, anchor = "2026-10-05"),
             now = now, days = 14, zone = TZ,
         )
-        assertTrue(out.any { it.id.endsWith(":2026-10-05") })
+        assertTrue(out.any { it.id.contains(":2026-10-05:") })
     }
 
     @Test
@@ -932,6 +949,6 @@ class RepeatModeTest {
         )
         // hour=7:30 は now=08:00 の30分前 = グレース内 → 当日分が即時鳴動対象で出る
         assertEquals(1, out.size)
-        assertTrue(out[0].id.endsWith(":2026-10-05"))
+        assertTrue(out[0].id.contains(":2026-10-05:"))
     }
 }

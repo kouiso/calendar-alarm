@@ -92,7 +92,11 @@ object ScheduleReconciler {
         for (inst in input.expanded) {
             val alarmId = inst.standaloneAlarmId
             if (alarmId != null && alarmId in consumedAlarmIds && alarmId in onceIds) continue
-            if (inst.id in noReviveAtRead) suppressed += inst else desired += inst
+            if (inst.id in noReviveAtRead || isSameOccurrenceAsLegacyRow(inst, noReviveRowsAtRead)) {
+                suppressed += inst
+            } else {
+                desired += inst
+            }
         }
 
         // タイマー・スヌーズなど展開が再生しない予約は「理想状態」へ持ち越す。
@@ -140,6 +144,28 @@ object ScheduleReconciler {
             suppressed = suppressed,
         )
     }
+
+    /**
+     * 時刻が入る前の形の id (sa:<id>:<日付>)。#278
+     * 前の形の行は7日で消える。この読み替えを消す時は、この版が行き渡った後の別の PR で行う
+     */
+    private val LEGACY_STANDALONE_ID = Regex("""^sa:\d+:\d{4}-\d{2}-\d{2}$""")
+
+    /**
+     * 前の形の id で止めた (蘇らせない状態の) 行が、展開の [expanded] と同じ回 (同じアラーム・日付・鳴動時刻) を指すか。
+     * 版を上げた直後に、止めたばかりのアラームが新しい id で鳴り直すのを防ぐ。
+     * 展開の id は「前の形の id + ":" + 数字4桁 (HHmm)」で、鳴動時刻も同じ時だけ同じ回とみなす。
+     * 止めた後に時刻を変えてあれば鳴動時刻が違うので当たらず、新しい仕様どおり今日の後の時刻に鳴る
+     */
+    private fun isSameOccurrenceAsLegacyRow(expanded: AlarmInstance, noReviveRows: List<Row>): Boolean =
+        noReviveRows.any { row ->
+            val legacyId = row.instance.id
+            if (!LEGACY_STANDALONE_ID.matches(legacyId)) return@any false
+            if (!expanded.id.startsWith("$legacyId:")) return@any false
+            val hhmm = expanded.id.removePrefix("$legacyId:")
+            hhmm.length == 4 && hhmm.all { it.isDigit() } &&
+                row.instance.triggerAtMillis == expanded.triggerAtMillis
+        }
 
     /** 展開に無い PENDING の行を、理想状態へ持ち越すか */
     private fun carriesOver(inst: AlarmInstance, input: Input, desiredIds: Set<String>): Boolean = when {
