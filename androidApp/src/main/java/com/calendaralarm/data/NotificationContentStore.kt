@@ -1,5 +1,6 @@
 package com.calendaralarm.data
 
+import android.annotation.SuppressLint
 import android.content.Context
 import java.security.MessageDigest
 
@@ -7,6 +8,8 @@ import java.security.MessageDigest
  * 通知アラームを鳴らした時の、通知の内容の印 (#384)。
  * 止めた直後の出し直しが、同じ知らせか新しい知らせかを比べるために覚える。題と本文そのものは保存しない
  * (確認コードなどが端末に平文で残らないようにするため)。
+ * 印は `題 + NUL (\u0000, 設計書の ^@) + 本文` の SHA-256。区切りを変えると保存済みの印が全て食い違い、
+ * 次の出し直しが鳴ってしまうので変えない。
  * 値の形は `<保存した時刻のミリ秒>|<印>`。読み書きは鳴動の経路から呼ぶので同期で確定させる
  */
 class NotificationContentStore(context: Context) {
@@ -14,6 +17,8 @@ class NotificationContentStore(context: Context) {
     private val lock = Any()
 
     /** [id] (`nf:…`) の鳴動を予約した時の印を書く。[MAX_ENTRIES] 件を超えたら保存した時刻が古い順に消す */
+    // 鳴動の経路から呼ぶため apply ではなく commit で同期確定させる (#300 の方針どおり、意図した使い方)
+    @SuppressLint("ApplySharedPref")
     fun put(id: String, contentKey: String, nowMillis: Long) {
         synchronized(lock) {
             val edit = prefs.edit()
