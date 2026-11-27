@@ -56,7 +56,7 @@ SBI GitHub Issue #76（決定4）。対象は `doc/spec/kmp-replacement.md` の 
 | 印刷→予定化（メール本文から予定を抽出） | あり | 対象外（OS に印刷サービスの仕組みがない。共有で代替） | A `AndroidManifest.xml` PrintService, `ai/MailPrintService.kt:34,52,73`, `ui/ExtractedEventDialog.kt:43,123,169` |
 | 共有→予定化 | なし | あり | A `androidApp/src/main` 配下に `ACTION_SEND` の一致なし（intent-filter は MAIN・PrintService・各 Receiver のみ）/ I `MailShareExt/ShareViewController.swift:8,10-11`, `CalendarAlarmApp.swift:85`, `MailImportView.swift:5,54` |
 | 予定の書き込み（抽出結果をカレンダーへ） | あり | あり | A `ui/ExtractedEventDialog.kt:169` / I `EventKitReader.swift:70-74` |
-| 通知アラーム（他アプリの通知で鳴らす） | あり。止めて 10 分以内の同じ通知の出し直しは鳴らさない。題か本文が変わっていれば鳴らす。60 秒以内の同じキーの通知も、題か本文が変わっていれば鳴らす（#384） | 対象外（他アプリの通知を読む公開 API が iOS に無い。#103） | A `engine/NotificationAlarmService.kt:23`, `data/SettingsRepository.kt` `notificationRules` / I 出典は末尾 |
+| 通知アラーム（他アプリの通知で鳴らす） | あり | 対象外（他アプリの通知を読む公開 API が iOS に無い。#103） | A `engine/NotificationAlarmService.kt:23`, `data/SettingsRepository.kt` `notificationRules` / I 出典は末尾 |
 | カレンダーの通知時刻でも鳴らす | あり | あり | A `data/SettingsRepository.kt` `importEventReminders` / I `SettingsView.swift:214-218` |
 | 天気（鳴動画面・一覧ヘッダ） | あり | あり | A `ui/SettingsScreen.kt` / `RingingActivity.kt`（WeatherApi 参照）/ I `AgendaView.swift:28` `WeatherHeaderRow`, `WeatherBackdropView.swift:5` |
 | テーマ・背景画像 | あり | あり | A `ui/theme/Palettes.kt`, `SettingsScreen.kt:224` / I `Theme.swift:94`, `SettingsView.swift:70-99` |
