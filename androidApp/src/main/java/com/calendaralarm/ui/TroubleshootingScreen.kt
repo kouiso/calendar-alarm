@@ -63,6 +63,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.data.SettingsRepository
 import com.calendaralarm.engine.AlarmService
 import kotlinx.coroutines.flow.first
@@ -222,10 +223,11 @@ object TroubleshootChecks {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TroubleshootingScreen(settings: SettingsRepository, onBack: () -> Unit) {
+fun TroubleshootingScreen(repository: AlarmRepository, settings: SettingsRepository, onBack: () -> Unit) {
     val context = LocalContext.current
     var items by remember { mutableStateOf<List<TroubleshootItem>>(emptyList()) }
     var tick by remember { mutableStateOf(0) }
+    var showShare by remember { mutableStateOf(false) }
     LaunchedEffect(tick) {
         val vibrate = runCatching { settings.flow.first().vibrateWhileRinging }.getOrDefault(true)
         items = TroubleshootChecks.collect(context, vibrate)
@@ -254,14 +256,21 @@ fun TroubleshootingScreen(settings: SettingsRepository, onBack: () -> Unit) {
         },
     ) { padding ->
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
+            Modifier.fillMaxSize().padding(padding).testTag("troubleshoot_list"),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(items, key = { it.key }) { item -> TroubleshootRow(item) { context.openSafely(item.fix) } }
             item(key = "force_fsi") {
                 ForceFsiRow(settings)
             }
+            // 鳴動の記録と端末の状態を文字にまとめて共有する (#286)
+            item(key = "share_log") {
+                ShareLogRow(onClick = { showShare = true })
+            }
         }
+    }
+    if (showShare) {
+        ShareLogDialog(repository, settings, onDismiss = { showShare = false })
     }
 }
 

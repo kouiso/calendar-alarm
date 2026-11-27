@@ -14,6 +14,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -29,6 +30,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -86,7 +89,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -300,7 +302,6 @@ fun SettingsScreen(
                             onChange = { next ->
                                 scope.launch {
                                     settings.setAccountSetting(account, next)
-                                    repository.resync("account setting")
                                 }
                             },
                         )
@@ -341,7 +342,7 @@ fun SettingsScreen(
         item { Spacer(Modifier.height(12.dp)) }
         item {
             prefs?.let { p ->
-                RingingCard(p, settings, repository, scope)
+                RingingCard(p, settings, scope)
             }
         }
 
@@ -958,7 +959,7 @@ private fun EventRulesCard(
                 actionLabels.forEach { (a, label) ->
                     FilterChip(
                         selected = prefs.defaultStartAction == a,
-                        onClick = { scope.launch { settings.setDefaultStartAction(a); repository.resync("settings") } },
+                        onClick = { scope.launch { settings.setDefaultStartAction(a) } },
                         label = { Text(label, maxLines = 1) },
                         modifier = Modifier.padding(end = 4.dp),
                     )
@@ -974,7 +975,7 @@ private fun EventRulesCard(
                 actionLabels.forEach { (a, label) ->
                     FilterChip(
                         selected = prefs.defaultReminderAction == a,
-                        onClick = { scope.launch { settings.setDefaultReminderAction(a); repository.resync("settings") } },
+                        onClick = { scope.launch { settings.setDefaultReminderAction(a) } },
                         label = { Text(label, maxLines = 1) },
                         modifier = Modifier.padding(end = 4.dp),
                     )
@@ -993,15 +994,15 @@ private fun EventRulesCard(
             }
             // 招待予定フィルタ
             InviteFilterRow(prefs.inviteFilter) { s ->
-                scope.launch { settings.toggleInviteStatus(s); repository.resync("settings") }
+                scope.launch { settings.toggleInviteStatus(s) }
             }
             // 鳴らす予定の種類と「予定なし」を一か所でまとめて切り替える (#79)
             EventTypeRingSwitches(
                 filter = prefs.eventTypeFilter,
                 // Google 連携が無い時、種類は予定のタイトルから推定するしかない (OS のカレンダーに種類の列が無い)
                 guessedFromTitle = prefs.googleAccountEmails.isEmpty(),
-                onToggleType = { t -> scope.launch { settings.toggleEventType(t); repository.resync("settings") } },
-                onToggleFree = { v -> scope.launch { settings.setRingFree(v); repository.resync("settings") } },
+                onToggleType = { t -> scope.launch { settings.toggleEventType(t) } },
+                onToggleFree = { v -> scope.launch { settings.setRingFree(v) } },
             )
             // Googleカレンダー連携 (eventType を API の正本から取得)
             val googleLauncher = rememberLauncherForActivityResult(
@@ -1026,7 +1027,7 @@ private fun EventRulesCard(
                         modifier = Modifier.weight(1f),
                     )
                     TextButton(onClick = {
-                        scope.launch { settings.removeGoogleAccount(email); repository.resync("google-unlink") }
+                        scope.launch { settings.removeGoogleAccount(email) }
                     }) { Text("解除") }
                 }
             }
@@ -1060,7 +1061,7 @@ private fun EventRulesCard(
                 Switch(
                     checked = prefs.importEventReminders,
                     onCheckedChange = {
-                        scope.launch { settings.setImportEventReminders(it); repository.resync("settings") }
+                        scope.launch { settings.setImportEventReminders(it) }
                     },
                 )
             }
@@ -1085,7 +1086,6 @@ private fun EventRulesCard(
                                 onClick = {
                                     scope.launch {
                                         settings.setExtraReminderOffsets(prefs.extraReminderOffsets - minutes)
-                                        repository.resync("settings")
                                     }
                                 },
                                 label = { Text(reminderOffsetLabel(minutes)) },
@@ -1109,7 +1109,6 @@ private fun EventRulesCard(
                     onAdd = { minutes ->
                         scope.launch {
                             settings.setExtraReminderOffsets(prefs.extraReminderOffsets + minutes)
-                            repository.resync("settings")
                         }
                         showAddReminder = false
                     },
@@ -1121,7 +1120,7 @@ private fun EventRulesCard(
         TitleCodeDialog(
             initial = prefs.titleCodes,
             onDismiss = { showCodes = false },
-            onSave = { scope.launch { settings.setTitleCodes(it); repository.resync("settings") }; showCodes = false },
+            onSave = { scope.launch { settings.setTitleCodes(it) }; showCodes = false },
         )
     }
 }
@@ -1260,7 +1259,6 @@ private fun AuditRow(log: AuditLogEntity) {
 private fun RingingCard(
     p: SettingsRepository.Settings,
     settings: SettingsRepository,
-    repository: AlarmRepository,
     scope: kotlinx.coroutines.CoroutineScope,
 ) {
     val context = LocalContext.current
@@ -1451,7 +1449,60 @@ private fun RingingCard(
                 Spacer(Modifier.weight(1f))
                 Switch(
                     checked = p.muteAll,
-                    onCheckedChange = { scope.launch { settings.setMuteAll(it); repository.resync("settings") } },
+                    onCheckedChange = { scope.launch { settings.setMuteAll(it) } },
+                )
+            }
+        }
+    }
+}
+
+/** テーマの丸のテスト用タグの接頭辞。末尾にパレット ID が付く。 */
+internal const val THEME_SWATCH_TAG_PREFIX = "theme_swatch_"
+
+/** 丸を塗る色。テーマを当てる側 (CalendarAlarmTheme) と同じく、今の外観がダークならダーク用の primary を使う。 */
+internal fun swatchColor(palette: AppPalette, dark: Boolean): Color =
+    if (dark) palette.dark.primary else palette.light.primary
+
+/**
+ * テーマ10種の丸の列。印は AppPalette.byId(themeId) で決める (テーマを当てる側と同じ関数なので、
+ * "default" や知らない ID は琥珀に印が付く)。保存値は書き換えない。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ThemeSwatchRow(
+    themeId: String,
+    onSelect: (AppPalette) -> Unit,
+    dark: Boolean = isSystemInDarkTheme(),
+) {
+    val current = AppPalette.byId(themeId)
+    FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), maxItemsInEachRow = 5) {
+        AppPalette.entries.forEach { palette ->
+            val selected = palette == current
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .selectable(selected = selected, role = Role.RadioButton, onClick = { onSelect(palette) })
+                    .padding(6.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(38.dp)
+                        .testTag(THEME_SWATCH_TAG_PREFIX + palette.id)
+                        .background(color = swatchColor(palette, dark), shape = CircleShape),
+                ) {
+                    if (selected) {
+                        Icon(
+                            Icons.Default.VerifiedUser,
+                            contentDescription = "選択中",
+                            tint = Color.White,
+                            modifier = Modifier.align(Alignment.Center).size(16.dp),
+                        )
+                    }
+                }
+                Text(
+                    palette.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -1495,48 +1546,11 @@ private fun AppearanceCard(
         ),
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-            // テーマスウォッチ (10種): 各パレットの primary を丸で表示
-            FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), maxItemsInEachRow = 5) {
-                AppPalette.entries.forEach { palette ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .clickable { scope.launch { settings.setThemeId(palette.id) } }
-                            .padding(6.dp),
-                    ) {
-                        Box(
-                            Modifier
-                                .size(38.dp)
-                                .background(
-                                    color = palette.light.primary,
-                                    shape = CircleShape,
-                                )
-                                .then(
-                                    if (p.themeId == palette.id || (p.themeId == "default" && palette == AppPalette.INDIGO)) {
-                                        Modifier.background(
-                                            Color.Transparent,
-                                            CircleShape,
-                                        )
-                                    } else Modifier,
-                                ),
-                        ) {
-                            if (p.themeId == palette.id || (p.themeId == "default" && palette == AppPalette.INDIGO)) {
-                                Icon(
-                                    Icons.Default.VerifiedUser,
-                                    contentDescription = "選択中",
-                                    tint = Color.White,
-                                    modifier = Modifier.align(Alignment.Center).size(16.dp),
-                                )
-                            }
-                        }
-                        Text(
-                            palette.label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
+            // テーマスウォッチ (10種): 各パレットの primary を今の外観 (ライト/ダーク) の色で丸表示
+            ThemeSwatchRow(
+                themeId = p.themeId,
+                onSelect = { scope.launch { settings.setThemeId(it.id) } },
+            )
             ThemePreview()
             // カスタム背景
             Row(

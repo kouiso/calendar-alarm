@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -72,6 +74,13 @@ android {
                     "https://maven-central.storage-download.googleapis.com/maven2",
                 )
                 it.systemProperty("robolectric.dependency.repo.id", "gcs-mirror")
+                // 既定では失敗の行番号しか出ず、assert のメッセージ (期待と実測の値) が CI のログに残らない。
+                // 失敗の理由を CI のログだけで読めるように、メッセージとスタックを全部出す
+                it.testLogging {
+                    events("failed")
+                    exceptionFormat = TestExceptionFormat.FULL
+                    showCauses = true
+                }
             }
         }
     }

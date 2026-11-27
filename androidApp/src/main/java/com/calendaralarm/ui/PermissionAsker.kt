@@ -1,17 +1,17 @@
 package com.calendaralarm.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,13 +21,22 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import com.calendaralarm.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.calendaralarm.data.AlarmRepository
 import com.calendaralarm.shared.logic.AlarmExpander
+import com.calendaralarm.ui.theme.NightButton
+import com.calendaralarm.ui.theme.NightIconRings
+import com.calendaralarm.ui.theme.NightLinkButton
+import com.calendaralarm.ui.theme.NightModalSheet
+import com.calendaralarm.ui.theme.NightTokens
+import com.calendaralarm.ui.theme.StatusColors
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 
@@ -37,7 +46,6 @@ import kotlinx.datetime.Clock
  * 「まだオフのまま」で頼み直し、「あとで」を押されたらこの起動中はもう頼まない。
  * 断られた後は設定の「権限」画面 ([PermissionsScreen]) から全部許可・個別に直せる。
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PermissionAsker(repository: AlarmRepository, onGranted: (AppPermission) -> Unit = {}) {
     val context = LocalContext.current
@@ -86,12 +94,14 @@ fun PermissionAsker(repository: AlarmRepository, onGranted: (AppPermission) -> U
 
     if (current == null) {
         if (askedAny && !readyClosed) {
-            ModalBottomSheet(onDismissRequest = { readyClosed = true }) {
+            NightModalSheet(onDismissRequest = { readyClosed = true }) {
                 AskSheetBody(
                     title = stringResource(R.string.ask_ready_title),
                     body = stringResource(R.string.ask_ready_body),
                     cta = stringResource(R.string.ask_ready_test),
                     later = stringResource(R.string.common_close),
+                    icon = ASK_READY_ICON,
+                    tone = askIconTone(retry = false, ready = true),
                     onCta = {
                         readyClosed = true
                         scope.launch {
@@ -107,7 +117,7 @@ fun PermissionAsker(repository: AlarmRepository, onGranted: (AppPermission) -> U
         return
     }
 
-    ModalBottomSheet(onDismissRequest = { stopped = true }) {
+    NightModalSheet(onDismissRequest = { stopped = true }) {
         AskSheetBody(
             title = stringResource(if (retry) R.string.ask_still_off else current.askTitle),
             body = if (retry) {
@@ -123,6 +133,8 @@ fun PermissionAsker(repository: AlarmRepository, onGranted: (AppPermission) -> U
                 },
             ),
             later = stringResource(R.string.ask_later),
+            icon = current.askIcon(),
+            tone = askIconTone(retry = retry, ready = false),
             onCta = {
                 if (retry) awaitingRetry = current.name
                 asked = current.name
@@ -134,23 +146,71 @@ fun PermissionAsker(repository: AlarmRepository, onGranted: (AppPermission) -> U
     }
 }
 
+/** 許可を頼む面の印の色。ふだんは ACCENT、頼み直しは WARN、準備OK は OK */
+internal enum class AskIconTone { ACCENT, WARN, OK }
+
+internal fun askIconTone(retry: Boolean, ready: Boolean): AskIconTone = when {
+    ready -> AskIconTone.OK
+    retry -> AskIconTone.WARN
+    else -> AskIconTone.ACCENT
+}
+
+/** 板 d68/ask.dc.html の各列の絵 */
+internal fun AppPermission.askIcon(): ImageVector = when (this) {
+    AppPermission.CALENDAR -> Icons.Outlined.CalendarToday
+    AppPermission.NOTIFY -> Icons.Outlined.Notifications
+    AppPermission.EXACT -> Icons.Outlined.Schedule
+    AppPermission.FULL_SCREEN -> Icons.Outlined.Smartphone
+}
+
+internal val ASK_READY_ICON: ImageVector = Icons.Default.Check
+
+internal const val ASK_ICON_TAG = "ask_icon"
+internal const val ASK_TITLE_TAG = "ask_title"
+internal const val ASK_BODY_TAG = "ask_body"
+internal const val ASK_CTA_TAG = "ask_cta"
+internal const val ASK_LATER_TAG = "ask_later"
+
 @Composable
-private fun AskSheetBody(
+internal fun AskSheetBody(
     title: String,
     body: String,
     cta: String,
     later: String,
+    icon: ImageVector,
+    tone: AskIconTone,
     onCta: () -> Unit,
     onLater: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 24.dp)) {
-        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(8.dp))
-        Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = onCta, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) {
-            Text(cta, fontWeight = FontWeight.SemiBold)
-        }
-        TextButton(onClick = onLater, modifier = Modifier.fillMaxWidth()) { Text(later) }
+    val ringColor = when (tone) {
+        AskIconTone.ACCENT -> NightTokens.accentRing
+        AskIconTone.WARN -> NightTokens.warnRing
+        AskIconTone.OK -> NightTokens.okRing
+    }
+    val iconTint = when (tone) {
+        AskIconTone.ACCENT -> MaterialTheme.colorScheme.primary
+        AskIconTone.WARN -> StatusColors.warn
+        AskIconTone.OK -> StatusColors.ok
+    }
+    // 上の 2 は、つまみの下 16 を板の 18 (下 6 と間 12) に足すため。印の左の 1 は外の余白 9 を板の左 10 に足すため
+    Column(
+        Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 2.dp, bottom = 26.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        NightIconRings(icon, ringColor, iconTint, Modifier.padding(start = 1.dp).testTag(ASK_ICON_TAG))
+        Text(
+            title,
+            modifier = Modifier.testTag(ASK_TITLE_TAG),
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 21.sp, lineHeight = 30.45.sp, fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            body,
+            modifier = Modifier.testTag(ASK_BODY_TAG),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 14.sp, lineHeight = 23.1.sp,
+        )
+        NightButton(cta, onCta, Modifier.fillMaxWidth().testTag(ASK_CTA_TAG))
+        NightLinkButton(later, onLater, Modifier.testTag(ASK_LATER_TAG))
     }
 }

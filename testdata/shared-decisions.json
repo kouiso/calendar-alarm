@@ -1,5 +1,5 @@
 {
-  "_readme": "shared の判定関数の「入力 -> 期待値」の表 (#301, #223 の子)。Kotlin (shared/src/jvmTest/.../SharedDecisionTableTest.kt) が読む。iosApp/unit-test の Swift からも同じファイルを読めるよう、リポジトリ直下の testdata/ に置く。時刻は全て UTC の ISO 文字列。展開は Asia/Tokyo (UTC+9) 固定。タイトルでの種類判定 (classifyEventType) は #306 で変更中のため表に入れない: 種類は必ず googleEventType で渡す。",
+  "_readme": "shared の判定関数の「入力 -> 期待値」の表 (#301, #223 の子)。Kotlin (shared/src/jvmTest/.../SharedDecisionTableTest.kt) が読む。iosApp/unit-test の Swift からも同じファイルを読めるよう、リポジトリ直下の testdata/ に置く。時刻は全て UTC の ISO 文字列。展開は Asia/Tokyo (UTC+9) 固定。タイトルでの種類判定 (classifyEventType) は #306 で変更中のため表に入れない: 種類は必ず googleEventType で渡す。reconcile の節だけは ScheduleReconciler.Input の JSON をそのまま入れる (時刻は UTC の epoch ミリ秒の数値)。",
   "version": 1,
   "expandEvents": [
     {
@@ -151,5 +151,142 @@
   "ringClock": [
     {"name": "9:00 の10分前", "eventMinuteOfDay": 540, "minutesBefore": 10, "expected": "8:50"},
     {"name": "0:05 の10分前は前日の時刻", "eventMinuteOfDay": 5, "minutesBefore": 10, "expected": "23:55"}
+  ],
+  "reconcile": [
+    {
+      "name": "新しい予約",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [], "rowsNow": [], "expanded": [{"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}]},
+      "expected": {"cancel": [], "arm": ["ev:1:1:1800003600000:b0"], "changedIds": ["ev:1:1:1800003600000:b0"], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "変わらない予約",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "expanded": [{"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}]},
+      "expected": {"cancel": [], "arm": ["ev:1:1:1800003600000:b0"], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "時刻が変わった予約",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "expanded": [{"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800007200000, "title": "t", "kind": "EVENT"}]},
+      "expected": {"cancel": [], "arm": ["ev:1:1:1800003600000:b0"], "changedIds": ["ev:1:1:1800003600000:b0"], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "展開から消えた予定は取り消す",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "expanded": []},
+      "expected": {"cancel": ["ev:1:1:1800003600000:b0"], "arm": [], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "読み取りに失敗した時は予定を残す",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "expanded": [], "keepEventRows": true},
+      "expected": {"cancel": [], "arm": ["ev:1:1:1800003600000:b0"], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "止めた・鳴った・スヌーズした・見逃した・飛ばした行は蘇らせない",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "DISMISSED"}, {"instance": {"id": "ev:2:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "FIRED"}, {"instance": {"id": "ev:3:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "SNOOZED"}, {"instance": {"id": "ev:4:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "MISSED"}, {"instance": {"id": "ev:5:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "SKIPPED"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "DISMISSED"}, {"instance": {"id": "ev:2:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "FIRED"}, {"instance": {"id": "ev:3:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "SNOOZED"}, {"instance": {"id": "ev:4:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "MISSED"}, {"instance": {"id": "ev:5:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "SKIPPED"}], "expanded": [{"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, {"id": "ev:2:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, {"id": "ev:3:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, {"id": "ev:4:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, {"id": "ev:5:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}]},
+      "expected": {"cancel": [], "arm": [], "changedIds": [], "fireNow": [], "skip": [], "suppressed": ["ev:1:1:1800003600000:b0", "ev:2:1:1800003600000:b0", "ev:3:1:1800003600000:b0", "ev:4:1:1800003600000:b0", "ev:5:1:1800003600000:b0"]}
+    },
+    {
+      "name": "取り消した行は展開に戻れば予約する",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "CANCELLED"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "CANCELLED"}], "expanded": [{"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}]},
+      "expected": {"cancel": [], "arm": ["ev:1:1:1800003600000:b0"], "changedIds": ["ev:1:1:1800003600000:b0"], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "使い切った1回のみは次の日の回も出さない",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "sa:7:2026-10-05", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 7}, "state": "DISMISSED"}], "rowsNow": [{"instance": {"id": "sa:7:2026-10-05", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 7}, "state": "DISMISSED"}], "expanded": [{"id": "sa:7:2026-10-06", "triggerAtMillis": 1800003600000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 7}], "standalone": [{"id": 7, "hour": 6, "minute": 0}]},
+      "expected": {"cancel": [], "arm": [], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "繰り返しは使い切らない",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "sa:8:2026-10-05", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 8}, "state": "DISMISSED"}], "rowsNow": [{"instance": {"id": "sa:8:2026-10-05", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 8}, "state": "DISMISSED"}], "expanded": [{"id": "sa:8:2026-10-06", "triggerAtMillis": 1800003600000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 8}], "standalone": [{"id": 8, "hour": 6, "minute": 0, "repeatMode": "INTERVAL_DAYS"}]},
+      "expected": {"cancel": [], "arm": ["sa:8:2026-10-06"], "changedIds": ["sa:8:2026-10-06"], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "タイマーと通知アラームは展開に無くても残す",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "tm:1", "triggerAtMillis": 1800003600000, "title": "t", "kind": "TIMER"}, "state": "PENDING"}, {"instance": {"id": "nf:1", "triggerAtMillis": 1800007200000, "title": "t", "kind": "NOTIFICATION"}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "tm:1", "triggerAtMillis": 1800003600000, "title": "t", "kind": "TIMER"}, "state": "PENDING"}, {"instance": {"id": "nf:1", "triggerAtMillis": 1800007200000, "title": "t", "kind": "NOTIFICATION"}, "state": "PENDING"}], "expanded": []},
+      "expected": {"cancel": [], "arm": ["tm:1", "nf:1"], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "アラームのスヌーズの子は親が有効な時だけ残す",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "sa:1:x:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "STANDALONE", "snoozeSeq": 1}, "state": "PENDING"}, {"instance": {"id": "sa:2:x:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "STANDALONE", "snoozeSeq": 1}, "state": "PENDING"}, {"instance": {"id": "sa:3:x:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "STANDALONE", "snoozeSeq": 1}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "sa:1:x:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "STANDALONE", "snoozeSeq": 1}, "state": "PENDING"}, {"instance": {"id": "sa:2:x:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "STANDALONE", "snoozeSeq": 1}, "state": "PENDING"}, {"instance": {"id": "sa:3:x:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "STANDALONE", "snoozeSeq": 1}, "state": "PENDING"}], "expanded": [], "standalone": [{"id": 1, "hour": 6, "minute": 0}, {"id": 2, "enabled": false, "hour": 6, "minute": 0}]},
+      "expected": {"cancel": ["sa:2:x:snz1", "sa:3:x:snz1"], "arm": ["sa:1:x:snz1"], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "予定のスヌーズの子は予定が生きていれば残す",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "EVENT", "snoozeSeq": 1}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "EVENT", "snoozeSeq": 1}, "state": "PENDING"}], "expanded": [], "liveEventKeys": ["1:1:1800003600000"]},
+      "expected": {"cancel": [], "arm": ["ev:1:1:1800003600000:b0:snz1"], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "予定のスヌーズの子は予定が消えれば取り消す",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "EVENT", "snoozeSeq": 1}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "EVENT", "snoozeSeq": 1}, "state": "PENDING"}], "expanded": []},
+      "expected": {"cancel": ["ev:1:1:1800003600000:b0:snz1"], "arm": [], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "予定のスヌーズの子は読み取りに失敗した時は残す",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "EVENT", "snoozeSeq": 1}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "EVENT", "snoozeSeq": 1}, "state": "PENDING"}], "expanded": [], "keepEventRows": true},
+      "expected": {"cancel": [], "arm": ["ev:1:1:1800003600000:b0:snz1"], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "終日の予定のスヌーズの子 (d 基点) も予定が生きていれば残す",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:d540:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "EVENT", "snoozeSeq": 1}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:d540:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "EVENT", "snoozeSeq": 1}, "state": "PENDING"}], "expanded": [], "liveEventKeys": ["1:1:1800003600000"]},
+      "expected": {"cancel": [], "arm": ["ev:1:1:1800003600000:d540:snz1"], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "予約していない過ぎた予定は SKIPPED",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [], "rowsNow": [], "expanded": [{"id": "ev:1:1:1799998200000:b0", "triggerAtMillis": 1799998200000, "title": "t", "kind": "EVENT"}], "skipUnarmedPastEvents": true},
+      "expected": {"cancel": [], "arm": [], "changedIds": [], "fireNow": [], "skip": ["ev:1:1:1799998200000:b0"], "suppressed": []}
+    },
+    {
+      "name": "方針が無ければ過ぎた予定も今すぐ鳴らす",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [], "rowsNow": [], "expanded": [{"id": "ev:1:1:1799998200000:b0", "triggerAtMillis": 1799998200000, "title": "t", "kind": "EVENT"}]},
+      "expected": {"cancel": [], "arm": [], "changedIds": [], "fireNow": ["ev:1:1:1799998200000:b0"], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "予約していない過ぎたアラームは今すぐ鳴らす",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [], "rowsNow": [], "expanded": [{"id": "sa:1:2026-10-05", "triggerAtMillis": 1799999400000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 1}], "skipUnarmedPastEvents": true},
+      "expected": {"cancel": [], "arm": [], "changedIds": [], "fireNow": ["sa:1:2026-10-05"], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "予約済みで時刻が過去へ動いた予定は今すぐ鳴らす",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "expanded": [{"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1799999400000, "title": "t", "kind": "EVENT"}], "skipUnarmedPastEvents": true},
+      "expected": {"cancel": [], "arm": [], "changedIds": [], "fireNow": ["ev:1:1:1800003600000:b0"], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "読んだ後に止めた行は書き戻さない",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "DISMISSED"}], "expanded": [{"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}]},
+      "expected": {"cancel": [], "arm": [], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "読んだ後に取り消された子は書き戻さない",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "sa:1:x:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "STANDALONE", "snoozeSeq": 1}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "sa:1:x:snz1", "triggerAtMillis": 1800001800000, "title": "t", "kind": "STANDALONE", "snoozeSeq": 1}, "state": "CANCELLED"}], "expanded": [], "standalone": [{"id": 1, "hour": 6, "minute": 0}]},
+      "expected": {"cancel": [], "arm": [], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "読んだ後に鳴り始めた行は書き戻さない",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "FIRED"}], "expanded": [{"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}]},
+      "expected": {"cancel": [], "arm": [], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "OS から予約が消えた行は予約し直す",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "expanded": [{"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}], "unarmedPendingIds": ["ev:1:1:1800003600000:b0"]},
+      "expected": {"cancel": [], "arm": ["ev:1:1:1800003600000:b0"], "changedIds": ["ev:1:1:1800003600000:b0"], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "OS から予約が消えて鳴らす理由も無い行は取り消す",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "rowsNow": [{"instance": {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, "state": "PENDING"}], "expanded": [], "unarmedPendingIds": ["ev:1:1:1800003600000:b0"]},
+      "expected": {"cancel": ["ev:1:1:1800003600000:b0"], "arm": [], "changedIds": [], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "arm は鳴動時刻の早い順",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [], "rowsNow": [], "expanded": [{"id": "ev:1:3:1800010800000:b0", "triggerAtMillis": 1800010800000, "title": "t", "kind": "EVENT"}, {"id": "ev:1:1:1800003600000:b0", "triggerAtMillis": 1800003600000, "title": "t", "kind": "EVENT"}, {"id": "ev:1:2:1800007200000:b0", "triggerAtMillis": 1800007200000, "title": "t", "kind": "EVENT"}]},
+      "expected": {"cancel": [], "arm": ["ev:1:1:1800003600000:b0", "ev:1:2:1800007200000:b0", "ev:1:3:1800010800000:b0"], "changedIds": ["ev:1:3:1800010800000:b0", "ev:1:1:1800003600000:b0", "ev:1:2:1800007200000:b0"], "fireNow": [], "skip": [], "suppressed": []}
+    },
+    {
+      "name": "前の形の止めた行は同じ時刻の新しい id を蘇らせない",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "sa:3:2026-10-05", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 3}, "state": "DISMISSED"}], "rowsNow": [{"instance": {"id": "sa:3:2026-10-05", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 3}, "state": "DISMISSED"}], "expanded": [{"id": "sa:3:2026-10-05:0600", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 3}]},
+      "expected": {"cancel": [], "arm": [], "changedIds": [], "fireNow": [], "skip": [], "suppressed": ["sa:3:2026-10-05:0600"]}
+    },
+    {
+      "name": "前の形の止めた行は違う時刻の新しい id を止めない",
+      "input": {"nowMillis": 1800000000000, "rowsAtRead": [{"instance": {"id": "sa:3:2026-10-05", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 3}, "state": "DISMISSED"}], "rowsNow": [{"instance": {"id": "sa:3:2026-10-05", "triggerAtMillis": 1799998200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 3}, "state": "DISMISSED"}], "expanded": [{"id": "sa:3:2026-10-05:2100", "triggerAtMillis": 1800052200000, "title": "t", "kind": "STANDALONE", "standaloneAlarmId": 3}]},
+      "expected": {"cancel": [], "arm": ["sa:3:2026-10-05:2100"], "changedIds": ["sa:3:2026-10-05:2100"], "fireNow": [], "skip": [], "suppressed": []}
+    }
   ]
 }

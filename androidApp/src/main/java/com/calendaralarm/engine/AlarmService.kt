@@ -353,6 +353,10 @@ class AlarmService : Service() {
                 instance.snoozeMinutes.takeIf { it > 0 } ?: ringSettings.defaultSnoozeMinutes,
                 ringSettings.snoozePresets,
                 largeButtons = ringSettings.largeButtons,
+                // 鳴動画面と同じ時刻・開始までの残り・テーマ色を出すために渡す (#336)
+                triggerAtMillis = instance.triggerAtMillis,
+                eventStartMillis = instance.eventStartMillis,
+                themeId = ringSettings.themeId,
                 stillValid = { synchronized(ringLock) { !destroyed && ringGen == gen } },
             )
         }

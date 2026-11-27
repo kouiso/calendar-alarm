@@ -145,6 +145,11 @@
     <string name="repeat_monthly_day">Monthly on day %1$d</string>
     <string name="repeat_once">Once</string>
     <string name="repeat_weekly_days">Weekly %1$s</string>
+    <plurals name="ring_starts_in_minutes">
+        <item quantity="one">Starts in %1$d minute</item>
+        <item quantity="other">Starts in %1$d minutes</item>
+    </plurals>
+    <string name="ring_starts_soon">Starting soon</string>
     <string name="ring_status_alarm_muted">Alarm volume is 0. Alarms will ring without sound</string>
     <string name="ring_status_all_muted">All alarms are muted. Notifications and timers still arrive</string>
     <plurals name="ring_status_missed_recently">
@@ -239,6 +244,12 @@
     <string name="trouble_exact_ok">Exact alarms allowed</string>
     <string name="trouble_force_fsi">Force full-screen notifications</string>
     <string name="trouble_force_fsi_desc">When on, the ringing screen always appears full screen. When off, only a heads-up notification is shown and opening it brings up the ringing screen. If notifications can\'t be shown, a full-screen stop screen still appears so you can stop the alarm.</string>
+    <string name="share_log_title">Share the log</string>
+    <string name="share_log_desc">Sends the ring log and device status as text. Event titles are hidden. Nothing goes to a server</string>
+    <string name="share_log_loading">Preparing…</string>
+    <string name="share_log_read_failed">Could not read the log</string>
+    <string name="share_log_send">Share</string>
+    <string name="share_log_subject">calendar-alarm diagnostic log</string>
     <string name="trouble_fsi_desc">Needed to show alarms full screen on the lock screen like a normal alarm clock.</string>
     <string name="trouble_fsi_ng">Full-screen alarms not allowed</string>
     <string name="trouble_fsi_ok">Full-screen alarms allowed</string>
@@ -280,4 +291,7 @@
     <string name="weekday_short_wednesday">Wed</string>
     <string name="widget_next_alarm">Next alarm</string>
     <string name="widget_none">None scheduled</string>
+    <string name="mute_all_banner">All alarms are muted</string>
+    <string name="mute_all_banner_unmute">Unmute</string>
+    <string name="alarms_row_muted">Muted</string>
 </resources>

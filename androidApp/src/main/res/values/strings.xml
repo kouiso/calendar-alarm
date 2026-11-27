@@ -57,6 +57,7 @@
     <string name="common_save">保存</string>
     <string name="common_start">開始</string>
     <string name="common_stop">停止</string>
+    <string name="date_pattern_month_day_weekday" translatable="false">M月d日 (E)</string>
     <string name="event_channel">予定の通知</string>
     <string name="event_channel_desc">通知のみアクションで配信される予定通知</string>
     <plurals name="event_minutes_before">
@@ -142,6 +143,10 @@
     <string name="repeat_monthly_day">毎月%1$d日</string>
     <string name="repeat_once">1回のみ</string>
     <string name="repeat_weekly_days">毎週 %1$s</string>
+    <plurals name="ring_starts_in_minutes">
+        <item quantity="other">%1$d分後に開始</item>
+    </plurals>
+    <string name="ring_starts_soon">まもなく開始</string>
     <string name="ring_status_alarm_muted">アラームの音量が0です。鳴っても音が出ません</string>
     <string name="ring_status_all_muted">すべてのアラームをミュート中です。通知とタイマーは届きます</string>
     <plurals name="ring_status_missed_recently">
@@ -234,6 +239,12 @@
     <string name="trouble_exact_ok">正確なアラームを設定可能</string>
     <string name="trouble_force_fsi">フルスクリーン通知を強制する</string>
     <string name="trouble_force_fsi_desc">オンの時は鳴動画面を常に全画面で出します。オフだとヘッズアップ通知のみで、通知を開くと鳴動画面が出ます。ただし通知が出せない設定の時は、止められるよう全画面の停止画面を出します。</string>
+    <string name="share_log_title">記録を共有</string>
+    <string name="share_log_desc">鳴動の記録と端末の状態を文字にまとめて送れます。予定の題は伏せます。サーバーには送りません</string>
+    <string name="share_log_loading">まとめています…</string>
+    <string name="share_log_read_failed">記録を読めませんでした</string>
+    <string name="share_log_send">共有する</string>
+    <string name="share_log_subject">calendar-alarm 診断の記録</string>
     <string name="trouble_fsi_desc">通常の目覚まし時計と同じようにアラームをロック画面へ全画面表示するには、この許可が必要です。</string>
     <string name="trouble_fsi_ng">全画面アラーム通知が許可されていません</string>
     <string name="trouble_fsi_ok">全画面アラーム通知を表示可能</string>
@@ -275,4 +286,7 @@
     <string name="weekday_short_wednesday">水</string>
     <string name="widget_next_alarm">次のアラーム</string>
     <string name="widget_none">予約なし</string>
+    <string name="mute_all_banner">すべてのアラームをミュート中です</string>
+    <string name="mute_all_banner_unmute">解除</string>
+    <string name="alarms_row_muted">ミュート中</string>
 </resources>

@@ -52,10 +52,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calendaralarm.CalendarAlarmApp
@@ -177,6 +179,10 @@ fun AgendaScreen(
                 onAction = onOpenPermissions,
             )
         }
+        // 全ミュート中は解除できる帯を出す。解除後の再同期は設定の見張りが行う (#255)。読み込み前 (null) は出さない
+        if (settings?.muteAll == true) {
+            MuteAllBanner(onUnmute = { scope.launch { app.container.settings.setMuteAll(false) } })
+        }
         if (ringStatus.showMissedBanner) {
             StatusBanner(
                 "直近24時間に鳴らせなかったアラームが${ringStatus.recentMissed}件あります",
@@ -265,31 +271,7 @@ fun AgendaScreen(
             filtered == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
-            filtered.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.DateRange,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.size(40.dp),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        if (searchQuery.isNotBlank()) "該当する予定はありません" else "この先2週間の予定はありません",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (searchQuery.isBlank()) {
-                        // 予定が無い時の画面 (#51 PR2): 何をすれば鳴るようになるかを1行で
-                        Text(
-                            "カレンダーに予定を入れると、ここに並んで前もって鳴ります",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp, start = 32.dp, end = 32.dp),
-                        )
-                    }
-                }
-            }
+            filtered.isEmpty() -> AgendaEmptyState(searching = searchQuery.isNotBlank())
             else -> when (viewMode) {
                 ViewMode.LIST -> AgendaList(
                     items = filtered,
@@ -466,12 +448,44 @@ internal fun AgendaList(
     }
 }
 
+/** 予定がない時の画面。検索中は題だけ出す (板の .empty: 題 16/500、説明 13・行の高さ 20) */
+@Composable
+internal fun AgendaEmptyState(searching: Boolean) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Default.DateRange,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(40.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                if (searching) "該当する予定はありません" else "この先2週間の予定はありません",
+                style = MaterialTheme.typography.titleSmall.copy(fontSize = 16.sp, fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (!searching) {
+                // 予定が無い時の画面 (#51 PR2): 何をすれば鳴るようになるかを1行で
+                Text(
+                    "カレンダーに予定を入れると、ここに並んで前もって鳴ります",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 20.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp, start = 32.dp, end = 32.dp),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun DayHeader(date: LocalDate, showWeekNumber: Boolean = false) {
     val today = kotlinx.datetime.Clock.System.now().toLocalDateTime(tz).date
-    val rel = when (date) {
-        today -> "今日"
-        today + kotlinx.datetime.DatePeriod(days = 1) -> "明日"
+    // 言葉と、今日かどうか。色を言葉の文字で分けない
+    val rel: Pair<String, Boolean>? = when (date) {
+        today -> "今日" to true
+        today + kotlinx.datetime.DatePeriod(days = 1) -> "明日" to false
         else -> null
     }
     Row(
@@ -480,23 +494,19 @@ private fun DayHeader(date: LocalDate, showWeekNumber: Boolean = false) {
     ) {
         Text(
             "${date.monthNumber}/${date.dayOfMonth}(${date.dayOfWeek.jaShort()})",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
+            fontFamily = com.calendaralarm.ui.theme.OutfitFontFamily,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
         )
-        rel?.let {
+        rel?.let { (label, isToday) ->
             Spacer(Modifier.width(8.dp))
-            Box(
-                Modifier.background(
-                    MaterialTheme.colorScheme.primaryContainer,
-                    androidx.compose.foundation.shape.RoundedCornerShape(50),
-                ).padding(horizontal = 8.dp, vertical = 1.dp),
-            ) {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
+            // 板の .dh: 札の背景は無く、文字の色だけで今日 (テーマ色) と明日 (控えめ) を分ける
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         if (showWeekNumber) {
             Spacer(Modifier.weight(1f))
@@ -810,12 +820,12 @@ internal fun eventDate(ev: CalendarEvent): LocalDate {
 
 /** 予定詳細の小さい天気カード: アイコン40 + 気温34 + 天気・降水 + 「地点・HH:mm の予報」 */
 @Composable
-private fun EventWeatherCard(f: DailyForecast, location: String, forecastAtMillis: Long) {
+internal fun EventWeatherCard(f: DailyForecast, location: String, forecastAtMillis: Long) {
     Card(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth().testTag("event-weather-card"),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
         colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ),
     ) {
         Row(

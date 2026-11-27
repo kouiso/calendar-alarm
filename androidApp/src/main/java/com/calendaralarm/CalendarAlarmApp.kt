@@ -112,9 +112,9 @@ class CalendarAlarmApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container
-        // 予約に効く既定の変更を、アプリが生きている間ずっと再同期へつなぐ (#231)。
+        // 予約に効く設定の変更を、アプリが生きている間ずっと再同期へつなぐ (#231)。
         // 画面のスコープで呼ぶと、保存の直後に画面を閉じた時に再同期が消える
-        container.repository.watchScheduleDefaults(container.appScope)
+        container.repository.watchScheduleSettings(container.appScope)
         // バックアップから復元された直後なら、端末と時刻に結びつく行を捨てて再同期する (#269)。
         // 削除が済むまで resync を待たせる門は、リポジトリを作る時に置いてある
         container.startRestoreReset()

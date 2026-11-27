@@ -50,6 +50,7 @@ object RestoreReset {
     /**
      * 復元の印があれば、予約の行 (scheduled_instances) と予定ごとの指定 (event_overrides) を捨て、
      * [resync] を呼ぶ。印が無ければ何も触らない。捨てた時 true。
+     * カレンダーごとの設定 (calendar_prefs) は消さず、行番号の控えを空にして旧形式の行だけ消す (#268)。
      * 印は行を捨てた後で消す。途中で落ちても次の起動でやり直せる (消すのは冪等)。
      */
     suspend fun runIfRestored(
@@ -67,6 +68,9 @@ object RestoreReset {
                 db.withTransaction {
                     db.scheduledInstances().deleteAll()
                     db.eventOverrides().deleteAll()
+                    // カレンダーごとの設定の行番号の控えは別の端末の物。旧形式の行は別の端末では結び付けられない (#268)
+                    db.calendarPrefs().deleteLegacy()
+                    db.calendarPrefs().clearCalendarIds()
                 }
             }
             RestoreMarker.consume(context)

@@ -20,6 +20,7 @@ import com.calendaralarm.data.db.EventOverrideEntity
 import com.calendaralarm.data.db.ScheduledInstanceEntity
 import com.calendaralarm.data.settingsDataStore
 import com.calendaralarm.engine.AlarmScheduler
+import com.calendaralarm.shared.logic.SilenceReason
 import com.calendaralarm.shared.model.AccountSetting
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
@@ -139,7 +140,7 @@ class EngineTest {
 
     @Test
     fun `未予約の過去evインスタンスはSKIPPEDが保存され次回resyncで除外される`() = runBlocking {
-        // applyPlan の不意打ち防止と同じ手順: setState は行が無いと更新0なので
+        // applyDecision の不意打ち防止と同じ手順: setState は行が無いと更新0なので
         // 先に行を作ってから終端化する。保存されないと次回 resync で再展開される。
         val inst = AlarmInstance(
             "ev:c1:e1:1000:b30",
@@ -157,8 +158,8 @@ class EngineTest {
 
     @Test
     fun `未予約の過去evインスタンスは実resyncでSKIPPED化され2回目で再処理されず見逃しに数えない`() = runBlocking {
-        // 本番の applyPlan 分岐を通す回帰: reader(fake provider) → expand → plan →
-        // applyPlan。production の upsert+MISSED 分岐が無いと、過去分は
+        // 本番の applyDecision 分岐を通す回帰: reader(fake provider) → expand → plan →
+        // applyDecision。production の upsert+MISSED 分岐が無いと、過去分は
         // AlarmManager に予約され DB は PENDING のまま残るので RED になる。
         val start = Clock.System.now().toEpochMilliseconds() + 30 * 60_000
         val inst = mapOf(
@@ -464,6 +465,85 @@ class EngineTest {
         repositoryWithCalendar.resync("test")
         val pendingIds = db.scheduledInstances().pending().map { it.id }
         assertEquals(listOf("ev:1:1:$start:b0"), pendingIds)
+    }
+
+    /** 予定一覧の理由の試験用: 終日を鳴らさないカレンダー1、鳴らさないカレンダー2の予定の行を差し込む */
+    private suspend fun seedReasonRows(declinedEventId: Long? = null): Long {
+        val start = Clock.System.now().toEpochMilliseconds() + 3 * 3_600_000L
+        val allDayStart = (Clock.System.now().toEpochMilliseconds() / 86_400_000L + 1) * 86_400_000L
+        fun row(eventId: Long, calId: Long, begin: Long, allDay: Boolean) = mapOf(
+            CalendarContract.Instances.EVENT_ID to eventId,
+            CalendarContract.Instances.CALENDAR_ID to calId,
+            CalendarContract.Instances.TITLE to "予定$eventId",
+            CalendarContract.Instances.DESCRIPTION to "",
+            CalendarContract.Instances.EVENT_LOCATION to "",
+            CalendarContract.Instances.BEGIN to begin,
+            CalendarContract.Instances.END to begin + if (allDay) 86_400_000L else 3_600_000L,
+            CalendarContract.Instances.ALL_DAY to if (allDay) 1 else 0,
+            CalendarContract.Instances.SELF_ATTENDEE_STATUS to
+                if (eventId == declinedEventId) {
+                    CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED
+                } else {
+                    CalendarContract.Attendees.ATTENDEE_STATUS_NONE
+                },
+            CalendarContract.Instances.ORGANIZER to null,
+        )
+        FakeCalendarProvider.instanceRows = listOf(
+            row(1, 1, start, allDay = false),
+            row(2, 1, allDayStart, allDay = true),
+            row(3, 2, start, allDay = false),
+            row(4, 1, start + 3_600_000L, allDay = false),
+        )
+        FakeCalendarProvider.reminderRows = emptyList()
+        Robolectric.buildContentProvider(FakeCalendarProvider::class.java)
+            .create(CalendarContract.AUTHORITY)
+        // カレンダー1は終日を鳴らさない、カレンダー2は丸ごと鳴らさない
+        db.calendarPrefs().upsert(CalendarPrefEntity("1", enabled = true, minutesBefore = 0, allDayMinutes = -1))
+        db.calendarPrefs().upsert(CalendarPrefEntity("2", enabled = false, minutesBefore = 0))
+        return start
+    }
+
+    @Test
+    fun `予定一覧の行が終日とカレンダーの鳴らない理由を返す`() = runBlocking {
+        seedReasonRows()
+        val items = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }
+        assertEquals(null, items.getValue("1").silenceReason)
+        assertEquals(SilenceReason.ALL_DAY_OFF, items.getValue("2").silenceReason)
+        assertEquals(SilenceReason.CALENDAR_OFF, items.getValue("3").silenceReason)
+    }
+
+    @Test
+    fun `予定一覧の行の理由と鳴らない表示が一致する`() = runBlocking {
+        val start = seedReasonRows()
+        // 予定4だけ自分で「鳴らさない」にした
+        db.eventOverrides().upsert(EventOverrideEntity("1:4:${start + 3_600_000L}", action = "MUTE", minutesBefore = null))
+        val items = repositoryWithCalendar.upcomingEvents()
+        assertEquals(4, items.size)
+        items.forEach { assertEquals("予定${it.event.id}", it.muted, it.silenceReason != null) }
+        assertEquals(SilenceReason.EVENT_OFF, items.first { it.event.id == "4" }.silenceReason)
+    }
+
+    @Test
+    fun `招待の返事で外れた予定とすべてミュートでも理由と鳴らない表示が一致する`() = runBlocking {
+        // 予定1は辞退済み: 招待の絞り込みで外れる
+        seedReasonRows(declinedEventId = 1L)
+        val items = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }
+        assertEquals(SilenceReason.INVITE, items.getValue("1").silenceReason)
+        items.values.forEach { assertEquals("予定${it.event.id}", it.muted, it.silenceReason != null) }
+
+        val settings = SettingsRepository(context)
+        settings.setMuteAll(true)
+        try {
+            val muted = repositoryWithCalendar.upcomingEvents().associateBy { it.event.id }
+            // 絞り込みで外れた予定は、すべてミュートでも理由は招待のまま
+            assertEquals(SilenceReason.INVITE, muted.getValue("1").silenceReason)
+            // 鳴る予定は、すべてミュート中はその理由になる
+            assertEquals(SilenceReason.MUTE_ALL, muted.getValue("4").silenceReason)
+            muted.values.forEach { assertEquals("予定${it.event.id}", it.muted, it.silenceReason != null) }
+        } finally {
+            // 設定は DataStore に残り他の試験へ漏れるので戻す
+            settings.setMuteAll(false)
+        }
     }
 
     @Test

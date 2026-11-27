@@ -18,10 +18,16 @@ import com.calendaralarm.data.db.ScheduledInstanceEntity
 import com.calendaralarm.data.settingsDataStore
 import com.calendaralarm.engine.AlarmScheduler
 import com.calendaralarm.shared.model.AlarmState
+import com.calendaralarm.shared.model.EventAction
+import com.calendaralarm.shared.model.EventType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.Clock
 import org.junit.After
@@ -35,7 +41,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * 設定で「何分前」「スヌーズ」の既定を変えたら、resync を呼ばなくても予約済みのアラームが新しい分数になる (#231 #254)。
+ * 予約に効く設定 (ScheduleSettings の12欄) を変えたら、resync を呼ばなくても予約済みのアラームが作り直される (#231 #254 #255)。
+ * 予約に効かない設定は再同期しない。
  * 画面と同じく SettingsRepository の setter だけを呼ぶ。
  */
 @RunWith(RobolectricTestRunner::class)
@@ -137,11 +144,16 @@ class ScheduleDefaultsResyncTest {
     }
 
     /** 見張りを始め、最初の値を受け取るまで待つ (最初の値では再同期しないので、その後に変える) */
-    private fun startWatcher() {
+    private fun startWatcher(source: Flow<SettingsRepository.Settings> = settings.flow) {
         val ready = java.util.concurrent.CountDownLatch(1)
-        repository.watchScheduleDefaults(scope) { ready.countDown() }
+        repository.watchScheduleSettings(scope, { ready.countDown() }, source)
         assertTrue("見張りが最初の値を受け取ること", ready.await(5, java.util.concurrent.TimeUnit.SECONDS))
     }
+
+    /** 見張りが呼んだ再同期の回数。理由は末尾の空白まで入れる (他の理由と取り違えない) */
+    private suspend fun settingsResyncCount(): Int =
+        db.auditLog().recentByActionsFlow(listOf("RESYNC"), 50).first()
+            .count { it.detail.startsWith("reason=settings ") }
 
     @Test
     fun `何分前の既定を変えると、resync を呼ばなくても予約の時刻が新しい分数になる`() {
@@ -173,13 +185,110 @@ class ScheduleDefaultsResyncTest {
     }
 
     @Test
-    fun `見張る既定は何分前とスヌーズの2つ`() {
-        // 予約に効く欄を足した時に、ここを直し忘れないための固定 (他の欄は今は画面が resync を呼ぶ)
+    fun `見張る設定は予約に効く12欄`() {
+        // 予約に効く欄を足した時に、ここを直し忘れないための固定
         assertEquals(
-            listOf("minutesBefore", "snoozeMinutes"),
-            AlarmRepository.ScheduleDefaults::class.java.declaredFields
+            listOf(
+                "defaultMinutesBefore", "defaultSnoozeMinutes", "defaultStartAction", "defaultReminderAction",
+                "titleCodes", "inviteFilter", "eventTypeFilter", "googleAccountEmails", "accountSettings",
+                "importEventReminders", "extraReminderOffsets", "muteAll",
+            ),
+            AlarmRepository.ScheduleSettings::class.java.declaredFields
                 .filterNot { java.lang.reflect.Modifier.isStatic(it.modifiers) }
                 .map { it.name },
         )
+    }
+
+    @Test
+    fun `すべてミュートにすると、resync を呼ばなくても予定のアラームの予約が取り消される`() {
+        runBlocking { repository.resync("start") }
+        assertEquals(1, runBlocking { pending() }.size)
+        startWatcher()
+
+        runBlocking { settings.setMuteAll(true) }
+
+        assertTrue("予約が取り消されること", waitUntil(5_000) { pending().isEmpty() })
+    }
+
+    @Test
+    fun `予定の種類を鳴らさないにすると、resync を呼ばなくても予約が取り消される`() {
+        runBlocking { repository.resync("start") }
+        assertEquals(1, runBlocking { pending() }.size)
+        startWatcher()
+
+        runBlocking { settings.toggleEventType(EventType.EVENT) }
+
+        assertTrue("予約が取り消されること", waitUntil(5_000) { pending().isEmpty() })
+    }
+
+    @Test
+    fun `開始の既定の動作を鳴らさないにすると、resync を呼ばなくても予約が取り消される`() {
+        runBlocking { repository.resync("start") }
+        assertEquals(1, runBlocking { pending() }.size)
+        startWatcher()
+
+        runBlocking { settings.setDefaultStartAction(EventAction.MUTE) }
+
+        assertTrue("予約が取り消されること", waitUntil(5_000) { pending().isEmpty() })
+    }
+
+    @Test
+    fun `全イベントへの追加リマインダーを足すと、resync を呼ばなくても予約が増える`() {
+        runBlocking { repository.resync("start") }
+        startWatcher()
+
+        runBlocking { settings.setExtraReminderOffsets(listOf(30)) }
+
+        assertTrue(
+            "30分前の予約が増えること",
+            waitUntil(5_000) { pending().any { it.id == "ev:1:1:$start:b30" } },
+        )
+    }
+
+    @Test
+    fun `設定を1つ変えると再同期は1回だけ走る`() {
+        runBlocking { repository.resync("start") }
+        startWatcher()
+
+        runBlocking { settings.setMuteAll(true) }
+        assertTrue("予約が取り消されること", waitUntil(5_000) { pending().isEmpty() })
+        Thread.sleep(500)
+
+        assertEquals(1, runBlocking { settingsResyncCount() })
+    }
+
+    @Test
+    fun `予約に効かない設定を変えても再同期しない`() {
+        runBlocking { repository.resync("start") }
+        startWatcher()
+
+        runBlocking { settings.setShowWeekNumbers(true) }
+        // 週番号が flow に流れるまで待ち、まとめて1回に見えないようにする
+        runBlocking { settings.flow.first { it.showWeekNumbers } }
+        Thread.sleep(500)
+        assertEquals("週番号の変更では再同期しないこと", 0, runBlocking { settingsResyncCount() })
+        runBlocking { settings.setMuteAll(true) }
+
+        assertTrue("予約が取り消されること", waitUntil(5_000) { pending().isEmpty() })
+        Thread.sleep(500)
+        // 週番号の分は数えない。ミュートの1回だけ
+        assertEquals(1, runBlocking { settingsResyncCount() })
+    }
+
+    @Test
+    fun `設定の読み取りが一度失敗しても、見張りは止まらずに次の変更で再同期する`() {
+        runBlocking { repository.resync("start") }
+        assertEquals(1, runBlocking { pending() }.size)
+        val subscriptions = java.util.concurrent.atomic.AtomicInteger(0)
+        // 1回目の購読だけ読み取りに失敗し、2回目から本物の設定を流す
+        val flaky = flow {
+            if (subscriptions.getAndIncrement() == 0) throw java.io.IOException("読み取りの失敗 (試験)")
+            emitAll(settings.flow)
+        }
+        startWatcher(flaky)
+
+        runBlocking { settings.setMuteAll(true) }
+
+        assertTrue("読み直した後の変更で予約が取り消されること", waitUntil(10_000) { pending().isEmpty() })
     }
 }

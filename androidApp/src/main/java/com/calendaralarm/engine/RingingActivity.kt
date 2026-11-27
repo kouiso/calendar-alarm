@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -58,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -344,8 +346,10 @@ private fun RingingScreen(
     onSnooze: () -> Unit,
     onSnoozeAt: (Int) -> Unit,
 ) {
-    val time = SimpleDateFormat("H:mm", Locale.getDefault()).format(Date(triggerAtMillis))
-    val date = SimpleDateFormat("M月d日 (E)", Locale.JAPAN).format(Date(triggerAtMillis))
+    val time = SimpleDateFormat(RingingSlideSpec.TIME_PATTERN, Locale.getDefault()).format(Date(triggerAtMillis))
+    // 日付の書式は Locale.JAPAN のまま (端末の地域に従わせるのは別の仕事)。書式の文字だけ資源から引く
+    val date = SimpleDateFormat(stringResource(R.string.date_pattern_month_day_weekday), Locale.JAPAN)
+        .format(Date(triggerAtMillis))
     val accent = MaterialTheme.colorScheme.primary
     val onAccent = MaterialTheme.colorScheme.onPrimary
     // 鳴動画面はテーマに依らず常時ダーク (Night UI spec: bg #0A0C11 フラット)
@@ -353,7 +357,7 @@ private fun RingingScreen(
         if (weather != null) {
             WeatherBackdrop(weatherCode = weather.weatherCode, isDay = weather.isDay)
         } else {
-            Box(Modifier.fillMaxSize().background(Color(0xFF0A0C11)))
+            Box(Modifier.fillMaxSize().background(Color(RingingSlideSpec.BACKGROUND_ARGB)))
         }
         // AlarmKit 同様、小画面でも停止操作が隠れないよう上部 (日付/時刻/件名) は
         // スクロール領域、下部の操作群 (スヌーズ/スライド停止) はピン留めする構造。
@@ -362,7 +366,10 @@ private fun RingingScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 24.dp, vertical = 20.dp),
+                .padding(
+                    horizontal = RingingSlideSpec.SCREEN_PAD_H_DP.dp,
+                    vertical = RingingSlideSpec.SCREEN_PAD_V_DP.dp,
+                ),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
@@ -378,17 +385,21 @@ private fun RingingScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
             // 日付チップ
+            // 高さは固定: 重ねて出す停止画面 (View) と位置を合わせるため、文字の行の高さに任せない
             Surface(
-                color = Color.White.copy(alpha = 0.06f),
-                shape = RoundedCornerShape(14.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+                modifier = Modifier.height(RingingSlideSpec.DATE_HEIGHT_DP.dp).testTag(RING_DATE_TAG),
+                color = Color(RingingSlideSpec.DATE_FILL_ARGB),
+                shape = RoundedCornerShape(RingingSlideSpec.DATE_CORNER_DP.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(RingingSlideSpec.DATE_STROKE_ARGB)),
             ) {
-                Text(
-                    date,
-                    fontSize = 13.sp,
-                    color = Color(0xFFB7BECB),
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        date,
+                        fontSize = RingingSlideSpec.DATE_TEXT_SP.sp,
+                        color = Color(RingingSlideSpec.SUB_TEXT_ARGB),
+                        modifier = Modifier.padding(horizontal = RingingSlideSpec.DATE_PAD_H_DP.dp),
+                    )
+                }
             }
             // 時計〜タイトルは残りの高さに収める。下の停止/スヌーズは固定高で先に確保され、
             // 小さい画面や大きい文字サイズでも画面外に押し出されない
@@ -398,62 +409,77 @@ private fun RingingScreen(
             ) {
                 // 本来の高さ (リング 290 + 下の文字群) に足りない分だけリングと時刻を縮める
                 // 大きいボタンモードの文字盤は盤の dial.sm (176) に縮める (#154)
-                val ringBase = if (largeButtons) RingingSlideSpec.LARGE_DIAL_DP.dp else 290.dp
-                val ringScale = ((maxHeight - 170.dp) / ringBase).coerceIn(0.35f, 1f)
-                val ringOuter = minOf(ringBase * ringScale, maxWidth)
-                val ringInnerRatio = if (largeButtons) 140f / 176f else 230f / 290f
-                val timeRatio = if (largeButtons) {
-                    RingingSlideSpec.LARGE_DIAL_TIME_SP / RingingSlideSpec.LARGE_DIAL_DP.toFloat()
-                } else {
-                    112f / 290f
-                }
+                // 式は RingingSlideSpec に置き、重ねて出す停止画面 (View) と同じ大きさにする
+                val ringScale = RingingSlideSpec.dialScale(maxHeight.value, largeButtons)
+                val ringOuter = RingingSlideSpec.dialOuterDp(maxHeight.value, maxWidth.value, largeButtons).dp
+                val ringInnerRatio = RingingSlideSpec.dialInnerRatio(largeButtons)
+                val timeRatio = RingingSlideSpec.dialTimeRatio(largeButtons)
                 val density = LocalDensity.current
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     // アクセントリング 2重 (290/230) + 大時刻
                     Box(contentAlignment = Alignment.Center) {
                         Box(
                             Modifier.size(ringOuter).testTag(RING_DIAL_TAG).border(
-                                1.5.dp, accent.copy(alpha = 0.25f), CircleShape,
+                                RingingSlideSpec.DIAL_OUTER_STROKE_DP.dp,
+                                accent.copy(alpha = RingingSlideSpec.DIAL_OUTER_ALPHA),
+                                CircleShape,
                             ),
                         )
                         Box(
                             Modifier.size(ringOuter * ringInnerRatio).border(
-                                1.dp, accent.copy(alpha = 0.15f), CircleShape,
+                                RingingSlideSpec.DIAL_INNER_STROKE_DP.dp,
+                                accent.copy(alpha = RingingSlideSpec.DIAL_INNER_ALPHA),
+                                CircleShape,
                             ),
                         )
                         // 時刻はリングに収める飾りなので端末の文字サイズ設定では拡大しない
                         Text(
                             text = time,
+                            modifier = Modifier.testTag(RING_TIME_TAG),
                             fontSize = with(density) { (ringOuter * timeRatio).toSp() },
                             fontFamily = OutfitFontFamily,
                             fontWeight = FontWeight.ExtraLight,
-                            letterSpacing = with(density) { (ringOuter * (-4f / 290f)).toSp() },
-                            color = Color(0xFFF4F5F8),
+                            letterSpacing = with(density) { (ringOuter * RingingSlideSpec.DIAL_TIME_LETTER_SPACING_PER_DIAL).toSp() },
+                            color = Color(RingingSlideSpec.TEXT_ARGB),
                             maxLines = 1,
                             softWrap = false,
                         )
                     }
-                    Spacer(Modifier.height(18.dp * ringScale))
-                    // 開始までの残り (eventStartMillis が無い通知由来等は「まもなく開始」)
-                    val remain = eventStartMillis?.minus(System.currentTimeMillis())
-                    Text(
-                        if (remain != null && remain > 0) {
-                            "${(remain + 30_000) / 60_000}分後に開始"
-                        } else {
-                            "まもなく開始"
-                        },
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = accent,
-                    )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(RingingSlideSpec.DIAL_TO_STARTS_IN_DP.dp * ringScale))
+                    // 開始までの残り (eventStartMillis が無い通知由来等は「まもなく開始」)。
+                    // 文言は重ねて出す停止画面と同じ startsInText から引く
+                    Box(
+                        Modifier.height(RingingSlideSpec.STARTS_IN_HEIGHT_DP.dp).testTag(RING_STARTS_IN_TAG),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            startsInText(LocalContext.current, eventStartMillis, System.currentTimeMillis()),
+                            fontSize = RingingSlideSpec.STARTS_IN_TEXT_SP.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = accent,
+                        )
+                    }
+                    Spacer(Modifier.height(RingingSlideSpec.STARTS_IN_TO_TITLE_DP.dp))
+                    // 題の高さは「行数 x 行の高さ」に固定する。重ねて出す停止画面 (View) はこの高さに固定している。
+                    // 文字の測りに任せると、書体や環境 (Robolectric の描画など) で行の高さが lineHeight と
+                    // ずれ (大きいボタンで 36 になった)、中央寄せの輪の位置が View とずれる。
+                    // 行数は描いた結果から引き、高さは lineHeight から決める
+                    val titleLineHeightSp = if (largeButtons) {
+                        RingingSlideSpec.LARGE_TITLE_LINE_SP
+                    } else {
+                        RingingSlideSpec.TITLE_LINE_SP.toFloat()
+                    }
+                    var titleLines by remember { mutableStateOf(1) }
                     Text(
                         text = title,
-                        modifier = Modifier.testTag(TITLE_TAG),
-                        fontSize = if (largeButtons) RingingSlideSpec.LARGE_TITLE_SP.sp else 32.sp,
+                        modifier = Modifier
+                            .height(with(density) { titleLineHeightSp.sp.toDp() } * titleLines)
+                            .testTag(TITLE_TAG),
+                        onTextLayout = { titleLines = it.lineCount.coerceIn(1, 2) },
+                        fontSize = if (largeButtons) RingingSlideSpec.LARGE_TITLE_SP.sp else RingingSlideSpec.TITLE_SP.sp,
                         fontWeight = FontWeight.SemiBold,
-                        lineHeight = if (largeButtons) (RingingSlideSpec.LARGE_TITLE_SP * 1.35f).sp else 42.sp,
-                        color = Color(0xFFF4F5F8),
+                        lineHeight = titleLineHeightSp.sp,
+                        color = Color(RingingSlideSpec.TEXT_ARGB),
                         textAlign = TextAlign.Center,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -490,7 +516,7 @@ private fun RingingScreen(
                         else RingingSlideSpec.SNOOZE_HEIGHT_DP.dp,
                     )
                     .testTag(SNOOZE_BUTTON_TAG),
-                color = Color.White.copy(alpha = 0.08f),
+                color = Color(RingingSlideSpec.BUTTON_FILL_ARGB),
                 shape = RoundedCornerShape(
                     if (largeButtons) RingingSlideSpec.LARGE_BUTTON_CORNER_DP.dp
                     else RingingSlideSpec.TRACK_CORNER_DP.dp,
@@ -499,27 +525,31 @@ private fun RingingScreen(
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         "スヌーズ ${snoozeMinutes}分",
-                        fontSize = if (largeButtons) RingingSlideSpec.LARGE_BUTTON_TEXT_SP.sp else 22.sp,
+                        fontSize = if (largeButtons) RingingSlideSpec.LARGE_BUTTON_TEXT_SP.sp else RingingSlideSpec.SNOOZE_TEXT_SP.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFECEEF3),
+                        color = Color(RingingSlideSpec.BUTTON_TEXT_ARGB),
                     )
                 }
             }
-            if (!largeButtons) {
+            // プリセットが空なら見出しも出さない: 重ねて出す停止画面 (View) と同じ条件で位置を合わせる
+            if (!largeButtons && snoozePresets.isNotEmpty()) {
                 // 別分数スヌーズは開閉式: 「スヌーズ時間を選ぶ」タップ時のみチップを展開
                 var presetsOpen by remember { mutableStateOf(false) }
                 Surface(
                     onClick = { presetsOpen = !presetsOpen },
-                    modifier = Modifier.testTag(SNOOZE_CHOOSE_TAG),
+                    modifier = Modifier.height(RingingSlideSpec.SNOOZE_CHOOSE_HEIGHT_DP.dp).testTag(SNOOZE_CHOOSE_TAG),
                     color = Color.Transparent,
                     shape = RoundedCornerShape(14.dp),
                 ) {
-                    Text(
-                        if (presetsOpen) "スヌーズ時間を選ぶ ▴" else "スヌーズ時間を選ぶ ▾",
-                        fontSize = 14.sp,
-                        color = Color(0xFFB7BECB),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    )
+                    // 高さは固定で文字は縦中央: 重ねて出す停止画面 (View) と位置を合わせるため
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            if (presetsOpen) "スヌーズ時間を選ぶ ▴" else "スヌーズ時間を選ぶ ▾",
+                            fontSize = RingingSlideSpec.SNOOZE_CHOOSE_TEXT_SP.sp,
+                            color = Color(RingingSlideSpec.SUB_TEXT_ARGB),
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                    }
                 }
                 if (presetsOpen) {
                     Spacer(Modifier.height(8.dp))
@@ -528,18 +558,18 @@ private fun RingingScreen(
                             Surface(
                                 onClick = { onSnoozeAt(m) },
                                 modifier = Modifier.weight(1f).height(40.dp),
-                                color = Color.White.copy(alpha = 0.08f),
+                                color = Color(RingingSlideSpec.BUTTON_FILL_ARGB),
                                 shape = RoundedCornerShape(14.dp),
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Text("+${m}分", fontSize = 14.sp, color = Color(0xFFECEEF3))
+                                    Text("+${m}分", fontSize = 14.sp, color = Color(RingingSlideSpec.BUTTON_TEXT_ARGB))
                                 }
                             }
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(RingingSlideSpec.STOP_GAP_DP.dp))
             // 停止は既定でスライド式: 誤タップで止まらないよう左端の丸を右へドラッグ。
             // 大ボタンモード (#154) ではスライドを止めて、盤の .bb.p (高さ124・角丸32・24px・太さ600) にする
             if (largeButtons) {
@@ -561,14 +591,15 @@ private fun RingingScreen(
             } else {
                 SlideToStop(accent = accent, onAccent = onAccent, onStop = onDismiss)
             }
-            Spacer(Modifier.height(if (largeButtons) RingingSlideSpec.LARGE_BUTTON_GAP_DP.dp else 10.dp))
+            Spacer(Modifier.height(if (largeButtons) RingingSlideSpec.LARGE_BUTTON_GAP_DP.dp else RingingSlideSpec.FOOT_GAP_DP.dp))
             Row(
+                modifier = Modifier.heightIn(min = RingingSlideSpec.FOOT_HEIGHT_DP.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Calendar Alarm", fontSize = 12.sp, color = Color(0xFF6E7686))
+                Text("Calendar Alarm", fontSize = RingingSlideSpec.FOOT_TEXT_SP.sp, color = Color(RingingSlideSpec.FOOT_TEXT_ARGB))
                 if (canOpenSource) {
-                    Text("・", fontSize = 12.sp, color = Color(0xFF6E7686))
+                    Text("・", fontSize = RingingSlideSpec.FOOT_TEXT_SP.sp, color = Color(RingingSlideSpec.FOOT_TEXT_ARGB))
                     TextButton(onClick = onOpenSource) {
                         Text("通知元を開く", fontSize = 12.sp, color = accent)
                     }
@@ -588,6 +619,12 @@ internal const val SNOOZE_BUTTON_TAG = "snooze-button"
 internal const val SNOOZE_CHOOSE_TAG = "snooze-choose"
 internal const val RING_DIAL_TAG = "ring-dial"
 internal const val TITLE_TAG = "ring-title"
+
+/** 日付の札・輪の中の時刻・「○分後に開始」・停止のトラックの目印。重ねて出す停止画面との位置の比べに使う (#336) */
+internal const val RING_DATE_TAG = "ring-date"
+internal const val RING_TIME_TAG = "ring-time"
+internal const val RING_STARTS_IN_TAG = "ring-starts-in"
+internal const val SLIDE_TRACK_TAG = "slide-stop-track"
 
 /**
  * 「スライドして停止」トラック。左端の丸を右へドラッグし、トラック幅の80%を
@@ -612,9 +649,14 @@ private fun SlideToStop(
         modifier = Modifier
             .fillMaxWidth()
             .height(RingingSlideSpec.TRACK_HEIGHT_DP.dp)
+            .testTag(SLIDE_TRACK_TAG)
             .clip(RoundedCornerShape(RingingSlideSpec.TRACK_CORNER_DP.dp))
-            .background(Color.White.copy(alpha = 0.08f))
-            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(RingingSlideSpec.TRACK_CORNER_DP.dp))
+            .background(Color(RingingSlideSpec.BUTTON_FILL_ARGB))
+            .border(
+                1.dp,
+                accent.copy(alpha = RingingSlideSpec.TRACK_STROKE_ALPHA),
+                RoundedCornerShape(RingingSlideSpec.TRACK_CORNER_DP.dp),
+            )
             .onSizeChanged { trackWidthPx = it.width.toFloat() }
             .semantics(mergeDescendants = true) {
                 contentDescription = "スライドして停止"
@@ -667,9 +709,9 @@ private fun SlideToStop(
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
                 "スライドして停止 ›",
-                fontSize = 20.sp,
+                fontSize = RingingSlideSpec.SLIDE_LABEL_SP.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFFECEEF3).copy(alpha = (1f - progress.value).coerceIn(0f, 1f)),
+                color = Color(RingingSlideSpec.BUTTON_TEXT_ARGB).copy(alpha = (1f - progress.value).coerceIn(0f, 1f)),
             )
         }
         Box(

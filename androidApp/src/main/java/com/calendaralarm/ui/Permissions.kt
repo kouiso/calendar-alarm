@@ -19,28 +19,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PriorityHigh
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -58,12 +47,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.annotation.StringRes
 import com.calendaralarm.R
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.calendaralarm.ui.theme.NightButton
+import com.calendaralarm.ui.theme.NightCard
+import com.calendaralarm.ui.theme.NightDivider
+import com.calendaralarm.ui.theme.NightListCard
+import com.calendaralarm.ui.theme.NightTopBar
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -221,23 +216,32 @@ internal fun rememberPermissionRequester(onResult: (AppPermission, Boolean) -> U
     }
 }
 
+internal const val PERM_SUMMARY_ICON_TAG = "perm_summary_icon"
+internal const val PERM_GRANT_ALL_TAG = "perm_grant_all"
+internal fun permRowTag(p: AppPermission) = "perm_row_${p.name}"
+
 /**
  * 権限画面 (デザイン ⑨)。断られた後に「全部許可する」と項目ごとのスイッチで直す
  * (局長決定 2026-10-17 の2)。押すと端末のその設定が直接開き、戻ると状態が自動で変わる。
  */
 @Composable
-fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {}) {
+fun PermissionsScreen(
+    onBack: () -> Unit,
+    onGranted: (AppPermission) -> Unit = {},
+    // 試験で許可の状態を決められるよう差し替え可能にする (既定は端末の実際の状態)
+    probe: (Context) -> Map<AppPermission, Boolean> = ::probePermissions,
+) {
     val context = LocalContext.current
     val activity = context as? Activity
     val tick = rememberResumeTick()
-    var granted by remember { mutableStateOf(probePermissions(context)) }
+    var granted by remember { mutableStateOf(probe(context)) }
     // 「全部許可する」の連続依頼中か。戻っても未許可なら断られたとみなして止める
     var chain by rememberSaveable { mutableStateOf(false) }
     var chainAsked by rememberSaveable { mutableStateOf<String?>(null) }
     var requestNext: (() -> Unit)? = null
     // 次へ進む判断は ON_RESUME だけで行う。ダイアログの結果でも進めると、直後の
     // ON_RESUME と二重に進んで設定画面を2つ開いたり、誤って断られた扱いにしたりする
-    val requester = rememberPermissionRequester { _, _ -> granted = probePermissions(context) }
+    val requester = rememberPermissionRequester { _, _ -> granted = probe(context) }
     requestNext = {
         if (chain) {
             val askedPerm = chainAsked?.let { a -> AppPermission.entries.firstOrNull { it.name == a } }
@@ -250,7 +254,7 @@ fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {
         }
     }
     LaunchedEffect(tick) {
-        val now = probePermissions(context)
+        val now = probe(context)
         // 新たに付いた許可を知らせる。カレンダーなら呼び出し側が予約を作り直す (待たせると次の定期同期まで鳴らない)
         AppPermission.entries.filter { granted[it] == false && now[it] == true }.forEach(onGranted)
         granted = now
@@ -262,34 +266,25 @@ fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {
     val ok = MaterialTheme.colorScheme.primary
     val warn = MaterialTheme.colorScheme.error
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 0.dp)) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
-            }
-            Text(stringResource(R.string.perm_screen_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-        }
-        Card(
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        NightTopBar(stringResource(R.string.perm_screen_title), onBack)
+        Column(
+            Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            NightCard(spacing = 14.dp) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     val c = if (allOn) ok else warn
                     Box(
-                        Modifier.size(36.dp).background(c.copy(alpha = 0.16f), CircleShape),
+                        Modifier.size(40.dp).testTag(PERM_SUMMARY_ICON_TAG).background(c.copy(alpha = 0.16f), CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             if (allOn) Icons.Default.Check else Icons.Default.PriorityHigh,
-                            contentDescription = null, tint = c, modifier = Modifier.size(18.dp),
+                            contentDescription = null, tint = c, modifier = Modifier.size(22.dp),
                         )
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Text(
                             stringResource(
                                 when {
@@ -298,82 +293,77 @@ fun PermissionsScreen(onBack: () -> Unit, onGranted: (AppPermission) -> Unit = {
                                     else -> R.string.perm_summary_some_missing
                                 },
                             ),
-                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp, lineHeight = 23.2.sp, fontWeight = FontWeight.SemiBold,
                         )
                         Text(
                             stringResource(if (allOn) R.string.perm_summary_all_granted else R.string.perm_summary_open_in_order),
-                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 13.sp, lineHeight = 20.15.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
                 if (!allOn) {
-                    Button(
+                    NightButton(
+                        stringResource(R.string.perm_grant_all),
                         onClick = {
                             chain = true
                             chainAsked = null
                             requestNext?.invoke()
                         },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(16.dp),
-                    ) { Text(stringResource(R.string.perm_grant_all), fontWeight = FontWeight.SemiBold) }
+                        modifier = Modifier.fillMaxWidth().testTag(PERM_GRANT_ALL_TAG),
+                    )
                 }
             }
-        }
-        Card(
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        ) {
-            AppPermission.entries.forEachIndexed { i, p ->
-                val on = granted[p] == true
-                val stateText = stringResource(if (on) R.string.perm_state_granted else R.string.perm_state_missing)
-                val label = stringResource(p.label)
-                val openDescription = stringResource(R.string.perm_open_settings_for, label, stateText)
-                // 許可済みでも押せば OS の設定を開き、そこでオフにできる (アプリからは外せないため)
-                val open = {
-                    chain = false
-                    // 許可済みの実行時権限を頼み直しても OS は何も出さない。外したい時に備えて端末の設定を開く
-                    // 通知は権限があっても設定で切られていることがあり、その時も頼み直しでは何も出ない
-                    val notifyBlockedInSettings = p == AppPermission.NOTIFY && !on && (
-                        Build.VERSION.SDK_INT < 33 ||
-                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-                            PackageManager.PERMISSION_GRANTED
-                        )
-                    if ((on || notifyBlockedInSettings) && activity != null) openSettingsFor(activity, p) else requester.request(p)
-                }
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 68.dp)
-                        .clickable(onClick = open)
-                        .semantics { contentDescription = openDescription }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                        Text(
-                            stringResource(p.reason), style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            stateText, style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.SemiBold, color = if (on) ok else warn,
-                        )
+            NightListCard {
+                AppPermission.entries.forEachIndexed { i, p ->
+                    val on = granted[p] == true
+                    val stateText = stringResource(if (on) R.string.perm_state_granted else R.string.perm_state_missing)
+                    val label = stringResource(p.label)
+                    val openDescription = stringResource(R.string.perm_open_settings_for, label, stateText)
+                    // 許可済みでも押せば OS の設定を開き、そこでオフにできる (アプリからは外せないため)
+                    val open = {
+                        chain = false
+                        // 許可済みの実行時権限を頼み直しても OS は何も出さない。外したい時に備えて端末の設定を開く
+                        // 通知は権限があっても設定で切られていることがあり、その時も頼み直しでは何も出ない
+                        val notifyBlockedInSettings = p == AppPermission.NOTIFY && !on && (
+                            Build.VERSION.SDK_INT < 33 ||
+                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                                PackageManager.PERMISSION_GRANTED
+                            )
+                        if ((on || notifyBlockedInSettings) && activity != null) openSettingsFor(activity, p) else requester.request(p)
                     }
-                    Switch(checked = on, onCheckedChange = { open() })
-                }
-                if (i < AppPermission.entries.lastIndex) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    if (i > 0) NightDivider()
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag(permRowTag(p))
+                            .clickable(onClick = open)
+                            .semantics { contentDescription = openDescription }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(label, fontSize = 15.sp, lineHeight = 21.75.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                stringResource(p.reason), fontSize = 13.sp, lineHeight = 20.15.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                stateText, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp),
+                                fontWeight = FontWeight.SemiBold, color = if (on) ok else warn,
+                            )
+                        }
+                        Switch(checked = on, onCheckedChange = { open() })
+                    }
                 }
             }
+            Text(
+                stringResource(R.string.perm_screen_footer),
+                fontSize = 13.sp, lineHeight = 20.15.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 6.dp),
+            )
         }
-        Text(
-            stringResource(R.string.perm_screen_footer),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 4.dp),
-        )
-        Spacer(Modifier.height(96.dp).background(Color.Transparent))
     }
 }
