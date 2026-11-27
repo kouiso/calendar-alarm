@@ -1,30 +1,23 @@
 package com.calendaralarm
 
-import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
 import java.io.File
 
 /**
- * デザインの板と見比べるための画像を書き出す補助。
- * 環境変数 BOARD_SHOT_DIR がある時だけ PNG を書く (CI や普段のテストでは何もしない)。
- * NATIVE グラフィックスの Robolectric で decorView を描いて保存する (captureToImage は使わない)。
+ * 板との見比べ用の画像を書き出す試験の部品。環境変数 BOARD_SHOT_DIR がある時だけ PNG を書く。
+ * Linux の CI で値が戻った時に落ちる回帰の証跡として使う (描き方は RingingActivityDarkThemeTest と同じ decorView.draw)。
  */
-object BoardShot {
-    /** 書き出し先。環境変数が無ければ null (何も書かない)。 */
-    private fun dir(): File? =
-        System.getenv("BOARD_SHOT_DIR")?.takeIf { it.isNotBlank() }?.let { File(it).apply { mkdirs() } }
-
-    /** [view] を描いて `<BOARD_SHOT_DIR>/<name>.png` に書く。 */
+internal object BoardShot {
     fun saveView(view: View, name: String) {
-        val out = dir() ?: return
+        val dir = System.getenv("BOARD_SHOT_DIR")?.takeIf { it.isNotBlank() } ?: return
         if (view.width <= 0 || view.height <= 0) return
         val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
         view.draw(Canvas(bitmap))
+        val out = File(dir).apply { mkdirs() }
         File(out, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    /** [activity] の画面全体を `<BOARD_SHOT_DIR>/<name>.png` に書く。 */
-    fun save(activity: Activity, name: String) = saveView(activity.window.decorView, name)
+    fun save(activity: android.app.Activity, name: String) = saveView(activity.window.decorView, name)
 }
