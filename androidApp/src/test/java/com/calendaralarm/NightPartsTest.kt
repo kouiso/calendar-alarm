@@ -8,14 +8,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.assertHeightIsEqualTo
-import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.unit.dp
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
 import com.calendaralarm.ui.theme.NightIconRings
 import kotlinx.coroutines.test.StandardTestDispatcher
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,7 +49,10 @@ class NightPartsTest {
             }
         }
         compose.waitForIdle()
-        // 60 の丸 + 外の余白 10.5 ずつ。外の丸 (半径 40 + 線の外側 0.5) が箱に収まる大きさ
-        compose.onNodeWithTag("rings").assertWidthIsEqualTo(81.dp).assertHeightIsEqualTo(81.dp)
+        // 60 の丸 + 外の余白 10.5 ずつ。外の丸 (半径 40 + 線の外側 0.5) が箱に収まる大きさ。
+        // 以前は padding(10.5.dp) が px へ四捨五入されて 82 になっていた。値を出して落とす
+        val b = compose.onNodeWithTag("rings").getUnclippedBoundsInRoot()
+        assertEquals("印の輪の幅 (期待 81dp・実測 ${b.width.value}dp)", 81f, b.width.value, 0.01f)
+        assertEquals("印の輪の高さ (期待 81dp・実測 ${b.height.value}dp)", 81f, b.height.value, 0.01f)
     }
 }

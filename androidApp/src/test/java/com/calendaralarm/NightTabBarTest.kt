@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Alarm
@@ -15,25 +17,22 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
-import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
-import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,6 +42,7 @@ import com.calendaralarm.ui.NightTabItem
 import com.calendaralarm.ui.nightTabIndicatorTag
 import com.calendaralarm.ui.nightTabTag
 import com.calendaralarm.ui.theme.CalendarAlarmTheme
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -84,8 +84,14 @@ class NightTabBarTest {
     @Test
     fun 帯は高さ72で選択中の印の面は56x30() {
         showBar()
-        compose.onNodeWithTag(NIGHT_TAB_BAR_TAG).assertHeightIsEqualTo(72.dp)
-        compose.onNodeWithTag(nightTabIndicatorTag("alarms")).assertWidthIsEqualTo(56.dp).assertHeightIsEqualTo(30.dp)
+        val bar = compose.onNodeWithTag(NIGHT_TAB_BAR_TAG).getUnclippedBoundsInRoot()
+        assertEquals("帯の高さ (期待 72dp・実測 ${bar.height.value}dp)", 72f, bar.height.value, 0.01f)
+        // タブ全体は selectable で意味を束ねる (mergeDescendants) ので、中の印の面の目印は束ねた木には出ない。
+        // 束ねない木 (useUnmergedTree) で探す。これを付けないと「ノードが無い」で落ちる
+        val indicator = compose.onNodeWithTag(nightTabIndicatorTag("alarms"), useUnmergedTree = true)
+            .getUnclippedBoundsInRoot()
+        assertEquals("印の面の幅 (期待 56dp・実測 ${indicator.width.value}dp)", 56f, indicator.width.value, 0.01f)
+        assertEquals("印の面の高さ (期待 30dp・実測 ${indicator.height.value}dp)", 30f, indicator.height.value, 0.01f)
     }
 
     @Test
@@ -120,18 +126,32 @@ class NightTabBarTest {
 
     @Test
     fun 中身の一番下が帯に隠れない() {
+        lateinit var listState: LazyListState
         setContent {
             Scaffold(bottomBar = { NightTabBar(tabItems, "agenda", {}) }) { p ->
-                LazyColumn(Modifier.padding(p)) {
+                listState = rememberLazyListState()
+                LazyColumn(Modifier.padding(p).testTag("night-list"), state = listState) {
                     items((0 until 50).toList()) { Text("行$it", Modifier.fillMaxWidth().height(48.dp)) }
                 }
             }
         }
-        compose.onNode(hasScrollAction()).performScrollToIndex(49)
+        // 意味の動作 (performScrollToIndex) は StandardTestDispatcher に積まれ、走ったか分からない。
+        // 状態へ直に最後まで送り、送れた事を値で確かめてから位置を比べる
+        compose.runOnIdle { runBlocking { listState.scrollToItem(49) } }
         compose.waitForIdle()
+        val info = compose.runOnIdle {
+            "先頭 ${listState.firstVisibleItemIndex}・見える数 ${listState.layoutInfo.visibleItemsInfo.size}・" +
+                "全部 ${listState.layoutInfo.totalItemsCount}・窓 ${listState.layoutInfo.viewportSize}"
+        }
+        val found = compose.onAllNodesWithText("行49").fetchSemanticsNodes().size
+        assertEquals("「行49」が木に ${found} 個 (期待 1)。$info", 1, found)
         val last = compose.onNodeWithText("行49").getUnclippedBoundsInRoot()
         val bar = compose.onNodeWithTag(NIGHT_TAB_BAR_TAG).getUnclippedBoundsInRoot()
-        assertTrue("行49の下端 ${last.bottom} が帯の上端 ${bar.top} 以下", last.bottom.value <= bar.top.value + 1f)
+        val list = compose.onNodeWithTag("night-list").getUnclippedBoundsInRoot()
+        assertTrue(
+            "行49の下端 ${last.bottom} が帯の上端 ${bar.top} 以下 (一覧 ${list.top}〜${list.bottom})。$info",
+            last.bottom.value <= bar.top.value + 1f,
+        )
     }
 
     @Test
