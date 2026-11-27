@@ -269,8 +269,10 @@ object AlarmExpander {
                 .toInstant(zone)
         }.getOrNull()
 
+    // id は sa:<アラームの id>:<日付>:<HHmm> (時と分は2桁ずつ0埋め)。時刻を入れるので、鳴って止めた後に
+    // 今日の後の時刻へ変えると別の回になり、今日その時刻に鳴る (#278)。止めた時刻の回は同じ id のまま残る
     private fun StandaloneAlarm.toInstance(date: LocalDate, triggerAt: Instant) = AlarmInstance(
-        id = "sa:$id:$date",
+        id = "sa:$id:$date:${hour.toString().padStart(2, '0')}${minute.toString().padStart(2, '0')}",
         triggerAtMillis = triggerAt.toEpochMilliseconds(),
         title = label.ifBlank { "アラーム" },
         kind = AlarmKind.STANDALONE,
