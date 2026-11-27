@@ -13,6 +13,9 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.calendaralarm.data.db.ScheduledInstanceEntity
@@ -36,12 +39,14 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.util.Calendar
+import kotlin.math.abs
 
 /**
  * 重ねて出す停止画面 (View の RingingOverlay) が、鳴動画面 (Compose の RingingActivity) と
@@ -105,12 +110,28 @@ class RingingOverlayMatchesScreenTest {
         compose.waitForIdle()
     }
 
+    /**
+     * 鳴動画面が受け取っている inset (システムバーと画面の切り欠き)。
+     * 重ねて出す側は窓に付かず inset が届かないので、同じ値を試験から流して、本番と同じ受け取りの道で足させる。
+     */
+    private fun screenInsets(): Insets {
+        var result = Insets.NONE
+        scenario?.onActivity { activity ->
+            val w = ViewCompat.getRootWindowInsets(activity.window.decorView)
+            if (w != null) {
+                result = w.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            }
+        }
+        return result
+    }
+
     private fun overlay(
         themeId: String = "default",
         large: Boolean = false,
         triggerAt: Long = System.currentTimeMillis(),
         eventStart: Long? = null,
         now: Long = triggerAt,
+        insets: Insets = Insets.NONE,
     ): View {
         val root = RingingOverlay.buildView(
             app, ID, TITLE, 10, listOf(5, 10, 15),
@@ -120,6 +141,10 @@ class RingingOverlayMatchesScreenTest {
             themeId = themeId,
             nowMillis = { now },
         )
+        if (insets != Insets.NONE) {
+            val w = WindowInsetsCompat.Builder().setInsets(WindowInsetsCompat.Type.systemBars(), insets).build()
+            ViewCompat.dispatchApplyWindowInsets(root, w)
+        }
         root.measure(
             View.MeasureSpec.makeMeasureSpec(WIDTH, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(HEIGHT, View.MeasureSpec.EXACTLY),
@@ -148,13 +173,26 @@ class RingingOverlayMatchesScreenTest {
         return Rect(x, y, x + target.width, y + target.height)
     }
 
-    private fun assertSame(name: String, expected: Float, actual: Float) =
-        assertEquals(name, expected, actual, TOL)
+    // CI のログは失敗の理由しか出さず、最初のずれで止まると他の部品の値が見えない。
+    // 比べた値は全部ここに貯め、最後に「どの部品が何 dp ずれたか」と全部の位置を 1 つのメッセージで出す
+    private val diffs = mutableListOf<String>()
+    private val trace = mutableListOf<String>()
+
+    private fun assertSame(name: String, expected: Float, actual: Float) {
+        if (abs(expected - actual) > TOL) {
+            diffs += "$name: 鳴動画面=$expected 重ねて出す側=$actual (差 ${actual - expected}、許容 $TOL)"
+        }
+    }
+
+    private fun record(tag: String, s: Rect, v: Rect) {
+        trace += "  $tag: 鳴動画面=$s 重ねて出す側=$v"
+    }
 
     /** 上下左右が合う (文字を持たない部品)。 */
     private fun assertBoxMatches(root: View, tag: String) {
         val s = screenBounds(tag)
         val v = viewBounds(root, tag)
+        record(tag, s, v)
         assertSame("$tag の左", s.left, v.left)
         assertSame("$tag の上", s.top, v.top)
         assertSame("$tag の右", s.right, v.right)
@@ -165,6 +203,7 @@ class RingingOverlayMatchesScreenTest {
     private fun assertTextBoxMatches(root: View, tag: String) {
         val s = screenBounds(tag)
         val v = viewBounds(root, tag)
+        record(tag, s, v)
         assertSame("$tag の中心の横", (s.left + s.right) / 2f, (v.left + v.right) / 2f)
         assertSame("$tag の上", s.top, v.top)
         assertSame("$tag の下", s.bottom, v.bottom)
@@ -174,25 +213,42 @@ class RingingOverlayMatchesScreenTest {
     private fun assertCenterMatches(root: View, tag: String) {
         val s = screenBounds(tag)
         val v = viewBounds(root, tag)
+        record(tag, s, v)
         assertSame("$tag の中心の横", (s.left + s.right) / 2f, (v.left + v.right) / 2f)
         assertSame("$tag の中心の縦", (s.top + s.bottom) / 2f, (v.top + v.bottom) / 2f)
     }
 
-    private fun assertRootSize() {
+    /** 貯めたずれが 1 つも無いこと。あれば、ずれた値と比べた部品の全部の位置を出す。 */
+    private fun assertNoDiffs() {
+        assertTrue(
+            "鳴動画面と重ねて出す停止画面の位置がずれている (${diffs.size} 件):\n" +
+                diffs.joinToString("\n") + "\n--- 比べた部品の位置 ---\n" + trace.joinToString("\n"),
+            diffs.isEmpty(),
+        )
+    }
+
+    /** 鳴動画面の大きさと、日付が「上の余白 + 上の inset」ちょうどに来ること。返すのは重ねて出す側へ流す inset。 */
+    private fun assertRootSize(): Insets {
         val size = compose.onRoot().fetchSemanticsNode().size
         assertEquals("鳴動画面の幅", WIDTH, size.width)
         assertEquals("鳴動画面の高さ", HEIGHT, size.height)
-        // 鳴動画面は safeDrawing の分だけ内側に寄る。重ねて出す側は窓に付かず inset が届かないので、
-        // この環境の inset が 0 (日付が上の余白ちょうどに来る) でないと、全部の位置がずれて比べられない
-        assertSame("鳴動画面の上の inset が 0", RingingSlideSpec.SCREEN_PAD_V_DP.toFloat(), screenBounds(RING_DATE_TAG).top)
+        // 鳴動画面は safeDrawing の分だけ内側に寄る。この環境の inset を重ねて出す側にも同じに流すので、
+        // 日付が (上の余白 + 上の inset) に来ていれば、2つの画面は同じ前提で比べられる
+        val insets = screenInsets()
+        assertSame(
+            "鳴動画面の日付の上 (上の余白 ${RingingSlideSpec.SCREEN_PAD_V_DP} + 上の inset ${insets.top})",
+            RingingSlideSpec.SCREEN_PAD_V_DP.toFloat() + insets.top,
+            screenBounds(RING_DATE_TAG).top,
+        )
+        return insets
     }
 
     @Test
     fun `日付と輪と時刻と開始までとスヌーズと停止の位置と大きさが鳴動画面と合う`() {
         val now = System.currentTimeMillis()
         launchScreen("forest", large = false, triggerAt = now, eventStart = now + 15 * 60_000L)
-        assertRootSize()
-        val root = overlay(themeId = "forest", triggerAt = now, eventStart = now + 15 * 60_000L)
+        val insets = assertRootSize()
+        val root = overlay(themeId = "forest", triggerAt = now, eventStart = now + 15 * 60_000L, insets = insets)
 
         assertTextBoxMatches(root, RING_DATE_TAG)
         assertBoxMatches(root, RING_DIAL_TAG)
@@ -201,18 +257,22 @@ class RingingOverlayMatchesScreenTest {
         assertTextBoxMatches(root, TITLE_TAG)
         assertBoxMatches(root, SNOOZE_BUTTON_TAG)
         assertBoxMatches(root, SLIDE_TRACK_TAG)
+        assertNoDiffs()
     }
 
     @Test
     fun `大きいボタンでも輪とスヌーズと停止の位置が合う`() {
         val now = System.currentTimeMillis()
         launchScreen("forest", large = true, triggerAt = now, eventStart = now + 15 * 60_000L)
-        assertRootSize()
-        val root = overlay(themeId = "forest", large = true, triggerAt = now, eventStart = now + 15 * 60_000L)
+        val insets = assertRootSize()
+        val root = overlay(
+            themeId = "forest", large = true, triggerAt = now, eventStart = now + 15 * 60_000L, insets = insets,
+        )
 
         assertBoxMatches(root, RING_DIAL_TAG)
         assertBoxMatches(root, SNOOZE_BUTTON_TAG)
         assertBoxMatches(root, LARGE_STOP_TAG)
+        assertNoDiffs()
     }
 
     @Test
