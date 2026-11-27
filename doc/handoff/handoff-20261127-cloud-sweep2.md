@@ -16,7 +16,7 @@ open の課題を全部読み、クラウドで確かめまで終わる物（`cl
 
 ## この環境の制約
 
-- `scripts/setup-android-sdk.sh` が dl.google.com で proxy に 403 を返された（環境の許可リストに無い）。Android の unit テストは PR の GitHub Actions（`all_check.yml` が `ci.sh all` と lint を回す）で確かめた
+- `scripts/setup-android-sdk.sh` が dl.google.com で proxy に 403 を返された（環境の許可リストに無い）。Android の unit テストと lint は PR #426 の GitHub Actions（`all_check.yml` が `ci.sh all` と lint を回す）で確かめる。Markdown だけの変更では all_check.yml は動かないので、コードが入るまでは未確認
 - `node scripts/hardcoded-ja/check.mjs` と `node scripts/sync-ai-rule.mjs --check` は手元で回した
 
 ## 課題ごとの結果
