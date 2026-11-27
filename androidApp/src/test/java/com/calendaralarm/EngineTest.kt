@@ -140,7 +140,7 @@ class EngineTest {
 
     @Test
     fun `未予約の過去evインスタンスはSKIPPEDが保存され次回resyncで除外される`() = runBlocking {
-        // applyPlan の不意打ち防止と同じ手順: setState は行が無いと更新0なので
+        // applyDecision の不意打ち防止と同じ手順: setState は行が無いと更新0なので
         // 先に行を作ってから終端化する。保存されないと次回 resync で再展開される。
         val inst = AlarmInstance(
             "ev:c1:e1:1000:b30",
@@ -158,8 +158,8 @@ class EngineTest {
 
     @Test
     fun `未予約の過去evインスタンスは実resyncでSKIPPED化され2回目で再処理されず見逃しに数えない`() = runBlocking {
-        // 本番の applyPlan 分岐を通す回帰: reader(fake provider) → expand → plan →
-        // applyPlan。production の upsert+MISSED 分岐が無いと、過去分は
+        // 本番の applyDecision 分岐を通す回帰: reader(fake provider) → expand → plan →
+        // applyDecision。production の upsert+MISSED 分岐が無いと、過去分は
         // AlarmManager に予約され DB は PENDING のまま残るので RED になる。
         val start = Clock.System.now().toEpochMilliseconds() + 30 * 60_000
         val inst = mapOf(

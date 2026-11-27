@@ -1119,7 +1119,7 @@ class AlarmRepository(
         // 時計は1回だけ読む。期限の選び方と条件付きの書き込みで同じ cutoff を使う
         val now = Clock.System.now().toEpochMilliseconds()
         val cutoff = now - AlarmExpander.FIRE_GRACE.inWholeMilliseconds
-        val rows = db.scheduledInstances().all()
+        val rows = db.scheduledInstances().pending()
         val byId = rows.associateBy { it.id }
         val stale = ScheduleReconciler.overdueIds(rows.mapNotNull { it.toRowOrNull() }, now)
         beforeMissedWriteForTest?.invoke()
