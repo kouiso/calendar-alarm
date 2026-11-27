@@ -33,13 +33,16 @@ class PermissionsBoardShotTest {
 
     private fun shot(name: String, dark: Boolean, state: Map<AppPermission, Boolean>) {
         RuntimeEnvironment.setQualifiers(if (dark) "+night" else "+notnight")
-        val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
+        val activity = controller.get()
         activity.setContent {
             CalendarAlarmTheme(darkTheme = dark) { PermissionsScreen(onBack = {}, probe = { state }) }
         }
         compose.waitForIdle()
         compose.onNodeWithTag(permRowTag(AppPermission.CALENDAR)).assertExists()
         BoardShot.save(activity, "$name-${if (dark) "dark" else "light"}")
+        // 次の1枚で根が2つにならないよう、描き終えた Activity は壊す
+        controller.pause().stop().destroy()
     }
 
     @Test
