@@ -6,14 +6,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.assertHeightIsAtLeast
-import androidx.compose.ui.test.assertHeightIsEqualTo
-import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.CalendarToday
@@ -78,9 +74,14 @@ class AskSheetShapeTest {
     @Test
     fun 印の輪とボタンとあとでの大きさ() {
         show()
-        compose.onNodeWithTag(ASK_ICON_TAG).assertWidthIsEqualTo(81.dp).assertHeightIsEqualTo(81.dp)
-        compose.onNodeWithTag(ASK_CTA_TAG).assertHeightIsEqualTo(52.dp)
-        compose.onNodeWithTag(ASK_LATER_TAG).assertHeightIsAtLeast(44.dp)
+        // 値が出るように、assert*Is* ではなく実測を自分で比べる
+        val icon = compose.onNodeWithTag(ASK_ICON_TAG).getUnclippedBoundsInRoot()
+        val cta = compose.onNodeWithTag(ASK_CTA_TAG).getUnclippedBoundsInRoot()
+        val later = compose.onNodeWithTag(ASK_LATER_TAG).getUnclippedBoundsInRoot()
+        assertEquals("印の輪の幅 (期待 81dp・実測 ${icon.width.value}dp)", 81f, icon.width.value, 0.01f)
+        assertEquals("印の輪の高さ (期待 81dp・実測 ${icon.height.value}dp)", 81f, icon.height.value, 0.01f)
+        assertEquals("ボタンの高さ (期待 52dp・実測 ${cta.height.value}dp)", 52f, cta.height.value, 0.01f)
+        assertTrue("「あとで」の高さが 44dp 以上 (実測 ${later.height.value}dp)", later.height.value >= 44f)
     }
 
     @Test

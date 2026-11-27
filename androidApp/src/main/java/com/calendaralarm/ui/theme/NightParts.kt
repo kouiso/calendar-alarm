@@ -206,7 +206,14 @@ fun NightLinkButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
     }
 }
 
-/** .ico: 60 の丸に 1dp の ringColor、外に 80 の丸 (濃さ .5)。印 28。外の余白 10.5 (外の丸の線が外へ 0.5 出るので、親に切られないよう全体 81) */
+/**
+ * .ico: 60 の丸に 1dp の ringColor、外に 80 の丸 (濃さ .5)。印 28。
+ * 外の丸の線が外へ 0.5 出るので、親に切られないよう全体を 81 にする (外の余白は 10.5)。
+ *
+ * 余白は padding(10.5.dp) にしない。Compose の padding は Dp を px へ丸める (Dp.roundToPx は四捨五入) ので、
+ * 10.5 を両側に付けると 11 + 11 で 82 になり、81 にならない (CI: NightPartsTest / AskSheetShapeTest で実測した差)。
+ * そこで箱を 81 に固定し、2つの輪は箱の中心 (40.5, 40.5) を基準に drawBehind で描いて端数を丸めさせない
+ */
 @Composable
 fun NightIconRings(
     icon: ImageVector,
@@ -216,16 +223,21 @@ fun NightIconRings(
 ) {
     Box(
         modifier
-            .padding(10.5.dp)
-            .size(60.dp)
+            .size(81.dp)
             .drawBehind {
+                // 外の丸: 半径 40 の線 (濃さ .5)
                 drawCircle(
                     color = ringColor.copy(alpha = ringColor.alpha * 0.5f),
                     radius = 40.dp.toPx(),
                     style = Stroke(width = 1.dp.toPx()),
                 )
-            }
-            .border(1.dp, ringColor, CircleShape),
+                // 内の丸: 60 の丸の内側に 1dp の線 (border と同じ。線の中心は半径 29.5)
+                drawCircle(
+                    color = ringColor,
+                    radius = 29.5.dp.toPx(),
+                    style = Stroke(width = 1.dp.toPx()),
+                )
+            },
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(28.dp))
