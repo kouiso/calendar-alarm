@@ -46,6 +46,8 @@ class NotificationRepostTest {
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
         runBlocking { context.settingsDataStore.edit { it.clear() } }
+        // Robolectric は同じプロセスで保存を持ち越すので、内容の印を空にする (#384)
+        context.getSharedPreferences("notification_alarm_content", Context.MODE_PRIVATE).edit().clear().commit()
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
         repository = AlarmRepository(
             db = db,
@@ -83,8 +85,10 @@ class NotificationRepostTest {
 
     private suspend fun skipLogs() = db.auditLog().recentByActionsFlow(listOf("NF_REPOST_SKIP"), 50).first()
 
-    private suspend fun post(id: String, title: String = "new") =
-        repository.scheduleNotificationAlarm(inst(id, title))
+    private suspend fun newContentLogs() = db.auditLog().recentByActionsFlow(listOf("NF_NEW_CONTENT"), 50).first()
+
+    private suspend fun post(id: String, title: String = "new", contentKey: String? = null) =
+        repository.scheduleNotificationAlarm(inst(id, title), contentKey)
 
     @Test
     fun `1 PENDING の行は何も書かず予約し直さない`() = runBlocking {
@@ -214,5 +218,74 @@ class NotificationRepostTest {
         post("nf:a")
         assertEquals(AlarmState.PENDING.name, row("nf:a")!!.state)
         assertEquals("new", row("nf:a")!!.title)
+    }
+
+    @Test
+    fun `2 止めて10分未満でも内容が変わっていれば鳴らす`() = runBlocking {
+        post("nf:q", title = "old", contentKey = "A")
+        db.scheduledInstances().setState("nf:q", AlarmState.DISMISSED.name)
+        seedDismissAudit("nf:q", now - 3 * minute)
+        post("nf:q", title = "new", contentKey = "B")
+        val r = row("nf:q")!!
+        assertEquals(AlarmState.PENDING.name, r.state)
+        assertEquals("new", r.title)
+        assertTrue(skipLogs().isEmpty())
+        assertEquals(1, newContentLogs().size)
+    }
+
+    @Test
+    fun `2 止めて10分未満で内容が同じなら鳴らさない`() = runBlocking {
+        post("nf:q", title = "old", contentKey = "A")
+        db.scheduledInstances().setState("nf:q", AlarmState.DISMISSED.name)
+        seedDismissAudit("nf:q", now - 3 * minute)
+        post("nf:q", title = "new", contentKey = "A")
+        val r = row("nf:q")!!
+        assertEquals(AlarmState.DISMISSED.name, r.state)
+        assertEquals("old", r.title)
+        assertEquals(1, skipLogs().size)
+        assertTrue(newContentLogs().isEmpty())
+    }
+
+    @Test
+    fun `2 印が保存されていない行は内容が違っても今までどおり落とす`() = runBlocking {
+        seed("nf:r", AlarmState.DISMISSED)
+        seedDismissAudit("nf:r", now - 3 * minute)
+        post("nf:r", contentKey = "B")
+        assertEquals(AlarmState.DISMISSED.name, row("nf:r")!!.state)
+        assertEquals("old", row("nf:r")!!.title)
+    }
+
+    @Test
+    fun `2 印を渡さない呼び出しは今までどおり落とす`() = runBlocking {
+        post("nf:s", title = "old", contentKey = "A")
+        db.scheduledInstances().setState("nf:s", AlarmState.DISMISSED.name)
+        seedDismissAudit("nf:s", now - 3 * minute)
+        post("nf:s")
+        assertEquals(AlarmState.DISMISSED.name, row("nf:s")!!.state)
+        assertEquals("old", row("nf:s")!!.title)
+    }
+
+    @Test
+    fun `1 鳴動中は内容が変わっても何も書かない`() = runBlocking {
+        post("nf:t", title = "old", contentKey = "A")
+        db.scheduledInstances().setState("nf:t", AlarmState.FIRED.name)
+        post("nf:t", title = "new", contentKey = "B")
+        val r = row("nf:t")!!
+        assertEquals(AlarmState.FIRED.name, r.state)
+        assertEquals("old", r.title)
+        assertTrue(newContentLogs().isEmpty())
+    }
+
+    @Test
+    fun `2 落とした出し直しは印を書き換えない`() = runBlocking {
+        post("nf:u", title = "old", contentKey = "A")
+        db.scheduledInstances().setState("nf:u", AlarmState.DISMISSED.name)
+        seedDismissAudit("nf:u", now - 3 * minute)
+        post("nf:u", title = "second", contentKey = "A") // 同じ内容: 落とす
+        assertEquals(AlarmState.DISMISSED.name, row("nf:u")!!.state)
+        post("nf:u", title = "third", contentKey = "B") // 保存した印は A のまま: 鳴らす
+        val r = row("nf:u")!!
+        assertEquals(AlarmState.PENDING.name, r.state)
+        assertEquals("third", r.title)
     }
 }

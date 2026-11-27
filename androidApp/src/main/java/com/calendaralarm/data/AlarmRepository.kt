@@ -534,6 +534,9 @@ class AlarmRepository(
     /** 押し出されて鳴らし直しを待つ id。プロセスが死んでも残るよう端末に保存する (#84)。 */
     private val waitingRings = WaitingRingStore(calendarReader.appContext())
 
+    /** 通知アラームを鳴らした時の内容の印。止めた直後の出し直しが新しい知らせかを比べる (#384) */
+    private val notificationContents = NotificationContentStore(calendarReader.appContext())
+
     suspend fun onSnoozed(id: String?, snoozeMinutes: Int? = null) {
         if (id == null) return
         val done = ringTransitionLock.withLock {
@@ -631,12 +634,15 @@ class AlarmRepository(
      * 通知アラーム (`nf:`) を予約する。元アプリが同じ通知キーで出し直しても、同じ鎖
      * (`nf:X` とスヌーズの子 `nf:X:snz*`) の状態で次のように分ける (#371)。
      * 1. PENDING か FIRED がある: 何も書かない (鳴動待ち・鳴動中を上書きしない)
-     * 2. DISMISSED がある: 最後に止めてから [NOTIFICATION_REPOST_WINDOW_MS] 未満なら鳴らさず記録を 1 行書く。以上なら鳴らす
+     * 2. DISMISSED がある: 最後に止めてから [NOTIFICATION_REPOST_WINDOW_MS] 未満なら鳴らさず記録を 1 行書く。以上なら鳴らす。
+     *    ただし [contentKey] (題と本文の印) があり、前に鳴らした時の印と違う時は、窓の中でも鳴らして `NF_NEW_CONTENT` を書く (#384)。
+     *    保存した印が無い・印が同じ・[contentKey] が null の時は今までどおり鳴らさない
      * 3. それ以外: [scheduleAdhoc] と同じに鳴らす
      * 止めた時刻は DISMISS の記録の行から読む (プロセスが落ちても残る)。読めなければ鳴動時刻から数える。
-     * 落とした出し直しは窓を延ばさない。確かめと書き込みは [ringTransitionLock] の中で行う
+     * 落とした出し直しは窓を延ばさない (印も書き換えない)。印は予約できた時だけ書く。
+     * 確かめと書き込みは [ringTransitionLock] の中で行う
      */
-    suspend fun scheduleNotificationAlarm(instance: AlarmInstance) = withContext(Dispatchers.IO) {
+    suspend fun scheduleNotificationAlarm(instance: AlarmInstance, contentKey: String? = null) = withContext(Dispatchers.IO) {
         val changed = ringTransitionLock.withLock {
             val chain = db.scheduledInstances().chainOf(instance.id)
             val states = chain.map { it.state }.toSet()
@@ -650,15 +656,27 @@ class AlarmRepository(
                 val elapsed = nowMillis() - stoppedAt
                 // 時計が止めた後に戻った (elapsed < 0) 時は窓の外とみなして鳴らす
                 if (elapsed in 0 until NOTIFICATION_REPOST_WINDOW_MS) {
-                    audit(
-                        "NF_REPOST_SKIP",
-                        "${instance.id}: 止めて ${elapsed / 1000} 秒なので出し直しを鳴らさない",
-                        dismissed.maxByOrNull { it.triggerAtMillis },
-                    )
-                    return@withLock false
+                    val saved = notificationContents.get(instance.id)
+                    if (contentKey != null && saved != null && saved != contentKey) {
+                        // 題と本文は記録に入れない (共有の対象になるため)
+                        audit(
+                            "NF_NEW_CONTENT",
+                            "${instance.id}: 止めて ${elapsed / 1000} 秒だが内容が変わったので鳴らす",
+                            dismissed.maxByOrNull { it.triggerAtMillis },
+                        )
+                    } else {
+                        audit(
+                            "NF_REPOST_SKIP",
+                            "${instance.id}: 止めて ${elapsed / 1000} 秒なので出し直しを鳴らさない",
+                            dismissed.maxByOrNull { it.triggerAtMillis },
+                        )
+                        return@withLock false
+                    }
                 }
             }
-            writeAdhoc(instance)
+            val scheduled = writeAdhoc(instance)
+            if (scheduled && contentKey != null) notificationContents.put(instance.id, contentKey, nowMillis())
+            scheduled
         }
         if (changed) onScheduleChanged?.invoke()
     }
