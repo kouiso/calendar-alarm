@@ -12,6 +12,7 @@ import com.calendaralarm.data.db.StandaloneAlarmEntity
 import com.calendaralarm.engine.AlarmScheduler
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.logic.ScheduleReconciler
+import com.calendaralarm.shared.logic.SilenceReason
 import com.calendaralarm.shared.model.AccountSetting
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
@@ -238,6 +239,8 @@ class AlarmRepository(
          * defaultSilenced との違いは、すべてミュートで外れるアラームの既定も数える点 (通知だけの既定は数えない)
          */
         val restoreSilenced: Boolean = false,
+        /** 鳴らない理由 (#315)。鳴る行は null。muted と一致する。強い理由が1つだけ入る */
+        val silenceReason: SilenceReason? = null,
     ) {
         /** 予定ごとの指定では鳴るようにできない (スイッチを押せなくする) */
         val lockedByCalendar: Boolean get() = calendarOff || accountOff || allDayOff
@@ -325,6 +328,9 @@ class AlarmRepository(
             } else {
                 AlarmExpander.resolveActions(ev, rule, override, appSettings.titleCodes)
             }
+            // リマインダー側の鳴る時刻の有無。表示用の判定と理由の判定で同じ値を使う
+            val reminderTriggers = effectiveExtras.isNotEmpty() ||
+                (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 })
             AgendaItem(
                 event = ev,
                 calendarName = sources[ev.calendarId]?.name ?: ev.calendarId,
@@ -339,20 +345,21 @@ class AlarmRepository(
                 calendarOff = pref?.enabled == false,
                 accountOff = accountOff,
                 allDayOff = allDayOff,
-                hasReminderTriggers = effectiveExtras.isNotEmpty() ||
-                    (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
+                hasReminderTriggers = reminderTriggers,
                 muteAll = appSettings.muteAll,
                 defaultSilenced = AlarmExpander.silencedWithoutOverride(
                     ev, rule, appSettings.titleCodes, appSettings.inviteFilter, appSettings.eventTypeFilter,
                     // 何分前などの個別指定は ON でも残すので、リマインダー側の時刻は指定の分まで数える
-                    hasReminderTriggers = effectiveExtras.isNotEmpty() ||
-                        (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
+                    hasReminderTriggers = reminderTriggers,
                 ),
                 restoreSilenced = AlarmExpander.silencedWithoutOverride(
                     ev, rule, appSettings.titleCodes, appSettings.inviteFilter, appSettings.eventTypeFilter,
-                    hasReminderTriggers = effectiveExtras.isNotEmpty() ||
-                        (appSettings.importEventReminders && ev.calendarReminderMinutes.any { it >= 0 }),
+                    hasReminderTriggers = reminderTriggers,
                     muteAll = appSettings.muteAll,
+                ),
+                silenceReason = AlarmExpander.silenceReason(
+                    ev, rule, override, appSettings.titleCodes, appSettings.inviteFilter, appSettings.eventTypeFilter,
+                    reminderTriggers, appSettings.muteAll, calendarOff = pref?.enabled == false, accountOff = accountOff,
                 ),
             )
         }

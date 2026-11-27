@@ -3,6 +3,7 @@ package com.calendaralarm.shared.logic
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
+import com.calendaralarm.shared.model.Availability
 import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
@@ -12,6 +13,7 @@ import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
 import com.calendaralarm.shared.model.TitleCodeSettings
 import com.calendaralarm.shared.model.TitleMatchRule
+import com.calendaralarm.shared.model.resolveEventType
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -378,6 +380,50 @@ object AlarmExpander {
         val (start, reminder) = resolveActions(event, rule, null, titleCodes)
         fun EventAction.silenced() = this == EventAction.MUTE || (muteAll && this == EventAction.ALARM)
         return start.silenced() && (reminder.silenced() || !hasReminderTriggers)
+    }
+
+    /**
+     * 予定一覧で、この予定が鳴らない理由 (#315)。鳴るなら null。AgendaItem.muted と必ず一致する。
+     * 2つ以上当てはまる時は [SilenceReason] の並びの強い方を返す。1〜7 は並びのとおり先に当たった物を返し、
+     * 8〜10 は「1つ外すと鳴るか」で原因を切り分ける (すべてミュート → 題の言葉 → カレンダーの鳴らし方の順)。
+     * 鳴る・鳴らないの判定は expandEvents・passesEventFilters・resolveActions と同じ
+     */
+    fun silenceReason(
+        event: CalendarEvent,
+        rule: AlarmRule,
+        override: EventOverride?,
+        titleCodes: TitleCodeSettings,
+        inviteFilter: InviteFilter,
+        eventTypeFilter: EventTypeFilter,
+        hasReminderTriggers: Boolean,
+        muteAll: Boolean,
+        calendarOff: Boolean,
+        accountOff: Boolean,
+        titleMatchRule: TitleMatchRule = TitleMatchRule.WHOLE_TITLE_FOR_TIMED,
+    ): SilenceReason? {
+        if (calendarOff) return SilenceReason.CALENDAR_OFF
+        if (accountOff) return SilenceReason.ACCOUNT_OFF
+        if (allDaySuppressed(event, rule)) return SilenceReason.ALL_DAY_OFF
+        if (override?.action == EventAction.MUTE) return SilenceReason.EVENT_OFF
+        // 予定ごとに「アラーム」を指定した予定は絞り込みを通す (passesEventFilters と同じ)
+        if (override?.action != EventAction.ALARM) {
+            if (!inviteFilter.allows(event.inviteStatus)) return SilenceReason.INVITE
+            if (!eventTypeFilter.allows(resolveEventType(event, titleMatchRule))) return SilenceReason.EVENT_TYPE
+            if (event.availability == Availability.FREE && !eventTypeFilter.free) return SilenceReason.FREE_TIME
+        }
+        // 何も鳴らないか。リマインダーの動作はリマインダー側の時刻がある時だけ鳴る
+        fun silent(codes: TitleCodeSettings, mute: Boolean): Boolean {
+            val (start, reminder) = resolveActions(event, rule, override, codes)
+            fun EventAction.off() = this == EventAction.MUTE || (mute && this == EventAction.ALARM)
+            return start.off() && (reminder.off() || !hasReminderTriggers)
+        }
+        if (!silent(titleCodes, muteAll)) return null
+        // すべてミュートだけを外して鳴るなら、原因はすべてミュート
+        if (muteAll && !silent(titleCodes, false)) return SilenceReason.MUTE_ALL
+        // すべてミュートを外したまま、題の言葉の「鳴らさない」だけを空にして鳴るなら、原因は題の言葉。
+        // 「鳴らす」の言葉は残す (鳴る側に上げた予定をカレンダーの既定へ戻して取り違えないため)
+        if (!silent(titleCodes.copy(neverCodes = emptyList()), false)) return SilenceReason.TITLE_CODE
+        return SilenceReason.CALENDAR_ACTION_OFF
     }
 
     /**
