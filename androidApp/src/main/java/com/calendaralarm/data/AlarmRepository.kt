@@ -11,7 +11,7 @@ import com.calendaralarm.data.db.ScheduledInstanceEntity
 import com.calendaralarm.data.db.StandaloneAlarmEntity
 import com.calendaralarm.engine.AlarmScheduler
 import com.calendaralarm.shared.logic.AlarmExpander
-import com.calendaralarm.shared.logic.AlarmPlanner
+import com.calendaralarm.shared.logic.ScheduleReconciler
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
@@ -61,6 +61,10 @@ private fun String?.toOffsets(): List<Int> =
     this?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.filter { it > 0 } ?: emptyList()
 
 private fun List<Int>.toCsv(): String = distinct().sorted().joinToString(",")
+
+/** 状態か種類が読めない行は null (その行は判定に使わない) */
+private fun ScheduledInstanceEntity.toRowOrNull(): ScheduleReconciler.Row? =
+    runCatching { ScheduleReconciler.Row(toInstance(), AlarmState.valueOf(state)) }.getOrNull()
 
 class AlarmRepository(
     private val db: AppDatabase,
@@ -724,29 +728,16 @@ class AlarmRepository(
         val horizon = now + 14.days
         val desired = mutableListOf<AlarmInstance>()
 
-        // 終端行は先に読む。同 id の蘇生防止と単発アラームの消費判定の両方で使う
+        // 全部の行は先に読む。蘇生防止・単発アラームの消費判定・持ち越しの判定は ScheduleReconciler が行う
         val allRows = db.scheduledInstances().all()
         afterResyncReadForTest?.invoke()
-        val terminalIds = allRows.asSequence()
-            .filter { it.state in NO_REVIVE_STATES }
-            .map { it.id }
-            .toSet()
 
-        // 単発/繰り返しアラーム。
-        // 単発 (daysOfWeek 空) は一度終端に達したら二度と発行しない。
-        // 展開は毎回「次の in-window 日付」へ新 id を発行するので、終端行が
-        // 残る限り「1回のみ」の約束が日跨ぎで破られて毎日鳴り続ける。
-        val consumedAlarmIds = allRows.asSequence()
-            .filter { it.id in terminalIds }
-            .mapNotNull { it.standaloneAlarmId }
-            .toSet()
+        // 単発/繰り返しアラーム。「1回のみ」の使い切りの絞り込みは reconcile が行う (展開は全部出す)
         val appSettings = settings.flow.first()
         val standalones = db.standaloneAlarms().all().map { it.toModel() }
         standalones.forEach { alarm ->
             // 一括ミュート中は単発/繰返しアラーム自体を展開しない (全部 ALARM 鳴動のため)
-            if (!appSettings.muteAll &&
-                (alarm.effectiveRepeatMode() != RepeatMode.ONCE || alarm.id !in consumedAlarmIds)
-            ) {
+            if (!appSettings.muteAll) {
                 desired += AlarmExpander.expandStandalone(alarm, now = now, days = 14)
             }
         }
@@ -876,47 +867,8 @@ class AlarmRepository(
             }
         }
 
-        // 終了済み状態 (鳴動/停止/スヌーズ/見逃し) の同 id は蘇生させない。
-        // 展開が同 id を再発行しても、ユーザーが「止めた」「スヌーズした」意味を守る。
-        val desiredBeforeTerminal = desired.associate { it.id to it.delivery }
-        desired.removeAll { it.id in terminalIds }
-        cancelStaleWaitingEvents(desiredBeforeTerminal, canJudge = hasCalendarPermission() && !keepPendingEvents)
-
-        // タイマー・スヌーズなど Expander が再生しない予約は「理想状態」へ持ち越す。
-        // 持ち越さないと差分計算で毎 resync キャンセルされてしまう。
-        val pendingRows = allRows.filter { it.state == AlarmState.PENDING.name }
-        val desiredIds = desired.map { it.id }.toSet()
-        val adhoc = pendingRows.map { it.toInstance() }
-            .filter { inst ->
-                inst.id !in desiredIds && when {
-                    // TIMER / NOTIFICATION は即時発火の adhoc。理想リストに無くても保持
-                    inst.kind == AlarmKind.TIMER || inst.kind == AlarmKind.NOTIFICATION -> true
-                    // スヌーズ中の子は「親が今も理想状態にある」場合だけ持ち越す。
-                    // 親アラームの無効化・削除・予定ミュート後にスヌーズだけ鳴るのを防ぐ。
-                    inst.snoozeSeq > 0 -> {
-                        // 親の「鳴動意思」を見る。親インスタンス id の照合では
-                        // グレース窓 (60分) を跨ぐスヌーズが resync で誤殺される
-                        // ため、sa: はアラームの有効性、ev: は予定の存続+非ミュートを見る。
-                        val root = inst.id.substringBefore(":snz")
-                        when {
-                            root.startsWith("sa:") ->
-                                root.removePrefix("sa:").substringBefore(":")
-                                    .toLongOrNull()?.let { aid ->
-                                        standalones.any { it.id == aid && it.enabled }
-                                    } == true
-                            root.startsWith("ev:") ->
-                                // カレンダー読み取り失敗時は平の EVENT 予約と同じく保守側に倒す。
-                                // id の末尾は ":b<分>" (開始基点) か ":d<分>" (終日の現地0時基点, #382)
-                                // なので、最後の区切りを外せば予定のキーに戻る
-                                keepPendingEvents || root in desiredIds ||
-                                    root.removePrefix("ev:").substringBeforeLast(":") in liveEventKeys
-                            else -> keepPendingEvents && inst.kind == AlarmKind.EVENT
-                        }
-                    }
-                    else -> keepPendingEvents && inst.kind == AlarmKind.EVENT
-                }
-            }
-        desired += adhoc
+        // 待っている鳴動のうち、もう展開されない予定を取り消す。終了済みの同 id を除く前の展開で判断する
+        cancelStaleWaitingEvents(desired.associate { it.id to it.delivery }, canJudge = hasCalendarPermission() && !keepPendingEvents)
 
         // 書き戻しは鳴動・停止・スヌーズと同じロックの中で行う (#232)。
         // 上の読み取りから後に通信などを挟むので、その間に状態が変わった行がある。
@@ -925,16 +877,20 @@ class AlarmRepository(
         // 読み取りの後にできた PENDING の行 (スヌーズの子など) は、この再同期では触らない (次の再同期で扱う)。
         // 再同期の全体はロックに入れない: 通信の間に停止ボタンが待たされるため
         ringTransitionLock.withLock {
-            val current = db.scheduledInstances().all().associateBy { it.id }
-            val noReviveNow = current.values.filter { it.state in NO_REVIVE_STATES }.map { it.id }.toSet()
-            val stillPending = pendingRows.filter { current[it.id]?.state == AlarmState.PENDING.name }
-            // 読んだ時に PENDING で、今は PENDING でない行も書き戻さない。停止がスヌーズの子を
-            // 取り消した (CANCELLED) 時に、持ち越しの予約として鳴らし直さないため
-            val leftPending = pendingRows.map { it.id }.toSet() - stillPending.map { it.id }.toSet()
-            val finalDesired = desired.filterNot { it.id in noReviveNow || it.id in leftPending }
-            val scheduled = stillPending.associate { it.id to it.triggerAtMillis }
-            val plan = AlarmPlanner.plan(scheduled, finalDesired, now)
-            applyPlan(plan, finalDesired, reason, scheduled.keys)
+            val decision = ScheduleReconciler.reconcile(
+                ScheduleReconciler.Input(
+                    nowMillis = now.toEpochMilliseconds(),
+                    rowsAtRead = allRows.mapNotNull { it.toRowOrNull() },
+                    rowsNow = db.scheduledInstances().all().mapNotNull { it.toRowOrNull() },
+                    expanded = desired,
+                    standalone = standalones,
+                    keepEventRows = keepPendingEvents,
+                    liveEventKeys = liveEventKeys,
+                    // 一度も予約していない予定の過ぎた鳴動は鳴らさず SKIPPED にする (iOS は今すぐ鳴らす)
+                    skipUnarmedPastEvents = true,
+                ),
+            )
+            applyDecision(decision, reason)
         }
         onScheduleChanged?.invoke()
     }
@@ -942,48 +898,43 @@ class AlarmRepository(
     /** 試験用の差込口: 再同期が全行を読んだ直後に呼ぶ (#232 の競合の再現) */
     @Volatile internal var afterResyncReadForTest: (suspend () -> Unit)? = null
 
-    private suspend fun applyPlan(
-        plan: AlarmPlanner.Plan,
-        desired: List<AlarmInstance>,
-        reason: String,
-        armedIds: Set<String>,
-    ) {
-        for (id in plan.toCancel) {
+    /**
+     * [ScheduleReconciler] の決定を DB と AlarmManager へ適用する。
+     * 順番は 取り消し → 予約 → SKIPPED → 今すぐ鳴らす。
+     */
+    private suspend fun applyDecision(d: ScheduleReconciler.Decision, reason: String) {
+        for (id in d.cancel) {
             scheduler.cancel(id)
             setState(id, AlarmState.CANCELLED)
         }
         // 差分が無い予約も毎回 AlarmManager に再主張する。
         // 再起動・強制終了・パッケージ更新で OS 側だけ消えるケースを潰すため。
-        // 近い順に予約する。AlarmManager の同時予約上限 (500) に万が一
+        // 近い順に予約する (arm は鳴動時刻の早い順)。AlarmManager の同時予約上限 (500) に万が一
         // 触れた場合、最も遠い予約から落ちる退化になる (近い側が鳴れば
         // 次回 resync で空きができて遠い側が拾い直される)。
-        val fireNowIds = plan.toFireNow.map { it.id }.toSet()
-        val toSchedule = desired.filter { it.id !in fireNowIds }
-            .sortedBy { it.triggerAtMillis }
-        if (toSchedule.isNotEmpty()) {
-            db.scheduledInstances().upsert(toSchedule.map { ScheduledInstanceEntity.of(it) })
-            toSchedule.forEach {
+        if (d.arm.isNotEmpty()) {
+            db.scheduledInstances().upsert(d.arm.map { ScheduledInstanceEntity.of(it) })
+            d.arm.forEach {
                 if (!scheduler.schedule(it)) {
                     audit("EXACT_DENIED", it.id)
                     setState(it.id, AlarmState.CANCELLED)
                 }
             }
         }
+        // 一度も予約していない ev: インスタンスの過去分 (リマインダー取込ONの
+        // 初回 resync 等) は「元カレンダー側が既に通知した時刻」。後追いで
+        // 不意に鳴らさず、次回展開からも外れるよう終端にする。鳴らせなかったのではなく
+        // わざと鳴らさなかったので、見逃しの件数に入らない SKIPPED にする。
+        // setState は UPDATE WHERE id のみで行が無いと更新0になるため、
+        // 先に行を作ってから終端化する (残さないと次回 resync で再展開される)。
+        for (skipped in d.skip) {
+            db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(skipped)))
+            // markSkipped はウィジェットの更新を呼ぶので、ロックの中では状態と記録だけ書く
+            setState(skipped.id, AlarmState.SKIPPED)
+            audit("SKIP", "${skipped.id}: 予約前に通知時刻が過ぎていた")
+        }
         // グレース幅内の過去分: PENDING に戻して即時トリガ (サービス経由で鳴らす)
-        for (fire in plan.toFireNow) {
-            // 一度も予約していない ev: インスタンスの過去分 (リマインダー取込ONの
-            // 初回 resync 等) は「元カレンダー側が既に通知した時刻」。後追いで
-            // 不意に鳴らさず、次回展開からも外れるよう終端にする。鳴らせなかったのではなく
-            // わざと鳴らさなかったので、見逃しの件数に入らない SKIPPED にする。
-            // setState は UPDATE WHERE id のみで行が無いと更新0になるため、
-            // 先に行を作ってから終端化する (残さないと次回 resync で再展開される)。
-            if (fire.id !in armedIds && fire.id.startsWith("ev:")) {
-                db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
-                // markSkipped はウィジェットの更新を呼ぶので、ロックの中では状態と記録だけ書く
-                setState(fire.id, AlarmState.SKIPPED)
-                audit("SKIP", "${fire.id}: 予約前に通知時刻が過ぎていた")
-                continue
-            }
+        for (fire in d.fireNow) {
             db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(fire)))
             if (!scheduler.schedule(fire.copy(triggerAtMillis = Clock.System.now().toEpochMilliseconds()))) {
                 audit("EXACT_DENIED", fire.id)
@@ -991,7 +942,7 @@ class AlarmRepository(
         }
         audit(
             "RESYNC",
-            "reason=$reason +${plan.toSchedule.size} -${plan.toCancel.size} fire=${plan.toFireNow.size}",
+            "reason=$reason +${d.changedIds.size + d.fireNow.size + d.skip.size} -${d.cancel.size} fire=${d.fireNow.size + d.skip.size}",
         )
         appScope.launch { pruneOldLogs() }
     }
@@ -1039,14 +990,17 @@ class AlarmRepository(
      * 戻り値は実際に変えた行の数 (読んだ後に停止された行は数えない)。
      */
     suspend fun markMissed(): Int {
-        val cutoff = Clock.System.now().toEpochMilliseconds() - AlarmExpander.FIRE_GRACE.inWholeMilliseconds
-        val stale = db.scheduledInstances().pending()
-            .filter { it.triggerAtMillis < cutoff }
+        // 時計は1回だけ読む。期限の選び方と条件付きの書き込みで同じ cutoff を使う
+        val now = Clock.System.now().toEpochMilliseconds()
+        val cutoff = now - AlarmExpander.FIRE_GRACE.inWholeMilliseconds
+        val rows = db.scheduledInstances().all()
+        val byId = rows.associateBy { it.id }
+        val stale = ScheduleReconciler.overdueIds(rows.mapNotNull { it.toRowOrNull() }, now)
         beforeMissedWriteForTest?.invoke()
-        val changed = stale.filter { db.scheduledInstances().setMissedIfOverduePending(it.id, cutoff) > 0 }
-        changed.forEach { audit("MISS", it.id, it) }
+        val changed = stale.filter { db.scheduledInstances().setMissedIfOverduePending(it, cutoff) > 0 }
+        changed.forEach { audit("MISS", it, byId[it]) }
         if (changed.isNotEmpty()) {
-            disableConsumedOneShots(changed.mapNotNull { it.standaloneAlarmId }.toSet())
+            disableConsumedOneShots(changed.mapNotNull { byId[it]?.standaloneAlarmId }.toSet())
             onScheduleChanged?.invoke()
         }
         return changed.size
@@ -1253,12 +1207,6 @@ class AlarmRepository(
     )
 
     companion object {
-        /** 再同期が同じ id を予約し直さない状態。ユーザーが止めた・スヌーズした・鳴っている意味を守る */
-        private val NO_REVIVE_STATES = setOf(
-            AlarmState.FIRED.name, AlarmState.DISMISSED.name,
-            AlarmState.SNOOZED.name, AlarmState.MISSED.name,
-            AlarmState.SKIPPED.name,
-        )
         /** 終わった行。遅れて届いたスヌーズで子を作らない (#145) */
         private val TERMINAL_STATES = setOf(
             AlarmState.DISMISSED.name, AlarmState.MISSED.name,

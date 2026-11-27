@@ -2,6 +2,7 @@ package com.calendaralarm.shared
 
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.logic.RingStatus
+import com.calendaralarm.shared.logic.ScheduleReconciler
 import com.calendaralarm.shared.logic.SettingsPreview
 import com.calendaralarm.shared.model.AlarmRule
 import com.calendaralarm.shared.model.Availability
@@ -148,6 +149,24 @@ class SharedDecisionTableTest {
             }
             val actual = AlarmExpander.passesEventFilters(event, override, InviteFilter(), filter)
             assertEquals(row["expected"]!!.jsonPrimitive.boolean, actual, "eventTypeFilter: $name")
+        }
+    }
+
+    @Test
+    fun reconcile() {
+        for (row in rows("reconcile")) {
+            val name = row.str("name")
+            // input は ScheduleReconciler.Input の JSON そのまま (時刻は UTC の epoch ミリ秒)
+            val input = Json.decodeFromJsonElement(ScheduleReconciler.Input.serializer(), row["input"]!!)
+            val d = ScheduleReconciler.reconcile(input)
+            val e = row["expected"]!!.jsonObject
+            fun ids(k: String) = e[k]!!.jsonArray.map { it.jsonPrimitive.content }
+            assertEquals(ids("cancel"), d.cancel, "reconcile cancel: $name")
+            assertEquals(ids("arm"), d.arm.map { it.id }, "reconcile arm: $name")
+            assertEquals(ids("changedIds").toSet(), d.changedIds, "reconcile changedIds: $name")
+            assertEquals(ids("fireNow"), d.fireNow.map { it.id }, "reconcile fireNow: $name")
+            assertEquals(ids("skip"), d.skip.map { it.id }, "reconcile skip: $name")
+            assertEquals(ids("suppressed"), d.suppressed.map { it.id }, "reconcile suppressed: $name")
         }
     }
 
