@@ -12,6 +12,7 @@ import com.calendaralarm.data.db.StandaloneAlarmEntity
 import com.calendaralarm.engine.AlarmScheduler
 import com.calendaralarm.shared.logic.AlarmExpander
 import com.calendaralarm.shared.logic.ScheduleReconciler
+import com.calendaralarm.shared.model.AccountSetting
 import com.calendaralarm.shared.model.AlarmInstance
 import com.calendaralarm.shared.model.AlarmKind
 import com.calendaralarm.shared.model.AlarmRule
@@ -20,6 +21,9 @@ import com.calendaralarm.shared.model.CalendarEvent
 import com.calendaralarm.shared.model.CalendarSource
 import com.calendaralarm.shared.model.EventAction
 import com.calendaralarm.shared.model.EventOverride
+import com.calendaralarm.shared.model.EventTypeFilter
+import com.calendaralarm.shared.model.InviteFilter
+import com.calendaralarm.shared.model.TitleCodeSettings
 import com.calendaralarm.shared.model.RepeatMode
 import com.calendaralarm.shared.model.StandaloneAlarm
 import androidx.room.withTransaction
@@ -36,6 +40,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.Job
@@ -100,7 +106,7 @@ class AlarmRepository(
      */
     private suspend fun enrichWithGoogleTypes(
         events: List<com.calendaralarm.shared.model.CalendarEvent>,
-        appSettings: SettingsRepository.Settings,
+        appSettings: ScheduleSettings,
         beginMillis: Long,
         endMillis: Long,
     ): List<com.calendaralarm.shared.model.CalendarEvent> {
@@ -261,7 +267,7 @@ class AlarmRepository(
      * 一覧 (upcomingEvents) の「予定側通知あり」判定用。予約 (resync) 側は生値のまま展開へ渡し、
      * 明示の通知と基点を分けるため AlarmExpander 内で defaultReminderMinutes に解決する (#382)
      */
-    private fun CalendarEvent.withResolvedDefaultReminders(appSettings: SettingsRepository.Settings): CalendarEvent =
+    private fun CalendarEvent.withResolvedDefaultReminders(appSettings: ScheduleSettings): CalendarEvent =
         copy(calendarReminderMinutes = calendarReminderMinutes.map { if (it < 0) appSettings.defaultMinutesBefore else it })
 
     suspend fun upcomingEvents(days: Int = 14): List<AgendaItem> = withContext(Dispatchers.IO) {
@@ -271,7 +277,7 @@ class AlarmRepository(
         val sources = calendarList.associateBy { it.id }
         val prefs = db.calendarPrefs().all().associateBy { it.calendarId }
         val overrides = db.eventOverrides().all().associateBy { it.instanceKey }
-        val appSettings = settings.flow.first()
+        val appSettings = ScheduleSettings.of(settings.flow.first())
         // アカウント単位の設定 (#74): 使わないアカウントの予定は一覧に出さず、鳴らさない分は鳴らない表示にする
         val accountApplied = com.calendaralarm.shared.logic.AccountRules.apply(
             calendarList, appSettings.accountSettings, emptyMap(), AlarmRule(minutesBefore = appSettings.defaultMinutesBefore),
@@ -448,7 +454,7 @@ class AlarmRepository(
         // 待っている間に親のアラームを OFF・削除されたら鳴らし直さない。resync は PENDING しか
         // 取り消さないので、FIRED のまま待つ行はここで確かめる
         val enabledAlarmIds = db.standaloneAlarms().all().filter { it.enabled }.map { it.id }.toSet()
-        val muteAll = settings.flow.first().muteAll
+        val muteAll = ScheduleSettings.of(settings.flow.first()).muteAll
         val orphaned = candidates.filter { (_, state) ->
             state == AlarmState.FIRED.name || state == AlarmState.PENDING.name
         }.map { it.first }.filter { inst ->
@@ -619,7 +625,7 @@ class AlarmRepository(
     private suspend fun writeAdhoc(instance: AlarmInstance): Boolean {
         // タイマー自体はスヌーズ分数を持たないので、設定の既定を載せる
         val inst = instance.copy(
-            snoozeMinutes = settings.flow.first().defaultSnoozeMinutes,
+            snoozeMinutes = ScheduleSettings.of(settings.flow.first()).defaultSnoozeMinutes,
         )
         db.scheduledInstances().upsert(listOf(ScheduledInstanceEntity.of(inst)))
         if (!scheduler.schedule(inst)) {
@@ -669,30 +675,70 @@ class AlarmRepository(
 
     // ---- 設定の変更から再同期 ----
 
-    /**
-     * 予約に効く既定のうち、設定画面が保存の後に自分で resync を呼んでいないもの (#231)。
-     * ここに無い予約に効く欄 (種別・招待・タイトルコード・一括ミュート等) は、今は画面の各行が保存の後に
-     * resync を呼んでいる。全部をここへ寄せて画面側の呼び出しを消すのは別の変更で行う
-     */
-    data class ScheduleDefaults(val minutesBefore: Int, val snoozeMinutes: Int) {
+    /** 予約に効く設定の欄。再同期はこの型だけを読む。欄を足すと見張りの対象にもなる (#231 #255) */
+    data class ScheduleSettings(
+        val defaultMinutesBefore: Int,
+        val defaultSnoozeMinutes: Int,
+        val defaultStartAction: EventAction,
+        val defaultReminderAction: EventAction,
+        val titleCodes: TitleCodeSettings,
+        val inviteFilter: InviteFilter,
+        val eventTypeFilter: EventTypeFilter,
+        val googleAccountEmails: Set<String>,
+        val accountSettings: Map<String, AccountSetting>,
+        val importEventReminders: Boolean,
+        val extraReminderOffsets: List<Int>,
+        val muteAll: Boolean,
+    ) {
         companion object {
-            fun of(s: SettingsRepository.Settings) =
-                ScheduleDefaults(s.defaultMinutesBefore, s.defaultSnoozeMinutes)
+            fun of(s: SettingsRepository.Settings) = ScheduleSettings(
+                defaultMinutesBefore = s.defaultMinutesBefore,
+                defaultSnoozeMinutes = s.defaultSnoozeMinutes,
+                defaultStartAction = s.defaultStartAction,
+                defaultReminderAction = s.defaultReminderAction,
+                titleCodes = s.titleCodes,
+                inviteFilter = s.inviteFilter,
+                eventTypeFilter = s.eventTypeFilter,
+                googleAccountEmails = s.googleAccountEmails,
+                accountSettings = s.accountSettings,
+                importEventReminders = s.importEventReminders,
+                extraReminderOffsets = s.extraReminderOffsets,
+                muteAll = s.muteAll,
+            )
         }
     }
 
     /**
-     * 「何分前」「スヌーズ」の既定が変わったら再同期する (#231)。保存した層の flow を見張るので、
-     * 設定画面を閉じても、アプリを開き直さなくても、予約済みのアラームが新しい分数になる。
+     * 予約に効く設定 (ScheduleSettings の12欄) が変わったら再同期する (#231 #255)。保存した層の flow を
+     * 見張るので、設定画面を閉じても、アプリを開き直さなくても、予約済みのアラームが新しい設定に合う。
      * 最初の値は起動時の状態なので再同期しない (起動時の再同期は別の入口が行う)。
-     * 設定の読み取り自体が壊れても、例外をアプリへ漏らさない (鳴動のための起動を落とさない)
+     * 再同期の途中で設定が何回変わっても、終わった後の再同期は1回にまとめる (conflate)。
+     * 途中の再同期を取り消すと DB と AlarmManager への書き込みが半分で止まるので collectLatest は使わない。
+     * 設定の読み取り (DataStore) が例外を投げても見張りを止めず、間を空けて読み直す。
+     * 止まると次の起動まで設定の変更が予約に入らないため
      * @param onFirstValue 最初の値を受け取った時に呼ぶ (試験が変更を入れる時を決めるため)
+     * @param source 見張る設定。既定は settings.flow。試験が読み取りの失敗を入れるための口
      */
-    fun watchScheduleDefaults(scope: CoroutineScope, onFirstValue: () -> Unit = {}): Job = scope.launch {
+    fun watchScheduleSettings(
+        scope: CoroutineScope,
+        onFirstValue: () -> Unit = {},
+        source: Flow<SettingsRepository.Settings> = settings.flow,
+    ): Job = scope.launch {
         var first = true
-        settings.flow
-            .map { ScheduleDefaults.of(it) }
+        source
+            .retryWhen { e, attempt ->
+                if (e is CancellationException) {
+                    false
+                } else {
+                    Log.w(TAG, "設定の読み取りに失敗した。読み直す", e)
+                    // 1秒から倍にして60秒まで間を空ける
+                    delay(minOf(60_000L, 1_000L shl attempt.toInt().coerceAtMost(6)))
+                    true
+                }
+            }
+            .map { ScheduleSettings.of(it) }
             .distinctUntilChanged()
+            .conflate()
             .catch { e -> Log.w(TAG, "設定の見張りが止まった", e) }
             .collect {
                 if (first) {
@@ -701,7 +747,7 @@ class AlarmRepository(
                     return@collect
                 }
                 try {
-                    resync("settings: defaults")
+                    resync("settings")
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -733,7 +779,7 @@ class AlarmRepository(
         afterResyncReadForTest?.invoke()
 
         // 単発/繰り返しアラーム。「1回のみ」の使い切りの絞り込みは reconcile が行う (展開は全部出す)
-        val appSettings = settings.flow.first()
+        val appSettings = ScheduleSettings.of(settings.flow.first())
         val standalones = db.standaloneAlarms().all().map { it.toModel() }
         standalones.forEach { alarm ->
             // 一括ミュート中は単発/繰返しアラーム自体を展開しない (全部 ALARM 鳴動のため)
