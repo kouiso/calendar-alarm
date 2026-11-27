@@ -285,4 +285,7 @@
     <string name="weekday_short_wednesday">Wed</string>
     <string name="widget_next_alarm">Next alarm</string>
     <string name="widget_none">None scheduled</string>
+    <string name="mute_all_banner">All alarms are muted</string>
+    <string name="mute_all_banner_unmute">Unmute</string>
+    <string name="alarms_row_muted">Muted</string>
 </resources>

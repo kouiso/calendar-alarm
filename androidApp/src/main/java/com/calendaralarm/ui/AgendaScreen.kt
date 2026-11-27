@@ -177,6 +177,10 @@ fun AgendaScreen(
                 onAction = onOpenPermissions,
             )
         }
+        // 全ミュート中は解除できる帯を出す。解除後の再同期は設定の見張りが行う (#255)。読み込み前 (null) は出さない
+        if (settings?.muteAll == true) {
+            MuteAllBanner(onUnmute = { scope.launch { app.container.settings.setMuteAll(false) } })
+        }
         if (ringStatus.showMissedBanner) {
             StatusBanner(
                 "直近24時間に鳴らせなかったアラームが${ringStatus.recentMissed}件あります",
